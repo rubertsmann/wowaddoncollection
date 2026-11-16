@@ -104,6 +104,15 @@ ns.Slash.scan = function()
     local n = 0
     for _, p in pairs(me and me.professions or {}) do n = n + ns.Util.Count(p.recipes) end
     ns.Print(("scan: %s, %d recipes known"):format(changed and "updated" or "unchanged", n))
+    -- why a scan finds nothing: recipes are only readable while ONE profession's recipe list is open
+    local ok, open = pcall(ns.Api.GetOpenProfession)
+    if not ok then
+        ns.Print("profession window check failed: " .. tostring(open))
+    elseif not open then
+        ns.Print("no profession recipe list detected: open one profession's window (click its name, e.g. Kochkunst) and run this again")
+    else
+        ns.Print(("open profession: %s (id %s), %d learned recipes visible"):format(tostring(open.name), tostring(open.id), #open.recipes))
+    end
 end
 
 ns.Slash.dump = function()

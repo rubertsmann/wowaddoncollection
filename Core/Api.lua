@@ -139,6 +139,35 @@ local function legacyOpen()
 end
 
 -- The profession whose window is open: { name, rank, max, recipes = { {recipeID,name,icon,produces,reagents} } } or nil.
+-- Opening professions for the automatic scan (see AutoScan.lua). C_TradeSkillUI.OpenTradeSkill is a retail API that
+-- was not in the probe's API list, so everything here is feature-detected and verified in game with /ts autoscan.
+function Api.CanOpenProfession()
+    return (C_TradeSkillUI and C_TradeSkillUI.OpenTradeSkill) and true or false
+end
+
+function Api.OpenProfession(skillLineID)
+    if not Api.CanOpenProfession() then return false end
+    local ok = pcall(C_TradeSkillUI.OpenTradeSkill, skillLineID)
+    return ok
+end
+
+function Api.CloseProfession()
+    if C_TradeSkillUI and C_TradeSkillUI.CloseTradeSkill then pcall(C_TradeSkillUI.CloseTradeSkill) end
+end
+
+function Api.InCombat()
+    return (InCombatLockdown and InCombatLockdown()) and true or false
+end
+
+-- true while the player has a profession window open (our automatic scan must never take it over)
+function Api.IsProfessionWindowShown()
+    for _, name in ipairs({ "ProfessionsFrame", "TradeSkillFrame", "CraftFrame" }) do
+        local fr = _G[name]
+        if fr and fr.IsShown and fr:IsShown() then return true end
+    end
+    return false
+end
+
 -- The window reports the profession's name; its skill line id is looked up among my own professions by that name
 -- (same client, same language, so the names are identical).
 local function withId(res)
@@ -167,6 +196,8 @@ end
 -- /ts i18n: what this client reports, to verify the localization assumptions in game.
 ns.Slash.i18n = function()
     ns.Print(("client locale %s, UI locale %s"):format(Api.GetLocale(), tostring(ns.Locale and ns.Locale.code)))
+    ns.Print(("auto scan: OpenTradeSkill %s, CloseTradeSkill %s"):format(
+        tostring(C_TradeSkillUI and C_TradeSkillUI.OpenTradeSkill ~= nil), tostring(C_TradeSkillUI and C_TradeSkillUI.CloseTradeSkill ~= nil)))
     for _, p in ipairs(Api.GetPlayerProfessions() or {}) do
         ns.Print(("profession %s id=%s | static name: %s"):format(p.name, tostring(p.id),
             tostring(ns.Locale.professions[Api.GetLocale()] and ns.Locale.professions[Api.GetLocale()][p.id])))

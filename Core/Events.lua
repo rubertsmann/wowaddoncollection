@@ -76,6 +76,7 @@ function onEvent.TRADE_SKILL_SHOW() scheduleScan(1.5) end
 function onEvent.TRADE_SKILL_LIST_UPDATE() scheduleScan(1.0) end
 function onEvent.TRADE_SKILL_DATA_SOURCE_CHANGED() scheduleScan(1.0) end
 function onEvent.SKILL_LINES_CHANGED() scheduleScan(2.0) end
+function onEvent.NEW_RECIPE_LEARNED() scheduleScan(1.5) end   -- keeps the cache current without reopening the window
 function onEvent.GET_ITEM_INFO_RECEIVED() Ev.Fire("ITEM_INFO") end
 
 for event in pairs(onEvent) do reg(event) end

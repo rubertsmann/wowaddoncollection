@@ -53,8 +53,11 @@ return {
                         chunk(addon, ns)
                     end
                 end
-                h.truthy(ns.UI and ns.Comm and ns.Scanner and ns.Names and ns.Locale and ns.L and ns.Model, "namespace incomplete")
-                h.truthy(ns.Slash.i18n and ns.Slash.locale and ns.Slash.scan and ns.Slash.version, "slash commands missing")
+                h.truthy(ns.UI and ns.Comm and ns.Scanner and ns.Names and ns.Locale and ns.L and ns.Model and ns.AutoScan, "namespace incomplete")
+                h.truthy(ns.Slash.i18n and ns.Slash.locale and ns.Slash.scan and ns.Slash.version and ns.Slash.autoscan, "slash commands missing")
+                -- on a client without C_TradeSkillUI.OpenTradeSkill the automatic scan must say so, not error (R4)
+                h.eq(ns.Api.CanOpenProfession(), false)
+                h.eq(ns.AutoScan.Instance():Start(false), false)
                 h.truthy(ns.Names.env.spellName, "Api did not wire Names.env.spellName")
             end
         end)

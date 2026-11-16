@@ -20,6 +20,7 @@ Core\Store.lua
 Core\Names.lua
 Core\Api.lua
 Core\Scanner.lua
+Core\AutoScan.lua
 Core\Codec.lua
 Core\Orders.lua
 Core\Sync.lua

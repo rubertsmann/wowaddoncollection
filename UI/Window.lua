@@ -245,7 +245,15 @@ local function build()
     f:SetFrameStrata("HIGH")
     f:Hide()
     table.insert(UISpecialFrames, frameName)
-    f:SetScript("OnShow", function() ns.Events.Fire("WINDOW_OPENED"); UI.Refresh() end)
+    f:SetScript("OnShow", function()
+        ns.Events.Fire("WINDOW_OPENED")
+        UI.Refresh()
+        -- first open of this session and some profession has no cached recipes: read them now (disable: /ts autoscan off)
+        if not UI.autoScanTried and ns.db.ui.autoScan ~= false then
+            UI.autoScanTried = true
+            ns.AutoScan.Run(false)
+        end
+    end)
 
     local title = text(f, "GameFontNormalLarge"); title:SetPoint("TOP", 0, -6); title:SetText(ns.TITLE)
 
@@ -295,7 +303,10 @@ local function build()
     recipeList:SetPoint("TOPLEFT", 0, -34)
     f.recipesEmpty = text(rt, "GameFontDisable", "CENTER")
     f.recipesEmpty:SetPoint("CENTER", recipeList, "CENTER", 0, 0); f.recipesEmpty:SetWidth(380)
-    f.recipesEmpty:SetText(L["No recipes known yet. Open each of your profession windows once so they can be scanned."])
+    f.recipesEmpty:SetText(L["No recipes known yet. Use the Scan professions button (or open each profession window once)."])
+    -- one click reads every profession (opens them one after another), so nobody has to cycle through the pages
+    f.scanBtn = button(rt, L["Scan professions"], 110, 22, function() ns.AutoScan.Run(true) end)
+    f.scanBtn:SetPoint("TOPRIGHT", rt, "TOPRIGHT", 0, 0)
 
     -- detail panel
     local dp = CreateFrame("Frame", nil, rt); dp:SetPoint("TOPLEFT", recipeList, "TOPRIGHT", 12, 0); dp:SetPoint("BOTTOMRIGHT", 0, 0)
