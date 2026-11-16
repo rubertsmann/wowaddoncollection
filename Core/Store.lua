@@ -23,6 +23,30 @@ function S.Init(sv)
     return sv
 end
 
+-- Sizes of everything held locally (for /ts clean).
+function S.Counts()
+    local n = { chars = 0, recipes = 0, orders = 0, catalog = 0, names = 0 }
+    for _ in pairs(S.db.chars) do n.chars = n.chars + 1 end
+    for _ in pairs(S.db.catalog) do n.catalog = n.catalog + 1 end
+    for _ in pairs(S.db.orders) do n.orders = n.orders + 1 end
+    for _, byId in pairs(S.db.profNames) do for _ in pairs(byId) do n.names = n.names + 1 end end
+    for _, rec in pairs(S.db.chars) do
+        for _, p in pairs(rec.professions or {}) do for _ in pairs(p.recipes or {}) do n.recipes = n.recipes + 1 end end
+    end
+    return n
+end
+
+-- Removes every cached and synced thing. The tables are emptied IN PLACE (Orders and Sync hold references to them);
+-- UI preferences, `schema` and `me` stay. Returns the counts that were removed.
+function S.Clean()
+    local removed = S.Counts()
+    for _, key in ipairs({ "chars", "catalog", "orders", "profNames", "debug" }) do
+        local t = S.db[key]
+        for k in pairs(t) do t[k] = nil end
+    end
+    return removed
+end
+
 function S.GetChar(fullName)
     return S.db.chars[fullName]
 end

@@ -83,6 +83,31 @@ return {
         h.eq(#ns.Model.BuildRecipeRows(ns.Store, { text = "", mineOnly = true, me = "B-R" }), 1)
     end,
 
+    ["store: Clean empties everything in place, keeps preferences, and holders of the tables keep working"] = function(h)
+        local ns = h.ns()
+        ns.db.ui.minimapAngle = 99; ns.db.me = "A-R"
+        ns.Store.PutChar(h.char("A-R", 1, { 1, 2 })); ns.Store.PutChar(h.char("B-R", 1, { 2 }))
+        ns.Store.PutCatalog({ [1] = { name = "x", reagents = {} } })
+        ns.db.profNames.deDE = { [185] = "Kochkunst" }
+        ns.db.debug[1] = "log"
+        local orders = ns.Orders.New(function() return h.clock end, ns.db.orders)
+        orders:Create("A-R", 1, 1, "")
+        local n = ns.Store.Counts()
+        h.eq(n.chars, 2); h.eq(n.recipes, 3); h.eq(n.orders, 1); h.eq(n.catalog, 1); h.eq(n.names, 1)
+
+        local removed = ns.Store.Clean()
+        h.eq(removed.chars, 2); h.eq(removed.orders, 1)
+        local after = ns.Store.Counts()
+        h.eq(after.chars + after.recipes + after.orders + after.catalog + after.names, 0)
+        h.eq(#ns.db.debug, 0)
+        h.eq(ns.db.ui.minimapAngle, 99, "preferences must survive"); h.eq(ns.db.me, "A-R"); h.eq(ns.db.schema, 1)
+        h.eq(#orders:List({ showClosed = true }), 0, "the order board must see the wipe")
+        local o = orders:Create("A-R", 2, 1, "")                    -- the same object still stores into the live table
+        h.truthy(o and ns.db.orders[o.id], "orders holder lost its table")
+        h.eq(ns.Store.PutChar(h.char("C-R", 1, { 1 })), true)
+        h.eq(ns.Store.Clean().chars, 1)
+    end,
+
     ["model: recipe detail computes have/enough and tolerates missing item names"] = function(h)
         local ns = h.ns()
         ns.Store.PutCatalog({ [1] = { name = "Roast", reagents = { { itemID = 10, count = 3 }, { itemID = 11, count = 1 } } } })
