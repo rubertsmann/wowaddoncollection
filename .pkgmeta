@@ -7,6 +7,7 @@ ignore:
   - docs
   - tools
   - dist
+  - screens-debug
   - .github
   - .gitignore
   - .pkgmeta
