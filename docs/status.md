@@ -19,7 +19,7 @@ Legend: DONE = written; UNVERIFIED = needs the check in the last column. **Verif
 | T13 Orders sync | DONE (in Sync) | two characters, create/claim an order |
 | T14-T17 UI | DONE, UNVERIFIED | open `/ts` in game; checklist in `eval/plan.md` |
 | T18 packaging | `tools/package.ps1`, `.pkgmeta`, workflow written; CurseForge project/token not created | `powershell tools/package.ps1`, install zip |
-| T19 soak | not started | needs a real guild |
+| T19 soak | offline half DONE and passing (`tests/test_soak.lua`: 3000-case fuzz, 30 peers x 20 min at 10% loss converge); real-guild half not started | needs a real guild evening |
 
 ## Differences from the plan
 
@@ -32,7 +32,7 @@ Legend: DONE = written; UNVERIFIED = needs the check in the last column. **Verif
 
 ## First things to do when you wake up
 
-1. `winget install DEVCOM.LuaJIT`, then `luajit tests/run.lua` from the repo root. Fix any failures (the code was never executed).
+1. `luajit tests/run.lua` -> 26 passed (LuaJIT is installed under %LOCALAPPDATA%Programsuajitbin; open a new shell for path).
 2. `powershell tools/deploy.ps1 -WithProbe`; log in; open a profession; `/tsp`; `/reload`; check `/ts scan`, `/ts dump`.
 3. Watch for Lua errors (`/console scriptErrors 1`).
 
