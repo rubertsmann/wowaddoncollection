@@ -1,0 +1,12 @@
+package-as: TalentShare
+
+ignore:
+  - tests
+  - dev
+  - eval
+  - docs
+  - tools
+  - dist
+  - .github
+  - .gitignore
+  - .pkgmeta

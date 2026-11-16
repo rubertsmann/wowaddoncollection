@@ -1,0 +1,25 @@
+## Interface: 16001
+## Title: TalentShare
+## Notes: Shares guild members' professions, recipes and reagents, plus a crafting order board.
+## Author: rubertsmann
+## Version: 0.1.0
+## SavedVariables: TalentShareDB
+## IconTexture: Interface\Icons\INV_Misc_Note_01
+## X-Category: Professions
+
+Libs\LibStub\LibStub.lua
+Libs\LibDeflate\LibDeflate.lua
+
+Core\Init.lua
+Core\Util.lua
+Core\Store.lua
+Core\Api.lua
+Core\Scanner.lua
+Core\Codec.lua
+Core\Orders.lua
+Core\Sync.lua
+Core\Model.lua
+Core\Comm.lua
+Core\Events.lua
+
+UI\Window.lua
