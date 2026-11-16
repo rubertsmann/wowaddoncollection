@@ -15,9 +15,21 @@ function Api.IsGuilded()
     return (IsInGuild and IsInGuild()) and true or false
 end
 
+-- My base name as the server uses it: "First" on normal clients, "First Surname" on Forever, where UnitName("player")
+-- returns the surname as its second value (retail returns nil there for the player).
+function Api.MyBaseName()
+    local first, second = UnitName("player")
+    if type(second) == "string" and second ~= "" and not ns.Util.IsRealmSpelling(second) then
+        local base = first .. " " .. second
+        ns.Util.NoteMyFullName(base)
+        return base
+    end
+    return first
+end
+
 function Api.GetPlayerInfo()
     local _, class = UnitClass("player")
-    return { name = ns.Util.FullName((UnitName("player"))), class = class, level = UnitLevel("player") }
+    return { name = ns.Util.Canon(Api.MyBaseName()), class = class, level = UnitLevel("player") }
 end
 
 function Api.RequestRoster()
@@ -25,15 +37,61 @@ function Api.RequestRoster()
     elseif GuildRoster then GuildRoster() end
 end
 
--- set of "Name-Realm" for everyone in the guild (empty if the roster is not loaded yet)
+-- set of canonical "Name-Realm" for everyone in the guild (empty if the roster is not loaded yet). The roster's spelling
+-- of MY character teaches Util which realm string the server uses for my realm (Util.LearnFromRoster), before any name
+-- is canonicalized.
 function Api.GetGuildRoster()
-    local set = {}
+    local set, raw = {}, {}
     if not Api.IsGuilded() or not GetNumGuildMembers then return set end
     for i = 1, (GetNumGuildMembers()) do
         local name = GetGuildRosterInfo(i)
-        if name then set[ns.Util.FullName(name)] = true end
+        if type(name) == "string" and name ~= "" then raw[#raw + 1] = name end
+    end
+    ns.Util.LearnFromRoster(raw, Api.MyBaseName())
+    ns.Util.SetRosterNames(raw)
+    for _, name in ipairs(raw) do
+        local c = ns.Util.Canon(name)
+        if c then set[c] = true end
     end
     return set
+end
+
+-- Raw identity facts for the diagnostic report (feature 008): every source of "my name" and of the roster's names, so a
+-- mismatch between them (realm suffix form) can be seen without guessing. Values are what the client returned, untouched.
+function Api.IdentityInfo()
+    local info = {}
+    info.unitName, info.unitRealm = try(UnitName, "player")
+    if UnitFullName then
+        local n, r = try(UnitFullName, "player")
+        info.unitFullName = tostring(n) .. " / " .. tostring(r)
+    end
+    info.realmName = GetRealmName and try(GetRealmName)
+    info.normalizedRealm = GetNormalizedRealmName and try(GetNormalizedRealmName)
+    info.guild = GetGuildInfo and try(GetGuildInfo, "player")
+    local full = ns.Util.Canon(Api.MyBaseName())
+    info.base = Api.MyBaseName()
+    info.built = full
+    info.ambiguated = Ambiguate and full and try(Ambiguate, full, "none")
+    local sample, mine = {}, nil
+    if Api.IsGuilded() and GetNumGuildMembers then
+        local n = try(GetNumGuildMembers) or 0
+        info.rosterCount = n
+        for i = 1, n do
+            local name = try(GetGuildRosterInfo, i)
+            if name then
+                if #sample < 8 then sample[#sample + 1] = name end   -- the raw form the client reports
+                local part = name:match("^([^-]+)") or name
+                if info.base and (part == info.base or part == info.unitName) then mine = name end
+            end
+        end
+    end
+    info.rosterSample = sample
+    info.rosterMe = mine   -- how the roster spells MY name
+    if GetBuildInfo then
+        local v, b, _, iface = try(GetBuildInfo)
+        info.build = ("%s (%s) interface %s"):format(tostring(v), tostring(b), tostring(iface))
+    end
+    return info
 end
 
 function Api.GetLocale()
@@ -255,6 +313,81 @@ function Api.ItemName(itemID)
     return n
 end
 
+-- feature 011: class id, subclass id, equip slot of an item from the client's item data (no server query needed).
+function Api.ItemCategoryInfo(itemID)
+    local fn = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    if not fn or type(itemID) ~= "number" then return nil end
+    local ok, _, _, _, equipLoc, _, classID, subClassID = pcall(fn, itemID)
+    if ok and type(classID) == "number" then return classID, subClassID, equipLoc end
+    return nil
+end
+
+local function classInfo(classID)
+    local fn = (C_Item and C_Item.GetItemClassInfo) or GetItemClassInfo
+    local ok, name = pcall(fn or error, classID)
+    return ok and type(name) == "string" and name ~= "" and name or nil
+end
+
+-- Display name of a Model.CategoryKey, in the viewer's language (from the client, no locale strings needed).
+function Api.CategoryLabel(key)
+    if key == "none" then return ns.L["No item (enchantments and others)"] end
+    local slot = type(key) == "string" and key:match("^slot:(.+)$")
+    if slot then
+        local s = _G[slot]
+        return type(s) == "string" and s ~= "" and s or slot
+    end
+    local c, sub = tostring(key):match("^class:(%-?%d+):(%-?%d+)$")
+    c, sub = tonumber(c), tonumber(sub)
+    if not c then return tostring(key) end
+    local fn = (C_Item and C_Item.GetItemSubClassInfo) or GetItemSubClassInfo
+    local ok, name = pcall(fn or error, c, sub)
+    if ok and type(name) == "string" and name ~= "" then return name end
+    return classInfo(c) or tostring(key)
+end
+
+function Api.CategoryGroupLabel(groupID)
+    if groupID == -1 then return ns.L["Other"] end
+    return classInfo(groupID) or tostring(groupID)
+end
+
+-- Tooltip lines of an item (left text, " " right text), or nil while the client has not loaded the item yet (a load is
+-- requested; ask again later). Read on THIS client only; the text is never sent to anyone (feature 011).
+local scanTip
+function Api.ItemTooltipLines(itemID)
+    if type(itemID) ~= "number" then return nil end
+    local info = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    if not info or not info(itemID) then
+        if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, itemID) end
+        return nil
+    end
+    local lines = {}
+    if C_TooltipInfo and C_TooltipInfo.GetItemByID then
+        local ok, data = pcall(C_TooltipInfo.GetItemByID, itemID)
+        if ok and type(data) == "table" and type(data.lines) == "table" then
+            for _, line in ipairs(data.lines) do
+                local l, r = line.leftText, line.rightText
+                lines[#lines + 1] = tostring(l or "") .. ((type(r) == "string" and r ~= "") and (" " .. r) or "")
+            end
+            return lines
+        end
+    end
+    if not CreateFrame then return nil end
+    if not scanTip then
+        local ok, t = pcall(CreateFrame, "GameTooltip", ns.FRAME .. "ScanTip", UIParent, "GameTooltipTemplate")
+        if not ok then return nil end
+        scanTip = t
+    end
+    scanTip:SetOwner(UIParent, "ANCHOR_NONE")
+    scanTip:ClearLines()
+    if not pcall(scanTip.SetHyperlink, scanTip, "item:" .. itemID) then return nil end
+    for i = 1, scanTip:NumLines() or 0 do
+        local l = _G[ns.FRAME .. "ScanTipTextLeft" .. i]
+        lines[#lines + 1] = l and l:GetText() or ""
+    end
+    scanTip:Hide()
+    return lines
+end
+
 function Api.ItemIcon(itemID)
     if C_Item and C_Item.GetItemIconByID then return C_Item.GetItemIconByID(itemID) end
     if GetItemIcon then return GetItemIcon(itemID) end
@@ -270,7 +403,7 @@ end
 
 -- Which windows are open right now. Set by Events.lua (bank, mail, guild bank and auction house contents are only
 -- readable while their window is open); a location that is not open is not scanned and keeps its last known state.
-Api.open = { bank = false, mail = false, gbank = false, auction = false }
+Api.open = { bank = false, mail = false, gbank = false, auction = false, tradeskill = false }
 
 -- class id, subclass id, icon of an item WITHOUT loading it (nil when the client does not know the id).
 function Api.ItemClass(itemID)
@@ -410,4 +543,83 @@ function Api.ScanItems()
     end
     if Api.open.auction then out.auction = scanAuctions() end
     return out
+end
+
+------------------------------------------------------------------ craft and whisper from lists (feature 009)
+
+local function isLink(s) return type(s) == "string" and s:find("|H", 1, true) ~= nil and s:find("|h", 1, true) ~= nil end
+
+-- A chat link for a recipe, built by THIS client: my own recipe link while the client knows it, else the crafted item's
+-- link (needs the item cached; a load is requested), else nil (the caller falls back to plain "[Name]").
+function Api.RecipeLink(recipeID, produces)
+    if C_TradeSkillUI and C_TradeSkillUI.GetRecipeLink then
+        local ok, link = pcall(C_TradeSkillUI.GetRecipeLink, recipeID)
+        if ok and isLink(link) then return link end
+    end
+    return Api.ItemLink(produces)
+end
+
+function Api.ItemLink(itemID)
+    if type(itemID) ~= "number" then return nil end
+    local fn = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    local ok, _, link = false, nil, nil
+    if fn then ok, _, link = pcall(fn, itemID) end
+    if ok and isLink(link) then return link end
+    if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, itemID) end
+    return nil
+end
+
+-- Name of the profession whose window is open (nil when none). Same client, so it equals the spellbook name.
+function Api.OpenProfessionName()
+    if not Api.open.tradeskill then return nil end
+    if C_TradeSkillUI and C_TradeSkillUI.GetBaseProfessionInfo then
+        local ok, info = pcall(C_TradeSkillUI.GetBaseProfessionInfo)
+        if ok and type(info) == "table" and info.professionName then return info.professionName end
+    end
+    if C_TradeSkillUI and C_TradeSkillUI.GetTradeSkillLine then
+        local ok, _, name = pcall(C_TradeSkillUI.GetTradeSkillLine)
+        if ok and type(name) == "string" then return name end
+    end
+    if GetTradeSkillLine then
+        local ok, name = pcall(GetTradeSkillLine)
+        if ok and type(name) == "string" then return name end
+    end
+    return nil
+end
+
+-- Select a recipe in the open profession window (so the game's own Create button crafts it). true if a call was made.
+function Api.SelectRecipe(recipeID)
+    if C_TradeSkillUI and C_TradeSkillUI.OpenRecipe then
+        local ok, err = pcall(C_TradeSkillUI.OpenRecipe, recipeID)
+        if not ok then ns.Debug.Log("craft.select", tostring(err)) end
+        return ok
+    end
+    if C_TradeSkillUI and C_TradeSkillUI.SetRecipeItemNameFilter then   -- fallback: filter the list down to it
+        local e = ns.Store.GetRecipe(recipeID)
+        if e and e.name then return (pcall(C_TradeSkillUI.SetRecipeItemNameFilter, e.name)) end
+    end
+    return false
+end
+
+-- Craft qty of recipeID in the open profession window (must run from a hardware click). true if the call raised no error;
+-- a call the client blocks still "succeeds" here (see docs/api-findings.md), so the UI also keeps the recipe selected.
+function Api.CraftRecipe(recipeID, qty)
+    if not (C_TradeSkillUI and C_TradeSkillUI.CraftRecipe) then return false, "no CraftRecipe" end
+    local ok, err = pcall(C_TradeSkillUI.CraftRecipe, recipeID, qty)
+    return ok, err
+end
+
+-- Is a profession window open that lists recipeID? (the window's own recipe list, so no name compare is needed)
+-- The open flag comes from TRADE_SKILL_SHOW/CLOSE; the default frames are also checked (window open before a /reload).
+function Api.OpenWindowHasRecipe(recipeID)
+    local shown = Api.open.tradeskill
+    for _, n in ipairs({ "ProfessionsFrame", "TradeSkillFrame" }) do
+        local fr = _G[n]
+        if fr and fr.IsShown and fr:IsShown() then shown = true end
+    end
+    if not shown or not (C_TradeSkillUI and C_TradeSkillUI.GetAllRecipeIDs) then return false end
+    local ok, ids = pcall(C_TradeSkillUI.GetAllRecipeIDs)
+    if not ok or type(ids) ~= "table" then return false end
+    for _, id in ipairs(ids) do if id == recipeID then return true end end
+    return false
 end

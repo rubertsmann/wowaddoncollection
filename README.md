@@ -7,6 +7,12 @@ shared crafting-order board.
 * **Recipes tab** – filter by profession, search recipe or reagent names, see reagents (with how many you have), see
   who can craft it (click to whisper), request it.
 * **Orders tab** – guild-wide board: requests, "I'll craft it" claims, done/cancel; everyone sees who claimed what.
+  **Craft** opens the order's profession with the recipe selected, a second click crafts the ordered quantity.
+* Hover a recipe icon in any list to see the recipe; click it to whisper the crafter/requester with the link typed in.
+* **Notifications** – new orders for your professions (and claims/completions of your own orders) show as a number on the
+  minimap button, plus a sound and a chat line; screen message and taskbar flash optional. `/ts options` to configure.
+* **Find recipes by what they make** – profession dropdown, category checkboxes (head, chest, food, ...) and a free-text
+  search that also matches item effects and stats ("intellect", "agility").
 * **Available tab** – tradeable recipe items (patterns, plans, formulas such as "Recipe: Savory Deviate Delight") that
   guild members hold in bags, bank, reagent bank, mail, guild bank or auctions, listed automatically so nobody sells
   them elsewhere unknowingly. Anyone can call **dibs** (several players can; all are listed, oldest first; press again
@@ -32,7 +38,8 @@ Re-run `tools/deploy.ps1` after every change to `TalentShare.toc` (the dev TOC i
 ## Use
 
 `/ts` (or the minimap button) opens the window. Click each profession icon at the top right of the Recipes tab once so the recipes are read.
-`/ts offers` (what the item scan sees; `/ts offers scan` forces a scan), `/ts scan`, `/ts dump`, `/ts chars`, `/ts comm`, `/ts hello`, `/ts debug`, `/ts version`,
+`/ts offers` (what the item scan sees; `/ts offers scan` forces a scan), `/ts scan`, `/ts dump`, `/ts chars`, `/ts comm`, `/ts hello`, `/ts debug [n]`, `/ts version`,
+`/ts export` (diagnostic report to copy for the addon author; also the **Debug** tab), `/ts trace [n] [problems]`, `/ts ident`,
 `/ts locale <code>|auto` (UI language, then `/reload`), `/ts i18n` (what the client reports),
 profession icons at the top right of the Recipes tab (one click opens that profession and reads its recipes),
 `/ts clean` then `/ts clean confirm` (deletes everything stored locally). In the dev build use `/tsd`.

@@ -11,14 +11,14 @@ end
 local H = {}
 
 function H.ns(opts)
-    local ns = { PROTO_MAJOR = 2, PROTO_MINOR = 1, PROTOCOL = 2, PREFIX = "TShare", Slash = {},
+    local ns = { PROTO_MAJOR = 2, PROTO_MINOR = 2, PROTOCOL = 2, PREFIX = "TShare", Slash = {},
         Print = function() end }   -- same values as Core/Init.lua (tests/test_hardening.lua pins them)
     local now = (opts and opts.now) or 1000
     H.clock = now
     GetServerTime = function() return H.clock end
     -- same order as the TOC (pure modules only)
-    for _, path in ipairs({ "Core/Util.lua", "Core/Locale.lua", "Locales/enUS.lua", "Locales/deDE.lua", "Core/Store.lua",
-        "Core/Names.lua", "Core/Orders.lua", "Core/Offers.lua", "Core/Codec.lua", "Core/Guard.lua", "Core/Sync.lua", "Core/Model.lua", "Core/Comm.lua" }) do
+    for _, path in ipairs({ "Core/Util.lua", "Core/Trace.lua", "Core/Locale.lua", "Locales/enUS.lua", "Locales/deDE.lua", "Core/Store.lua",
+        "Core/Names.lua", "Core/Orders.lua", "Core/Offers.lua", "Core/Codec.lua", "Core/Guard.lua", "Core/Sync.lua", "Core/Model.lua", "Core/ItemText.lua", "Core/Notify.lua", "Core/Comm.lua", "Core/Diag.lua" }) do
         loadAddonFile(ns, path)
     end
     ns.Store.Init({})

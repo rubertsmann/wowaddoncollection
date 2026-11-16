@@ -9,7 +9,7 @@ ns.Events = Ev
 -- this the player only sees a chain of "attempt to index a nil value" errors from the files that needed the module.
 do
     local missing = {}
-    for _, key in ipairs({ "Util", "Locale", "Store", "Names", "Api", "Scanner", "Codec", "Guard", "Orders", "Offers", "Sync", "Model", "Comm" }) do
+    for _, key in ipairs({ "Util", "Locale", "Store", "Names", "Api", "Scanner", "Codec", "Guard", "Orders", "Offers", "Sync", "Model", "Comm", "Trace", "Diag" }) do
         if not ns[key] then missing[#missing + 1] = key end
     end
     if #missing > 0 then
@@ -121,6 +121,22 @@ end
 
 function onEvent.PLAYER_LOGIN()
     ns.Store.db.me = ns.Api.GetPlayerInfo().name
+    ns.Store.Recanon()     -- names stored by older builds (or under another realm spelling) get their canonical key
+    ns.Comm.canonVersion = ns.Util.realmAliasVersion
+    -- first login with another version than the data was saved with: drop what other members sent (Store.ResetPeerData)
+    local ver = (ns.BASE_VERSION:gsub("%-dev$", ""))
+    if not ns.db.readonly and ns.db.version ~= ver then
+        local n = ns.Store.ResetPeerData(ns.Store.db.me)
+        if (n.chars + n.offers + n.catalog) > 0 then
+            ns.Debug.Log("version.reset", tostring(ns.db.version) .. " -> " .. ver, n.chars, n.offers, n.catalog)
+            C_Timer.After(5, function()
+                ns.Print((ns.L["version %s: guild data is fetched again (your own recipes and orders are kept)"]):format(ver))
+            end)
+        end
+        ns.db.version = ver
+        ns.Locale.version = ns.Locale.version + 1   -- invalidates the name caches
+    end
+    ns.Comm.ready = true   -- the current character is known now; Comm.Start refuses to run before this
     ns.Comm.Start()
     if ns.dbStatus == "newer" then
         C_Timer.After(5, function()   -- after the chat frame is up
@@ -128,6 +144,14 @@ function onEvent.PLAYER_LOGIN()
         end)
     end
     C_Timer.After(3, function()
+        -- the realm part comes from GetNormalizedRealmName, which can be empty very early at login: build the name again
+        local name = ns.Api.GetPlayerInfo().name
+        if name and name ~= ns.Store.db.me then
+            ns.Trace.Sys("warn", "identity changed after login", tostring(ns.Store.db.me) .. " -> " .. name)
+            ns.Store.db.me = name
+            ns.Comm.canonVersion = nil
+            ns.Comm.Recanon()
+        end
         local changed = ns.Scanner.Refresh(ns.Util.Now())
         ns.Comm.Start()
         scheduleItemScan(0.5)
@@ -149,7 +173,13 @@ function onEvent.PLAYER_GUILD_UPDATE() ns.Comm.Start() end
 function onEvent.PLAYER_LEVEL_UP() scheduleScan(2) end
 function onEvent.TRADE_SKILL_SHOW()
     ns.Debug.Log("event", "TRADE_SKILL_SHOW")   -- a profession window really opened (after a click on a profession button)
+    ns.Api.open.tradeskill = true
     scheduleScan(1.5)
+    Ev.Fire("TRADESKILL", true)   -- Orders tab: select a pending recipe, switch the Craft button (feature 009)
+end
+function onEvent.TRADE_SKILL_CLOSE()
+    ns.Api.open.tradeskill = false
+    Ev.Fire("TRADESKILL", false)
 end
 
 -- The game's red error text (e.g. "no target", "action blocked") for 6 s after a click on a profession button, so a

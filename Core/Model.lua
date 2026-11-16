@@ -21,6 +21,13 @@ local function recipeName(store, id)
 end
 Model.RecipeName = recipeName
 
+-- An order's recipe name: the catalog when the viewer has the recipe, else the snapshot the requester sent (2.2), and only
+-- then a spell lookup by recipe id (unreliable on Forever: recipe ids are not spell ids).
+function Model.OrderRecipeName(store, o)
+    if store.GetRecipe(o.recipeID) or not o.name then return recipeName(store, o.recipeID) end
+    return esc(o.name)
+end
+
 local function sortKey(s) return ns.Util.SearchKey(s or "") end
 
 -- unique professions across all cached characters: { { key = canonical id, name = display name }, ... } sorted by name
@@ -97,10 +104,75 @@ function Model.CastMacro(row)
     return table.concat(lines, "\n")
 end
 
--- state = { profession = canonical key|nil, text = string, mineOnly = bool, me = "Name-Realm" }
--- nameFn(itemID) -> cached item name or nil (used for reagent search)
-function Model.BuildRecipeRows(store, state, nameFn)
-    local text = sortKey(state.text)
+------------------------------------------------------------------ item categories + free-text search (feature 011)
+-- A recipe's category comes from the item it makes (catalog `produces`) and the CLIENT's item data (class, subclass,
+-- equip slot); nothing about it is sent or stored. Recipes without an item (enchants, old catalog entries) are "none".
+Model.CAT_NONE = "none"
+local SLOT_ALIAS = { INVTYPE_ROBE = "INVTYPE_CHEST" }
+local SLOT_ORDER = {}
+for i, slot in ipairs({ "INVTYPE_HEAD", "INVTYPE_NECK", "INVTYPE_SHOULDER", "INVTYPE_CLOAK", "INVTYPE_CHEST", "INVTYPE_BODY",
+    "INVTYPE_TABARD", "INVTYPE_WRIST", "INVTYPE_HAND", "INVTYPE_WAIST", "INVTYPE_LEGS", "INVTYPE_FEET", "INVTYPE_FINGER",
+    "INVTYPE_TRINKET", "INVTYPE_SHIELD", "INVTYPE_HOLDABLE" }) do SLOT_ORDER[slot] = i end
+-- group order: armor, weapons, consumables, containers, quivers, projectiles, trade goods, then by class id, "none" last
+local GROUP_ORDER = { [4] = 1, [2] = 2, [0] = 3, [1] = 4, [11] = 5, [6] = 6, [7] = 7 }
+
+-- classID, subClassID, equipLoc (client item data) -> category key, group id (-1 = no item)
+function Model.CategoryKey(classID, subID, equipLoc)
+    if type(classID) ~= "number" then return Model.CAT_NONE, -1 end
+    if classID == 4 and type(equipLoc) == "string" and equipLoc:find("^INVTYPE_") and equipLoc ~= "INVTYPE_NON_EQUIP_IGNORE" then
+        return "slot:" .. (SLOT_ALIAS[equipLoc] or equipLoc), 4
+    end
+    return ("class:%d:%d"):format(classID, tonumber(subID) or 0), classID
+end
+
+local function groupRank(g)
+    if g == -1 then return 100000 end
+    return GROUP_ORDER[g] or (100 + g)
+end
+
+local function recipeCategory(store, recipeID, classFn)
+    local e = store.GetRecipe(recipeID)
+    local item = e and e.produces
+    if not item or not classFn then return Model.CAT_NONE, -1 end
+    local ok, classID, subID, equipLoc = pcall(classFn, item)
+    if not ok then return Model.CAT_NONE, -1 end
+    return Model.CategoryKey(classID, subID, equipLoc)
+end
+
+-- Searchable text from tooltip lines (viewer's client, never a peer): drops the first line (the item name, searched
+-- anyway) and every UI escape sequence, keeps at most maxLen bytes (cut on a UTF-8 character boundary).
+function Model.TooltipSearchText(lines, maxLen)
+    local out = {}
+    for i, l in ipairs(type(lines) == "table" and lines or {}) do
+        if i > 1 and type(l) == "string" then
+            l = l:gsub("|4([^:;|]*):[^;|]*;", "%1")     -- plural "|4Sek.:Sek.;" -> "Sek."
+                :gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[^:|]*:", ""):gsub("|r", "")
+                :gsub("|A.-|a", ""):gsub("|T.-|t", ""):gsub("|H.-|h(.-)|h", "%1")
+                :gsub("|", ""):gsub("%s+", " ")
+            l = l:match("^%s*(.-)%s*$")
+            if l ~= "" then out[#out + 1] = l end
+        end
+    end
+    local s = table.concat(out, " ")
+    if maxLen and #s > maxLen then
+        local cut = maxLen
+        while cut > 0 and s:byte(cut + 1) and s:byte(cut + 1) >= 128 and s:byte(cut + 1) < 192 do cut = cut - 1 end
+        s = s:sub(1, cut)
+    end
+    return s
+end
+
+-- state = { profession = canonical key|nil, text = string, mineOnly = bool, me = "Name-Realm",
+--           categories = { [categoryKey] = true } (nil or empty = all) }
+-- nameFn(itemID) -> cached item name or nil (reagent search)
+-- fns (optional) = { class = fn(itemID) -> classID, subClassID, equipLoc; label = fn(categoryKey) -> text;
+--                    text = fn(itemID) -> effect/tooltip text or nil }
+-- Search is free text: every word must appear somewhere in name, profession, reagents, category or the item's text.
+function Model.BuildRecipeRows(store, state, nameFn, fns)
+    fns = fns or {}
+    local words = {}
+    for w in sortKey(state.text):gmatch("%S+") do words[#words + 1] = w end
+    local cats = type(state.categories) == "table" and next(state.categories) and state.categories or nil
     local byID, rows = {}, {}
     for _, rec in pairs(store.db.chars) do
         for pname, p in pairs(rec.professions or {}) do
@@ -113,6 +185,7 @@ function Model.BuildRecipeRows(store, state, nameFn)
                             local e = store.GetRecipe(id)
                             row = { recipeID = id, name = recipeName(store, id), icon = e and e.icon,
                                 professionKey = key, profession = esc(ns.Names.Profession(key, p)), crafters = {} }
+                            row.category, row.group = recipeCategory(store, id, fns.class)
                             byID[id] = row
                             rows[#rows + 1] = row
                         end
@@ -124,15 +197,20 @@ function Model.BuildRecipeRows(store, state, nameFn)
     end
     local out = {}
     for _, row in ipairs(rows) do
-        local keep = true
-        if text ~= "" then
-            keep = sortKey(row.name):find(text, 1, true) ~= nil
-            if not keep then
-                local e = store.GetRecipe(row.recipeID)
-                for _, r in ipairs(e and e.reagents or {}) do
-                    local rn = (nameFn and nameFn(r.itemID)) or r.name   -- the viewer's client first
-                    if rn and sortKey(rn):find(text, 1, true) then keep = true; break end
-                end
+        local keep = not cats or cats[row.category] == true
+        if keep and #words > 0 then
+            local e = store.GetRecipe(row.recipeID)
+            local parts = { row.name, row.profession }
+            for _, r in ipairs(e and e.reagents or {}) do
+                parts[#parts + 1] = (nameFn and nameFn(r.itemID)) or r.name   -- the viewer's client first
+            end
+            if fns.label then parts[#parts + 1] = fns.label(row.category) end
+            if fns.text and e and e.produces then parts[#parts + 1] = fns.text(e.produces) end
+            local hay = {}
+            for _, v in ipairs(parts) do if type(v) == "string" then hay[#hay + 1] = sortKey(v) end end
+            hay = table.concat(hay, "\n")
+            for _, w in ipairs(words) do
+                if not hay:find(w, 1, true) then keep = false; break end
             end
         end
         if keep then
@@ -148,6 +226,46 @@ function Model.BuildRecipeRows(store, state, nameFn)
         return a.recipeID < b.recipeID
     end)
     return out
+end
+
+-- The categories present for the current profession / "mine only" choice (ignores text and the category choice itself):
+-- { { group = id, label = text, cats = { { key, label, n }, ... } }, ... } in display order.
+-- fns.groupLabel(groupID) -> text, fns.label(key) -> text.
+function Model.RecipeCategories(store, state, fns)
+    fns = fns or {}
+    local rows = Model.BuildRecipeRows(store, { profession = state.profession, mineOnly = state.mineOnly, me = state.me,
+        text = "" }, nil, { class = fns.class })
+    local groups, byGroup, byKey = {}, {}, {}
+    for _, row in ipairs(rows) do
+        local c = byKey[row.category]
+        if not c then
+            local g = byGroup[row.group]
+            if not g then
+                g = { group = row.group, label = tostring((fns.groupLabel and fns.groupLabel(row.group)) or row.group), cats = {} }
+                byGroup[row.group] = g
+                groups[#groups + 1] = g
+            end
+            c = { key = row.category, label = tostring((fns.label and fns.label(row.category)) or row.category), n = 0 }
+            byKey[row.category] = c
+            g.cats[#g.cats + 1] = c
+        end
+        c.n = c.n + 1
+    end
+    table.sort(groups, function(a, b)
+        local x, y = groupRank(a.group), groupRank(b.group)
+        if x ~= y then return x < y end
+        return sortKey(a.label) < sortKey(b.label)
+    end)
+    for _, g in ipairs(groups) do
+        table.sort(g.cats, function(a, b)
+            local x, y = SLOT_ORDER[a.key:match("^slot:(.+)$") or ""] or 99, SLOT_ORDER[b.key:match("^slot:(.+)$") or ""] or 99
+            if x ~= y then return x < y end
+            local la, lb = sortKey(a.label), sortKey(b.label)
+            if la ~= lb then return la < lb end
+            return a.key < b.key
+        end)
+    end
+    return groups
 end
 
 -- haveFn(itemID) -> count, nameFn(itemID) -> name|nil
@@ -190,9 +308,11 @@ function Model.BuildOrderRows(store, orders, filterKey, showClosed, me)
         elseif filterKey == "can" then keep = knows(o.recipeID) end
         if keep then
             local live = (st == "open" or st == "claimed")
-            rows[#rows + 1] = { id = o.id, recipeID = o.recipeID, recipeName = recipeName(store, o.recipeID), qty = o.qty,
+            rows[#rows + 1] = { id = o.id, recipeID = o.recipeID, recipeName = Model.OrderRecipeName(store, o), qty = o.qty,
                 note = esc(o.note), requester = esc(o.requester), status = st, claimers = escAll(claimers), createdAt = o.createdAt,
                 canClaim = live and not iClaimed and knows(o.recipeID),
+                canCraft = live and knows(o.recipeID) or false,
+                claimersRaw = claimers,
                 canWithdraw = live and iClaimed or false,
                 canDone = live and (o.requester == me or iClaimed) or false,
                 canCancel = live and o.requester == me }
@@ -261,4 +381,50 @@ function Model.BuildOfferRows(store, state, classFn, nameFn)
         return a.itemID < b.itemID
     end)
     return out
+end
+
+------------------------------------------------------------------ craft and whisper from lists (feature 009)
+
+-- The own profession that holds recipeID, as an OwnProfessions row (spellName/spells for CastMacro), or nil + why:
+-- "unknown" (I do not know the recipe), "noprof" (my record has it, but the profession is not in my live spellbook).
+function Model.CraftTarget(store, me, recipeID, live)
+    local rec = store.GetChar(me or "")
+    local key
+    for pname, p in pairs(rec and rec.professions or {}) do
+        if p.recipes and p.recipes[recipeID] then key = ns.Names.ProfKey(pname, p) break end
+    end
+    if not key then return nil, "unknown" end
+    for _, row in ipairs(Model.OwnProfessions(store, me, live)) do
+        if row.key == key and type(row.spellName) == "string" and row.spellName ~= "" then return row end
+    end
+    return nil, "noprof"
+end
+
+-- Whom an icon click on an order row whispers: the requester, or on my own order the first claimer (nil: nobody but me).
+function Model.OrderContact(row, me)
+    if row.requester ~= me then return row.requester end
+    for _, c in ipairs(row.claimersRaw or row.claimers or {}) do
+        if c ~= me then return c end
+    end
+    return nil
+end
+
+-- Whom an icon click on a recipe row whispers: the first crafter (Store.Crafters order: highest rank) who is not me.
+function Model.RecipeContact(crafters, me)
+    for _, c in ipairs(crafters or {}) do
+        local name = type(c) == "table" and c.name or c
+        if name ~= me then return name end
+    end
+    return nil
+end
+
+-- Text inserted into a whisper. link: a hyperlink built by THIS client (Api.RecipeLink), else the recipe name as plain
+-- "[Name]" with every "|" and bracket removed, so text a peer sent can never become a link or escape code in chat.
+function Model.ChatText(link, name, qty)
+    local t = link
+    if type(t) ~= "string" or t == "" then
+        t = "[" .. (tostring(name or "?"):gsub("[|%[%]\r\n]", "")) .. "]"
+    end
+    if qty and qty > 1 then t = t .. " x" .. qty end
+    return t
 end

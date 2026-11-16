@@ -23,7 +23,7 @@ return {
         end)
     end,
 
-    -- the game's own Ambiguate decides when the client has it; the realm comparison is only the offline fallback
+    -- for realms other than my own, the game's Ambiguate decides when the client has it (connected realms)
     ["names: the game's Ambiguate is used when available"] = function(h)
         local U = h.ns().Util
         local saved = Ambiguate
@@ -33,6 +33,19 @@ return {
         Ambiguate = saved
         if not ok then error(err, 0) end
         h.eq(calls[1], "none")
+    end,
+
+    -- Ambiguate that does not know the normalized realm returns the name unchanged: my own realm must still be stripped
+    ["whisper: my own realm is stripped even when Ambiguate returns the full name"] = function(h)
+        local U = h.ns().Util
+        local saved = Ambiguate
+        Ambiguate = function(name) return name end
+        local ok, err = pcall(withRealm, "Mine", function()
+            h.eq(U.WhisperTarget("Peer-Mine"), "Peer")
+            h.eq(U.WhisperTarget("Peer-Other"), "Peer-Other")
+        end)
+        Ambiguate = saved
+        if not ok then error(err, 0) end
     end,
 
     ["whisper: other realms keep the realm suffix"] = function(h)

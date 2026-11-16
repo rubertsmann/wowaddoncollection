@@ -1,7 +1,7 @@
 local ADDON, ns = ...
 
--- Standalone window: "Recipes" tab (filter, search, reagents, crafters, request), "Orders" tab (shared board) and
--- "Available" tab (recipe items guild members hold, with dibs).
+-- Standalone window: "Recipes" tab (filter, search, reagents, crafters, request), "Orders" tab (shared board),
+-- "Available" tab (recipe items guild members hold, with dibs) and "Debug" tab (network trace, diagnostic export).
 -- Plain frames only (no secure templates), so it never taints and is safe to open in combat.
 -- All text goes through L (Locales/); game names are resolved for this client by Model/Names. tests/test_locale_files.lua
 -- fails on a hardcoded label.
@@ -11,6 +11,7 @@ ns.UI = UI
 local L, F, P = ns.L, ns.Locale.Fmt, ns.Locale.Plural
 
 local ROW_H = 20
+local notice = { n = 0, icon = false }   -- feature 010: unseen orders (UI.SetNotice)
 local atan2 = math.atan2 or math.atan
 
 local state = {
@@ -18,6 +19,7 @@ local state = {
     professionIdx = 0,           -- 0 = all, else index into the professions list ({ key, name })
     text = "",
     mineOnly = false,
+    categories = {},             -- feature 011: checked category keys (Model.CategoryKey); empty = all
     selectedRecipe = nil,
     orderFilterIdx = 1,
     showClosed = false,
@@ -25,6 +27,8 @@ local state = {
     offerText = "",
     offerMineProf = false,
     selectedOffer = nil,
+    debugFilterIdx = 1,
+    debugView = "trace",         -- "trace" (message log) | "names" (name check table)
 }
 local function orderFilters()
     return { { "all", L["All"] }, { "open", L["Open"] }, { "mine", L["My requests"] }, { "crafting", L["I'm crafting"] },
@@ -132,6 +136,14 @@ local function makeSelectableRow(list)
     r.icon = r:CreateTexture(nil, "ARTWORK"); r.icon:SetSize(ROW_H - 2, ROW_H - 2); r.icon:SetPoint("LEFT", 2, 0)
     r.label = text(r, "GameFontHighlightSmall"); r.label:SetPoint("LEFT", r.icon, "RIGHT", 4, 0); r.label:SetPoint("RIGHT", -70, 0)
     r.right = text(r, "GameFontNormalSmall", "RIGHT"); r.right:SetPoint("RIGHT", -2, 0)
+    -- the icon is its own button (feature 009): hover shows the recipe/item, click whispers with its link. A list sets
+    -- r.onIconEnter(self) / r.onIconClick() in its fill function; without them the icon behaves like the row.
+    local ib = CreateFrame("Button", nil, r)
+    ib:SetAllPoints(r.icon)
+    ib:SetScript("OnEnter", function(self) if r.onIconEnter then r.onIconEnter(self) end end)
+    ib:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    ib:SetScript("OnClick", function() if r.onIconClick then r.onIconClick() else r:Click() end end)
+    r.iconBtn = ib
     return r
 end
 
@@ -139,10 +151,35 @@ end
 
 local f
 local recipeList, orderList, offerList
+local refreshDebug   -- Debug tab (defined with the tab below)
 local offerRows = {}
 local detail = {}
 
 local function professionsList() return ns.Model.Professions(ns.Store) end
+
+-- feature 011: client item data for categories and the free-text search (looked up when called; Api loads before UI)
+local itemFns = {
+    class = function(id) return ns.Api.ItemCategoryInfo(id) end,
+    label = function(key) return ns.Api.CategoryLabel(key) end,
+    groupLabel = function(g) return ns.Api.CategoryGroupLabel(g) end,
+    text = function(id) return ns.ItemText.Get(id) end,
+}
+
+-- Modern menu dropdowns (Blizzard_Menu: WowStyle1DropdownTemplate, checkbox menus; present on Forever, see
+-- docs/api-findings.md). nil when the client lacks them; callers then fall back to plain cycle buttons.
+local function menuDropdown(parent, template, w)
+    local ok, dd = pcall(CreateFrame, "DropdownButton", nil, parent, template)
+    if not ok or type(dd) ~= "table" or not dd.SetupMenu then return nil end
+    dd:SetWidth(w)
+    return dd
+end
+
+local function setDropdownText(dd, s)
+    if dd.SetLabel then dd:SetLabel(s)                 -- fallback button
+    elseif dd.OverrideText then dd:OverrideText(s)
+    elseif dd.SetText then dd:SetText(s)
+    elseif dd.Text and dd.Text.SetText then dd.Text:SetText(s) end
+end
 
 ------------------------------------------------------------------ profession scan buttons
 -- The game only exposes a profession's recipes while its window is open, and addon code may not open it (blocked,
@@ -258,14 +295,23 @@ local function refreshBar()
     end
 end
 
-local function refreshRecipes()
-    if not f or state.tab ~= "recipes" then return end
+-- the current Recipes tab filter (feature 011 adds categories); also used to build the category menu
+local function recipeFilter()
     local profs = professionsList()
     if state.professionIdx > #profs then state.professionIdx = 0 end
     local sel = profs[state.professionIdx]
-    f.profBtn:SetLabel(F(L["Profession: {name}"], { name = sel and sel.name or L["All"] }))
-    local rows = ns.Model.BuildRecipeRows(ns.Store, { profession = sel and sel.key, text = state.text,
-        mineOnly = state.mineOnly, me = me() }, ns.Api.ItemName)
+    return { profession = sel and sel.key, text = state.text, mineOnly = state.mineOnly, me = me(),
+        categories = state.categories }, sel, profs
+end
+
+local function refreshRecipes()
+    if not f or state.tab ~= "recipes" then return end
+    local filter, sel, profs = recipeFilter()
+    setDropdownText(f.profBtn, F(L["Profession: {name}"], { name = sel and sel.name or L["All"] }))
+    local nCats = 0
+    for _ in pairs(state.categories) do nCats = nCats + 1 end
+    setDropdownText(f.catBtn, nCats > 0 and F(L["Category ({n})"], { n = nCats }) or L["Category"])
+    local rows = ns.Model.BuildRecipeRows(ns.Store, filter, ns.Api.ItemName, itemFns)
     recipeList:SetData(rows)
     f.count:SetText(P(#rows, L["{n} recipe"], L["{n} recipes"]))
     -- nothing cached anywhere yet: say how to fill it (recipes are only readable while a profession window is open)
@@ -308,8 +354,81 @@ local function refreshDetail()
     for _, w in ipairs({ detail.qty, detail.note, detail.request }) do w:SetShown(d ~= nil) end
 end
 
-local function refreshOrders()
+------------------------------------------------------------------ Craft button (feature 009)
+-- Crafting needs the profession window open, and only a real click on a secure button may open it (feature 005). So the
+-- button has two modes, set out of combat: "open" = macro "/cast <profession>" (the window opens, then the ordered recipe
+-- is selected), "craft" = no secure action, PostClick calls C_TradeSkillUI.CraftRecipe for the order's quantity.
+local refreshOrders   -- defined below; the craft helpers call it
+local craft = { mode = nil, recipeID = nil, qty = 1, pending = nil, dirty = false, lastClick = 0 }
+
+local function refreshCraft(sel)
+    local b = f and f.craftBtn
+    if not b then return end
+    if ns.Api.InCombat() then craft.dirty = true return end   -- secure frame: no attribute or state changes in combat
+    craft.dirty = false
+    local target = sel and sel.canCraft and ns.Model.CraftTarget(ns.Store, me(), sel.recipeID, ns.Api.GetPlayerProfessions() or {})
+    if not target then
+        craft.mode, craft.recipeID = nil, nil
+        b:SetAttribute("type", nil)
+        b:SetLabel(L["Craft"])
+        b:Disable()
+        return
+    end
+    craft.recipeID, craft.qty = sel.recipeID, sel.qty
+    -- "craft" when the open profession window lists this recipe. A name compare failed in game (the button stayed on
+    -- "/cast", and casting the open profession CLOSES its window: "Open profession works only sometimes").
+    local openHas = ns.Api.OpenWindowHasRecipe(sel.recipeID)
+    local mode = openHas and "craft" or "open"
+    if mode ~= craft.mode or sel.recipeID ~= craft.loggedID then
+        craft.loggedID = sel.recipeID
+        ns.Debug.Log("craft.mode", mode, tostring(sel.recipeID), "open=" .. tostring(ns.Api.OpenProfessionName()),
+            "target=" .. tostring(target.spellName), "flag=" .. tostring(ns.Api.open.tradeskill))
+    end
+    if openHas then
+        craft.mode = "craft"
+        b:SetAttribute("type", nil)
+        b:SetLabel(F(L["Craft {qty}x"], { qty = sel.qty }))
+    else
+        craft.mode = "open"
+        b:SetAttribute("type", "macro")
+        b:SetAttribute("macrotext", ns.Model.CastMacro(target))
+        b:SetLabel(L["Open profession"])
+    end
+    b:Enable()
+end
+
+local function craftPostClick()
+    local t = GetTime and GetTime() or 0
+    if t - craft.lastClick < 0.4 then return end   -- clicks are registered on down AND up: act once
+    craft.lastClick = t
+    local name = ns.Model.RecipeName(ns.Store, craft.recipeID or 0)
+    if craft.mode == "open" then
+        craft.pending = { recipeID = craft.recipeID, t = t }
+        ns.Debug.Log("craft.open", tostring(craft.recipeID))
+    elseif craft.mode == "craft" then
+        local ok, err = ns.Api.CraftRecipe(craft.recipeID, craft.qty)
+        ns.Debug.Log("craft.start", tostring(craft.recipeID), tostring(craft.qty), ok and "ok" or tostring(err))
+        if ok then ns.Print(F(L["Crafting {qty}x {name}"], { qty = craft.qty, name = name }))
+        else ns.Print(L["Could not start crafting. The recipe is selected in the profession window: press its Create button."]) end
+    end
+end
+
+-- profession window opened or closed: select the pending recipe, then switch the button's mode
+local function onTradeSkill(isOpen)
+    if isOpen and craft.pending and ((GetTime and GetTime() or 0) - craft.pending.t) < 20 then
+        local id = craft.pending.recipeID
+        craft.pending = nil
+        C_Timer.After(0.5, function()
+            ns.Debug.Log("craft.select", tostring(id), tostring(ns.Api.SelectRecipe(id)))
+            if f and f:IsShown() then refreshOrders() end
+        end)
+    end
+    if f and f:IsShown() then refreshOrders() end
+end
+
+refreshOrders = function()
     if not f or state.tab ~= "orders" then return end
+    if ns.Alerts then ns.Alerts.Seen() end   -- feature 010: looking at the board clears the badge
     local key = orderFilters()[state.orderFilterIdx]
     f.orderFilterBtn:SetLabel(F(L["Show: {filter}"], { filter = key[2] }))
     f.closedBtn:SetLabel(state.showClosed and L["Hide finished"] or L["Show finished"])
@@ -321,6 +440,7 @@ local function refreshOrders()
     f.withdrawBtn:SetEnabled(sel and sel.canWithdraw or false)
     f.doneBtn:SetEnabled(sel and sel.canDone or false)
     f.cancelBtn:SetEnabled(sel and sel.canCancel or false)
+    refreshCraft(sel)
     f.ordersEmpty:SetShown(#rows == 0)
 end
 
@@ -356,7 +476,7 @@ end
 
 function UI.Refresh()
     if not f or not f:IsShown() then return end
-    refreshRecipes(); refreshDetail(); refreshOrders(); refreshOffers(); refreshBar()
+    refreshRecipes(); refreshDetail(); refreshOrders(); refreshOffers(); refreshDebug(); refreshBar()
 end
 
 local function setTab(name)
@@ -365,19 +485,276 @@ local function setTab(name)
     f.tabBtns.recipes:SetEnabled(name ~= "recipes")
     f.tabBtns.orders:SetEnabled(name ~= "orders")
     f.tabBtns.available:SetEnabled(name ~= "available")
+    f.tabBtns.debug:SetEnabled(name ~= "debug")
     UI.Refresh()
 end
 UI.SelectTab = function(name) if f then setTab(name) end end
+function UI.OrdersVisible() return (f and f:IsShown() and state.tab == "orders") and true or false end
 
-local function whisper(name)
-    if not name or name == me() then return end   -- you cannot whisper yourself: the game answers "no player named ... online"
-    name = ns.Util.WhisperTarget(name)   -- same-realm players by character name only (the "Name-Realm" form is not found)
-    if ChatFrame_SendTell then ChatFrame_SendTell(name) elseif ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. name .. " ") end
+-- insert (optional): a function returning the text to put into the whisper's edit box (Model.ChatText: local links only).
+-- The whisper opens first; building or inserting the text can never stop it. Every step is in the debug log, and an error
+-- is printed to chat (players usually run without script errors shown, so a failing click looked like "nothing happens").
+local function whisper(name, insert)
+    if not name or name == me() then   -- you cannot whisper yourself: the game answers "no player named ... online"
+        ns.Debug.Log("whisper.skip", tostring(name))
+        return
+    end
+    local target = ns.Util.WhisperTarget(name)   -- same-realm players by character name only (the "Name-Realm" form is not found)
+    local ok, err = pcall(function()
+        if ChatFrame_SendTell then ChatFrame_SendTell(target) elseif ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. target .. " ") end
+    end)
+    local text, eb
+    if ok and insert then
+        ok, err = pcall(function()
+            text = type(insert) == "function" and insert() or insert
+            eb = ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow()
+            if eb and eb.Insert and type(text) == "string" and text ~= "" then eb:Insert(text) end
+        end)
+    end
+    ns.Debug.Log("whisper", tostring(name), "->", tostring(target), "text=" .. tostring(text and #text), "editbox=" .. tostring(eb ~= nil),
+        ok and "ok" or ("ERROR " .. tostring(err)))
+    if not ok then ns.Print("whisper failed: " .. ns.Util.Esc(tostring(err))) end
+end
+
+-- whisper text for a recipe: link built by this client, else "[Name]" (Model.ChatText strips escape codes)
+local function recipeChatText(recipeID, qty)
+    local e = ns.Store.GetRecipe(recipeID)
+    return ns.Model.ChatText(ns.Api.RecipeLink(recipeID, e and e.produces), ns.Names.Recipe(recipeID, e), qty)
+end
+
+-- hover on a recipe icon: the crafted item's own tooltip when known, else the name; then reagents and what a click does
+local function recipeTooltip(owner, recipeID, clickHint)
+    local e = ns.Store.GetRecipe(recipeID)
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    if e and e.produces then
+        GameTooltip:SetHyperlink("item:" .. e.produces)
+        GameTooltip:AddLine(ns.Model.RecipeName(ns.Store, recipeID), 1, 0.82, 0)
+    else
+        GameTooltip:SetText(ns.Model.RecipeName(ns.Store, recipeID), 1, 0.82, 0)
+    end
+    local d = ns.Model.RecipeDetail(ns.Store, recipeID, ns.Api.ItemCount, ns.Api.ItemName)
+    if #d.reagents > 0 then
+        GameTooltip:AddLine(L["Reagents"], 1, 1, 1)
+        for _, r in ipairs(d.reagents) do
+            GameTooltip:AddLine(("%s x%d  (%s)"):format(r.name, r.count, F(L["have {n}"], { n = r.have })),
+                r.enough and 0.2 or 1, r.enough and 1 or 0.4, r.enough and 0.6 or 0.4)
+        end
+    end
+    if clickHint then GameTooltip:AddLine(clickHint, 0.6, 0.8, 1, true) end
+    GameTooltip:Show()
 end
 
 local function afterOrderChange(order)
     if order then ns.Comm.BroadcastOrder(order) end
     UI.Refresh()
+end
+
+------------------------------------------------------------------ Debug tab (feature 008): network trace + export
+
+local DEBUG_FILTERS = { "all", "in", "out", "sys", "problems" }
+local function debugFilterLabel(key)
+    local map = { all = L["All"], ["in"] = L["Incoming"], out = L["Outgoing"], sys = L["System"], problems = L["Problems"] }
+    return map[key] or key
+end
+local ST_COLOR = { ok = "33ff99", sent = "33ff99", info = "aaaaaa", queued = "ffd100", ignored = "bbbbbb",
+    failed = "ff5555", dropped = "ff5555", rejected = "ff5555", error = "ff5555", warn = "ff8800" }
+local DIR_TEXT = { ["in"] = "|cff66ccff<-|r", out = "|cffffd100->|r", sys = "|cffaaaaaa**|r" }
+
+local function debugLine(e)
+    local E = ns.Util.Esc
+    local parts = { "|cff888888" .. ns.Trace.Clock(e.t) .. "|r", DIR_TEXT[e.dir] or "?" }
+    if e.ch then parts[#parts + 1] = "|cff888888" .. E(e.ch) .. "|r" end
+    if e.peer then parts[#parts + 1] = E(short(e.peer)) end
+    if e.mt then parts[#parts + 1] = "|cffffffff" .. E(e.mt) .. "|r" end
+    parts[#parts + 1] = "|cff" .. (ST_COLOR[e.st] or "ffffff") .. E(e.st) .. "|r"
+    if e.why then parts[#parts + 1] = "|cffcccccc" .. E(e.why) .. "|r"
+    elseif e.info and e.info ~= "" then parts[#parts + 1] = "|cff999999" .. E(e.info) .. "|r" end
+    return table.concat(parts, " ")
+end
+
+-- name check table: column widths (the list is 736 wide, 16 of it for the slider); Location and the full behaviour are in the tooltip
+local NAME_COLS = { { key = "status", w = 82 }, { key = "method", w = 196 }, { key = "value", w = 168 }, { key = "expected", w = 150 },
+    { key = "behaviour", w = 120 } }
+local NAME_ST_COLOR = { ok = "33ff99", fixed = "ffd100", bad = "ff5555", info = "aaaaaa", unknown = "aaaaaa" }
+
+local function nameCell(r, key)
+    local E = ns.Util.Esc
+    if key == "status" then return "|cff" .. (NAME_ST_COLOR[r.status] or "ffffff") .. E(ns.Diag.StatusLabel(r.status)) .. "|r" end
+    if key == "method" then return "|cffffffff" .. E(r.method) .. "|r" end
+    if key == "behaviour" then return "|cff999999" .. E(r.behaviour) .. "|r" end
+    return E(tostring(r[key]))
+end
+
+local function makeColumns(parent, font)
+    local cols, x = {}, 2
+    for i, c in ipairs(NAME_COLS) do
+        local fs = text(parent, font)
+        fs:SetPoint("LEFT", x, 0); fs:SetWidth(c.w - 6); fs:SetWordWrap(false)
+        cols[i] = fs
+        x = x + c.w
+    end
+    return cols
+end
+
+local function makeDebugRow(list)
+    local r = CreateFrame("Button", nil, list)
+    local hl = r:CreateTexture(nil, "HIGHLIGHT"); hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.1)
+    r.label = text(r, "GameFontHighlightSmall"); r.label:SetPoint("LEFT", 2, 0); r.label:SetPoint("RIGHT", -2, 0)
+    r.label:SetWordWrap(false)
+    r.cols = makeColumns(r, "GameFontHighlightSmall")
+    r:SetScript("OnEnter", function(self)
+        local it = self.item
+        if not it then return end
+        local E = ns.Util.Esc
+        GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+        if it.method then
+            GameTooltip:SetText(E(it.method), 1, 1, 1)
+            GameTooltip:AddLine(L["Status"] .. ": " .. nameCell(it, "status"), 1, 1, 1)
+            GameTooltip:AddLine(L["Location"] .. ": " .. E(it.where), 0.8, 0.8, 0.8, true)
+            GameTooltip:AddLine(L["Value"] .. ": " .. E(it.value), 1, 1, 1, true)
+            GameTooltip:AddLine(L["Expected"] .. ": " .. E(tostring(it.expected)), 1, 1, 1, true)
+            GameTooltip:AddLine(L["Behaviour"] .. ": " .. E(it.behaviour), 0.8, 0.8, 0.8, true)
+        else
+            GameTooltip:SetText(E(ns.Trace.Format(it)), 1, 1, 1, 1, true)
+        end
+        GameTooltip:Show()
+    end)
+    r:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    return r
+end
+
+local function fillDebugRow(r, e)
+    local isName = e.method ~= nil
+    r.label:SetShown(not isName)
+    for i, fs in ipairs(r.cols) do
+        fs:SetShown(isName)
+        if isName then fs:SetText(nameCell(e, NAME_COLS[i].key)) end
+    end
+    if not isName then r.label:SetText(debugLine(e)) end
+end
+
+local debugList
+local debugTop = 0   -- seq of the newest entry shown, to keep a scrolled-down view still while new entries arrive
+
+local function refreshNames()
+    local rows = ns.Diag.IdentityRows(ns.Diag.IdentityContext())
+    debugList.offset = math.min(debugList.offset, math.max(0, #rows - 1))
+    debugList:SetData(rows)
+    local n = { ok = 0, fixed = 0, bad = 0 }
+    for _, r in ipairs(rows) do if n[r.status] then n[r.status] = n[r.status] + 1 end end
+    f.debugStatus:SetText(F(L["Name check: {ok} OK, {fixed} normalized, {bad} problems. Hover a row for location and behaviour."],
+        { ok = n.ok, fixed = n.fixed, bad = n.bad }))
+    f.debugEmpty:Hide()
+end
+
+refreshDebug = function()
+    if not f or state.tab ~= "debug" then return end
+    local names = state.debugView == "names"
+    f.namesBtn:SetLabel(names and L["Message log"] or L["Name check"])
+    f.debugFilterBtn:SetEnabled(not names)
+    f.debugHeader:SetShown(names)
+    if names then refreshNames() return end
+    local key = DEBUG_FILTERS[state.debugFilterIdx] or "all"
+    f.debugFilterBtn:SetLabel(F(L["Show: {filter}"], { filter = debugFilterLabel(key) }))
+    local rows = ns.Trace.List(key)
+    if debugList.offset > 0 then
+        local added = 0
+        for _, e in ipairs(rows) do if (e.seq or 0) > debugTop then added = added + 1 else break end end
+        debugList.offset = debugList.offset + added
+    end
+    debugTop = rows[1] and rows[1].seq or debugTop
+    debugList:SetData(rows)
+    local C = ns.Comm
+    local my = ns.Store.db.me
+    f.debugStatus:SetText(F(L["Queue {q} chunks | incomplete {f} | roster {r} | me in roster: {m} | send failures {s}"], {
+        q = #C.queue, f = #C.InFlight(), r = ns.Util.Count(C.roster),
+        m = (ns.Util.Count(C.roster) == 0 and "?") or (my and C.roster[my] and L["yes"] or ("|cffff5555" .. L["NO"] .. "|r")),
+        s = C.sendFailures }))
+    f.debugEmpty:SetShown(#rows == 0)
+end
+
+local exportFrame
+function UI.ShowExport(report)
+    if not exportFrame then
+        local name = ns.FRAME .. "ExportFrame"
+        local ok, e = pcall(CreateFrame, "Frame", name, UIParent, "BasicFrameTemplateWithInset")
+        if not ok or not e then
+            e = CreateFrame("Frame", name, UIParent, "BackdropTemplate")
+            e:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+                edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
+            local x = CreateFrame("Button", nil, e, "UIPanelCloseButton"); x:SetPoint("TOPRIGHT", -2, -2)
+        end
+        e:SetSize(720, 500); e:SetPoint("CENTER")
+        e:SetFrameStrata("DIALOG")
+        e:SetMovable(true); e:EnableMouse(true); e:RegisterForDrag("LeftButton")
+        e:SetScript("OnDragStart", e.StartMoving); e:SetScript("OnDragStop", e.StopMovingOrSizing)
+        table.insert(UISpecialFrames, name)
+        local title = text(e, "GameFontNormalLarge"); title:SetPoint("TOP", 0, -6); title:SetText(L["Diagnostic report"])
+        local hint = text(e, "GameFontHighlightSmall"); hint:SetPoint("TOPLEFT", 14, -32); hint:SetPoint("RIGHT", -14, 0)
+        hint:SetText(L["Press Ctrl+A, then Ctrl+C to copy. Paste it into Discord, a whisper or a text file for the addon author."])
+        local sf = CreateFrame("ScrollFrame", nil, e, "UIPanelScrollFrameTemplate")
+        sf:SetPoint("TOPLEFT", 12, -52); sf:SetPoint("BOTTOMRIGHT", -32, 12)
+        local eb = CreateFrame("EditBox", nil, sf)
+        eb:SetMultiLine(true); eb:SetAutoFocus(false); eb:SetMaxLetters(0)
+        eb:SetFontObject(ChatFontNormal or GameFontHighlightSmall)
+        eb:SetWidth(660)
+        eb:SetScript("OnEscapePressed", function() e:Hide() end)
+        -- read-only: typing restores the report
+        eb:SetScript("OnTextChanged", function(self, user) if user and e.report then self:SetText(e.report) end end)
+        sf:SetScrollChild(eb)
+        e.eb = eb
+        exportFrame = e
+    end
+    exportFrame.report = ns.Util.Esc(report)
+    exportFrame.eb:SetText(exportFrame.report)
+    exportFrame:Show()
+    exportFrame.eb:SetFocus()
+    exportFrame.eb:HighlightText()
+end
+
+local function buildDebugTab()
+    local dt = CreateFrame("Frame", nil, f); dt:SetPoint("TOPLEFT", 12, -58); dt:SetPoint("BOTTOMRIGHT", -12, 12)
+    f.tabs.debug = dt
+    f.debugFilterBtn = button(dt, F(L["Show: {filter}"], { filter = L["All"] }), 150, 22, function()
+        state.debugFilterIdx = state.debugFilterIdx % #DEBUG_FILTERS + 1
+        debugList.offset = 0
+        refreshDebug()
+    end)
+    f.debugFilterBtn:SetPoint("TOPLEFT", 0, 0)
+    local hello = button(dt, L["Send HELLO"], 100, 22, function() ns.Comm.RequestHello(false, true); refreshDebug() end)
+    hello:SetPoint("LEFT", f.debugFilterBtn, "RIGHT", 8, 0)
+    local clear = button(dt, L["Clear"], 70, 22, function() ns.Trace.Clear(); debugList.offset = 0; refreshDebug() end)
+    clear:SetPoint("LEFT", hello, "RIGHT", 8, 0)
+    f.namesBtn = button(dt, L["Name check"], 110, 22, function()
+        state.debugView = state.debugView == "names" and "trace" or "names"
+        debugList.offset = 0
+        refreshDebug()
+    end)
+    f.namesBtn:SetPoint("LEFT", clear, "RIGHT", 8, 0)
+    local export = button(dt, L["Export report"], 120, 22, function() ns.Slash.export() end)
+    export:SetPoint("TOPRIGHT", 0, 0)
+    if ns.IS_DEV and ns.DevProbe then   -- dev build only (feature 011): records item/category/tooltip data to SavedVariables
+        local probe = button(dt, L["Item probe"], 100, 22, function() ns.DevProbe.Run() end)
+        probe:SetPoint("RIGHT", export, "LEFT", -8, 0)
+    end
+    f.debugStatus = text(dt, "GameFontHighlightSmall"); f.debugStatus:SetPoint("TOPLEFT", 0, -28); f.debugStatus:SetPoint("RIGHT", 0, 0)
+    -- column headings of the name check (shown only in that view)
+    local header = CreateFrame("Frame", nil, dt); header:SetSize(720, 16); header:SetPoint("TOPLEFT", 0, -44)
+    local heads = makeColumns(header, "GameFontNormalSmall")
+    local titles = { L["Status"], L["Method"], L["Value"], L["Expected"], L["Behaviour"] }
+    for i, fs in ipairs(heads) do fs:SetText(titles[i]) end
+    header:Hide()
+    f.debugHeader = header
+    debugList = createList(dt, 736, 360, makeDebugRow, fillDebugRow)
+    debugList:SetPoint("TOPLEFT", 0, -62)
+    f.debugEmpty = text(dt, "GameFontDisable", "CENTER"); f.debugEmpty:SetPoint("CENTER", debugList, "CENTER", 0, 0)
+    f.debugEmpty:SetText(L["No network messages recorded yet."])
+    -- live view: entries change status after they were added (queued -> sent), so redraw once a second while visible
+    local acc = 0
+    dt:SetScript("OnUpdate", function(_, dt2)
+        acc = acc + dt2
+        if acc >= 1 then acc = 0; refreshDebug() end
+    end)
 end
 
 local function build()
@@ -406,36 +783,117 @@ local function build()
         recipes = button(f, L["Recipes"], 90, 22, function() setTab("recipes") end),
         orders = button(f, L["Orders"], 90, 22, function() setTab("orders") end),
         available = button(f, L["Available"], 90, 22, function() setTab("available") end),
+        debug = button(f, L["Debug"], 70, 22, function() setTab("debug") end),
     }
     f.tabBtns.recipes:SetPoint("TOPLEFT", 12, -30)
     f.tabBtns.orders:SetPoint("LEFT", f.tabBtns.recipes, "RIGHT", 4, 0)
     f.tabBtns.available:SetPoint("LEFT", f.tabBtns.orders, "RIGHT", 4, 0)
+    f.tabBtns.debug:SetPoint("LEFT", f.tabBtns.available, "RIGHT", 4, 0)
+    f.optionsBtn = button(f, L["Options"], 80, 22, function() if ns.Alerts then ns.Alerts.OpenOptions() end end)
+    f.optionsBtn:SetPoint("TOPRIGHT", -30, -30)
     f.tabs = {}
+    UI.SetNotice(notice.n, notice.icon, notice.hide)
 
     -- Recipes tab
     local rt = CreateFrame("Frame", nil, f); rt:SetPoint("TOPLEFT", 12, -58); rt:SetPoint("BOTTOMRIGHT", -12, 12)
     f.tabs.recipes = rt
-    f.profBtn = button(rt, F(L["Profession: {name}"], { name = L["All"] }), 190, 22, function() end)
+    -- profession: dropdown with one entry per profession (feature 011); old cycle button if the client has no menus
+    local function pickProfession(i)
+        if state.professionIdx ~= i then state.categories = {} end   -- categories differ per profession
+        state.professionIdx = i
+        refreshRecipes()
+    end
+    local profBtnMenu = menuDropdown(rt, "WowStyle1DropdownTemplate", 180)
+    if profBtnMenu then
+        f.profBtn = profBtnMenu
+        f.profBtn:SetupMenu(function(_, root)
+            local function isSel(i) return state.professionIdx == i end
+            root:CreateRadio(L["All"], isSel, pickProfession, 0)
+            for i, p in ipairs(professionsList()) do root:CreateRadio(p.name, isSel, pickProfession, i) end
+        end)
+    else
+        f.profBtn = button(rt, F(L["Profession: {name}"], { name = L["All"] }), 180, 22, function() end)
+        f.profBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        f.profBtn:SetScript("OnClick", function(_, btn)
+            local n = #professionsList()
+            pickProfession((state.professionIdx + (btn == "RightButton" and -1 or 1)) % (n + 1))
+        end)
+    end
     f.profBtn:SetPoint("TOPLEFT", 0, 0)
-    f.profBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    f.profBtn:SetScript("OnClick", function(_, btn)
-        local n = #professionsList()
-        state.professionIdx = (state.professionIdx + (btn == "RightButton" and -1 or 1)) % (n + 1)
+
+    -- category: checkbox menu built from the items the recipes of this profession make (feature 011)
+    local function toggleCategory(key)
+        state.categories[key] = (not state.categories[key]) or nil
+        refreshRecipes()
+    end
+    local catBtnMenu = menuDropdown(rt, "WowStyle1FilterDropdownTemplate", 120)
+    if catBtnMenu then
+        f.catBtn = catBtnMenu
+        f.catBtn:SetupMenu(function(_, root)
+            if root.SetScrollMode then root:SetScrollMode(420) end
+            local groups = ns.Model.RecipeCategories(ns.Store, (recipeFilter()), itemFns)
+            if #groups == 0 then root:CreateTitle(L["No recipes"]); return end
+            root:CreateButton(L["Show all"], function()
+                state.categories = {}
+                refreshRecipes()
+            end)
+            local function isSel(key) return state.categories[key] == true end
+            for _, g in ipairs(groups) do
+                root:CreateTitle(g.label)
+                for _, c in ipairs(g.cats) do root:CreateCheckbox(("%s (%d)"):format(c.label, c.n), isSel, toggleCategory, c.key) end
+            end
+        end)
+    else   -- no menus: cycle through the categories one at a time
+        f.catBtn = button(rt, L["Category"], 120, 22, function()
+            local flat = {}
+            for _, g in ipairs(ns.Model.RecipeCategories(ns.Store, (recipeFilter()), itemFns)) do
+                for _, c in ipairs(g.cats) do flat[#flat + 1] = c.key end
+            end
+            local cur = next(state.categories)
+            local idx = 0
+            for i, k in ipairs(flat) do if k == cur then idx = i end end
+            state.categories = {}
+            if flat[idx + 1] then state.categories[flat[idx + 1]] = true end
+            refreshRecipes()
+        end)
+    end
+    f.catBtn:SetPoint("LEFT", f.profBtn, "RIGHT", 8, 0)
+
+    -- free-text search: words in any order over name, reagents, category and the item's effect text (feature 011)
+    local okSearch, search = pcall(CreateFrame, "EditBox", nil, rt, "SearchBoxTemplate")
+    if not okSearch or type(search) ~= "table" then search = CreateFrame("EditBox", nil, rt, "InputBoxTemplate") end
+    search:SetSize(170, 20); search:SetPoint("LEFT", f.catBtn, "RIGHT", 14, 0); search:SetAutoFocus(false)
+    search:SetScript("OnTextChanged", function(self)
+        if SearchBoxTemplate_OnTextChanged and self.clearButton then pcall(SearchBoxTemplate_OnTextChanged, self) end
+        state.text = self:GetText()
         refreshRecipes()
     end)
-    local search = CreateFrame("EditBox", nil, rt, "InputBoxTemplate")
-    search:SetSize(150, 20); search:SetPoint("LEFT", f.profBtn, "RIGHT", 14, 0); search:SetAutoFocus(false)
-    search:SetScript("OnTextChanged", function(self) state.text = self:GetText(); refreshRecipes() end)
     search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     f.search = search
-    local hint = text(rt, "GameFontDisableSmall"); hint:SetPoint("BOTTOMLEFT", search, "TOPLEFT", 0, 0); hint:SetText(L["search recipe or reagent"])
+    local hint = text(rt, "GameFontDisableSmall"); hint:SetPoint("BOTTOMLEFT", search, "TOPLEFT", 0, 0)
+    hint:SetText(L["search name, reagent, slot or effect"])
+
+    -- effect texts are read a few per frame while this tab is open, so the first search does not freeze the game
+    local pumpAcc, prefetchAcc, refreshAcc, gotText = 0, 3, 0, false
+    rt:SetScript("OnUpdate", function(_, elapsed)
+        pumpAcc, prefetchAcc, refreshAcc = pumpAcc + elapsed, prefetchAcc + elapsed, refreshAcc + elapsed
+        if prefetchAcc >= 3 then prefetchAcc = 0; ns.ItemText.Prefetch(ns.Store) end
+        if pumpAcc >= 0.2 then
+            pumpAcc = 0
+            if ns.ItemText.Pump(8) > 0 then gotText = true end
+        end
+        if gotText and refreshAcc >= 1 then
+            refreshAcc, gotText = 0, false
+            if tostring(state.text):find("%S") then refreshRecipes() end
+        end
+    end)
     f.mineBtn = button(rt, L["Mine only"], 80, 22, function()
         state.mineOnly = not state.mineOnly
         f.mineBtn:SetLabel(state.mineOnly and (L["Mine only"] .. " *") or L["Mine only"])
         refreshRecipes()
     end)
     f.mineBtn:SetPoint("LEFT", search, "RIGHT", 8, 0)
-    f.count = text(rt, "GameFontNormalSmall", "RIGHT"); f.count:SetPoint("TOPRIGHT", rt, "TOPRIGHT", -330, -6)
+    f.count = text(rt, "GameFontNormalSmall", "LEFT"); f.count:SetPoint("LEFT", f.mineBtn, "RIGHT", 10, 0)
 
     recipeList = createList(rt, 440, 400, makeSelectableRow, function(r, row)
         r.icon:SetTexture(row.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
@@ -446,6 +904,16 @@ local function build()
             state.selectedRecipe = row.recipeID
             recipeList:Refresh(); refreshDetail()
         end)
+        -- crafters are looked up on hover/click only (not for every row on every refresh)
+        local function contact() return ns.Model.RecipeContact(ns.Store.Crafters(row.recipeID), me()) end
+        r.onIconEnter = function(self)
+            local c = contact()
+            recipeTooltip(self, row.recipeID, c and F(L["Click: whisper {name} with this recipe"], { name = short(c) }))
+        end
+        r.onIconClick = function()
+            local c = contact()
+            whisper(c, function() return recipeChatText(row.recipeID) end)
+        end
     end)
     recipeList:SetPoint("TOPLEFT", 0, -34)
     f.recipesEmpty = text(rt, "GameFontDisable", "CENTER")
@@ -490,7 +958,10 @@ local function build()
         line:SetSize(300, 18); line:SetPoint("TOPLEFT", 0, -222 - i * 19)
         local hl = line:CreateTexture(nil, "HIGHLIGHT"); hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.1)
         line.label = text(line, "GameFontHighlightSmall"); line.label:SetPoint("LEFT", 2, 0)
-        line:SetScript("OnClick", function(self) if self.who then whisper(self.who) end end)
+        line:SetScript("OnClick", function(self)
+            local id = state.selectedRecipe
+            if self.who then whisper(self.who, id and function() return recipeChatText(id) end) end
+        end)
         detail.crafters[i] = line
     end
     detail.more = text(dp, "GameFontDisableSmall"); detail.more:SetPoint("TOPLEFT", 0, -222 - 8 * 19)
@@ -506,7 +977,8 @@ local function build()
         if not id then return end
         local qty = tonumber(detail.qty:GetText()) or 1
         if qty < 1 then qty = 1 end
-        local o = ns.orders:Create(me(), id, qty, detail.note:GetText() or "")
+        local entry = ns.Store.GetRecipe(id)
+        local o = ns.orders:Create(me(), id, qty, detail.note:GetText() or "", entry and entry.name, entry and entry.loc)
         if o then
             detail.note:SetText(""); detail.qty:SetText("1")
             afterOrderChange(o)
@@ -539,6 +1011,13 @@ local function build()
         r.label:SetPoint("RIGHT", -130, 0)
         r.sel:SetShown(row.id == state.selectedOrder)
         r:SetScript("OnClick", function() state.selectedOrder = row.id; refreshOrders() end)
+        local contact = ns.Model.OrderContact(row, me())
+        r.onIconEnter = function(self)
+            recipeTooltip(self, row.recipeID, contact and F(L["Click: whisper {name} with this recipe"], { name = short(contact) }))
+        end
+        r.onIconClick = function()
+            whisper(contact, function() return recipeChatText(row.recipeID, row.qty) end)
+        end
     end)
     orderList:SetPoint("TOPLEFT", 0, -30)
     f.ordersEmpty = text(ot, "GameFontDisable"); f.ordersEmpty:SetPoint("CENTER", 0, 0); f.ordersEmpty:SetText(L["No orders yet."])
@@ -557,6 +1036,24 @@ local function build()
     f.withdrawBtn:SetPoint("LEFT", f.claimBtn, "RIGHT", 6, 0)
     f.doneBtn:SetPoint("LEFT", f.withdrawBtn, "RIGHT", 6, 0)
     f.cancelBtn:SetPoint("LEFT", f.doneBtn, "RIGHT", 6, 0)
+    -- secure Craft button (see "Craft button" above); without the template (should not happen) there is no button
+    local okc, cb = pcall(CreateFrame, "Button", nil, ot, "SecureActionButtonTemplate,UIPanelButtonTemplate")
+    if okc and cb then
+        cb:SetSize(110, 24)
+        cb.minW, cb.SetLabel = 110, setLabel
+        cb:RegisterForClicks("AnyUp", "AnyDown")
+        cb:HookScript("PostClick", craftPostClick)
+        cb:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(L["Craft"], 1, 1, 1)
+            GameTooltip:AddLine(L["First click opens the profession and selects the ordered recipe, the next click crafts the ordered quantity. Only for recipes you know."], 0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end)
+        cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        cb:SetPoint("LEFT", f.cancelBtn, "RIGHT", 18, 0)
+        cb:SetLabel(L["Craft"]); cb:Disable()
+        f.craftBtn = cb
+    end
 
     -- Available tab: recipe items on offer
     local at = CreateFrame("Frame", nil, f); at:SetPoint("TOPLEFT", 12, -58); at:SetPoint("BOTTOMRIGHT", -12, 12)
@@ -582,12 +1079,20 @@ local function build()
         r.label:SetPoint("RIGHT", -100, 0)
         r.sel:SetShown(row.key == state.selectedOffer)
         r:SetScript("OnClick", function() state.selectedOffer = row.key; refreshOffers() end)
-        r:SetScript("OnEnter", function(self)
+        local function itemTip(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetHyperlink("item:" .. row.itemID)
+            if row.canDib then
+                GameTooltip:AddLine(F(L["Click the icon: whisper {name} with this item"], { name = row.ownerName }), 0.6, 0.8, 1, true)
+            end
             GameTooltip:Show()
-        end)
+        end
+        r:SetScript("OnEnter", itemTip)
         r:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        r.onIconEnter = itemTip
+        r.onIconClick = function()
+            if row.canDib then whisper(row.owner, function() return ns.Model.ChatText(ns.Api.ItemLink(row.itemID), ns.Api.ItemName(row.itemID)) end) end
+        end
     end)
     offerList:SetPoint("TOPLEFT", 0, -38)
     f.offersEmpty = text(at, "GameFontDisable", "CENTER")
@@ -620,7 +1125,10 @@ local function build()
     f.hideBtn:SetPoint("LEFT", f.dibsBtn, "RIGHT", 6, 0)
     f.whisperBtn:SetPoint("LEFT", f.hideBtn, "RIGHT", 6, 0)
 
+    buildDebugTab()
+
     ns.Events.On("DATA_CHANGED", UI.Refresh)
+    ns.Events.On("TRADESKILL", onTradeSkill)
     ns.Events.On("ITEM_INFO", function() if f:IsShown() then refreshDetail(); refreshOffers() end end)
     setTab("recipes")
 end
@@ -637,6 +1145,22 @@ end
 
 ------------------------------------------------------------------ minimap button
 
+-- Feature 010: unseen orders as a number on the minimap button and the Orders tab, a letter icon while n > 0.
+local ICON_DEFAULT, ICON_NEWS = "Interface\\Icons\\INV_Misc_Note_01", "Interface\\Icons\\INV_Letter_15"
+local minimapBtn
+
+-- hideNumber: the badge option is off (the letter icon may still show that something is new)
+function UI.SetNotice(n, showIcon, hideNumber)
+    notice.n, notice.icon, notice.hide = n or 0, showIcon and true or false, hideNumber and true or false
+    if f and f.tabBtns then
+        f.tabBtns.orders:SetLabel(notice.n > 0 and not notice.hide and F(L["Orders ({n})"], { n = notice.n }) or L["Orders"])
+    end
+    if not minimapBtn then return end
+    minimapBtn.icon:SetTexture(notice.icon and notice.n > 0 and ICON_NEWS or ICON_DEFAULT)
+    minimapBtn.badge:SetShown(notice.n > 0 and not notice.hide)
+    minimapBtn.badgeText:SetText(notice.n > 99 and "99+" or tostring(notice.n))
+end
+
 local function placeMinimapButton(b)
     local a = math.rad(ns.db and ns.db.ui.minimapAngle or (ns.IS_DEV and 245 or 215))
     b:ClearAllPoints()
@@ -647,15 +1171,24 @@ local function buildMinimapButton()
     local b = CreateFrame("Button", ns.FRAME .. "MinimapButton", Minimap)
     b:SetSize(31, 31); b:SetFrameStrata("MEDIUM"); b:SetFrameLevel(8)
     local icon = b:CreateTexture(nil, "BACKGROUND"); icon:SetSize(20, 20); icon:SetPoint("CENTER")
-    icon:SetTexture("Interface\\Icons\\INV_Misc_Note_01")
+    icon:SetTexture(ICON_DEFAULT)
+    b.icon = icon
     local ring = b:CreateTexture(nil, "OVERLAY"); ring:SetSize(53, 53); ring:SetPoint("TOPLEFT")
     ring:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+    local badge = CreateFrame("Frame", nil, b); badge:SetSize(16, 14); badge:SetPoint("TOPRIGHT", 2, 2)
+    badge:SetFrameLevel(b:GetFrameLevel() + 2)
+    local bg = badge:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(); bg:SetColorTexture(0.75, 0.05, 0.05, 0.95)
+    b.badgeText = badge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); b.badgeText:SetPoint("CENTER", 0, 0)
+    b.badge = badge
+    badge:Hide()
     b:RegisterForClicks("LeftButtonUp")
     b:RegisterForDrag("RightButton")
     b:SetScript("OnClick", UI.Toggle)
     b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:SetText(ns.TITLE); GameTooltip:AddLine(L["Click: open window. Right-drag: move."], 1, 1, 1); GameTooltip:Show()
+        GameTooltip:SetText(ns.TITLE)
+        if notice.n > 0 then GameTooltip:AddLine(F(L["{n} new on the order board"], { n = notice.n }), 1, 0.82, 0) end
+        GameTooltip:AddLine(L["Click: open window. Right-drag: move."], 1, 1, 1); GameTooltip:Show()
     end)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
     b:SetScript("OnDragStart", function(self)
@@ -669,6 +1202,8 @@ local function buildMinimapButton()
     end)
     b:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
     placeMinimapButton(b)
+    minimapBtn = b
+    UI.SetNotice(notice.n, notice.icon, notice.hide)
 end
 
 local loader = CreateFrame("Frame")
@@ -677,8 +1212,10 @@ pcall(loader.RegisterEvent, loader, "PLAYER_REGEN_ENABLED")
 loader:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_REGEN_ENABLED" then
         if bar.dirty and f and f:IsShown() then refreshBar() end   -- secure buttons could not be updated in combat
+        if craft.dirty and f and f:IsShown() then refreshOrders() end
         return
     end
     local ok, err = pcall(buildMinimapButton)
     if not ok then ns.Util.ReportError(err) end
+    if ns.Alerts then ns.Alerts.Start() end
 end)

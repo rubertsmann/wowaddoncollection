@@ -1,5 +1,10 @@
 package-as: TalentShare
 
+# the player-facing notes are the release text on GitHub (and CurseForge once the upload is automated)
+manual-changelog:
+  filename: RELEASE_NOTES.md
+  markup-type: markdown
+
 ignore:
   - tests
   - dev
