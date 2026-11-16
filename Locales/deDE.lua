@@ -34,6 +34,7 @@ ns.Locale.Register("deDE", {
         ["for {name}"] = "für {name}",
         ["Request recipes on the Recipes tab. Everyone in the guild sees this board."] = "Rezepte im Reiter Rezepte anfragen. Alle in der Gilde sehen diese Liste.",
         ["No orders yet."] = "Noch keine Bestellungen.",
+        ["No recipes known yet. Open each of your profession windows once so they can be scanned."] = "Noch keine Rezepte bekannt. Öffne jedes deiner Berufsfenster einmal, damit sie gescannt werden können.",
         ["I'll craft it"] = "Ich mache es",
         ["Withdraw"] = "Zurückziehen",
         ["Mark done"] = "Als erledigt markieren",

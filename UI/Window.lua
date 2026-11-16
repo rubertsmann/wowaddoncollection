@@ -148,6 +148,8 @@ local function refreshRecipes()
         mineOnly = state.mineOnly, me = me() }, ns.Api.ItemName)
     recipeList:SetData(rows)
     f.count:SetText(P(#rows, L["{n} recipe"], L["{n} recipes"]))
+    -- nothing cached anywhere yet: say how to fill it (recipes are only readable while a profession window is open)
+    f.recipesEmpty:SetShown(#profs == 0)
 end
 
 local function refreshDetail()
@@ -291,6 +293,9 @@ local function build()
         end)
     end)
     recipeList:SetPoint("TOPLEFT", 0, -34)
+    f.recipesEmpty = text(rt, "GameFontDisable", "CENTER")
+    f.recipesEmpty:SetPoint("CENTER", recipeList, "CENTER", 0, 0); f.recipesEmpty:SetWidth(380)
+    f.recipesEmpty:SetText(L["No recipes known yet. Open each of your profession windows once so they can be scanned."])
 
     -- detail panel
     local dp = CreateFrame("Frame", nil, rt); dp:SetPoint("TOPLEFT", recipeList, "TOPRIGHT", 12, 0); dp:SetPoint("BOTTOMRIGHT", 0, 0)
