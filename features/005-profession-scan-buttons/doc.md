@@ -7,7 +7,7 @@ The game only shows a profession's recipes while that profession's window is ope
 
 ## How to use
 - Open `/ts` (dev: `/tsd`), look at the top right of the Recipes tab, and click each profession icon once. You do not have to cycle through the pages of the profession menu.
-- Red 0 = not read yet, green number = recipes stored. Hover for details.
+- Red 0 = not read yet, green number = recipes stored. Hover for details. While all of them are still 0, a pulsing "CLICK HERE ->" label points at the icons.
 - New recipes you learn later are picked up automatically; you only need the icons again after `/ts clean`.
 - Without the addon the same thing works with a macro: `/cast <profession name>`.
 

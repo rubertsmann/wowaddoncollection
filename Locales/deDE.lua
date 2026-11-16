@@ -36,6 +36,7 @@ ns.Locale.Register("deDE", {
         ["No orders yet."] = "Noch keine Bestellungen.",
         ["No recipes known yet. Click your profession icons at the top right once."] = "Noch keine Rezepte bekannt. Klicke einmal oben rechts auf deine Berufs-Symbole.",
         ["not scanned yet"] = "noch nicht gescannt",
+        ["CLICK HERE ->"] = "HIER KLICKEN ->",
         ["Click to open this profession and read its recipes."] = "Klicken, um diesen Beruf zu öffnen und seine Rezepte zu lesen.",
         ["I'll craft it"] = "Ich mache es",
         ["Withdraw"] = "Zurückziehen",

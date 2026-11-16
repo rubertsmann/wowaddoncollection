@@ -61,6 +61,16 @@ function Model.OwnProfessions(store, me, live)
     return out
 end
 
+-- True while the player has professions but none of them has any stored recipe: the UI then shows a "CLICK HERE ->"
+-- hint next to the profession buttons. It disappears as soon as one profession has been read.
+function Model.NeedsScanHint(rows)
+    if #rows == 0 then return false end
+    for _, r in ipairs(rows) do
+        if r.count > 0 then return false end
+    end
+    return true
+end
+
 -- Macro text of a profession button: the profession's own name first, then every other spellbook entry of that
 -- profession (e.g. Skinning has a second one on Forever; `/cast` of a passive or unusable spell just fails and the
 -- next line runs). Names only, no duplicates, at most 3 lines, nothing with line breaks (they come from our own client).

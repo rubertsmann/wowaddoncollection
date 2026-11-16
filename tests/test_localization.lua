@@ -172,6 +172,15 @@ return {
         h.eq(#ns.Model.OwnProfessions(ns.Store, "Me-R", nil), 0)
     end,
 
+    ["model: the CLICK HERE hint shows only while professions exist and all of them are at 0"] = function(h)
+        local M = viewer(h, "enUS").Model
+        h.eq(M.NeedsScanHint({}), false, "no professions: nothing to click")
+        h.eq(M.NeedsScanHint({ { count = 0 } }), true)
+        h.eq(M.NeedsScanHint({ { count = 0 }, { count = 0 }, { count = 0 } }), true)
+        h.eq(M.NeedsScanHint({ { count = 0 }, { count = 1 }, { count = 0 } }), false, "one read profession is enough to hide it")
+        h.eq(M.NeedsScanHint({ { count = 11 } }), false)
+    end,
+
     ["model: profession button macro casts the profession name first, then its other spellbook entries"] = function(h)
         local M = viewer(h, "deDE").Model
         h.eq(M.CastMacro({ spellName = "Kochkunst" }), "/cast Kochkunst")

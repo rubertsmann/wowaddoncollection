@@ -31,3 +31,9 @@ Append only. Newest entry at the bottom. The last entry must say what to do next
 - Result: no need to copy chat output; the next step is reading `TalentShare-Dev.lua`
 - Evidence: `luajit tests/run.lua` -> 54 passed, 0 failed
 - Next: user: `/reload`, open `/tsd`, click the Kürschnerei icon, wait ~5 s, run `/tsd i18n`, then `/reload` (or log out) so the file is written. Claude reads `WTF\Account\<ACCOUNT>\SavedVariables\TalentShare-Dev.lua`
+
+## 2026-11-16 11:08 | BUILD | pulsing "CLICK HERE ->" next to the profession buttons
+- Did: user: "add a visual highlight to the ui e.g. 'CLICK HERE ->' next to the button as long as all talents are at 0". `Model.NeedsScanHint(rows)` (pure: professions exist and every count is 0); `UI/Window.lua`: a gold, pulsing label (alpha 0.55-1.0, 3 rad/s) anchored to the left of the leftmost profession button, shown/hidden by `refreshBar`; `Locales/deDE.lua`: "HIER KLICKEN ->"; test `model: the CLICK HERE hint shows only while ...`
+- Result: the label disappears as soon as one profession has a stored recipe (the counters refresh after every scan)
+- Evidence: `luajit tests/run.lua` -> 55 passed, 0 failed; the label's look and position are NOT-VERIFIED in game
+- Next: user checks the label in game; Skinning diagnosis still waits for the debug log (previous entry)

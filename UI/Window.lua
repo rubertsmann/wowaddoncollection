@@ -236,6 +236,17 @@ local function refreshBar()
         end
     end
     if not locked then bar.dirty = false end
+    -- pulsing "CLICK HERE ->" to the left of the leftmost button while every profession is still at 0
+    local lastBtn = bar.buttons[math.min(#bar.rows, MAX_BAR)]
+    if f.barHint then
+        if lastBtn and ns.Model.NeedsScanHint(bar.rows) then
+            f.barHintText:ClearAllPoints()
+            f.barHintText:SetPoint("RIGHT", lastBtn, "LEFT", -10, 0)
+            f.barHint:Show()
+        else
+            f.barHint:Hide()
+        end
+    end
     if f.recipesEmpty then
         f.recipesEmpty:SetShown(#professionsList() == 0)
     end
@@ -401,6 +412,14 @@ local function build()
     f.recipesEmpty:SetText(L["No recipes known yet. Click your profession icons at the top right once."])
     -- one secure button per own profession (see "profession scan buttons" above)
     for i = 1, MAX_BAR do bar.buttons[i] = createBarButton(rt, i) end
+    -- attention label next to the buttons (positioned and shown by refreshBar)
+    local hint = CreateFrame("Frame", nil, rt)
+    hint:SetSize(1, 1); hint:SetPoint("TOPRIGHT", rt, "TOPRIGHT", 0, 0)
+    local hintText = text(hint, "GameFontNormalLarge", "RIGHT")
+    hintText:SetText(L["CLICK HERE ->"]); hintText:SetTextColor(1, 0.82, 0)
+    hint:SetScript("OnUpdate", function() hintText:SetAlpha(0.55 + 0.45 * math.abs(math.sin((GetTime and GetTime() or 0) * 3))) end)
+    hint:Hide()
+    f.barHint, f.barHintText = hint, hintText
 
     -- detail panel
     local dp = CreateFrame("Frame", nil, rt); dp:SetPoint("TOPLEFT", recipeList, "TOPRIGHT", 12, 0); dp:SetPoint("BOTTOMRIGHT", 0, 0)

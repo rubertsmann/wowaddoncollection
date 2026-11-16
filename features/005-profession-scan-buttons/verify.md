@@ -21,6 +21,7 @@ Result after work:    `luajit tests/run.lua` -> 53 passed, 0 failed (AutoScan te
 - [ ] **First, without the addon:** type `/cast Kochkunst` into chat (your own profession name). Does the profession window open? If not, tell me; the whole approach depends on this.
 - [ ] `/reload`, open `/tsd`: no red "Interface-Aktion ..." message, no Lua error (`/console scriptErrors 1`).
 - [ ] Top right of the Recipes tab: one icon per profession, a red 0 (not scanned) or a green number each; hovering shows the tooltip.
+- [ ] While all icons show a red 0, a pulsing gold "HIER KLICKEN ->" (English: "CLICK HERE ->") is to the left of the icons and disappears once one profession has recipes.
 - [ ] Click an icon: the profession window opens by itself; after a second the number on the icon turns green and the recipes appear in the list.
 - [ ] Click the other icons: each opens its profession and fills.
 - [ ] Optional: click an icon during combat (expect nothing to be broken; the bar only updates after combat).
