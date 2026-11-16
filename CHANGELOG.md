@@ -5,6 +5,12 @@
 - Wire protocol **2.1** (additive: optional HELLO field `orev`, new messages `WANTO`/`OFFERS`; 0.3.x clients ignore them and keep syncing everything else). SavedVariables **schema 3** (new `offers`, `hidden`; schema 2 data kept).
 - `/ts clean` also removes offers.
 
+## 0.3.2
+- **Whisper fix:** same-realm players are now whispered by character name only. The `Name-Realm` form made the game answer "no player named … is online", for the whisper buttons and for the addon's own background whispers (sync requests and replies). Other realms keep `Name-Realm`.
+- Lists show same-realm characters without the realm suffix (crafters, order requester and claimers).
+- Clicking your own character in the crafter list no longer tries to whisper you.
+- Wire protocol (2.0) and SavedVariables schema (2) unchanged.
+
 ## 0.3.1
 - **Build flag:** one definition in `Core/Init.lua` (`ns.BUILD`, TOC `## X-Build: dev` or a folder name containing "dev"); the comms prefix, SavedVariables, frame names and slash commands of the dev build are all derived from it, so a dev build and the live addon never share data or addon messages. `tools/deploy.ps1` and `tools/package.ps1` now verify the generated dev TOC and the shipped live TOC; a TOC that saves a different global than the build uses is reported.
 - Dev client no longer fails with a chain of nil-index errors when its generated TOC is stale: one message names the missing modules and the fix (`tools/deploy.ps1`, then restart the game).
