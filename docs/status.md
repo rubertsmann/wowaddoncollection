@@ -1,6 +1,6 @@
 ﻿# Implementation status (updated 2026-11-16, after features 001 and 002)
 
-**Current:** `luajit tests/run.lua` -> **60 passed, 0 failed**. Per-feature state lives in `features/INDEX.md` (001 dev/live coexistence, 002 localization, 003 auto profession scan, 004 clean command: all `verifying`, waiting for the in-game checklists in their `verify.md`).
+**Current:** `luajit tests/run.lua` -> **53 passed, 0 failed**. Per-feature state lives in `features/INDEX.md` (001 dev/live coexistence, 002 localization, 004 clean command, 005 profession scan buttons: `verifying` (003 auto profession scan was abandoned: the game blocks addons from opening professions), waiting for the in-game checklists in their `verify.md`).
 **Verified in game (user, 0.1.0 dev build):** profession scan (23 recipes, reagents), `/ts scan` and `/ts dump`, window opens, API probe (see `docs/api-findings.md`). **Not verified in game:** two-player sync, the 0.2.0 changes (localized UI, dev/live side by side), CurseForge auto-release.
 
 Table below is the original plan status from the first night (T1-T19), kept for history.

@@ -36,6 +36,31 @@ function Model.Professions(store)
     return out
 end
 
+-- The player's own professions for the scan buttons: live = Api.GetPlayerProfessions() ({name, icon, rank, max, id}).
+-- count = recipes already stored for that profession (0 = not scanned yet; scanning needs the profession window to be
+-- opened by a real click, see UI/Window.lua). Old name-keyed records are matched through Names.ProfKey.
+function Model.OwnProfessions(store, me, live)
+    local rec = store.GetChar(me or "")
+    local counts = {}
+    for key, p in pairs(rec and rec.professions or {}) do
+        local canon = ns.Names.ProfKey(key, p)
+        counts[canon] = (counts[canon] or 0) + ns.Util.Count(p.recipes or {})
+    end
+    local out = {}
+    for _, lp in ipairs(live or {}) do
+        local key = ns.Names.ProfKey(lp.name, { id = lp.id, name = lp.name })
+        out[#out + 1] = { key = key, id = lp.id, spellName = lp.name, icon = lp.icon, rank = lp.rank, max = lp.max,
+            name = ns.Names.Profession(key, { id = lp.id, name = lp.name, loc = ns.Locale.clientCode }),
+            count = counts[key] or 0 }
+    end
+    table.sort(out, function(a, b)
+        local x, y = sortKey(a.name), sortKey(b.name)
+        if x ~= y then return x < y end
+        return tostring(a.key) < tostring(b.key)
+    end)
+    return out
+end
+
 -- state = { profession = canonical key|nil, text = string, mineOnly = bool, me = "Name-Realm" }
 -- nameFn(itemID) -> cached item name or nil (used for reagent search)
 function Model.BuildRecipeRows(store, state, nameFn)

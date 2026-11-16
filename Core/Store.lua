@@ -17,7 +17,6 @@ function S.Init(sv)
     sv.orders = sv.orders or {}
     sv.debug = sv.debug or {}
     sv.ui = sv.ui or {}
-    if sv.ui.autoScan == nil then sv.ui.autoScan = true end   -- opening the window scans the professions (/ts autoscan off)
     sv.profNames = sv.profNames or {}   -- [clientLocale][skillLineID] = name the viewer's own client reported
     S.db = sv
     ns.db = sv

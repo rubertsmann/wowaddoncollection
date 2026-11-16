@@ -149,6 +149,29 @@ return {
         h.eq(#ns.Model.BuildRecipeRows(ns.Store, { text = "susskartoffel" }), 1)  -- reagent, ß -> ss
     end,
 
+    ["model: own professions for the scan buttons report how many recipes are stored (0 = not scanned)"] = function(h)
+        local ns = viewer(h, "deDE")
+        -- stored: Kochkunst scanned (id-keyed), Kürschnerei from a 0.1.0 name-keyed record, Lederverarbeitung empty
+        ns.Store.PutChar(char("Me-R", 1, {
+            Kochkunst = prof("Kochkunst", 185, "deDE", { 1, 2, 3 }),
+            ["Kürschnerei"] = { name = "Kürschnerei", rank = 5, max = 75, recipes = { [9] = true } },
+            Lederverarbeitung = prof("Lederverarbeitung", 165, "deDE", {}),
+        }))
+        local live = {
+            { name = "Lederverarbeitung", icon = 1, rank = 35, max = 75, id = 165 },
+            { name = "Kochkunst", icon = 2, rank = 150, max = 150, id = 185 },
+            { name = "Kürschnerei", icon = 3, rank = 131, max = 150, id = 393 },
+        }
+        local rows = ns.Model.OwnProfessions(ns.Store, "Me-R", live)
+        h.eq(#rows, 3)
+        h.eq(rows[1].name, "Kochkunst"); h.eq(rows[1].count, 3); h.eq(rows[1].spellName, "Kochkunst")
+        h.eq(rows[2].name, "Kürschnerei"); h.eq(rows[2].count, 1, "0.1.0 name-keyed record must still be counted")
+        h.eq(rows[3].name, "Lederverarbeitung"); h.eq(rows[3].count, 0)
+        h.eq(#ns.Model.OwnProfessions(ns.Store, "Nobody-R", live), 3, "unknown character: all professions, all unscanned")
+        h.eq(ns.Model.OwnProfessions(ns.Store, "Nobody-R", live)[1].count, 0)
+        h.eq(#ns.Model.OwnProfessions(ns.Store, "Me-R", nil), 0)
+    end,
+
     ["model: reagent names come from the viewer's client before the sender's snapshot"] = function(h)
         local ns = viewer(h, "deDE")
         ns.Store.PutCatalog({ [1] = { name = "X", reagents = { { itemID = 10, count = 1, name = "Boar Meat" } } } })

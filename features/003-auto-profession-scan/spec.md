@@ -1,6 +1,6 @@
 # 003 Auto profession scan: spec
 
-- Status: verifying
+- Status: abandoned (superseded by 005-profession-scan-buttons)
 - Created: 2026-11-16
 - Target version: 0.2.0
 - Owner: claude

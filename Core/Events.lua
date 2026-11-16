@@ -31,10 +31,9 @@ ns.Slash.clean = function(arg)
     end
     local n = ns.Store.Clean()
     ns.Locale.version = ns.Locale.version + 1     -- invalidates the name caches
-    ns.db.ui.lastAutoScan = nil                   -- the next window open scans your professions again
     Ev.Fire("DATA_CHANGED", "chars")
     ns.Comm.RequestHello(true, true)              -- ask online guild members to introduce themselves, then pull their data
-    ns.Print(("cleaned: removed %d characters, %d catalog entries, %d orders. Reopen the window to rescan your professions."):format(
+    ns.Print(("cleaned: removed %d characters, %d catalog entries, %d orders. Click your profession icons in the window to scan them again."):format(
         n.chars, n.catalog, n.orders))
 end
 

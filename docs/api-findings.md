@@ -33,6 +33,15 @@ runtime; the legacy branch is dead code on this client and can stay as a fallbac
 * `TRADE_SKILL_CLOSE` fired in the probe; scans also ran from the profession-window events (`scan changed` log lines).
 * Profession record: `{name, icon, skill, maxSkill, ...}`; Cooking 150/150, Leatherworking 35/75, Skinning 131/150.
 
+## Blocked for addons (found in game 2026-11-16)
+
+* `C_TradeSkillUI.OpenTradeSkill(skillLineID)` exists, but calling it from addon code opens nothing and shows the red
+  message "Interface-Aktion auf Grund eines Addons fehlgeschlagen" (inferred from the user report, no taint log read).
+  `pcall` still returns success because a blocked call raises no Lua error. Professions must be opened by a real click:
+  a `SecureActionButtonTemplate` with `type=macro`, `macrotext="/cast <profession>"` (feature 005).
+* A profession's recipe list is only readable while that profession's window is open; there is no passive way to read it.
+* `GetProfessionInfo` returns the icon as 2nd value (used only for local buttons).
+
 ## Still unverified
 
 * Whether the scan data survives for professions that were not opened since login (scanner needs the window open once).

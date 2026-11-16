@@ -44,3 +44,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: OpenTradeSkill exists on Forever (R4/R1 partly confirmed); the run did not complete for all professions; cause of the blocked-action message unknown (suspect: opening/closing the Blizzard profession window from tainted code)
 - Evidence: `TalentShare-Dev.lua` (SavedVariables, read 2026-11-16)
 - Next: added step logging (`ns.Debug.Log("autoscan", ...)`: start/open/check/finish incl. the pcall error), 6 retries (list gets ~7.5 s), deferred start (0.5 s after our window shows, not inside OnShow); tests 62 passed. User: `/console taintLog 1`, `/reload`, open `/tsd`, wait 15 s, `/reload`; I read `_forever_\Logs\taint.log` and the SavedVariables debug log
+
+## 2026-11-16 10:47 | DONE | abandoned, superseded by 005-profession-scan-buttons
+- Did: user report (German): "Deine Berufe werden gescannt ... kein Berufsfenster wurde jemals geöffnet". `C_TradeSkillUI.OpenTradeSkill` from addon code is blocked on Forever (nothing opens, red "Interface-Aktion auf Grund eines Addons fehlgeschlagen"); the pcall wrapper reported success because a blocked call raises no Lua error. The module `Core/AutoScan.lua`, its tests and `/ts autoscan` were removed (git history keeps them: commits 6e660a1 ... 38b7798)
+- Result: replaced by secure profession buttons (feature 005)
+- Evidence: user report; `TalentShare-Dev.lua` showed Lederverarbeitung 0 recipes
+- Next: none here, continue in features/005-profession-scan-buttons

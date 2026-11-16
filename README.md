@@ -25,10 +25,10 @@ separate **TalentShare-Dev** addon (own data, prefix and `/tsd`), so it runs nex
 
 ## Use
 
-`/ts` (or the minimap button) opens the window. Open each profession once so recipes are scanned.
+`/ts` (or the minimap button) opens the window. Click each profession icon at the top right of the Recipes tab once so the recipes are read.
 `/ts scan`, `/ts dump`, `/ts chars`, `/ts comm`, `/ts hello`, `/ts debug`, `/ts version`,
-`/ts locale <code>|auto` (UI language, then `/reload`), `/ts i18n` (what the client reports), `/ts autoscan [on|off]`
-(or the reload symbol at the top right of the Recipes tab: opens each of your professions by itself and reads the recipes),
+`/ts locale <code>|auto` (UI language, then `/reload`), `/ts i18n` (what the client reports),
+profession icons at the top right of the Recipes tab (one click opens that profession and reads its recipes),
 `/ts clean` then `/ts clean confirm` (deletes everything stored locally). In the dev build use `/tsd`.
 The UI is available in English and German; profession and recipe names always follow your own game client.
 

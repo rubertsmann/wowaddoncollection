@@ -138,6 +138,77 @@ local detail = {}
 
 local function professionsList() return ns.Model.Professions(ns.Store) end
 
+------------------------------------------------------------------ profession scan buttons
+-- The game only exposes a profession's recipes while its window is open, and addon code may not open it (blocked,
+-- "Interface-Aktion auf Grund eines Addons fehlgeschlagen"). A REAL click on a secure button may: each button is the
+-- macro "/cast <profession>". Opening the window triggers the normal scan, so one click per profession reads it.
+local bar = { buttons = {}, rows = {}, dirty = false }
+local MAX_BAR = 5
+
+local function barTooltip(self)
+    local r = self.row
+    if not r then return end
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:SetText(r.name)
+    GameTooltip:AddLine(("%d/%d"):format(r.rank or 0, r.max or 0), 1, 1, 1)
+    if r.count > 0 then
+        GameTooltip:AddLine(P(r.count, L["{n} recipe"], L["{n} recipes"]), 0.2, 1, 0.6)
+    else
+        GameTooltip:AddLine(L["not scanned yet"], 1, 0.4, 0.4)
+    end
+    GameTooltip:AddLine(L["Click to open this profession and read its recipes."], 0.8, 0.8, 0.8, true)
+    GameTooltip:Show()
+end
+
+local function createBarButton(parent, i)
+    local ok, b = pcall(CreateFrame, "Button", nil, parent, "SecureActionButtonTemplate")
+    if not ok or not b then return nil end
+    b:SetSize(24, 24)
+    b:RegisterForClicks("AnyUp", "AnyDown")
+    b.icon = b:CreateTexture(nil, "ARTWORK"); b.icon:SetAllPoints()
+    b.count = text(b, "GameFontNormalSmall", "RIGHT"); b.count:SetPoint("BOTTOMRIGHT", 0, 1)
+    b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+    b:SetScript("OnEnter", barTooltip)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    if i == 1 then b:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+    else b:SetPoint("RIGHT", bar.buttons[i - 1], "LEFT", -4, 0) end
+    b:Hide()
+    return b
+end
+
+-- Attributes and visibility of secure frames may not change in combat: then only the counters are updated and the
+-- rest is applied when combat ends (PLAYER_REGEN_ENABLED).
+local function refreshBar()
+    if not f then return end
+    bar.rows = ns.Model.OwnProfessions(ns.Store, me(), ns.Api.GetPlayerProfessions() or {})
+    local locked = ns.Api.InCombat()
+    if locked then bar.dirty = true end
+    for i = 1, MAX_BAR do
+        local b, r = bar.buttons[i], bar.rows[i]
+        if b then
+            if r then
+                b.row = r
+                b.icon:SetTexture(r.icon)
+                b.count:SetText(r.count)
+                if r.count > 0 then b.count:SetTextColor(0.2, 1, 0.6); b.icon:SetVertexColor(1, 1, 1)
+                else b.count:SetTextColor(1, 0.3, 0.3); b.icon:SetVertexColor(1, 0.55, 0.55) end
+                if not locked then
+                    b:SetAttribute("type", "macro")
+                    b:SetAttribute("macrotext", "/cast " .. r.spellName)
+                    b:Show()
+                end
+            elseif not locked then
+                b.row = nil
+                b:Hide()
+            end
+        end
+    end
+    if not locked then bar.dirty = false end
+    if f.recipesEmpty then
+        f.recipesEmpty:SetShown(#professionsList() == 0)
+    end
+end
+
 local function refreshRecipes()
     if not f or state.tab ~= "recipes" then return end
     local profs = professionsList()
@@ -206,7 +277,7 @@ end
 
 function UI.Refresh()
     if not f or not f:IsShown() then return end
-    refreshRecipes(); refreshDetail(); refreshOrders()
+    refreshRecipes(); refreshDetail(); refreshOrders(); refreshBar()
 end
 
 local function setTab(name)
@@ -245,13 +316,7 @@ local function build()
     f:SetFrameStrata("HIGH")
     f:Hide()
     table.insert(UISpecialFrames, frameName)
-    f:SetScript("OnShow", function()
-        ns.Events.Fire("WINDOW_OPENED")
-        UI.Refresh()
-        -- opening the window reads the player's professions (default on; /ts autoscan off disables), see AutoScan.Auto
-        -- deferred: the profession window must not be opened from inside our own frame's OnShow (taint)
-        if C_Timer and C_Timer.After then C_Timer.After(0.5, ns.AutoScan.Auto) else ns.AutoScan.Auto() end
-    end)
+    f:SetScript("OnShow", function() ns.Events.Fire("WINDOW_OPENED"); UI.Refresh() end)
 
     local title = text(f, "GameFontNormalLarge"); title:SetPoint("TOP", 0, -6); title:SetText(ns.TITLE)
 
@@ -301,29 +366,9 @@ local function build()
     recipeList:SetPoint("TOPLEFT", 0, -34)
     f.recipesEmpty = text(rt, "GameFontDisable", "CENTER")
     f.recipesEmpty:SetPoint("CENTER", recipeList, "CENTER", 0, 0); f.recipesEmpty:SetWidth(380)
-    f.recipesEmpty:SetText(L["No recipes known yet. Use the reload symbol at the top right (or open each profession window once)."])
-    -- one click reads every profession (opens them one after another), so nobody has to cycle through the pages
-    -- small reload symbol (tooltip explains it); the stock refresh texture needs no translation
-    local scanBtn = CreateFrame("Button", nil, rt)
-    f.scanBtn = scanBtn
-    scanBtn:SetSize(20, 20)
-    scanBtn:SetPoint("TOPRIGHT", rt, "TOPRIGHT", 0, -1)
-    local scanIcon = scanBtn:CreateTexture(nil, "ARTWORK")
-    scanIcon:SetAllPoints()
-    scanIcon:SetTexture("Interface\\Buttons\\UI-RefreshButton")
-    scanBtn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
-    scanBtn:SetScript("OnMouseDown", function()
-        scanIcon:ClearAllPoints(); scanIcon:SetPoint("TOPLEFT", 1, -1); scanIcon:SetPoint("BOTTOMRIGHT", 1, -1)
-    end)
-    scanBtn:SetScript("OnMouseUp", function() scanIcon:ClearAllPoints(); scanIcon:SetAllPoints() end)
-    scanBtn:SetScript("OnClick", function() ns.AutoScan.Run(true) end)
-    scanBtn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:SetText(L["Scan professions"])
-        GameTooltip:AddLine(L["Reads all your professions: opens each one briefly."], 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    scanBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    f.recipesEmpty:SetText(L["No recipes known yet. Click your profession icons at the top right once."])
+    -- one secure button per own profession (see "profession scan buttons" above)
+    for i = 1, MAX_BAR do bar.buttons[i] = createBarButton(rt, i) end
 
     -- detail panel
     local dp = CreateFrame("Frame", nil, rt); dp:SetPoint("TOPLEFT", recipeList, "TOPRIGHT", 12, 0); dp:SetPoint("BOTTOMRIGHT", 0, 0)
@@ -472,7 +517,12 @@ end
 
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_LOGIN")
-loader:SetScript("OnEvent", function()
+pcall(loader.RegisterEvent, loader, "PLAYER_REGEN_ENABLED")
+loader:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_REGEN_ENABLED" then
+        if bar.dirty and f and f:IsShown() then refreshBar() end   -- secure buttons could not be updated in combat
+        return
+    end
     local ok, err = pcall(buildMinimapButton)
     if not ok then ns.Util.ReportError(err) end
 end)
