@@ -23,6 +23,7 @@ Core\Scanner.lua
 Core\Codec.lua
 Core\Guard.lua
 Core\Orders.lua
+Core\Offers.lua
 Core\Sync.lua
 Core\Model.lua
 Core\Comm.lua

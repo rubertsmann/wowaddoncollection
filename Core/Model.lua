@@ -200,3 +200,65 @@ function Model.BuildOrderRows(store, orders, filterKey, showClosed, me)
     end
     return rows
 end
+
+------------------------------------------------------------------ recipe items board (feature 007)
+
+-- "Bags x2", "Guild bank tab 3 x1": location label for the viewer's language (stored data holds only the location key)
+function Model.LocLabel(loc, count)
+    local L = ns.L
+    local text
+    if loc == "bag" then text = L["Bags"]
+    elseif loc == "bank" then text = L["Bank"]
+    elseif loc == "reagent" then text = L["Reagent bank"]
+    elseif loc == "mail" then text = L["Mail"]
+    elseif loc == "auction" then text = L["Auctions"]
+    else text = ns.Locale.Fmt(L["Guild bank tab {n}"], { n = tonumber(tostring(loc):match("^gbank(%d)$")) or 0 }) end
+    return text .. " x" .. tostring(count)
+end
+
+-- state = { text = search string, mineProf = only items for my professions, me = "Name-Realm" }
+-- classFn(itemID) -> classID, subClassID, icon (client item data, no loading); nameFn(itemID) -> name | nil
+-- Everything that came from a peer (owner and dibber names) is escaped; item names and icons come from THIS client, and an
+-- id the client does not know or that is not a recipe item is not shown (a peer cannot list arbitrary things).
+function Model.BuildOfferRows(store, state, classFn, nameFn)
+    local text = sortKey(state.text)
+    local mySkills = {}
+    local mine = store.GetChar(state.me or "")
+    for key, p in pairs(mine and mine.professions or {}) do
+        local canon = ns.Names.ProfKey(key, p)
+        if type(canon) == "number" then mySkills[canon] = true end
+    end
+    local out = {}
+    for _, row in ipairs(ns.Offers.List(state.me)) do
+        local class, sub, icon = classFn(row.itemID)
+        if class == ns.Offers.RECIPE_CLASS then
+            local skill = ns.Offers.SUBCLASS_SKILL[sub]
+            local keep = true
+            if state.mineProf and not (skill and mySkills[skill]) then keep = false end
+            local name = esc((nameFn and nameFn(row.itemID)) or ns.Locale.Fmt(ns.L["Item #{id}"], { id = row.itemID }))
+            local prof = skill and esc(ns.Names.Profession(skill, { id = skill })) or nil
+            if keep and text ~= "" then
+                keep = sortKey(name):find(text, 1, true) ~= nil or sortKey(row.owner):find(text, 1, true) ~= nil
+                    or (prof ~= nil and sortKey(prof):find(text, 1, true) ~= nil)
+            end
+            if keep then
+                local locs = {}
+                for i, l in ipairs(row.locs) do locs[i] = Model.LocLabel(l.loc, l.count) end
+                local dibs = {}
+                for i, d in ipairs(row.dibs) do dibs[i] = { who = esc(d.who), whoRaw = d.who, t = d.t, mine = d.who == state.me } end
+                out[#out + 1] = { key = row.key, owner = row.owner, ownerName = esc(row.owner), itemID = row.itemID, name = name,
+                    icon = icon, profession = prof, locations = table.concat(locs, ", "), total = row.total,
+                    dibs = dibs, dibCount = #dibs, mine = row.mine, canDib = row.owner ~= state.me, ownerRev = row.ownerRev }
+            end
+        end
+    end
+    table.sort(out, function(a, b)
+        local pa, pb = sortKey(a.profession or ""), sortKey(b.profession or "")
+        if pa ~= pb then return pa < pb end
+        local na, nb = sortKey(a.name), sortKey(b.name)
+        if na ~= nb then return na < nb end
+        if a.owner ~= b.owner then return a.owner < b.owner end
+        return a.itemID < b.itemID
+    end)
+    return out
+end

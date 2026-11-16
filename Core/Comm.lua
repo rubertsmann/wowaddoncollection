@@ -36,7 +36,7 @@ function Comm.Send(msg, dist, target)
     for i = 1, total do
         local part = enc:sub((i - 1) * CHUNK + 1, i * CHUNK)
         local item = { dist = dist, target = target, text = Codec.Header(id, i, total) .. part }
-        if msg.t == "ORDER" or msg.t == "WANT" or msg.t == "HELLO" then
+        if msg.t == "ORDER" or msg.t == "WANT" or msg.t == "WANTO" or msg.t == "HELLO" then
             table.insert(Comm.queue, 1, item)  -- small control messages jump the queue (single chunk)
         else
             Comm.queue[#Comm.queue + 1] = item
@@ -48,7 +48,8 @@ local function pump(dt)
     Comm.tokens = math.min(BUCKET_MAX, Comm.tokens + dt * REFILL)
     while Comm.tokens >= 1 and #Comm.queue > 0 do
         local item = table.remove(Comm.queue, 1)
-        local ok, res = pcall(C_ChatInfo.SendAddonMessage, ns.PREFIX, item.text, item.dist, item.target)
+        local target = item.dist == "WHISPER" and ns.Util.WhisperTarget(item.target) or item.target   -- same realm: name only
+        local ok, res = pcall(C_ChatInfo.SendAddonMessage, ns.PREFIX, item.text, item.dist, target)
         if ok and type(res) == "number" and res == 3 then   -- AddonMessageThrottle: retry later
             table.insert(Comm.queue, 1, item)
             Comm.tokens = 0

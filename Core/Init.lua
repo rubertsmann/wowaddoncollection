@@ -24,7 +24,7 @@ ns.VERSION = ns.BASE_VERSION .. (IS_DEV and "-dev" or "")
 -- Wire protocol (docs/protocol.md): MAJOR must match exactly between peers, MINOR may differ (additive changes only).
 -- Bump MAJOR for any breaking change to the chunk header, serializer, compression or message meaning.
 ns.PROTO_MAJOR = 2
-ns.PROTO_MINOR = 0
+ns.PROTO_MINOR = 1
 ns.PROTOCOL = ns.PROTO_MAJOR                              -- alias: the major is what the payload "v" field carries
 ns.TITLE = IS_DEV and "TalentShare (dev)" or "TalentShare"
 ns.PREFIX = IS_DEV and "TShareDev" or "TShare"            -- addon-message prefix, max 16 bytes

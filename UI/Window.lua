@@ -1,6 +1,7 @@
 local ADDON, ns = ...
 
--- Standalone window: "Recipes" tab (filter, search, reagents, crafters, request) and "Orders" tab (shared board).
+-- Standalone window: "Recipes" tab (filter, search, reagents, crafters, request), "Orders" tab (shared board) and
+-- "Available" tab (recipe items guild members hold, with dibs).
 -- Plain frames only (no secure templates), so it never taints and is safe to open in combat.
 -- All text goes through L (Locales/); game names are resolved for this client by Model/Names. tests/test_locale_files.lua
 -- fails on a hardcoded label.
@@ -21,6 +22,9 @@ local state = {
     orderFilterIdx = 1,
     showClosed = false,
     selectedOrder = nil,
+    offerText = "",
+    offerMineProf = false,
+    selectedOffer = nil,
 }
 local function orderFilters()
     return { { "all", L["All"] }, { "open", L["Open"] }, { "mine", L["My requests"] }, { "crafting", L["I'm crafting"] },
@@ -33,6 +37,7 @@ local function statusLabel(st)
 end
 
 local function me() return ns.Store.db.me or ns.Api.GetPlayerInfo().name end
+local function short(n) return ns.Util.ShortName(n) end   -- display form of a character name (realm hidden on my own realm)
 
 local function classColor(class, text)
     local c = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
@@ -133,7 +138,8 @@ end
 ------------------------------------------------------------------ frame
 
 local f
-local recipeList, orderList
+local recipeList, orderList, offerList
+local offerRows = {}
 local detail = {}
 
 local function professionsList() return ns.Model.Professions(ns.Store) end
@@ -291,7 +297,7 @@ local function refreshDetail()
         local c = d and d.crafters[i]
         if c then
             line.who = c.name
-            line.label:SetText(("%s  |cffaaaaaa%s %d/%d, %s|r"):format(classColor(c.class, c.name), c.professionName or c.profession,
+            line.label:SetText(("%s  |cffaaaaaa%s %d/%d, %s|r"):format(classColor(c.class, short(c.name)), c.professionName or c.profession,
                 c.rank or 0, c.max or 0, ago(c.rev)))
             line:Show()
         else
@@ -318,9 +324,39 @@ local function refreshOrders()
     f.ordersEmpty:SetShown(#rows == 0)
 end
 
+local function selectedOfferRow()
+    for _, r in ipairs(offerRows) do if r.key == state.selectedOffer then return r end end
+end
+
+local function refreshOffers()
+    if not f or state.tab ~= "available" then return end
+    local rows = ns.Model.BuildOfferRows(ns.Store, { text = state.offerText, mineProf = state.offerMineProf, me = me() },
+        ns.Api.ItemClass, ns.Api.ItemName)
+    offerRows = rows
+    offerList:SetData(rows)
+    f.offerCount:SetText(P(#rows, L["{n} offer"], L["{n} offers"]))
+    local sel = selectedOfferRow()
+    f.dibsBtn:SetLabel(sel and sel.mine and L["Remove dibs"] or L["Dibs"])
+    f.dibsBtn:SetEnabled(sel ~= nil and sel.canDib)
+    f.hideBtn:SetEnabled(sel ~= nil)
+    f.whisperBtn:SetEnabled(sel ~= nil and sel.canDib)
+    if not sel then
+        f.offerDetail:SetText(L["Select an offer to see who called dibs."])
+    elseif #sel.dibs == 0 then
+        f.offerDetail:SetText(L["No dibs yet."])
+    else
+        local parts = {}
+        for i, d in ipairs(sel.dibs) do
+            parts[i] = ("%d. %s |cffaaaaaa%s|r"):format(i, d.mine and ("|cff33ff99" .. short(d.who) .. "|r") or short(d.who), ago(d.t))
+        end
+        f.offerDetail:SetText(F(L["Dibs: {list}"], { list = table.concat(parts, "   ") }))
+    end
+    f.offersEmpty:SetShown(#rows == 0)
+end
+
 function UI.Refresh()
     if not f or not f:IsShown() then return end
-    refreshRecipes(); refreshDetail(); refreshOrders(); refreshBar()
+    refreshRecipes(); refreshDetail(); refreshOrders(); refreshOffers(); refreshBar()
 end
 
 local function setTab(name)
@@ -328,11 +364,14 @@ local function setTab(name)
     for key, frame in pairs(f.tabs) do frame:SetShown(key == name) end
     f.tabBtns.recipes:SetEnabled(name ~= "recipes")
     f.tabBtns.orders:SetEnabled(name ~= "orders")
+    f.tabBtns.available:SetEnabled(name ~= "available")
     UI.Refresh()
 end
 UI.SelectTab = function(name) if f then setTab(name) end end
 
 local function whisper(name)
+    if not name or name == me() then return end   -- you cannot whisper yourself: the game answers "no player named ... online"
+    name = ns.Util.WhisperTarget(name)   -- same-realm players by character name only (the "Name-Realm" form is not found)
     if ChatFrame_SendTell then ChatFrame_SendTell(name) elseif ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. name .. " ") end
 end
 
@@ -366,9 +405,11 @@ local function build()
     f.tabBtns = {
         recipes = button(f, L["Recipes"], 90, 22, function() setTab("recipes") end),
         orders = button(f, L["Orders"], 90, 22, function() setTab("orders") end),
+        available = button(f, L["Available"], 90, 22, function() setTab("available") end),
     }
     f.tabBtns.recipes:SetPoint("TOPLEFT", 12, -30)
     f.tabBtns.orders:SetPoint("LEFT", f.tabBtns.recipes, "RIGHT", 4, 0)
+    f.tabBtns.available:SetPoint("LEFT", f.tabBtns.orders, "RIGHT", 4, 0)
     f.tabs = {}
 
     -- Recipes tab
@@ -489,9 +530,11 @@ local function build()
     help:SetText(L["Request recipes on the Recipes tab. Everyone in the guild sees this board."])
     orderList = createList(ot, 736, 380, makeSelectableRow, function(r, row)
         r.icon:SetTexture((ns.Store.GetRecipe(row.recipeID) or {}).icon or "Interface\\Icons\\INV_Misc_QuestionMark")
-        local who = #row.claimers > 0 and ("  -> |cff33ff99" .. table.concat(row.claimers, ", ") .. "|r") or ""
+        local claimers = {}
+        for i, c in ipairs(row.claimers) do claimers[i] = short(c) end
+        local who = #claimers > 0 and ("  -> |cff33ff99" .. table.concat(claimers, ", ") .. "|r") or ""
         local note = row.note ~= "" and ("  |cff999999\"" .. row.note .. "\"|r") or ""
-        r.label:SetText(("%dx %s  |cffaaaaaa%s|r%s%s"):format(row.qty, row.recipeName, F(L["for {name}"], { name = row.requester }), who, note))
+        r.label:SetText(("%dx %s  |cffaaaaaa%s|r%s%s"):format(row.qty, row.recipeName, F(L["for {name}"], { name = short(row.requester) }), who, note))
         r.right:SetText("|cff" .. (STATUS_COLOR[row.status] or "ffffff") .. statusLabel(row.status) .. "|r  " .. ago(row.createdAt))
         r.label:SetPoint("RIGHT", -130, 0)
         r.sel:SetShown(row.id == state.selectedOrder)
@@ -515,8 +558,70 @@ local function build()
     f.doneBtn:SetPoint("LEFT", f.withdrawBtn, "RIGHT", 6, 0)
     f.cancelBtn:SetPoint("LEFT", f.doneBtn, "RIGHT", 6, 0)
 
+    -- Available tab: recipe items on offer
+    local at = CreateFrame("Frame", nil, f); at:SetPoint("TOPLEFT", 12, -58); at:SetPoint("BOTTOMRIGHT", -12, 12)
+    f.tabs.available = at
+    local osearch = CreateFrame("EditBox", nil, at, "InputBoxTemplate")
+    osearch:SetSize(200, 20); osearch:SetPoint("TOPLEFT", 6, -14); osearch:SetAutoFocus(false)
+    osearch:SetScript("OnTextChanged", function(self) state.offerText = self:GetText(); refreshOffers() end)
+    osearch:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    local ohint = text(at, "GameFontDisableSmall"); ohint:SetPoint("BOTTOMLEFT", osearch, "TOPLEFT", 0, 0)
+    ohint:SetText(L["search item, owner or profession"])
+    f.offerProfBtn = button(at, L["Only my professions"], 150, 22, function()
+        state.offerMineProf = not state.offerMineProf
+        f.offerProfBtn:SetLabel(state.offerMineProf and (L["Only my professions"] .. " *") or L["Only my professions"])
+        refreshOffers()
+    end)
+    f.offerProfBtn:SetPoint("LEFT", osearch, "RIGHT", 8, 0)
+    f.offerCount = text(at, "GameFontNormalSmall", "RIGHT"); f.offerCount:SetPoint("TOPRIGHT", at, "TOPRIGHT", -4, -6)
+    offerList = createList(at, 736, 300, makeSelectableRow, function(r, row)
+        r.icon:SetTexture(row.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+        local prof = row.profession and ("  |cff888888" .. row.profession .. "|r") or ""
+        r.label:SetText(("%s%s  |cffaaaaaa%s|r  |cff999999%s|r"):format(row.name, prof, short(row.ownerName), row.locations))
+        r.right:SetText((row.mine and "|cff33ff99* |r" or "") .. P(row.dibCount, L["{n} dib"], L["{n} dibs"]))
+        r.label:SetPoint("RIGHT", -100, 0)
+        r.sel:SetShown(row.key == state.selectedOffer)
+        r:SetScript("OnClick", function() state.selectedOffer = row.key; refreshOffers() end)
+        r:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetHyperlink("item:" .. row.itemID)
+            GameTooltip:Show()
+        end)
+        r:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end)
+    offerList:SetPoint("TOPLEFT", 0, -38)
+    f.offersEmpty = text(at, "GameFontDisable", "CENTER")
+    f.offersEmpty:SetPoint("CENTER", offerList, "CENTER", 0, 0); f.offersEmpty:SetWidth(520)
+    f.offersEmpty:SetText(L["No recipe items on offer yet. They are listed automatically from the bags, bank, mail, guild bank and auctions of every guild member."])
+    f.offerDetail = text(at, "GameFontHighlightSmall")
+    f.offerDetail:SetPoint("TOPLEFT", offerList, "BOTTOMLEFT", 4, -8); f.offerDetail:SetWidth(724); f.offerDetail:SetHeight(44)
+    f.offerDetail:SetJustifyV("TOP"); f.offerDetail:SetWordWrap(true)
+    f.dibsBtn = button(at, L["Dibs"], 140, 24, function()
+        local row = selectedOfferRow()
+        if not row then return end
+        local res, why = ns.Offers.ToggleDib(me(), row.owner, row.itemID, ns.Util.Now())
+        if res == "on" then ns.Print(F(L["Dibs set on {name}"], { name = row.name }))
+        elseif res == "off" then ns.Print(F(L["Dibs removed from {name}"], { name = row.name }))
+        elseif why == "limit" then ns.Print(L["Too many active dibs."])
+        else ns.Print(L["That item is no longer on offer."]) end
+        if res then ns.Events.Fire("OFFERS_CHANGED") end
+        UI.Refresh()
+    end)
+    f.hideBtn = button(at, L["Remove from my list"], 150, 24, function()
+        local row = selectedOfferRow()
+        if row and ns.Offers.Hide(row.owner, row.itemID) then state.selectedOffer = nil end
+        UI.Refresh()
+    end)
+    f.whisperBtn = button(at, L["Whisper owner"], 120, 24, function()
+        local row = selectedOfferRow()
+        if row then whisper(row.owner) end
+    end)
+    f.dibsBtn:SetPoint("BOTTOMLEFT", 0, 0)
+    f.hideBtn:SetPoint("LEFT", f.dibsBtn, "RIGHT", 6, 0)
+    f.whisperBtn:SetPoint("LEFT", f.hideBtn, "RIGHT", 6, 0)
+
     ns.Events.On("DATA_CHANGED", UI.Refresh)
-    ns.Events.On("ITEM_INFO", function() if f:IsShown() then refreshDetail() end end)
+    ns.Events.On("ITEM_INFO", function() if f:IsShown() then refreshDetail(); refreshOffers() end end)
     setTab("recipes")
 end
 

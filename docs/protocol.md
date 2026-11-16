@@ -1,6 +1,6 @@
 # Wire protocol, compatibility and stored data
 
-Applies from 0.3.0 (protocol 2.0, schema 2). Source of truth in code: `Core/Init.lua` (versions), `Core/Codec.lua`
+Applies from 0.3.0 (protocol 2.0, schema 2); 0.4.0 adds protocol 2.1 and schema 3 (sections 6 and 7). Source of truth in code: `Core/Init.lua` (versions), `Core/Codec.lua`
 (format), `Core/Guard.lua` (gate), `Core/Comm.lua` (transport), `Core/Sync.lua` (messages), `Core/Store.lua` (schema).
 Tests: `tests/test_hardening.lua`.
 
@@ -70,6 +70,22 @@ Display: every peer-originated string leaves `Core/Model.lua` escaped (`|` -> `|
 - Rules for changes: changing the stored shape -> bump `Store.SCHEMA` and add a migration + test; changing the wire ->
   decide major/minor first and write it in the feature's `spec.md` Decisions.
 
-## 6. Version source
+## 6. Recipe items board (protocol 2.1, schema 3; feature 007)
+Additive minor change: a 2.0 peer ignores everything below (unknown HELLO field and unknown message types are dropped).
+- `HELLO` gets optional `orev` = `rev` of my offers record (omitted when I have none). A receiver holding an older (or no)
+  record of the sender whispers `WANTO {names={sender}}` (once per sender+rev per minute); only the sender's own name is honoured.
+- `OFFERS {offers = rec}` (whisper): `rec = { name, rev, items = { [itemID] = { [loc] = count } }, dibs = { ["Owner-Realm:itemID"] = { on, t } } }`.
+  `loc` is one of `bag bank reagent mail auction gbank1..gbank8`. The author is the only writer (`rec.name` must equal the
+  sender), so a dib can only be set or removed by the dibbing player; a newer `rev` replaces the whole record.
+- `Offers.Sanitize` (allow-list, one bad entry rejects the record): <= 300 items, <= 200 dibs, counts 1..9999, `rev`/`t` in
+  `[0, now + 1 day]`, dib keys parse to a safe owner name + item id, no dib on the author's own items.
+- Display safety: item names/icons/profession come from the viewer's client (`C_Item.GetItemInfoInstant`: only class Recipe is shown);
+  owner and dibber names are escaped in `Core/Model.lua`.
+
+## 7. Stored data additions (schema 3)
+`offers[name]` (records above), `hidden["Owner:itemID"] = ownerRev` (local removal; void once the owner's `rev` changes).
+Migration 2 -> 3 only creates the two tables. Both are re-validated on every load; `/ts clean` empties them in place.
+
+## 8. Version source
 One source: the TOC `## Version` (`Core/Init.lua` reads it from addon metadata; a literal fallback exists for the offline
 tests and is pinned to the TOC by a test). The release workflow refuses a tag that does not match the TOC version.

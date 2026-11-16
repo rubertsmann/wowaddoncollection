@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased (target 0.4.0)
+- **Available tab (feature 007):** tradeable recipe items (item class Recipe) in bags, bank, reagent bank, mail, guild bank (per tab) and own auctions are listed automatically for the whole guild, with owner, locations, profession and age. Anyone can call **dibs**; all dibs are visible (oldest first) and each player removes only their own by pressing the button again. "Remove from my list" hides an offer locally; it returns when its owner's list changes. Handing items over stays manual. `/ts offers` shows what the scan sees. See `features/007-recipe-items-board/doc.md`.
+- Wire protocol **2.1** (additive: optional HELLO field `orev`, new messages `WANTO`/`OFFERS`; 0.3.x clients ignore them and keep syncing everything else). SavedVariables **schema 3** (new `offers`, `hidden`; schema 2 data kept).
+- `/ts clean` also removes offers.
+
 ## 0.3.1
 - **Build flag:** one definition in `Core/Init.lua` (`ns.BUILD`, TOC `## X-Build: dev` or a folder name containing "dev"); the comms prefix, SavedVariables, frame names and slash commands of the dev build are all derived from it, so a dev build and the live addon never share data or addon messages. `tools/deploy.ps1` and `tools/package.ps1` now verify the generated dev TOC and the shipped live TOC; a TOC that saves a different global than the build uses is reported.
 - Dev client no longer fails with a chain of nil-index errors when its generated TOC is stale: one message names the missing modules and the fix (`tools/deploy.ps1`, then restart the game).

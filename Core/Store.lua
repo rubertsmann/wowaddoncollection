@@ -4,13 +4,15 @@ local ADDON, ns = ...
 --   chars[fullName]   = { name, class, level, rev, professions = { [profName] = { name, rank, max, recipes = { [recipeID]=true } } } }
 --   catalog[recipeID] = { name, icon, minSkill, produces, reagents = { { itemID, count, name? } } }
 --   orders[id]        = see Orders.lua
+--   offers[name]      = recipe items on offer + that character's dibs, see Offers.lua;  hidden[key] = locally removed offers
 local S = {}
 ns.Store = S
 
 -- Schema history (docs/protocol.md "Stored data"):
 --   1  0.1.0 / 0.2.0   raw records as received
 --   2  0.3.0           every persisted record is re-validated on load (allow-list copy); hostile or corrupt entries dropped
-S.SCHEMA = 2
+--  3  0.4.0           + offers, hidden (recipe items board); additive, schema 2 data is kept
+S.SCHEMA = 3
 
 local DAY = 86400
 local MAX_ID = 2147483647          -- recipe / item / spell ids fit a signed 32-bit integer
@@ -30,6 +32,8 @@ local function fresh(sv)
     sv.chars = type(sv.chars) == "table" and sv.chars or {}
     sv.catalog = type(sv.catalog) == "table" and sv.catalog or {}
     sv.orders = type(sv.orders) == "table" and sv.orders or {}
+    sv.offers = type(sv.offers) == "table" and sv.offers or {}
+    sv.hidden = type(sv.hidden) == "table" and sv.hidden or {}
     sv.debug = type(sv.debug) == "table" and sv.debug or {}
     sv.ui = type(sv.ui) == "table" and sv.ui or {}
     sv.profNames = type(sv.profNames) == "table" and sv.profNames or {}   -- [clientLocale][skillLineID] = name the viewer's own client reported
@@ -38,7 +42,8 @@ end
 
 -- Sizes of everything held locally (for /ts clean).
 function S.Counts()
-    local n = { chars = 0, recipes = 0, orders = 0, catalog = 0, names = 0 }
+    local n = { chars = 0, recipes = 0, orders = 0, catalog = 0, names = 0, offers = 0 }
+    for _, rec in pairs(S.db.offers) do for _ in pairs(rec.items or {}) do n.offers = n.offers + 1 end end
     for _ in pairs(S.db.chars) do n.chars = n.chars + 1 end
     for _ in pairs(S.db.catalog) do n.catalog = n.catalog + 1 end
     for _ in pairs(S.db.orders) do n.orders = n.orders + 1 end
@@ -53,7 +58,7 @@ end
 -- UI preferences, `schema` and `me` stay. Returns the counts that were removed.
 function S.Clean()
     local removed = S.Counts()
-    for _, key in ipairs({ "chars", "catalog", "orders", "profNames", "debug" }) do
+    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "profNames", "debug" }) do
         local t = S.db[key]
         for k in pairs(t) do t[k] = nil end
     end
@@ -90,6 +95,12 @@ function S.SanitizePersisted(sv)
         orders = sv.orders
     end
     sv.orders = orders
+    if ns.Offers and ns.Offers.SanitizePersisted then
+        dropped = dropped + ns.Offers.SanitizePersisted(sv)
+    else
+        sv.offers = type(sv.offers) == "table" and sv.offers or {}
+        sv.hidden = type(sv.hidden) == "table" and sv.hidden or {}
+    end
     local names = {}
     if type(sv.profNames) == "table" then
         for code, byId in pairs(sv.profNames) do
@@ -112,6 +123,7 @@ end
 -- them; only orders (and the viewer's own record) deserve care.
 local MIGRATIONS = {
     [1] = function(sv) S.SanitizePersisted(sv) end,
+    [2] = function(sv) sv.offers, sv.hidden = sv.offers or {}, sv.hidden or {} end,   -- additive: new tables only
 }
 
 -- Returns sv, status:  "ok" | "migrated"            usable table (modified in place)
@@ -221,6 +233,9 @@ function S.Prune(rosterNames, keep)
             S.db.chars[name] = nil
             n = n + 1
         end
+    end
+    for name in pairs(S.db.offers) do   -- offers of members who left the guild go with them
+        if not rosterNames[name] and name ~= keep then S.db.offers[name] = nil end
     end
     return n
 end

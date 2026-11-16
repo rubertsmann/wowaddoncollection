@@ -7,6 +7,11 @@ shared crafting-order board.
 * **Recipes tab** – filter by profession, search recipe or reagent names, see reagents (with how many you have), see
   who can craft it (click to whisper), request it.
 * **Orders tab** – guild-wide board: requests, "I'll craft it" claims, done/cancel; everyone sees who claimed what.
+* **Available tab** – tradeable recipe items (patterns, plans, formulas such as "Recipe: Savory Deviate Delight") that
+  guild members hold in bags, bank, reagent bank, mail, guild bank or auctions, listed automatically so nobody sells
+  them elsewhere unknowingly. Anyone can call **dibs** (several players can; all are listed, oldest first; press again
+  to take yours back); the owner decides and hands the item over manually. "Remove from my list" hides an offer
+  locally until its owner's list changes.
 * No server. Data travels over hidden guild addon messages (prefix `TShare`) and is stored in the `TalentShareDB`
   SavedVariable.
 
@@ -27,7 +32,7 @@ Re-run `tools/deploy.ps1` after every change to `TalentShare.toc` (the dev TOC i
 ## Use
 
 `/ts` (or the minimap button) opens the window. Click each profession icon at the top right of the Recipes tab once so the recipes are read.
-`/ts scan`, `/ts dump`, `/ts chars`, `/ts comm`, `/ts hello`, `/ts debug`, `/ts version`,
+`/ts offers` (what the item scan sees; `/ts offers scan` forces a scan), `/ts scan`, `/ts dump`, `/ts chars`, `/ts comm`, `/ts hello`, `/ts debug`, `/ts version`,
 `/ts locale <code>|auto` (UI language, then `/reload`), `/ts i18n` (what the client reports),
 profession icons at the top right of the Recipes tab (one click opens that profession and reads its recipes),
 `/ts clean` then `/ts clean confirm` (deletes everything stored locally). In the dev build use `/tsd`.
@@ -44,7 +49,8 @@ The UI is available in English and German; profession and recipe names always fo
 
 ## Trust model
 
-Any guild member running the addon can create/claim/close orders and can only publish **their own** character record.
+Any guild member running the addon can create/claim/close orders and can only publish **their own** character record
+(and their own offers and dibs: nobody can set or remove another player's dib).
 There is no authentication beyond guild membership, but nothing from outside the guild is processed: only guild
 messages and whispers from guild-roster members are accepted, and all received data is validated before it is stored or shown.
 

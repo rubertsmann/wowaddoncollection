@@ -8,13 +8,16 @@ local ADDON, ns = ...
 --   SNAP  {char, catalog}       whisper: a character record + catalog entries of its recipes
 --   OPUSH {orders}              whisper: orders the receiver lacks (<= 10 per message)
 --   ORDER {order}               broadcast: one order changed
+--   WANTO {names}               whisper: "send me your offers record" (2.1+); only the sender's own name is honoured
+--   OFFERS {offers}             whisper: a character's offers/dibs record (2.1+)
+--   HELLO also carries optional orev (my offers record rev, 2.1+)
 -- A peer can only author its OWN character record (SNAP char.name must equal the sender).
 local Sync = {}
 ns.Sync = Sync
 Sync.__index = Sync
 
 function Sync.New(env)
-    return setmetatable({ env = env, pending = {}, wanted = {}, budget = 0, budgetT = 0,
+    return setmetatable({ env = env, pending = {}, wanted = {}, wantedO = {}, budget = 0, budgetT = 0,
         stats = { sent = 0, received = 0, dropped = 0 } }, Sync)
 end
 
@@ -33,7 +36,9 @@ function Sync:_myRev()
 end
 
 function Sync:_helloMsg(login)
-    return { t = "HELLO", rev = self:_myRev(), login = login or nil, odig = self.env.orders:Digest(100) }
+    local o = ns.Offers.Get(self.env.me)
+    return { t = "HELLO", rev = self:_myRev(), login = login or nil, odig = self.env.orders:Digest(100),
+        orev = (o and o.rev > 0) and o.rev or nil }
 end
 
 function Sync:Hello(login)
@@ -78,6 +83,17 @@ function Sync:_onHELLO(msg, sender)
             self:_send({ t = "WANT", names = { sender } }, "WHISPER", sender)
         end
     end
+    -- offers record (protocol 2.1): same pull rule as the character record, validated like it
+    if msg.orev ~= nil and ns.Util.SafeInt(msg.orev, 1, ns.Store.Horizon()) then
+        local have = ns.Offers.Get(sender)
+        if (have and have.rev or 0) < msg.orev then
+            local w = self.wantedO[sender]
+            if not (w and w.rev >= msg.orev and now - w.t < 60) then
+                self.wantedO[sender] = { rev = msg.orev, t = now }
+                self:_send({ t = "WANTO", names = { sender } }, "WHISPER", sender)
+            end
+        end
+    end
     if msg.login then -- a member just logged in: introduce myself after a random delay (storm control)
         if now - self.budgetT >= 60 then self.budgetT, self.budget = now, 0 end
         if self.budget < 20 then   -- at most 20 login introductions per minute
@@ -115,6 +131,23 @@ function Sync:_onWANT(msg, sender)
             end
         end
     end
+end
+
+function Sync:_onWANTO(msg, sender)
+    if type(msg.names) ~= "table" then error("bad names") end
+    for _, name in ipairs(msg.names) do
+        if name == self.env.me then
+            local rec = ns.Offers.Get(self.env.me)
+            if rec then self:_later(self.env.rand() * 2, { t = "OFFERS", offers = rec }, "WHISPER", sender) end
+        end
+    end
+end
+
+function Sync:_onOFFERS(msg, sender)
+    local rec = ns.Offers.Sanitize(msg.offers)
+    if not rec then error("invalid offers") end
+    if rec.name ~= sender then error("offers/sender mismatch") end   -- a peer authors only its own record
+    if ns.Offers.Put(rec) then self.env.onChange("offers") end
 end
 
 function Sync:_onSNAP(msg, sender)

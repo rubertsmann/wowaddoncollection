@@ -9,7 +9,7 @@ ns.Events = Ev
 -- this the player only sees a chain of "attempt to index a nil value" errors from the files that needed the module.
 do
     local missing = {}
-    for _, key in ipairs({ "Util", "Locale", "Store", "Names", "Api", "Scanner", "Codec", "Guard", "Orders", "Sync", "Model", "Comm" }) do
+    for _, key in ipairs({ "Util", "Locale", "Store", "Names", "Api", "Scanner", "Codec", "Guard", "Orders", "Offers", "Sync", "Model", "Comm" }) do
         if not ns[key] then missing[#missing + 1] = key end
     end
     if #missing > 0 then
@@ -38,16 +38,17 @@ ns.Slash.clean = function(arg)
     if not ns.db then return end
     if word ~= "confirm" then
         local n = ns.Store.Counts()
-        ns.Print(("clean would delete %d characters (%d recipes), %d catalog entries, %d orders. Type %s clean confirm to do it."):format(
-            n.chars, n.recipes, n.catalog, n.orders, ns.SLASH[1]))
+        ns.Print(("clean would delete %d characters (%d recipes), %d catalog entries, %d orders, %d offered items. Type %s clean confirm to do it."):format(
+            n.chars, n.recipes, n.catalog, n.orders, n.offers, ns.SLASH[1]))
         return
     end
     local n = ns.Store.Clean()
     ns.Locale.version = ns.Locale.version + 1     -- invalidates the name caches
     Ev.Fire("DATA_CHANGED", "chars")
     ns.Comm.RequestHello(true, true)              -- ask online guild members to introduce themselves, then pull their data
-    ns.Print(("cleaned: removed %d characters, %d catalog entries, %d orders. Click your profession icons in the window to scan them again."):format(
-        n.chars, n.catalog, n.orders))
+    ns.Print(("cleaned: removed %d characters, %d catalog entries, %d orders, %d offered items. Click your profession icons in the window to scan them again."):format(
+        n.chars, n.catalog, n.orders, n.offers))
+    Ev.ScanItems(1.0)                             -- my own items are read again right away
 end
 
 local pendingScan = false
@@ -65,7 +66,38 @@ local function scheduleScan(delay)
     end)
 end
 
+-- Recipe items (feature 007): bags are read at any time, bank/mail/guild bank/auctions only while their window is open
+-- (Api.open); a location that cannot be read keeps its last known state. A changed record is announced with a HELLO.
+local pendingItems = false
+local function scheduleItemScan(delay)
+    if pendingItems then return end
+    pendingItems = true
+    C_Timer.After(delay or 1.5, function()
+        pendingItems = false
+        local me = ns.Store.db.me or ns.Api.GetPlayerInfo().name
+        if not me then return end
+        local ok, scans = pcall(ns.Api.ScanItems)
+        if not ok then ns.Debug.Log("items.error", scans) return end
+        local changed = ns.Offers.Update(me, scans, ns.Util.Now())
+        ns.Debug.Log("items", changed and "changed" or "same", ns.Api.scanStats.recipes)
+        if changed then Ev.Fire("OFFERS_CHANGED") end
+        Ev.Fire("DATA_CHANGED", "offers-local")
+    end)
+end
+Ev.ScanItems = scheduleItemScan
+
 Ev.On("LOCAL_CHANGED", function() ns.Comm.RequestHello(false, true) end)
+Ev.On("OFFERS_CHANGED", function() ns.Comm.RequestHello(false, true) end)
+-- a record from a peer arrived: drop MY dibs on items that are gone (the new record may have removed them)
+Ev.On("DATA_CHANGED", function(kind)
+    if kind ~= "offers" or not ns.db or ns.db.readonly then return end
+    local me = ns.Store.db.me
+    if me and ns.Offers.Maintain(me, ns.Util.Now()) then
+        Ev.Fire("OFFERS_CHANGED")
+        Ev.Fire("DATA_CHANGED", "offers-local")
+    end
+    ns.Offers.PruneHidden()
+end)
 Ev.On("WINDOW_OPENED", function() ns.Comm.RequestHello(false, false) end)
 
 local frame = CreateFrame("Frame")
@@ -98,6 +130,7 @@ function onEvent.PLAYER_LOGIN()
     C_Timer.After(3, function()
         local changed = ns.Scanner.Refresh(ns.Util.Now())
         ns.Comm.Start()
+        scheduleItemScan(0.5)
         ns.Comm.RequestHello(true, true)  -- login=true: online peers answer with their own HELLO
         if changed then Ev.Fire("DATA_CHANGED", "chars") end
     end)
@@ -135,6 +168,65 @@ function onEvent.TRADE_SKILL_DATA_SOURCE_CHANGED() scheduleScan(1.0) end
 function onEvent.SKILL_LINES_CHANGED() scheduleScan(2.0) end
 function onEvent.NEW_RECIPE_LEARNED() scheduleScan(1.5) end   -- keeps the cache current without reopening the window
 function onEvent.GET_ITEM_INFO_RECEIVED() Ev.Fire("ITEM_INFO") end
+
+-- recipe item locations (events that do not exist on this client are skipped by `reg`)
+function onEvent.BAG_UPDATE_DELAYED() scheduleItemScan(1.5) end
+local function openClose(key, isOpen)
+    return function()
+        ns.Api.open[key] = isOpen
+        ns.Debug.Log("window", key, isOpen and "open" or "closed")
+        if isOpen then scheduleItemScan(1.0) end
+    end
+end
+onEvent.BANKFRAME_OPENED, onEvent.BANKFRAME_CLOSED = openClose("bank", true), openClose("bank", false)
+onEvent.MAIL_SHOW, onEvent.MAIL_CLOSED = openClose("mail", true), openClose("mail", false)
+onEvent.GUILDBANKFRAME_OPENED, onEvent.GUILDBANKFRAME_CLOSED = openClose("gbank", true), openClose("gbank", false)
+onEvent.AUCTION_HOUSE_SHOW, onEvent.AUCTION_HOUSE_CLOSED = openClose("auction", true), openClose("auction", false)
+function onEvent.PLAYERBANKSLOTS_CHANGED() scheduleItemScan(1.5) end
+function onEvent.PLAYERBANKBAGSLOTS_CHANGED() scheduleItemScan(1.5) end
+function onEvent.PLAYERREAGENTBANKSLOTS_CHANGED() scheduleItemScan(1.5) end
+function onEvent.MAIL_INBOX_UPDATE() scheduleItemScan(1.5) end
+function onEvent.GUILDBANKBAGSLOTS_CHANGED() scheduleItemScan(1.5) end
+function onEvent.AUCTION_OWNED_LIST_UPDATE() scheduleItemScan(1.5) end
+function onEvent.OWNED_AUCTIONS_UPDATED() scheduleItemScan(1.5) end
+
+-- /ts offers [scan]: what the item scan can see on this client and what my offers record holds (also the in-game probe)
+ns.Slash.offers = function(arg)
+    local api = ns.Api
+    if (arg or ""):match("^%s*scan") then
+        local ok, scans = pcall(api.ScanItems)
+        if not ok then ns.Print("scan failed: " .. tostring(scans)) return end
+        local me = ns.Store.db.me or api.GetPlayerInfo().name
+        local changed = ns.Offers.Update(me, scans, ns.Util.Now())
+        if changed then Ev.Fire("OFFERS_CHANGED") end
+        Ev.Fire("DATA_CHANGED", "offers-local")
+        ns.Print("scan: " .. (changed and "updated" or "unchanged"))
+    end
+    local function has(v) return v and "yes" or "NO" end
+    ns.Print(("APIs: C_Container %s, legacy container %s, item class %s, mail %s, guild bank %s, auction (modern/classic) %s/%s"):format(
+        has(C_Container and C_Container.GetContainerItemInfo), has(GetContainerItemInfo),
+        has((C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant), has(GetInboxItem and GetInboxNumItems),
+        has(GetGuildBankItemLink), has(C_AuctionHouse and C_AuctionHouse.GetNumOwnedAuctions), has(GetNumAuctionItems)))
+    local o = api.open
+    ns.Print(("windows open: bank %s, mail %s, guild bank %s, auction %s"):format(tostring(o.bank), tostring(o.mail), tostring(o.gbank), tostring(o.auction)))
+    local st = api.scanStats
+    ns.Print(("last scan: %d items seen, %d recipes (%d bound, not offered), %d with unknown class"):format(st.items, st.recipes, st.bound, st.unknownClass))
+    local rec = ns.Offers.Get(ns.Store.db.me or "")
+    if not rec then ns.Print("no offers record yet (no tradeable recipe item found)") return end
+    local perLoc = {}
+    for id, locs in pairs(rec.items) do
+        for loc, n in pairs(locs) do
+            perLoc[loc] = perLoc[loc] or {}
+            table.insert(perLoc[loc], ("%s x%d"):format(api.ItemName(id) or ("item:" .. id), n))
+        end
+    end
+    for _, loc in ipairs(ns.Offers.LOC_ORDER) do
+        if perLoc[loc] then ns.Print(("%s: %s"):format(loc, table.concat(perLoc[loc], ", "))) end
+    end
+    local dibs = 0
+    for _, d in pairs(rec.dibs) do if d.on then dibs = dibs + 1 end end
+    ns.Print(("record rev %s, %d active dibs; %d offers known from the guild"):format(tostring(rec.rev), dibs, select(2, ns.Offers.Counts())))
+end
 
 for event in pairs(onEvent) do reg(event) end
 frame:SetScript("OnEvent", function(_, event, ...)

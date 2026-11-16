@@ -265,3 +265,149 @@ function Api.ItemCount(itemID)
     if GetItemCount then return GetItemCount(itemID, true) or 0 end
     return 0
 end
+
+------------------------------------------------------------------ recipe items (feature 007: Offers)
+
+-- Which windows are open right now. Set by Events.lua (bank, mail, guild bank and auction house contents are only
+-- readable while their window is open); a location that is not open is not scanned and keeps its last known state.
+Api.open = { bank = false, mail = false, gbank = false, auction = false }
+
+-- class id, subclass id, icon of an item WITHOUT loading it (nil when the client does not know the id).
+function Api.ItemClass(itemID)
+    local fn = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    if not fn then return nil end
+    local ok, _, _, _, _, icon, classID, subClassID = pcall(fn, itemID)
+    if ok and type(classID) == "number" then return classID, subClassID, icon end
+    return nil
+end
+
+local function itemIDOf(link)
+    if type(link) ~= "string" then return nil end
+    return tonumber(link:match("item:(%d+)"))
+end
+
+-- A recipe item that can be handed to someone: class Recipe, not soulbound. Adds it to `set` (itemID -> total count).
+Api.scanStats = { items = 0, recipes = 0, bound = 0, unknownClass = 0 }   -- of the last ScanItems (for /ts offers)
+local function addRecipe(set, itemID, count, bound)
+    local st = Api.scanStats
+    if not itemID then return end
+    st.items = st.items + 1
+    local class = Api.ItemClass(itemID)
+    if class == nil then st.unknownClass = st.unknownClass + 1 end
+    if class ~= ns.Offers.RECIPE_CLASS then return end
+    st.recipes = st.recipes + 1
+    if bound then st.bound = st.bound + 1 return end
+    set[itemID] = (set[itemID] or 0) + math.max(1, tonumber(count) or 1)
+end
+
+local function containerSlots(bag)
+    local fn = (C_Container and C_Container.GetContainerNumSlots) or GetContainerNumSlots
+    return fn and (try(fn, bag) or 0) or 0
+end
+
+-- itemID, count, isBound for one container slot (modern C_Container table, or the legacy multi-value API)
+local function containerItem(bag, slot)
+    if C_Container and C_Container.GetContainerItemInfo then
+        local info = try(C_Container.GetContainerItemInfo, bag, slot)
+        if type(info) == "table" then return info.itemID or itemIDOf(info.hyperlink), info.stackCount, info.isBound end
+        return nil
+    end
+    if GetContainerItemInfo then
+        local _, count, _, _, _, _, link, _, _, id, bound = try(GetContainerItemInfo, bag, slot)
+        return id or itemIDOf(link), count, bound
+    end
+end
+
+local function scanContainers(bags)
+    local set, readable = {}, false
+    for _, bag in ipairs(bags) do
+        local n = containerSlots(bag)
+        if n > 0 then readable = true end
+        for slot = 1, n do
+            local id, count, bound = containerItem(bag, slot)
+            addRecipe(set, id, count, bound)
+        end
+    end
+    return readable and set or nil
+end
+
+local function scanMail()
+    if not (GetInboxNumItems and GetInboxItem) then return nil end
+    local set = {}
+    local n = try(GetInboxNumItems) or 0
+    for mail = 1, n do
+        for att = 1, (ATTACHMENTS_MAX_RECEIVE or 16) do
+            local name, id, _, count = try(GetInboxItem, mail, att)
+            if name or id then
+                local link = GetInboxItemLink and try(GetInboxItemLink, mail, att)
+                addRecipe(set, itemIDOf(link) or (type(id) == "number" and id) or nil, count, false)   -- mailed items are tradeable
+            end
+        end
+    end
+    return set
+end
+
+local function scanGuildBank()
+    if not (GetCurrentGuildBankTab and GetGuildBankItemLink) then return nil end
+    local tab = try(GetCurrentGuildBankTab)
+    if not ns.Util.SafeInt(tab, 1, 8) then return nil end
+    local set = {}
+    for slot = 1, (MAX_GUILDBANK_SLOTS_PER_TAB or 98) do
+        local link = try(GetGuildBankItemLink, tab, slot)
+        if link then
+            local _, count = try(GetGuildBankItemInfo, tab, slot)
+            addRecipe(set, itemIDOf(link), count, false)   -- the guild bank cannot hold soulbound items
+        end
+    end
+    return set, "gbank" .. tab
+end
+
+-- own auctions: modern C_AuctionHouse, or the classic "owner" list
+local function scanAuctions()
+    local set = {}
+    if C_AuctionHouse and C_AuctionHouse.GetNumOwnedAuctions then
+        local n = try(C_AuctionHouse.GetNumOwnedAuctions) or 0
+        for i = 1, n do
+            local info = try(C_AuctionHouse.GetOwnedAuctionInfo, i)
+            if type(info) == "table" then
+                local key = info.itemKey
+                addRecipe(set, (type(key) == "table" and key.itemID) or itemIDOf(info.itemLink), info.quantity, false)
+            end
+        end
+        return set
+    end
+    if GetNumAuctionItems and GetAuctionItemLink then
+        local n = try(GetNumAuctionItems, "owner") or 0
+        for i = 1, n do
+            local link = try(GetAuctionItemLink, "owner", i)
+            local _, _, count = try(GetAuctionItemInfo, "owner", i)
+            addRecipe(set, itemIDOf(link), count, false)
+        end
+        return set
+    end
+    return nil
+end
+
+-- Returns { [loc] = { [itemID] = count } } for every location that can be read right now (see Offers.lua for the keys).
+-- A location that cannot be read (window closed, API missing) is simply absent, so its old state is kept.
+function Api.ScanItems()
+    local out = {}
+    Api.scanStats = { items = 0, recipes = 0, bound = 0, unknownClass = 0 }
+    local nbag = NUM_BAG_SLOTS or 4
+    local bags = {}
+    for b = 0, nbag do bags[#bags + 1] = b end
+    out.bag = scanContainers(bags)
+    if Api.open.bank then
+        local bank = { BANK_CONTAINER or -1 }
+        for b = nbag + 1, nbag + (NUM_BANKBAGSLOTS or 7) do bank[#bank + 1] = b end
+        out.bank = scanContainers(bank)
+        out.reagent = scanContainers({ REAGENTBANK_CONTAINER or -3 })
+    end
+    if Api.open.mail then out.mail = scanMail() end
+    if Api.open.gbank then
+        local set, loc = scanGuildBank()
+        if set then out[loc] = set end
+    end
+    if Api.open.auction then out.auction = scanAuctions() end
+    return out
+end

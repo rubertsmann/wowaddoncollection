@@ -76,9 +76,9 @@ return {
     ["codec: chunk header round-trips and carries major.minor"] = function(h)
         local ns = h.ns()
         local text = ns.Codec.Header("3fa2", 2, 5) .. "payload|with|bars"
-        h.truthy(text:find("^2%.0|3fa2|2|5|"))
+        h.truthy(text:find("^2%." .. ns.PROTO_MINOR .. "|3fa2|2|5|"))
         local p = assert(ns.Codec.ParseHeader(text))
-        h.eq(p.major, 2); h.eq(p.minor, 0); h.eq(p.id, "3fa2"); h.eq(p.idx, 2); h.eq(p.total, 5); h.eq(p.part, "payload|with|bars")
+        h.eq(p.major, 2); h.eq(p.minor, ns.PROTO_MINOR); h.eq(p.id, "3fa2"); h.eq(p.idx, 2); h.eq(p.total, 5); h.eq(p.part, "payload|with|bars")
     end,
 
     ["codec: malformed headers are rejected, legacy 0.1/0.2 headers are recognised, foreign majors only expose the version"] = function(h)

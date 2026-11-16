@@ -85,6 +85,11 @@ return {
                 h.truthy(pcall(ns.UI.Toggle), "building the window failed")
                 h.truthy(pcall(ns.UI.Refresh), "refreshing the window failed")
                 h.truthy(pcall(ns.UI.SelectTab, "orders"), "switching to the orders tab failed")
+                ns.Offers.Put({ name = "B-R", rev = 5, items = { [6661] = { bag = 1 } }, dibs = {} })
+                h.truthy(pcall(ns.UI.SelectTab, "available"), "switching to the available tab failed")
+                h.truthy(pcall(ns.UI.Refresh), "refreshing the available tab failed")
+                h.truthy(ns.Slash.offers, "/ts offers missing")
+                h.truthy(ns.Events.ScanItems, "item scan hook missing")
                 h.truthy(ns.Names.env.spellName, "Api did not wire Names.env.spellName")
             end
         end)

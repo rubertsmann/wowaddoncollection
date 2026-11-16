@@ -13,6 +13,25 @@ function U.FullName(name, realm)
     return name .. "-" .. realm
 end
 
+-- Whisper target for a stored "Name-Realm": a player on MY realm is addressed by the character name alone, because the
+-- game's whisper lookup does not resolve this realm's own suffix on every client ("no player named 'Name-Realm' is
+-- online"). Other realms keep "Name-Realm", which cross-realm whispers need.
+function U.WhisperTarget(full)
+    if type(full) ~= "string" then return full end
+    if Ambiguate then   -- the game knows which realm is mine; "none" drops the suffix only for my own realm
+        local ok, short = pcall(Ambiguate, full, "none")
+        if ok and type(short) == "string" and short ~= "" then return short end
+    end
+    local name, realm = full:match("^([^-]+)-(.+)$")   -- offline fallback (tests)
+    if not name then return full end
+    local mine = (GetNormalizedRealmName and GetNormalizedRealmName()) or ""
+    mine = (mine:gsub("%s", ""))
+    if mine ~= "" and (realm:gsub("%s", "")) == mine then return name end
+    return full
+end
+
+U.ShortName = U.WhisperTarget   -- lists show the same form: "Name" on my realm, "Name-Realm" elsewhere
+
 function U.DeepCopy(t)
     if type(t) ~= "table" then return t end
     local c = {}
