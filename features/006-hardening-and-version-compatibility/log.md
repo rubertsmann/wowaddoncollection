@@ -69,3 +69,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: not adopted from the review: tint for the dev minimap icon (cosmetic, UI is only verifiable in game), a `luajit tests/run.lua` step in release.yml (the runner shells out to `dir`/`ls` and was not tried on Linux CI).
 - Evidence: see the suite line in the commit that follows.
 - Next: restart the game (dev TOC regenerated), `/tsd version` expects 0.3.1-dev. In-game rows of verify.md stay open.
+
+## 2026-11-16 14:52 | DONE | Releases 0.3.1 and 0.3.2 pushed; records aligned
+- Did: v0.3.1 (build flag, isolation checks) and v0.3.2 (same-realm whisper fix, short names in lists) tagged and pushed; GitHub release runs for both finished with success. master merged with the published feature 007 (merge commit, no history rewritten: a local rebase of the already-pushed 007 commit was undone). INDEX, docs/status.md, CHANGELOG and the review skill updated to the released state (protocol 2.1 / schema 3 on master).
+- Result: `luajit tests/run.lua` -> 134 passed, 0 failed. Status stays `verifying`: the in-game and two-client rows of verify.md are still NOT verified.
+- Evidence: suite output; GitHub Actions runs for v0.3.1 and v0.3.2 (conclusion success).
+- Next: install 0.3.2 live, restart the game, check /ts version, /ts comm (roster, rejected) with a second player; reproduce the "addon action blocked" dialog with /console taintLog 2.

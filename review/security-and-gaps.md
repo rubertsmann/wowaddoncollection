@@ -48,6 +48,8 @@ Date: 2026-11-16 · Scope: whole repo (working tree + all commits) · Status: **
 - **Tests:** add adversarial cases (non-guild sender, non-finite numbers, bad catalog fields, escape sequences in notes, foreign protocol).
 - **Docs/release:** no CHANGELOG, SECURITY.md, or addon licence file; no checksum for the manual zip; no `docs/protocol.md`.
 
+- **Sync architecture and transfer efficiency:** see `review/sharing-architecture.md` (A1-A8, 2026-11-16).
+
 ## Priority
 1. S1 (single inbound gate) and the protocol header from `version-compatibility.md` R1, both before first release.
 2. S2 (escape helper) and S3 (strict sanitizer).
