@@ -1,25 +1,39 @@
 # API findings for WoW Forever (interface 16001)
 
-**Status: INCONCLUSIVE. The probe (`dev/TalentShareProbe`, `/tsp`) has not been run in the game yet.** Replace this
-file with the probe's results (`TalentShareProbeDB.lua`) once it has.
+**Status: VERIFIED in game (build 1.60.1 / 70938, 2026-11-16), German client (deDE), character with Leatherworking,
+Skinning, Cooking.** Source: `TalentShareProbeDB` plus a `/ts scan` / `/ts dump` run (screenshot in `screens-debug/`).
 
-## Static evidence (read from addons installed in `_forever_\Interface\AddOns`, no game started)
+## What Forever provides (probe `apis` table)
 
-* Auctionator's TOC lists `16001` in `## Interface:` but its `[AllowLoadGameType ...]` filters only name
-  `vanilla, tbc, wrath, cata, mists, mainline, classic`. Forever (`camelot` / `forever`) is not named, so which of
-  Auctionator's code paths Forever runs is not determinable from the files.
-* Auctionator ships both profession API families: modern `C_TradeSkillUI.GetRecipeSchematic(recipeID, false, level)`
-  (`Source_Mainline`) and legacy `GetTradeSkillReagentInfo(recipeIndex, reagentIndex)` / `GetTradeSkillInfo`
-  (`Source_Classic`). This is why `Core/Api.lua` supports both and picks at runtime.
-* No installed addon calls `GetAllRecipeIDs`, so there is no evidence about the recipe-listing call on Forever.
+| Need | API that exists | Legacy API (all absent) |
+|---|---|---|
+| Professions | `GetProfessions`, `GetProfessionInfo` | `GetNumSkillLines`, `GetSkillLineInfo` |
+| Recipe IDs | `C_TradeSkillUI.GetAllRecipeIDs` (132 IDs returned for Cooking, includes unlearned) | `GetNumTradeSkills`, `GetTradeSkillInfo` |
+| Recipe info | `C_TradeSkillUI.GetRecipeInfo` (has `learned`, `name`, `icon`, `hyperlink`, `categoryID`) | |
+| Reagents | `C_TradeSkillUI.GetRecipeSchematic(id, false)` -> `reagentSlotSchematics[].reagents[]`, `quantityRequired`, `outputItemID` | `GetTradeSkillReagentInfo` etc. |
+| Items | `C_Item.GetItemInfo`, `C_Item.GetItemNameByID`, `C_Item.GetItemIconByID`, `C_Item.GetItemCount`, `C_Item.RequestLoadItemDataByID` | `GetItemInfo`, `GetItemCount` |
+| Spells | `C_Spell.GetSpellInfo` | |
+| Addon comms | `C_ChatInfo.RegisterAddonMessagePrefix` / `SendAddonMessage` / `IsAddonMessagePrefixRegistered` | |
+| Guild | `IsInGuild`, `GetNumGuildMembers`, `GetGuildRosterInfo`, `C_GuildInfo.GuildRoster` | `GuildRoster` |
+| Timers | `C_Timer.After`, `C_Timer.NewTicker` | |
 
-## Already known from public docs (third-party, unverified on the live client)
+Conclusion: Forever is the modern (Mainline-style) API. `Core/Api.lua` chooses the modern `C_TradeSkillUI` path at
+runtime; the legacy branch is dead code on this client and can stay as a fallback.
 
-* `GetSpellInfo`, `GetItemInfo`, `GetTalentInfo` globals are reported missing on Forever beta builds; use
-  `C_Spell.GetSpellInfo` / `C_Item.GetItemInfo`. `Core/Api.lua` only uses `C_Item.*` first for item data.
-* TOC per-client suffixes: `_Forever.toc` / `_Camelot.toc` (wiki); this addon uses a single `TalentShare.toc` with
-  `## Interface: 16001`.
+## Facts the data model relies on
 
-## To do
+* `recipeID` is NOT a spell ID in the Classic sense but is stable and unique per recipe (e.g. 1263067 Eisenofen,
+  2152 Leichtes Rüstungsset). Both classic-era IDs (2152, 9058) and new-style IDs (1229517) appear in one character.
+* `GetAllRecipeIDs` lists every recipe of the profession; only those with `learned == true` are the character's.
+  Scanner filters on `learned` (confirmed: 23 known out of 132 listed for Cooking, plus 12 + 1 for the others).
+* Reagent entries are item IDs plus a required count (`quantityRequired`); names/icons are resolved separately via
+  `C_Item`, and may be nil until the item data has loaded (use `RequestLoadItemDataByID`).
+* Profession names are localized (here `Lederverarbeitung`, `Kürschnerei`, `Kochkunst`). The addon keys professions by
+  localized name, so a guild with mixed client languages would show duplicates (known limitation).
+* `TRADE_SKILL_CLOSE` fired in the probe; scans also ran from the profession-window events (`scan changed` log lines).
+* Profession record: `{name, icon, skill, maxSkill, ...}`; Cooking 150/150, Leatherworking 35/75, Skinning 131/150.
 
-Run the probe, then fill in: which recipe-list API exists, where reagents come from, whether recipe IDs are spell IDs.
+## Still unverified
+
+* Whether the scan data survives for professions that were not opened since login (scanner needs the window open once).
+* Addon-message delivery between two real characters (needs another online guild member), including the throttle limits.
