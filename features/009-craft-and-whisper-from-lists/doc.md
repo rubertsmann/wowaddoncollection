@@ -1,6 +1,6 @@
 # Craft and whisper from lists
 
-Status: verifying | Since version: next release | Spec: [spec](spec.md) | Verification: [verify](verify.md)
+Status: verifying | Since version: 0.5.0 | Spec: [spec](spec.md) | Verification: [verify](verify.md)
 
 ## What it does
 On the Orders tab a **Craft** button opens the profession of the selected order with the ordered recipe selected, and the

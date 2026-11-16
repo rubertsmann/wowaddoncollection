@@ -1,39 +1,41 @@
-# TalentShare 0.4.2
+# TalentShare 0.5.0
 
 ## English
 
-**Recipes and recipe items now sync between guild members on different realms.** 0.4.1 still showed empty Recipes and
-Available tabs for many guilds.
+**Craft orders in one click, get told about new orders, and find recipes by what they make.**
 
-**What was wrong:** a guild on WoW Forever spans several realms (for example "EU4 Realm 1", "EU4 Realm 3", "EU4 Realm 5").
-The game shows names without the realm, so TalentShare added your own realm to every name. A member on another realm was
-therefore called differently on each computer, and requests for recipes were ignored. The realm is now ignored in player
-names, so every member has the same name everywhere. Saved data is converted automatically.
+- **Orders tab: Craft button.** The first click opens the order's profession with the recipe selected, the next click
+  crafts the ordered amount.
+- **Icons in every list:** hover a recipe or item icon to see its tooltip; click it to open a whisper to the crafter,
+  requester or owner with the link already typed in.
+- **Notifications:** a new order for one of your professions, or someone taking or finishing your order, shows a red
+  number on the minimap button and the Orders tab, a letter icon, a chat line and a sound. A message in the middle of the
+  screen and a flashing taskbar icon can be switched on. Everything is in the new **Options** (button in the window,
+  `/ts options`, or the game's settings under AddOns); **Test all notifications** shows them once.
+- **Recipes tab:** the profession is picked from a dropdown; the new **Category** menu filters by what a recipe makes
+  (head, chest, feet, food, armor kits, ...; tick several); the search takes words in any order and also finds item
+  effects and stats, for example "agility" or "intellect".
 
-- Members who are still on 0.4.0 or 0.4.1 also receive your recipes from 0.4.2, but everyone should update.
-- Debug tab -> **Name check** has a new row "Realm in player names" (should say "ignored").
-- After switching to another version, the window could show mixed or broken data until `/ts clean confirm`. Now the
-  guild data is fetched again automatically once after every update; your own recipes, items and orders are kept.
-
-**After updating:** restart the game, open each profession once (icons at the top right of the Recipes tab) and wait about
-two minutes.
+**After updating:** restart the game. Guild data is fetched again once after the update (about two minutes); your own
+recipes, items and orders are kept.
 
 ## Deutsch
 
-**Rezepte und Rezept-Gegenstände werden jetzt auch zwischen Gildenmitgliedern auf verschiedenen Realms geteilt.** Mit
-0.4.1 blieben der Rezepte-Tab und der Verfügbar-Tab in vielen Gilden weiter leer.
+**Bestellungen mit einem Klick herstellen, Bescheid bekommen bei neuen Bestellungen und Rezepte nach dem finden, was sie
+herstellen.**
 
-**Was falsch war:** Eine Gilde auf WoW Forever erstreckt sich über mehrere Realms (zum Beispiel „EU4 Realm 1“, „EU4
-Realm 3“, „EU4 Realm 5“). Das Spiel zeigt Namen ohne Realm, deshalb hat TalentShare an jeden Namen deinen eigenen Realm
-angehängt. Ein Mitglied auf einem anderen Realm hieß dadurch auf jedem Rechner anders, und Anfragen nach Rezepten wurden
-ignoriert. Der Realm wird in Spielernamen jetzt ignoriert, jedes Mitglied hat überall denselben Namen. Gespeicherte Daten
-werden automatisch umgestellt.
+- **Bestellungen: Knopf „Herstellen“.** Der erste Klick öffnet den Beruf der Bestellung mit dem Rezept ausgewählt, der
+  nächste Klick stellt die bestellte Menge her.
+- **Symbole in jeder Liste:** mit der Maus über ein Rezept- oder Gegenstandssymbol zeigt den Tooltip; ein Klick öffnet
+  ein Flüstern an Hersteller, Besteller oder Besitzer, der Link ist schon eingetragen.
+- **Benachrichtigungen:** eine neue Bestellung für einen deiner Berufe, oder jemand übernimmt oder erledigt deine
+  Bestellung: rote Zahl am Minimap-Knopf und am Reiter Bestellungen, ein Brief-Symbol, eine Chatzeile und ein Ton.
+  Eine Nachricht in der Bildschirmmitte und ein blinkendes Taskleisten-Symbol lassen sich einschalten. Alles unter den
+  neuen **Optionen** (Knopf im Fenster, `/ts options` oder die Spieleinstellungen unter AddOns); **Alle
+  Benachrichtigungen testen** zeigt sie einmal.
+- **Rezepte:** der Beruf wird in einem Auswahlmenü gewählt; das neue Menü **Kategorie** filtert danach, was ein Rezept
+  herstellt (Kopf, Brust, Füße, Essen, Rüstungssets, ...; mehrere ankreuzbar); die Suche nimmt Wörter in beliebiger
+  Reihenfolge und findet auch Wirkungen und Werte von Gegenständen, zum Beispiel „Beweglichkeit“ oder „Intelligenz“.
 
-- Mitglieder, die noch 0.4.0 oder 0.4.1 nutzen, bekommen deine Rezepte von 0.4.2 ebenfalls, aktualisieren sollten trotzdem alle.
-- Debug-Tab -> **Namen prüfen** hat eine neue Zeile „Realm in Spielernamen“ (sollte „ignoriert“ zeigen).
-- Nach einem Versionswechsel konnte das Fenster gemischte oder kaputte Daten zeigen, bis `/ts clean confirm` half. Jetzt
-  werden die Gildendaten nach jedem Update einmal automatisch neu abgerufen; deine eigenen Rezepte, Gegenstände und
-  Bestellungen bleiben erhalten.
-
-**Nach dem Update:** Spiel neu starten, jeden Beruf einmal öffnen (Symbole oben rechts im Rezepte-Tab) und etwa zwei
-Minuten warten.
+**Nach dem Update:** Spiel neu starten. Die Gildendaten werden nach dem Update einmal neu geholt (etwa zwei Minuten);
+deine eigenen Rezepte, Gegenstände und Bestellungen bleiben erhalten.

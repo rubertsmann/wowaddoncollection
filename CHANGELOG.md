@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
+Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.2 and schema 3 unchanged.
+
 - Orders tab: **Craft** button: the first click opens the order's profession with the recipe selected, the next click
   crafts the ordered quantity (feature 009).
 - Recipes, Orders and Available tabs: hovering a row's icon shows the recipe or item; clicking it opens a whisper with
@@ -9,6 +11,9 @@
   a red number on the minimap button and the Orders tab, a letter icon, a chat line and a sound; optional screen message
   and taskbar flash. Everything can be switched in the new options panel (**Options** button, `/ts options`, game
   settings > AddOns).
+- Recipes tab (feature 011): the profession button is now a dropdown, a new **Category** menu filters by what a recipe
+  makes (head, chest, food, ... with checkboxes), and the search takes free text that also matches the item's effect and
+  stats (e.g. "Beweglichkeit").
 
 ## 0.4.2
 Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`.

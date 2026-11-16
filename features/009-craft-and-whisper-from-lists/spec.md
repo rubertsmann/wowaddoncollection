@@ -2,7 +2,7 @@
 
 - Status: verifying
 - Created: 2026-11-16
-- Target version: next release (UI only, no protocol/schema change)
+- Target version: 0.5.0 (UI only, no protocol/schema change)
 - Owner: claude
 - Links: [log](log.md) | [verify](verify.md) | [doc](doc.md)
 

@@ -19,6 +19,7 @@ local state = {
     professionIdx = 0,           -- 0 = all, else index into the professions list ({ key, name })
     text = "",
     mineOnly = false,
+    categories = {},             -- feature 011: checked category keys (Model.CategoryKey); empty = all
     selectedRecipe = nil,
     orderFilterIdx = 1,
     showClosed = false,
@@ -156,6 +157,30 @@ local detail = {}
 
 local function professionsList() return ns.Model.Professions(ns.Store) end
 
+-- feature 011: client item data for categories and the free-text search (looked up when called; Api loads before UI)
+local itemFns = {
+    class = function(id) return ns.Api.ItemCategoryInfo(id) end,
+    label = function(key) return ns.Api.CategoryLabel(key) end,
+    groupLabel = function(g) return ns.Api.CategoryGroupLabel(g) end,
+    text = function(id) return ns.ItemText.Get(id) end,
+}
+
+-- Modern menu dropdowns (Blizzard_Menu: WowStyle1DropdownTemplate, checkbox menus; present on Forever, see
+-- docs/api-findings.md). nil when the client lacks them; callers then fall back to plain cycle buttons.
+local function menuDropdown(parent, template, w)
+    local ok, dd = pcall(CreateFrame, "DropdownButton", nil, parent, template)
+    if not ok or type(dd) ~= "table" or not dd.SetupMenu then return nil end
+    dd:SetWidth(w)
+    return dd
+end
+
+local function setDropdownText(dd, s)
+    if dd.SetLabel then dd:SetLabel(s)                 -- fallback button
+    elseif dd.OverrideText then dd:OverrideText(s)
+    elseif dd.SetText then dd:SetText(s)
+    elseif dd.Text and dd.Text.SetText then dd.Text:SetText(s) end
+end
+
 ------------------------------------------------------------------ profession scan buttons
 -- The game only exposes a profession's recipes while its window is open, and addon code may not open it (blocked,
 -- "Interface-Aktion auf Grund eines Addons fehlgeschlagen"). A REAL click on a secure button may: each button is the
@@ -270,14 +295,23 @@ local function refreshBar()
     end
 end
 
-local function refreshRecipes()
-    if not f or state.tab ~= "recipes" then return end
+-- the current Recipes tab filter (feature 011 adds categories); also used to build the category menu
+local function recipeFilter()
     local profs = professionsList()
     if state.professionIdx > #profs then state.professionIdx = 0 end
     local sel = profs[state.professionIdx]
-    f.profBtn:SetLabel(F(L["Profession: {name}"], { name = sel and sel.name or L["All"] }))
-    local rows = ns.Model.BuildRecipeRows(ns.Store, { profession = sel and sel.key, text = state.text,
-        mineOnly = state.mineOnly, me = me() }, ns.Api.ItemName)
+    return { profession = sel and sel.key, text = state.text, mineOnly = state.mineOnly, me = me(),
+        categories = state.categories }, sel, profs
+end
+
+local function refreshRecipes()
+    if not f or state.tab ~= "recipes" then return end
+    local filter, sel, profs = recipeFilter()
+    setDropdownText(f.profBtn, F(L["Profession: {name}"], { name = sel and sel.name or L["All"] }))
+    local nCats = 0
+    for _ in pairs(state.categories) do nCats = nCats + 1 end
+    setDropdownText(f.catBtn, nCats > 0 and F(L["Category ({n})"], { n = nCats }) or L["Category"])
+    local rows = ns.Model.BuildRecipeRows(ns.Store, filter, ns.Api.ItemName, itemFns)
     recipeList:SetData(rows)
     f.count:SetText(P(#rows, L["{n} recipe"], L["{n} recipes"]))
     -- nothing cached anywhere yet: say how to fill it (recipes are only readable while a profession window is open)
@@ -699,6 +733,10 @@ local function buildDebugTab()
     f.namesBtn:SetPoint("LEFT", clear, "RIGHT", 8, 0)
     local export = button(dt, L["Export report"], 120, 22, function() ns.Slash.export() end)
     export:SetPoint("TOPRIGHT", 0, 0)
+    if ns.IS_DEV and ns.DevProbe then   -- dev build only (feature 011): records item/category/tooltip data to SavedVariables
+        local probe = button(dt, L["Item probe"], 100, 22, function() ns.DevProbe.Run() end)
+        probe:SetPoint("RIGHT", export, "LEFT", -8, 0)
+    end
     f.debugStatus = text(dt, "GameFontHighlightSmall"); f.debugStatus:SetPoint("TOPLEFT", 0, -28); f.debugStatus:SetPoint("RIGHT", 0, 0)
     -- column headings of the name check (shown only in that view)
     local header = CreateFrame("Frame", nil, dt); header:SetSize(720, 16); header:SetPoint("TOPLEFT", 0, -44)
@@ -759,27 +797,103 @@ local function build()
     -- Recipes tab
     local rt = CreateFrame("Frame", nil, f); rt:SetPoint("TOPLEFT", 12, -58); rt:SetPoint("BOTTOMRIGHT", -12, 12)
     f.tabs.recipes = rt
-    f.profBtn = button(rt, F(L["Profession: {name}"], { name = L["All"] }), 190, 22, function() end)
+    -- profession: dropdown with one entry per profession (feature 011); old cycle button if the client has no menus
+    local function pickProfession(i)
+        if state.professionIdx ~= i then state.categories = {} end   -- categories differ per profession
+        state.professionIdx = i
+        refreshRecipes()
+    end
+    local profBtnMenu = menuDropdown(rt, "WowStyle1DropdownTemplate", 180)
+    if profBtnMenu then
+        f.profBtn = profBtnMenu
+        f.profBtn:SetupMenu(function(_, root)
+            local function isSel(i) return state.professionIdx == i end
+            root:CreateRadio(L["All"], isSel, pickProfession, 0)
+            for i, p in ipairs(professionsList()) do root:CreateRadio(p.name, isSel, pickProfession, i) end
+        end)
+    else
+        f.profBtn = button(rt, F(L["Profession: {name}"], { name = L["All"] }), 180, 22, function() end)
+        f.profBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        f.profBtn:SetScript("OnClick", function(_, btn)
+            local n = #professionsList()
+            pickProfession((state.professionIdx + (btn == "RightButton" and -1 or 1)) % (n + 1))
+        end)
+    end
     f.profBtn:SetPoint("TOPLEFT", 0, 0)
-    f.profBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    f.profBtn:SetScript("OnClick", function(_, btn)
-        local n = #professionsList()
-        state.professionIdx = (state.professionIdx + (btn == "RightButton" and -1 or 1)) % (n + 1)
+
+    -- category: checkbox menu built from the items the recipes of this profession make (feature 011)
+    local function toggleCategory(key)
+        state.categories[key] = (not state.categories[key]) or nil
+        refreshRecipes()
+    end
+    local catBtnMenu = menuDropdown(rt, "WowStyle1FilterDropdownTemplate", 120)
+    if catBtnMenu then
+        f.catBtn = catBtnMenu
+        f.catBtn:SetupMenu(function(_, root)
+            if root.SetScrollMode then root:SetScrollMode(420) end
+            local groups = ns.Model.RecipeCategories(ns.Store, (recipeFilter()), itemFns)
+            if #groups == 0 then root:CreateTitle(L["No recipes"]); return end
+            root:CreateButton(L["Show all"], function()
+                state.categories = {}
+                refreshRecipes()
+            end)
+            local function isSel(key) return state.categories[key] == true end
+            for _, g in ipairs(groups) do
+                root:CreateTitle(g.label)
+                for _, c in ipairs(g.cats) do root:CreateCheckbox(("%s (%d)"):format(c.label, c.n), isSel, toggleCategory, c.key) end
+            end
+        end)
+    else   -- no menus: cycle through the categories one at a time
+        f.catBtn = button(rt, L["Category"], 120, 22, function()
+            local flat = {}
+            for _, g in ipairs(ns.Model.RecipeCategories(ns.Store, (recipeFilter()), itemFns)) do
+                for _, c in ipairs(g.cats) do flat[#flat + 1] = c.key end
+            end
+            local cur = next(state.categories)
+            local idx = 0
+            for i, k in ipairs(flat) do if k == cur then idx = i end end
+            state.categories = {}
+            if flat[idx + 1] then state.categories[flat[idx + 1]] = true end
+            refreshRecipes()
+        end)
+    end
+    f.catBtn:SetPoint("LEFT", f.profBtn, "RIGHT", 8, 0)
+
+    -- free-text search: words in any order over name, reagents, category and the item's effect text (feature 011)
+    local okSearch, search = pcall(CreateFrame, "EditBox", nil, rt, "SearchBoxTemplate")
+    if not okSearch or type(search) ~= "table" then search = CreateFrame("EditBox", nil, rt, "InputBoxTemplate") end
+    search:SetSize(170, 20); search:SetPoint("LEFT", f.catBtn, "RIGHT", 14, 0); search:SetAutoFocus(false)
+    search:SetScript("OnTextChanged", function(self)
+        if SearchBoxTemplate_OnTextChanged and self.clearButton then pcall(SearchBoxTemplate_OnTextChanged, self) end
+        state.text = self:GetText()
         refreshRecipes()
     end)
-    local search = CreateFrame("EditBox", nil, rt, "InputBoxTemplate")
-    search:SetSize(150, 20); search:SetPoint("LEFT", f.profBtn, "RIGHT", 14, 0); search:SetAutoFocus(false)
-    search:SetScript("OnTextChanged", function(self) state.text = self:GetText(); refreshRecipes() end)
     search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     f.search = search
-    local hint = text(rt, "GameFontDisableSmall"); hint:SetPoint("BOTTOMLEFT", search, "TOPLEFT", 0, 0); hint:SetText(L["search recipe or reagent"])
+    local hint = text(rt, "GameFontDisableSmall"); hint:SetPoint("BOTTOMLEFT", search, "TOPLEFT", 0, 0)
+    hint:SetText(L["search name, reagent, slot or effect"])
+
+    -- effect texts are read a few per frame while this tab is open, so the first search does not freeze the game
+    local pumpAcc, prefetchAcc, refreshAcc, gotText = 0, 3, 0, false
+    rt:SetScript("OnUpdate", function(_, elapsed)
+        pumpAcc, prefetchAcc, refreshAcc = pumpAcc + elapsed, prefetchAcc + elapsed, refreshAcc + elapsed
+        if prefetchAcc >= 3 then prefetchAcc = 0; ns.ItemText.Prefetch(ns.Store) end
+        if pumpAcc >= 0.2 then
+            pumpAcc = 0
+            if ns.ItemText.Pump(8) > 0 then gotText = true end
+        end
+        if gotText and refreshAcc >= 1 then
+            refreshAcc, gotText = 0, false
+            if tostring(state.text):find("%S") then refreshRecipes() end
+        end
+    end)
     f.mineBtn = button(rt, L["Mine only"], 80, 22, function()
         state.mineOnly = not state.mineOnly
         f.mineBtn:SetLabel(state.mineOnly and (L["Mine only"] .. " *") or L["Mine only"])
         refreshRecipes()
     end)
     f.mineBtn:SetPoint("LEFT", search, "RIGHT", 8, 0)
-    f.count = text(rt, "GameFontNormalSmall", "RIGHT"); f.count:SetPoint("TOPRIGHT", rt, "TOPRIGHT", -330, -6)
+    f.count = text(rt, "GameFontNormalSmall", "LEFT"); f.count:SetPoint("LEFT", f.mineBtn, "RIGHT", 10, 0)
 
     recipeList = createList(rt, 440, 400, makeSelectableRow, function(r, row)
         r.icon:SetTexture(row.icon or "Interface\\Icons\\INV_Misc_QuestionMark")

@@ -1,6 +1,6 @@
 # Order notifications
 
-Status: verifying | Since version: next release | Spec: [spec](spec.md) | Verification: [verify](verify.md)
+Status: verifying | Since version: 0.5.0 | Spec: [spec](spec.md) | Verification: [verify](verify.md)
 
 ## What it does
 When a guild member posts an order you could craft, or someone claims or finishes one of your orders, TalentShare tells

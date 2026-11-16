@@ -313,6 +313,81 @@ function Api.ItemName(itemID)
     return n
 end
 
+-- feature 011: class id, subclass id, equip slot of an item from the client's item data (no server query needed).
+function Api.ItemCategoryInfo(itemID)
+    local fn = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    if not fn or type(itemID) ~= "number" then return nil end
+    local ok, _, _, _, equipLoc, _, classID, subClassID = pcall(fn, itemID)
+    if ok and type(classID) == "number" then return classID, subClassID, equipLoc end
+    return nil
+end
+
+local function classInfo(classID)
+    local fn = (C_Item and C_Item.GetItemClassInfo) or GetItemClassInfo
+    local ok, name = pcall(fn or error, classID)
+    return ok and type(name) == "string" and name ~= "" and name or nil
+end
+
+-- Display name of a Model.CategoryKey, in the viewer's language (from the client, no locale strings needed).
+function Api.CategoryLabel(key)
+    if key == "none" then return ns.L["No item (enchantments and others)"] end
+    local slot = type(key) == "string" and key:match("^slot:(.+)$")
+    if slot then
+        local s = _G[slot]
+        return type(s) == "string" and s ~= "" and s or slot
+    end
+    local c, sub = tostring(key):match("^class:(%-?%d+):(%-?%d+)$")
+    c, sub = tonumber(c), tonumber(sub)
+    if not c then return tostring(key) end
+    local fn = (C_Item and C_Item.GetItemSubClassInfo) or GetItemSubClassInfo
+    local ok, name = pcall(fn or error, c, sub)
+    if ok and type(name) == "string" and name ~= "" then return name end
+    return classInfo(c) or tostring(key)
+end
+
+function Api.CategoryGroupLabel(groupID)
+    if groupID == -1 then return ns.L["Other"] end
+    return classInfo(groupID) or tostring(groupID)
+end
+
+-- Tooltip lines of an item (left text, " " right text), or nil while the client has not loaded the item yet (a load is
+-- requested; ask again later). Read on THIS client only; the text is never sent to anyone (feature 011).
+local scanTip
+function Api.ItemTooltipLines(itemID)
+    if type(itemID) ~= "number" then return nil end
+    local info = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    if not info or not info(itemID) then
+        if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, itemID) end
+        return nil
+    end
+    local lines = {}
+    if C_TooltipInfo and C_TooltipInfo.GetItemByID then
+        local ok, data = pcall(C_TooltipInfo.GetItemByID, itemID)
+        if ok and type(data) == "table" and type(data.lines) == "table" then
+            for _, line in ipairs(data.lines) do
+                local l, r = line.leftText, line.rightText
+                lines[#lines + 1] = tostring(l or "") .. ((type(r) == "string" and r ~= "") and (" " .. r) or "")
+            end
+            return lines
+        end
+    end
+    if not CreateFrame then return nil end
+    if not scanTip then
+        local ok, t = pcall(CreateFrame, "GameTooltip", ns.FRAME .. "ScanTip", UIParent, "GameTooltipTemplate")
+        if not ok then return nil end
+        scanTip = t
+    end
+    scanTip:SetOwner(UIParent, "ANCHOR_NONE")
+    scanTip:ClearLines()
+    if not pcall(scanTip.SetHyperlink, scanTip, "item:" .. itemID) then return nil end
+    for i = 1, scanTip:NumLines() or 0 do
+        local l = _G[ns.FRAME .. "ScanTipTextLeft" .. i]
+        lines[#lines + 1] = l and l:GetText() or ""
+    end
+    scanTip:Hide()
+    return lines
+end
+
 function Api.ItemIcon(itemID)
     if C_Item and C_Item.GetItemIconByID then return C_Item.GetItemIconByID(itemID) end
     if GetItemIcon then return GetItemIcon(itemID) end

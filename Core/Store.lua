@@ -38,6 +38,7 @@ local function fresh(sv)
     sv.trace = type(sv.trace) == "table" and sv.trace or {}     -- network trace ring (Core/Trace.lua, feature 008)
     sv.ui = type(sv.ui) == "table" and sv.ui or {}
     sv.profNames = type(sv.profNames) == "table" and sv.profNames or {}   -- [clientLocale][skillLineID] = name the viewer's own client reported
+    sv.itemText = type(sv.itemText) == "table" and sv.itemText or {}      -- feature 011: { locale, items = { [itemID] = tooltip text } }, this client only
     return sv
 end
 
@@ -59,7 +60,7 @@ end
 -- UI preferences, `schema` and `me` stay. Returns the counts that were removed.
 function S.Clean()
     local removed = S.Counts()
-    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "profNames", "debug", "trace" }) do
+    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "profNames", "debug", "trace", "itemText" }) do
         local t = S.db[key]
         for k in pairs(t) do t[k] = nil end
     end

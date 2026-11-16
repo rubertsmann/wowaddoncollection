@@ -60,6 +60,26 @@ pulls fall back to the guild channel if not).
 * A profession's recipe list is only readable while that profession's window is open; there is no passive way to read it.
 * `GetProfessionInfo` returns the icon as 2nd value (used only for local buttons).
 
+## Item and spell data (dev item probe, feature 011, client 1.60.1 build 70938, deDE, 2026-11-16)
+
+* Only the namespaced APIs exist: `C_Item.GetItemInfoInstant`, `C_Item.GetItemInfo`, `C_Item.GetItemClassInfo`,
+  `C_Item.GetItemSubClassInfo`, `C_Item.GetItemSpell`, `C_Item.GetItemStats`, `C_Item.GetItemInventoryTypeByID`,
+  `C_Spell.GetSpellInfo`, `C_Spell.GetSpellDescription`, `C_Spell.RequestLoadSpellData`. The old globals
+  (`GetItemInfo`, `GetItemInfoInstant`, `GetItemSpell`, `GetSpellDescription`, `GetItemStats`, `GetItemClassInfo`,
+  `GetSpellInfo`) are **nil**.
+* `C_Item.GetItemInfoInstant` returns id, type name, subtype name, equipLoc (`INVTYPE_HEAD` ...; `_G[equipLoc]` is the
+  localized slot), icon, classID, subClassID. Consumable subclasses are specific: 5 = food and drink, 6 = item
+  enhancement, 8 = other (camp items). Trade goods 7:6 = leather, quiver 11:2 / ammo pouch 11:3.
+* `C_Item.GetItemStats(link)` keys are language independent (`ITEM_MOD_AGILITY_SHORT`, `RESISTANCE0_NAME`).
+* Buff food: `C_Item.GetItemSpell` -> spell id; `C_Spell.GetSpellDescription` holds the full effect text
+  ("... erhaltet 15 Min. lang 1 Beweglichkeit"). Plural markup `|4Sek.:Sek.;` can appear and must be stripped.
+* `C_TooltipInfo.GetItemByID(id).lines[i].leftText` works directly (`TooltipUtil.SurfaceArgs` is nil and not needed);
+  same text as a hidden `GameTooltip` scan, but plural markup stays raw.
+* Profession window filters: legacy `GetTradeSkillSubClasses` / `GetTradeSkillInvSlots` are nil;
+  `C_TradeSkillUI.GetCategories` / `GetCategoryInfo` exist (contents not probed yet).
+* UI: `MenuUtil.CreateCheckboxContextMenu`, `MenuUtil.CreateRadioContextMenu`, `WowStyle1DropdownTemplate`,
+  `WowStyle1FilterDropdownTemplate`, `SearchBoxTemplate`, `UIDropDownMenuTemplate` all exist.
+
 ## Still unverified
 
 * Whether the scan data survives for professions that were not opened since login (scanner needs the window open once).

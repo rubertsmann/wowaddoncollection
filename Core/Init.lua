@@ -19,7 +19,7 @@ ns.BUILD = IS_DEV and "dev" or "live"
 ns.IS_DEV = IS_DEV
 -- ONE version source: the TOC "## Version" line (read from addon metadata). The literal fallback only matters for the
 -- offline tests, which have no client; tests/test_hardening.lua checks it against the TOC.
-ns.BASE_VERSION = tocField("Version") or "0.4.2"
+ns.BASE_VERSION = tocField("Version") or "0.5.0"
 ns.VERSION = ns.BASE_VERSION .. ((IS_DEV and not ns.BASE_VERSION:find("-dev", 1, true)) and "-dev" or "")   -- the dev TOC already says "-dev"
 -- Wire protocol (docs/protocol.md): MAJOR must match exactly between peers, MINOR may differ (additive changes only).
 -- Bump MAJOR for any breaking change to the chunk header, serializer, compression or message meaning.

@@ -11,6 +11,8 @@ shared crafting-order board.
 * Hover a recipe icon in any list to see the recipe; click it to whisper the crafter/requester with the link typed in.
 * **Notifications** – new orders for your professions (and claims/completions of your own orders) show as a number on the
   minimap button, plus a sound and a chat line; screen message and taskbar flash optional. `/ts options` to configure.
+* **Find recipes by what they make** – profession dropdown, category checkboxes (head, chest, food, ...) and a free-text
+  search that also matches item effects and stats ("intellect", "agility").
 * **Available tab** – tradeable recipe items (patterns, plans, formulas such as "Recipe: Savory Deviate Delight") that
   guild members hold in bags, bank, reagent bank, mail, guild bank or auctions, listed automatically so nobody sells
   them elsewhere unknowingly. Anyone can call **dibs** (several players can; all are listed, oldest first; press again
