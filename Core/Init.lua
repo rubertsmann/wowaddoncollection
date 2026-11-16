@@ -12,7 +12,7 @@ local function tocField(field)
     local ok, v = pcall(get, ADDON, field)
     return ok and type(v) == "string" and v ~= "" and v or nil
 end
-ns.BASE_VERSION = tocField("Version") or "0.2.0"
+ns.BASE_VERSION = tocField("Version") or "0.3.0"
 ns.VERSION = ns.BASE_VERSION .. (IS_DEV and "-dev" or "")
 -- Wire protocol (docs/protocol.md): MAJOR must match exactly between peers, MINOR may differ (additive changes only).
 -- Bump MAJOR for any breaking change to the chunk header, serializer, compression or message meaning.

@@ -50,3 +50,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: `luajit tests/run.lua` -> `87 passed, 0 failed`; mutation check re-run, all six protections still caught
 - Evidence: suite output above; `docs/status.md` no longer hard-codes a pass count
 - Next: user runs the in-game checklist in verify.md; then merge. Stale on master (not changed here): the header comment of `UI/Window.lua` still says "Plain frames only (no secure templates)", which is no longer true.
+
+## 2026-11-16 11:10 | DONE | Version bumped to 0.3.0 for the merge and the regression-test tag
+- Did: TOC `## Version: 0.3.0`, `Core/Init.lua` fallback 0.3.0 (pinned to the TOC by `version: the protocol constants match...`), CHANGELOG headings (0.2.0 was never released on its own). Merge into master and local tag `v0.3.0`; the tag is NOT pushed (pushing a `v*` tag runs the release workflow and uploads to CurseForge).
+- Result: `luajit tests/run.lua` -> `87 passed, 0 failed`. Feature status stays `verifying`: the in-game and two-client rows in verify.md are still open.
+- Evidence: suite output
+- Next: regression test from tag v0.3.0 using the checklist in verify.md.

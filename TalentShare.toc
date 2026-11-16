@@ -2,7 +2,7 @@
 ## Title: TalentShare
 ## Notes: Shares guild members' professions, recipes and reagents, plus a crafting order board.
 ## Author: rubertsmann
-## Version: 0.2.0
+## Version: 0.3.0
 ## SavedVariables: TalentShareDB
 ## IconTexture: Interface\Icons\INV_Misc_Note_01
 ## X-Category: Professions

@@ -2,7 +2,7 @@
 
 - Status: verifying
 - Created: 2026-11-16
-- Target version: 0.3.0 (TOC stays 0.2.0 until release; see CHANGELOG "Unreleased")
+- Target version: 0.3.0 (TOC bumped to 0.3.0 at merge, tag v0.3.0)
 - Owner: claude (requested by user)
 - Links: [log](log.md) | [verify](verify.md) | [doc](doc.md)
 - Source findings: `review/security-and-gaps.md` (S1-S6), `review/version-compatibility.md` (V1-V8, R1-R6)
