@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+- **Build flag:** one definition in `Core/Init.lua` (`ns.BUILD`, TOC `## X-Build: dev` or a folder name containing "dev"); the comms prefix, SavedVariables, frame names and slash commands of the dev build are all derived from it, so a dev build and the live addon never share data or addon messages. `tools/deploy.ps1` and `tools/package.ps1` now verify the generated dev TOC and the shipped live TOC; a TOC that saves a different global than the build uses is reported.
+- Dev client no longer fails with a chain of nil-index errors when its generated TOC is stale: one message names the missing modules and the fix (`tools/deploy.ps1`, then restart the game).
+- Tests: build-flag and TOC-invariant tests, stale dev TOC detection.
+- Wire protocol (2.0) and SavedVariables schema (2) unchanged.
+
 ## 0.3.0
 - **Protocol 2.0 (breaking, intentional):** every chunk header now carries `major.minor`, so incompatible versions are detected before anything is buffered and the player gets ONE notice (newer / older version in the guild). Same major with a different minor still syncs. 0.1/0.2 builds cannot sync with 0.3. See `docs/protocol.md`.
 - **Inbound gate:** only `GUILD` messages and whispers from guild-roster members are processed; non-guild players can no longer request your recipes or inject data.

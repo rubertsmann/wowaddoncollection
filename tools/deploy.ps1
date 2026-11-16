@@ -2,6 +2,9 @@
 #   AddOns\TalentShare-Dev  -> junction to this repo (edit files, then /reload in game); uses a generated, git-ignored
 #                              TalentShare-Dev.toc (own title, version "-dev", SavedVariables TalentShareDevDB)
 #   AddOns\TalentShare      -> the LIVE addon (CurseForge or `-InstallLive`); never touched unless you ask
+# RE-RUN THIS whenever TalentShare.toc changes (a file added or removed, a version bump): the dev TOC is a generated copy
+#   and goes stale, and the dev client then fails with "attempt to index a nil value" in the file that needs the new one.
+#   tests/test_load.lua fails while the generated TOC is stale. Restart the game afterwards: /reload does not re-read the TOC.
 # Usage: powershell tools/deploy.ps1 [-WowDir "C:\Program Files (x86)\World of Warcraft"] [-WithProbe] [-InstallLive [-Force]]
 param(
     [string]$WowDir = "C:\Program Files (x86)\World of Warcraft",
@@ -39,10 +42,15 @@ $lines = Get-Content $liveToc -Encoding UTF8 | ForEach-Object {
     if ($_ -match '^## Title:') { '## Title: TalentShare (dev)' }
     elseif ($_ -match '^## Notes:') { '## Notes: [DEV BUILD] ' + ($_ -replace '^## Notes:\s*', '') }
     elseif ($_ -match '^## Version:\s*(.+)$') { '## Version: ' + $Matches[1].Trim() + '-dev' }
-    elseif ($_ -match '^## SavedVariables:') { '## SavedVariables: TalentShareDevDB' }
+    elseif ($_ -match '^## SavedVariables:') { '## SavedVariables: TalentShareDevDB'; '## X-Build: dev' }   # X-Build = the build flag Core/Init.lua reads (ns.BUILD); the live TOC has no such line
     elseif ($_ -match '^## X-Website:') { $null }
     else { $_ }
 } | Where-Object { $null -ne $_ }
+# invariants: a dev TOC that kept the live SavedVariables or lost the build flag would let dev and live share state
+$svLines = @($lines | Where-Object { $_ -match '^## SavedVariables' })
+if ($svLines.Count -ne 1 -or $svLines[0] -ne '## SavedVariables: TalentShareDevDB') { throw "dev TOC must declare exactly one '## SavedVariables: TalentShareDevDB', found: $($svLines -join ' | ')" }
+if (@($lines | Where-Object { $_ -eq '## X-Build: dev' }).Count -ne 1) { throw "dev TOC must contain exactly one '## X-Build: dev'" }
+if (@($lines | Where-Object { $_ -match 'TalentShareDB' }).Count -gt 0) { throw "dev TOC still mentions the live TalentShareDB" }
 [IO.File]::WriteAllText($devToc, (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding($false)))
 Write-Host "generated $devToc"
 

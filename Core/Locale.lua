@@ -59,7 +59,7 @@ ns.Slash.locale = function(arg)
     arg = (arg or ""):match("^%s*(%S*)") or ""
     if arg == "" then
         ns.Print(("UI language %s, game client %s (use /%s locale <code> or auto, then /reload)"):format(
-            Loc.code, Loc.clientCode, ((ns.SLASH[1] or "/ts"):gsub("^/", ""))))
+            Loc.code, Loc.clientCode, (ns.SLASH[1]:gsub("^/", ""))))
         return
     end
     if not ns.db then return end

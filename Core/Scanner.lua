@@ -119,7 +119,7 @@ end
 
 ns.Slash.dump = function()
     local me = ns.Store.GetChar(ns.Store.db.me or "")
-    if not me then ns.Print("no record yet; try /ts scan") return end
+    if not me then ns.Print("no record yet; try " .. ns.SLASH[1] .. " scan") return end
     for pname, p in pairs(me.professions) do
         ns.Print(("%s (id %s) %d/%d: %d recipes"):format(ns.Names.Profession(ns.Names.ProfKey(pname, p), p), tostring(p.id),
             p.rank or 0, p.max or 0, ns.Util.Count(p.recipes)))

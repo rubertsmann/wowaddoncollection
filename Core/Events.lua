@@ -4,6 +4,19 @@ local ADDON, ns = ...
 local Ev = {}
 ns.Events = Ev
 
+-- Events.lua loads after every module it depends on. If one is missing, the TOC in use is out of date: typically the
+-- generated TalentShare-Dev.toc after a new file was added to TalentShare.toc (tools/deploy.ps1 regenerates it). Without
+-- this the player only sees a chain of "attempt to index a nil value" errors from the files that needed the module.
+do
+    local missing = {}
+    for _, key in ipairs({ "Util", "Locale", "Store", "Names", "Api", "Scanner", "Codec", "Guard", "Orders", "Sync", "Model", "Comm" }) do
+        if not ns[key] then missing[#missing + 1] = key end
+    end
+    if #missing > 0 then
+        ns.Print("not loaded: " .. table.concat(missing, ", ") .. ". The TOC is out of date. Dev build: run tools/deploy.ps1 (it regenerates TalentShare-Dev.toc), then restart the game (/reload does not re-read the TOC).")
+    end
+end
+
 local handlers = {}
 function Ev.On(name, fn)
     handlers[name] = handlers[name] or {}

@@ -22,6 +22,7 @@ Run `powershell tools/package.ps1`, unzip `dist/TalentShare-<version>.zip` into
 `World of Warcraft\_forever_\Interface\AddOns\`. For development: `powershell tools/deploy.ps1` links the repo as a
 separate **TalentShare-Dev** addon (own data, prefix and `/tsd`), so it runs next to the live `TalentShare`;
 `powershell tools/deploy.ps1 -InstallLive` also installs the newest `dist` zip as the live addon.
+Re-run `tools/deploy.ps1` after every change to `TalentShare.toc` (the dev TOC is a generated copy) and restart the game.
 
 ## Use
 

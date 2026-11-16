@@ -36,10 +36,16 @@ try {
 $check = [System.IO.Compression.ZipFile]::OpenRead($zip)
 try {
     $names = @($check.Entries | ForEach-Object { $_.FullName })
+    # the shipped TOC must be the LIVE build: live SavedVariables, no dev build flag
+    $reader = New-Object System.IO.StreamReader($check.GetEntry("TalentShare/TalentShare.toc").Open())
+    try { $tocText = $reader.ReadToEnd() } finally { $reader.Dispose() }
 } finally {
     $check.Dispose()
 }
 $bad = @($names | Where-Object { $_ -match '\\' -or $_ -notlike 'TalentShare/*' })
 if ($bad.Count -gt 0) { throw "bad zip entry names: $($bad -join ', ')" }
 if ($names -notcontains "TalentShare/TalentShare.toc") { throw "TalentShare/TalentShare.toc missing from zip" }
+if ($names -contains "TalentShare/TalentShare-Dev.toc") { throw "the dev TOC must not ship" }
+if ($tocText -match '(?m)^## X-Build:') { throw "TalentShare.toc carries a build flag; the shipped TOC must be the live build" }
+if ($tocText -notmatch '(?m)^## SavedVariables:\s*TalentShareDB\s*$') { throw "TalentShare.toc must declare '## SavedVariables: TalentShareDB'" }
 Write-Host "built $zip ($($names.Count) files)"
