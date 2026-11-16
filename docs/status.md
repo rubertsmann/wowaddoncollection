@@ -1,7 +1,6 @@
-# Implementation status (2026-11-16, written at ~01:45)
+﻿# Implementation status (2026-11-16, written at ~01:45)
 
-Legend: DONE = written; UNVERIFIED = needs the check in the last column. **Nothing has been run yet**: no Lua
-interpreter is installed (installing one was blocked by the auto-mode classifier) and the game was not started.
+Legend: DONE = written; UNVERIFIED = needs the check in the last column. **Verified so far:** LuaJIT was installed with your approval; `luajit tests/run.lua` -> **24 passed, 0 failed** (Store, Codec, Model, Orders merge, Sync incl. 40-peer login storm); every Core/UI/probe file compiles. **Not verified:** anything that needs the game client (Api, Scanner, Events, Comm transport, UI) - the game was never started.
 
 | Plan task | State | What proves it |
 |---|---|---|
@@ -36,3 +35,4 @@ interpreter is installed (installing one was blocked by the auto-mode classifier
 1. `winget install DEVCOM.LuaJIT`, then `luajit tests/run.lua` from the repo root. Fix any failures (the code was never executed).
 2. `powershell tools/deploy.ps1 -WithProbe`; log in; open a profession; `/tsp`; `/reload`; check `/ts scan`, `/ts dump`.
 3. Watch for Lua errors (`/console scriptErrors 1`).
+
