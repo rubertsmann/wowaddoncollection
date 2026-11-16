@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (target 0.4.0)
+## 0.4.0
 - **Available tab (feature 007):** tradeable recipe items (item class Recipe) in bags, bank, reagent bank, mail, guild bank (per tab) and own auctions are listed automatically for the whole guild, with owner, locations, profession and age. Anyone can call **dibs**; all dibs are visible (oldest first) and each player removes only their own by pressing the button again. "Remove from my list" hides an offer locally; it returns when its owner's list changes. Handing items over stays manual. `/ts offers` shows what the scan sees. See `features/007-recipe-items-board/doc.md`.
 - Wire protocol **2.1** (additive: optional HELLO field `orev`, new messages `WANTO`/`OFFERS`; 0.3.x clients ignore them and keep syncing everything else). SavedVariables **schema 3** (new `offers`, `hidden`; schema 2 data kept).
 - `/ts clean` also removes offers.

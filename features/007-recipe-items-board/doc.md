@@ -1,6 +1,6 @@
 # Recipe items board
 
-Status: verifying (offline proven, in-game checks pending) | Since version: 0.4.0 (unreleased) | Spec: [spec](spec.md) | Verification: [verify](verify.md)
+Status: verifying (offline proven, in-game checks pending) | Since version: 0.4.0 | Spec: [spec](spec.md) | Verification: [verify](verify.md)
 
 ## What it does
 The **Available** tab lists every tradeable recipe item (patterns, plans, formulas, e.g. "Recipe: Savory Deviate Delight") that guild members hold, so players know what exists before they sell it elsewhere. Anyone can call **dibs** on an item; all dibs are shown with who and when. The owner decides and hands the item over by hand.

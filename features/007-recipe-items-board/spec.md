@@ -2,7 +2,7 @@
 
 - Status: verifying
 - Created: 2026-11-16
-- Target version: 0.4.0 (protocol 2.1 additive, schema 3)
+- Target version: 0.4.0 (released; protocol 2.1 additive, schema 3)
 - Owner: claude
 - Links: [log](log.md) | [verify](verify.md) | [doc](doc.md)
 
