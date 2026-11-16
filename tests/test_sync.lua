@@ -60,12 +60,12 @@ return {
     ["sync: own echo, garbage and wrong version are dropped without errors (RF5)"] = function(h)
         local bus = newBus()
         local a = peer(h, bus, "A-R", 1)
-        a.sync:OnMessage({ v = 1, t = "HELLO", rev = 1 }, "A-R")
+        a.sync:OnMessage({ v = a.ns.PROTOCOL, t = "HELLO", rev = 1 }, "A-R")
         a.sync:OnMessage("junk", "B-R")
         a.sync:OnMessage({ v = 9, t = "HELLO", rev = 1 }, "B-R")
-        a.sync:OnMessage({ v = 1, t = "NOPE" }, "B-R")
-        a.sync:OnMessage({ v = 1, t = "HELLO", rev = "x" }, "B-R")
-        a.sync:OnMessage({ v = 1, t = "SNAP", char = h.char("C-R", 5, {}) }, "B-R")   -- B claims to author C
+        a.sync:OnMessage({ v = a.ns.PROTOCOL, t = "NOPE" }, "B-R")
+        a.sync:OnMessage({ v = a.ns.PROTOCOL, t = "HELLO", rev = "x" }, "B-R")
+        a.sync:OnMessage({ v = a.ns.PROTOCOL, t = "SNAP", char = h.char("C-R", 5, {}) }, "B-R")   -- B claims to author C
         h.eq(a.sync.stats.dropped, 6); h.eq(a.ns.Store.GetChar("C-R"), nil)
     end,
 
@@ -73,7 +73,7 @@ return {
         local bus = newBus()
         local a = peer(h, bus, "A-R", 1)
         a.ns.Store.PutChar(h.char("B-R", 100, { 1 }))
-        a.sync:OnMessage({ v = 1, t = "SNAP", char = h.char("B-R", 10, { 1, 2, 3 }), catalog = {} }, "B-R")
+        a.sync:OnMessage({ v = a.ns.PROTOCOL, t = "SNAP", char = h.char("B-R", 10, { 1, 2, 3 }), catalog = {} }, "B-R")
         h.eq(a.ns.Store.GetChar("B-R").rev, 100)
     end,
 

@@ -6,8 +6,18 @@ local ADDON, ns = ...
 local Model = {}
 ns.Model = Model
 
+-- Names can come from another player's snapshot: escape "|" so they can never inject colour/texture/hyperlink codes into a
+-- FontString. Every peer-originated string leaves this module through `esc`.
+local esc = ns.Util.Esc
+
+local function escAll(list)
+    local out = {}
+    for i, v in ipairs(list) do out[i] = esc(v) end
+    return out
+end
+
 local function recipeName(store, id)
-    return ns.Names.Recipe(id, store.GetRecipe(id))
+    return esc(ns.Names.Recipe(id, store.GetRecipe(id)))
 end
 Model.RecipeName = recipeName
 
@@ -23,7 +33,7 @@ function Model.Professions(store)
                 local key = ns.Names.ProfKey(pname, p)
                 if not seen[key] then
                     seen[key] = true
-                    out[#out + 1] = { key = key, name = ns.Names.Profession(key, p) }
+                    out[#out + 1] = { key = key, name = esc(ns.Names.Profession(key, p)) }
                 end
             end
         end
@@ -102,7 +112,7 @@ function Model.BuildRecipeRows(store, state, nameFn)
                         if not row then
                             local e = store.GetRecipe(id)
                             row = { recipeID = id, name = recipeName(store, id), icon = e and e.icon,
-                                professionKey = key, profession = ns.Names.Profession(key, p), crafters = {} }
+                                professionKey = key, profession = esc(ns.Names.Profession(key, p)), crafters = {} }
                             byID[id] = row
                             rows[#rows + 1] = row
                         end
@@ -146,12 +156,13 @@ function Model.RecipeDetail(store, recipeID, haveFn, nameFn)
     local d = { recipeID = recipeID, name = recipeName(store, recipeID), icon = e and e.icon, produces = e and e.produces,
         reagents = {}, crafters = store.Crafters(recipeID) }
     for _, c in ipairs(d.crafters) do
-        c.professionName = ns.Names.Profession(ns.Names.ProfKey(c.profession, c.pentry), c.pentry)
+        c.professionName = esc(ns.Names.Profession(ns.Names.ProfKey(c.profession, c.pentry), c.pentry))
+        -- c.name stays raw: it is also the whisper target, and character names can never contain "|" (Util.IsSafeName)
     end
     for _, r in ipairs(e and e.reagents or {}) do
         local have = haveFn and haveFn(r.itemID) or 0
         d.reagents[#d.reagents + 1] = { itemID = r.itemID, count = r.count,
-            name = (nameFn and nameFn(r.itemID)) or r.name or ns.Locale.Fmt(ns.L["Item #{id}"], { id = r.itemID }),
+            name = esc((nameFn and nameFn(r.itemID)) or r.name or ns.Locale.Fmt(ns.L["Item #{id}"], { id = r.itemID })),
             have = have, enough = have >= r.count }
     end
     return d
@@ -180,7 +191,7 @@ function Model.BuildOrderRows(store, orders, filterKey, showClosed, me)
         if keep then
             local live = (st == "open" or st == "claimed")
             rows[#rows + 1] = { id = o.id, recipeID = o.recipeID, recipeName = recipeName(store, o.recipeID), qty = o.qty,
-                note = o.note, requester = o.requester, status = st, claimers = claimers, createdAt = o.createdAt,
+                note = esc(o.note), requester = esc(o.requester), status = st, claimers = escAll(claimers), createdAt = o.createdAt,
                 canClaim = live and not iClaimed and knows(o.recipeID),
                 canWithdraw = live and iClaimed or false,
                 canDone = live and (o.requester == me or iClaimed) or false,

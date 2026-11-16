@@ -16,7 +16,7 @@ A Lua 5.1 addon for **WoW Forever** (interface `16001`, Mainline-style API, mode
 - A peer may only author its **own** character record (`SNAP.char.name == sender`); keep it that way.
 
 ## Layout and load order (`TalentShare.toc`)
-`Libs/LibStub`, `Libs/LibDeflate` (vendored copy from the Spoken addon, see `docs/vendored-libs.md`) -> `Core/Init` (identity, `ns.PROTO_MAJOR/MINOR`, version from TOC metadata) -> `Util` (names, UTF-8, untrusted-input helpers, `Debug.Log`) -> `Locale`/`Locales` -> `Store` (SV schema, migration, allow-list sanitizers) -> `Names` -> `Api` (WoW adapter) -> `Scanner` -> `AutoScan` -> `Codec` (serializer, deflate, chunk header, limits) -> `Guard` (inbound gate, incompatibility notices) -> `Orders` -> `Sync` (pure protocol state machine) -> `Model` (UI view-models, escapes peer text) -> `Comm` (chunking, pacing, reassembly, gate) -> `Events` -> `UI/Window`. Check the real order in `TalentShare.toc`.
+`Libs/LibStub`, `Libs/LibDeflate` (vendored copy from the Spoken addon, see `docs/vendored-libs.md`) -> `Core/Init` (identity, `ns.PROTO_MAJOR/MINOR`, version from TOC metadata) -> `Util` (names, UTF-8, untrusted-input helpers, `Debug.Log`) -> `Locale`/`Locales` -> `Store` (SV schema, migration, allow-list sanitizers) -> `Names` -> `Api` (WoW adapter) -> `Scanner` -> `Codec` (serializer, deflate, chunk header, limits) -> `Guard` (inbound gate, incompatibility notices) -> `Orders` -> `Sync` (pure protocol state machine) -> `Model` (UI view-models, escapes peer text) -> `Comm` (chunking, pacing, reassembly, gate) -> `Events` -> `UI/Window`. Check the real order in `TalentShare.toc`.
 
 **Pure modules** (testable offline, no WoW calls): Util, Store, Orders, Codec, Guard, Sync, Model, Names, Locale (Comm is loaded by the test harness with stubs). **Needs the game client:** Api, Scanner, Events, Comm, UI. Keep new logic in the pure modules where possible.
 
@@ -38,7 +38,7 @@ A Lua 5.1 addon for **WoW Forever** (interface `16001`, Mainline-style API, mode
 7. **Resource bounds (defence in depth):** buffers, queue, pending lists, table sizes. Not a security finding by itself unless it enables more than slowdown.
 8. **CI/release:** actions pinned to SHAs, token scoped to the step that needs it, tag filter `v*`, version from one source, `.pkgmeta` ignores `tests dev eval docs tools dist review .claude screens-debug .github`.
 9. **Vendored libs:** version/provenance recorded, local modifications diffed.
-10. **WoW specifics:** nothing taints (no secure templates, safe in combat); events registered with `pcall` for unknown ones; no calls to protected APIs; timers use `C_Timer`.
+10. **WoW specifics:** the only secure frames are the profession buttons (`SecureActionButtonTemplate`, macro `/cast <profession>` built by `Model.CastMacro` from the player's OWN spellbook names, never from peer data); every protected change (`SetAttribute`, `Show`/`Hide` of those buttons) must be guarded by `Api.InCombat()` and re-applied after combat; the rest of the window uses plain frames; events registered with `pcall` for unknown ones; no calls to protected APIs; timers use `C_Timer`.
 11. **Tests:** each fixed finding has a regression test in `tests/`; adversarial cases exist (non-guild sender, inf/NaN, bad catalog fields, escape sequences, foreign protocol).
 
 ## Commands

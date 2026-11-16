@@ -44,32 +44,44 @@ function Orders:Claimers(o)
     return out
 end
 
+-- Allow-list copy of an order (remote or persisted): known fields only, finite bounded numbers, safe names, UTF-8 note
+-- without control characters. Timestamps may not lie in the future (a far-future createdAt would never be pruned, a
+-- tiny closedAt would win every merge). NOTE: whether a member may change THIS order is not checked: guild members
+-- are trusted (README "Trust model").
 local function sanitize(o)
+    local U = ns.Util
     if type(o) ~= "table" then return nil end
-    if type(o.id) ~= "string" or #o.id == 0 or #o.id > MAX_ID then return nil end
-    if type(o.requester) ~= "string" or #o.requester > 64 then return nil end
-    if type(o.recipeID) ~= "number" then return nil end
-    if type(o.qty) ~= "number" or o.qty < 1 or o.qty > 99 or o.qty ~= math.floor(o.qty) then return nil end
-    if type(o.createdAt) ~= "number" then return nil end
+    if not U.CleanString(o.id, MAX_ID) or o.id == "" then return nil end
+    if not U.IsSafeName(o.requester) then return nil end
+    local horizon = ns.Store.Horizon()
+    if not U.SafeInt(o.recipeID, 1, 2147483647) then return nil end
+    if not U.SafeInt(o.qty, 1, 99) then return nil end
+    if not U.SafeInt(o.createdAt, 0, horizon) then return nil end
     local note = o.note
     -- MAX_NOTE counts BYTES (the wire and storage limit); notes must be well-formed UTF-8 so peers never show garbage
-    if note ~= nil and (type(note) ~= "string" or #note > MAX_NOTE or not ns.Util.IsValidUtf8(note)) then return nil end
+    if note ~= nil then
+        if type(note) ~= "string" or #note > MAX_NOTE or not U.IsValidUtf8(note) then return nil end
+        note = U.StripControl(note)
+    end
     if o.closed ~= nil and o.closed ~= "done" and o.closed ~= "cancelled" then return nil end
-    if o.closed and type(o.closedAt) ~= "number" then return nil end
+    if o.closed and not U.SafeInt(o.closedAt, 0, horizon) then return nil end
+    if o.closedBy ~= nil and not U.IsSafeName(o.closedBy) then return nil end
     if type(o.claims) ~= "table" then return nil end
     local claims, n = {}, 0
     for name, c in pairs(o.claims) do
         n = n + 1
         if n > MAX_CLAIMS then return nil end
-        if type(name) ~= "string" or #name > 64 or type(c) ~= "table" or type(c.t) ~= "number"
+        if not U.IsSafeName(name) or type(c) ~= "table" or not U.SafeInt(c.t, 0, horizon)
             or (c.state ~= "claimed" and c.state ~= "withdrawn") then
             return nil
         end
         claims[name] = { state = c.state, t = c.t }
     end
     return { id = o.id, requester = o.requester, recipeID = o.recipeID, qty = o.qty, note = note or "",
-        createdAt = o.createdAt, closed = o.closed, closedAt = o.closedAt, closedBy = o.closedBy, claims = claims }
+        createdAt = o.createdAt, closed = o.closed, closedAt = o.closed and o.closedAt or nil, closedBy = o.closedBy,
+        claims = claims }
 end
+Orders.Sanitize = sanitize
 
 -- Merge a (possibly remote) order. Returns true when local state changed.
 function Orders:Merge(incoming)

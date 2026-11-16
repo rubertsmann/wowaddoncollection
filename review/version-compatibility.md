@@ -1,6 +1,6 @@
 # Review: version compatibility and migration
 
-Date: 2026-11-16 · Scope: wire protocol, SavedVariables schema, version constants · Status: **R1-R6 implemented in feature 004** (`features/004-hardening-and-version-compatibility/`, protocol 2.0, schema 2); the sections below describe the state BEFORE that change. Current rules: `docs/protocol.md`
+Date: 2026-11-16 · Scope: wire protocol, SavedVariables schema, version constants · Status: **R1-R6 implemented in feature 006** (`features/006-hardening-and-version-compatibility/`, protocol 2.0, schema 2); the sections below describe the state BEFORE that change. Current rules: `docs/protocol.md`
 
 ## 1. What exists today
 

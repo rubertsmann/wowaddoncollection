@@ -44,4 +44,11 @@ The UI is available in English and German; profession and recipe names always fo
 ## Trust model
 
 Any guild member running the addon can create/claim/close orders and can only publish **their own** character record.
-There is no authentication beyond guild membership.
+There is no authentication beyond guild membership, but nothing from outside the guild is processed: only guild
+messages and whispers from guild-roster members are accepted, and all received data is validated before it is stored or shown.
+
+## Compatibility
+
+Everyone in the guild should run the same TalentShare **major** protocol (shown by `/ts version`, e.g. `protocol 2.0`).
+A different minor still syncs; a different major does not, and you get a one-time notice that a guild member runs a newer or
+older version. Saved data written by a newer addon is never overwritten by an older one. Rules and history: `docs/protocol.md`.

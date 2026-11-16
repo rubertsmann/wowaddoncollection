@@ -5,8 +5,9 @@ local ADDON, ns = ...
 local Comm = {}
 ns.Comm = Comm
 
-local CHUNK = 225         -- payload bytes per addon message (header adds ~12)
-local MAX_PARTS = 200
+local L = ns.L
+local Codec, Guard = ns.Codec, ns.Guard
+local CHUNK, MAX_PARTS = Codec.CHUNK, Codec.MAX_PARTS   -- one definition (Codec): Decode accepts what we can send
 local BUCKET_MAX, REFILL = 5, 0.9   -- messages burst / refill per second (server allows 10 burst, 1/s)
 
 Comm.active = false
@@ -15,6 +16,10 @@ Comm.buffers = {}
 Comm.tokens = BUCKET_MAX
 Comm.lastHello = 0
 Comm.msgCounter = 0
+Comm.salt = 0                -- random per session (Comm.Init): ids never repeat across /reload while stale buffers exist
+Comm.roster = {}             -- set of "Name-Realm" as of the last roster update; WHISPERs from anyone else are dropped
+Comm.hints = Guard.NewHints()
+Comm.rejected = 0            -- chunks dropped by the gate or for a foreign protocol (shown by /ts comm)
 Comm.chunksSent, Comm.chunksReceived = 0, 0
 
 local function me() return ns.Store.db and ns.Store.db.me or (ns.Api.GetPlayerInfo().name) end
@@ -24,13 +29,13 @@ function Comm.Send(msg, dist, target)
     local ok, enc = pcall(ns.Codec.Encode, msg)
     if not ok then ns.Debug.Log("comm.encode", enc) return end
     Comm.msgCounter = Comm.msgCounter + 1
-    local id = string.format("%x", Comm.msgCounter % 65536)
+    local id = string.format("%04x%x", Comm.salt % 65536, Comm.msgCounter % 65536)
     local total = math.ceil(#enc / CHUNK)
     if total > MAX_PARTS then ns.Debug.Log("comm.toobig", msg.t, #enc) return end
     if #Comm.queue + total > 600 then ns.Debug.Log("comm.queuefull", msg.t) return end  -- never let a storm grow unbounded
     for i = 1, total do
         local part = enc:sub((i - 1) * CHUNK + 1, i * CHUNK)
-        local item = { dist = dist, target = target, text = id .. "|" .. i .. "|" .. total .. "|" .. part }
+        local item = { dist = dist, target = target, text = Codec.Header(id, i, total) .. part }
         if msg.t == "ORDER" or msg.t == "WANT" or msg.t == "HELLO" then
             table.insert(Comm.queue, 1, item)  -- small control messages jump the queue (single chunk)
         else
@@ -55,10 +60,31 @@ local function pump(dt)
     end
 end
 
+-- One notice per kind per session; the sender is only recorded (bounded), never printed.
+local function incompatible(kind, sender)
+    Comm.rejected = Comm.rejected + (kind == "newer-minor" and 0 or 1)
+    if not Guard.Note(Comm.hints, kind, sender) then return end
+    if kind == "newer" then
+        ns.Print(L["A guild member runs a newer TalentShare that cannot sync with this version. Please update the addon."])
+    elseif kind == "older" then
+        ns.Print(L["A guild member runs an older TalentShare that cannot sync with this version."])
+    else
+        ns.Print(L["A guild member runs a newer TalentShare with extra features. Updating is recommended."])
+    end
+end
+
 local function onChunk(text, sender)
-    local id, idx, total, part = text:match("^([%x]+)|(%d+)|(%d+)|(.*)$")
-    idx, total = tonumber(idx), tonumber(total)
-    if not id or not idx or not total or total < 1 or total > MAX_PARTS or idx < 1 or idx > total then return end
+    local h, why = Codec.ParseHeader(text)
+    if not h then
+        if why == "legacy" then incompatible("older", sender) end   -- 0.1/0.2 builds: no version in the header
+        return
+    end
+    if h.major ~= ns.PROTO_MAJOR then
+        incompatible(Codec.Compat(h.major, h.minor), sender)        -- before any buffer is allocated
+        return
+    end
+    if Codec.Compat(h.major, h.minor) == "newer-minor" then incompatible("newer-minor", sender) end
+    local id, idx, total, part = h.id, h.idx, h.total, h.part
     Comm.chunksReceived = Comm.chunksReceived + 1
     local key = sender .. ":" .. id
     local buf = Comm.buffers[key]
@@ -72,7 +98,7 @@ local function onChunk(text, sender)
     end
     if buf.got == total then
         Comm.buffers[key] = nil
-        local msg, err = ns.Codec.Decode(table.concat(buf.parts))
+        local msg, err = Codec.Decode(table.concat(buf.parts))
         if msg then
             Comm.sync:OnMessage(msg, sender)
         else
@@ -82,12 +108,18 @@ local function onChunk(text, sender)
     end
 end
 
+-- Entry point for CHAT_MSG_ADDON. The gate runs FIRST: nothing from outside the guild is parsed, buffered or answered.
 function Comm.OnAddonMessage(prefix, text, channel, sender)
     if prefix ~= ns.PREFIX or not Comm.active or type(text) ~= "string" or type(sender) ~= "string" then return end
     sender = ns.Util.FullName(sender)
-    if sender == me() then return end
-    local ok, err = pcall(onChunk, text, sender)
-    if not ok then ns.Debug.Log("comm.chunk", err) end
+    if not sender or sender == me() then return end
+    local ok, why = Guard.Accept(channel, sender, Comm.roster)
+    if not ok then
+        Comm.rejected = Comm.rejected + 1
+        return
+    end
+    local ok2, err = pcall(onChunk, text, sender)
+    if not ok2 then ns.Debug.Log("comm.chunk", err) end
 end
 
 function Comm.RequestHello(login, force)
@@ -105,6 +137,7 @@ end
 function Comm.PruneRoster()
     local roster = ns.Api.GetGuildRoster()
     if ns.Util.Count(roster) == 0 then return end
+    Comm.roster = roster
     local n = ns.Store.Prune(roster, ns.Store.db.me)
     if n > 0 then ns.Debug.Log("prune", n) end
 end
@@ -122,11 +155,13 @@ function Comm.Start()
         onChange = function(kind) ns.Events.Fire("DATA_CHANGED", kind) end,
     })
     Comm.active = true
+    Comm.roster = ns.Api.GetGuildRoster()   -- may be empty until the first roster update; WHISPERs fail closed meanwhile
     ns.Debug.Log("comm.start", me())
     ns.Api.RequestRoster()
 end
 
 function Comm.Init()
+    Comm.salt = math.random(0, 65535)
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
         C_ChatInfo.RegisterAddonMessagePrefix(ns.PREFIX)
     end
@@ -163,8 +198,9 @@ end
 
 ns.Slash.comm = function()
     local s = Comm.sync and Comm.sync.stats or { sent = 0, received = 0, dropped = 0 }
-    ns.Print(("comm: active=%s sent=%d received=%d dropped=%d queue=%d chunks out/in=%d/%d"):format(
-        tostring(Comm.active), s.sent, s.received, s.dropped, #Comm.queue, Comm.chunksSent, Comm.chunksReceived))
+    ns.Print(("comm: active=%s protocol=%d.%d sent=%d received=%d dropped=%d rejected=%d queue=%d chunks out/in=%d/%d roster=%d incompatible peers=%d"):format(
+        tostring(Comm.active), ns.PROTO_MAJOR, ns.PROTO_MINOR, s.sent, s.received, s.dropped, Comm.rejected, #Comm.queue,
+        Comm.chunksSent, Comm.chunksReceived, ns.Util.Count(Comm.roster), Comm.hints.count))
 end
 
 ns.Slash.hello = function()

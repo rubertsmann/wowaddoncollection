@@ -60,7 +60,7 @@ return {
     ["codec: a different protocol version is rejected"] = function(h)
         local ns = h.ns()
         local enc = ns.Codec.Encode({ t = "HELLO" })
-        ns.PROTOCOL = 2
+        ns.PROTOCOL = ns.PROTO_MAJOR + 1
         h.eq((ns.Codec.Decode(enc)), nil)
     end,
 
@@ -100,7 +100,7 @@ return {
         local after = ns.Store.Counts()
         h.eq(after.chars + after.recipes + after.orders + after.catalog + after.names, 0)
         h.eq(#ns.db.debug, 0)
-        h.eq(ns.db.ui.minimapAngle, 99, "preferences must survive"); h.eq(ns.db.me, "A-R"); h.eq(ns.db.schema, 1)
+        h.eq(ns.db.ui.minimapAngle, 99, "preferences must survive"); h.eq(ns.db.me, "A-R"); h.eq(ns.db.schema, ns.Store.SCHEMA)
         h.eq(#orders:List({ showClosed = true }), 0, "the order board must see the wipe")
         local o = orders:Create("A-R", 2, 1, "")                    -- the same object still stores into the live table
         h.truthy(o and ns.db.orders[o.id], "orders holder lost its table")

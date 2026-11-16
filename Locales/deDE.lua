@@ -50,6 +50,10 @@ ns.Locale.Register("deDE", {
         ["Recipe #{id}"] = "Rezept #{id}",
         ["Profession #{id}"] = "Beruf #{id}",
         ["Item #{id}"] = "Gegenstand #{id}",
+        ["A guild member runs a newer TalentShare that cannot sync with this version. Please update the addon."] = "Ein Gildenmitglied nutzt ein neueres TalentShare, das mit dieser Version nicht synchronisieren kann. Bitte aktualisiere das Addon.",
+        ["A guild member runs an older TalentShare that cannot sync with this version."] = "Ein Gildenmitglied nutzt ein älteres TalentShare, das mit dieser Version nicht synchronisieren kann.",
+        ["A guild member runs a newer TalentShare with extra features. Updating is recommended."] = "Ein Gildenmitglied nutzt ein neueres TalentShare mit zusätzlichen Funktionen. Ein Update wird empfohlen.",
+        ["Saved data was written by a newer TalentShare and is left untouched. Nothing is saved this session. Please update the addon."] = "Die gespeicherten Daten stammen von einem neueren TalentShare und bleiben unverändert. In dieser Sitzung wird nichts gespeichert. Bitte aktualisiere das Addon.",
     },
     -- skill line id -> name (165, 185, 393 confirmed by the in-game probe: Lederverarbeitung, Kochkunst, Kürschnerei)
     professions = {

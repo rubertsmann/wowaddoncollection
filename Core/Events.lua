@@ -64,7 +64,11 @@ local onEvent = {}
 
 function onEvent.ADDON_LOADED(name)
     if name ~= ADDON then return end
-    _G[ns.SVNAME] = ns.Store.Init(_G[ns.SVNAME])
+    -- status "newer": Init hands back the ORIGINAL table, so assigning it keeps the newer data on disk untouched while this
+    -- session runs on a throwaway database (docs/protocol.md "Stored data")
+    local sv, status = ns.Store.Init(_G[ns.SVNAME])
+    _G[ns.SVNAME] = sv
+    ns.dbStatus = status
     ns.Locale.SetUI(ns.db.ui.locale)   -- /ts locale <code> override for testing translations; nil = game client language
     ns.orders = ns.Orders.New(ns.Util.Now, ns.db.orders)
     ns.Comm.Init()
@@ -73,6 +77,11 @@ end
 function onEvent.PLAYER_LOGIN()
     ns.Store.db.me = ns.Api.GetPlayerInfo().name
     ns.Comm.Start()
+    if ns.dbStatus == "newer" then
+        C_Timer.After(5, function()   -- after the chat frame is up
+            ns.Print(ns.L["Saved data was written by a newer TalentShare and is left untouched. Nothing is saved this session. Please update the addon."])
+        end)
+    end
     C_Timer.After(3, function()
         local changed = ns.Scanner.Refresh(ns.Util.Now())
         ns.Comm.Start()

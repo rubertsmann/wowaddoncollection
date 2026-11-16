@@ -31,6 +31,45 @@ function U.Now()
     return time()
 end
 
+------------------------------------------------------------------ untrusted-input helpers (used by the sanitizers)
+
+local INF = math.huge
+
+-- a real, finite number (rejects NaN, +/-inf and non-numbers)
+function U.IsFinite(v)
+    return type(v) == "number" and v == v and v ~= INF and v ~= -INF
+end
+
+-- v when it is a finite integer within [lo, hi], else nil
+function U.SafeInt(v, lo, hi)
+    if not U.IsFinite(v) or v ~= math.floor(v) then return nil end
+    if (lo and v < lo) or (hi and v > hi) then return nil end
+    return v
+end
+
+-- remove control characters (incl. NUL and DEL); keeps everything else, including multi-byte UTF-8
+function U.StripControl(s)
+    return (s:gsub("[%z\1-\31\127]", ""))
+end
+
+-- s when it is a UTF-8 string of at most maxBytes without control characters; otherwise nil
+function U.CleanString(s, maxBytes)
+    if type(s) ~= "string" or #s > (maxBytes or 100) then return nil end
+    if s:find("[%z\1-\31\127]") or not U.IsValidUtf8(s) then return nil end
+    return s
+end
+
+-- player/character names: 1..64 bytes, UTF-8, no control characters and no "|" (escape-sequence introducer)
+function U.IsSafeName(s)
+    return U.CleanString(s, 64) ~= nil and s ~= "" and not s:find("|", 1, true)
+end
+
+-- Escape text that came from another player before it goes into a FontString: "|" starts colour/texture/hyperlink codes.
+function U.Esc(s)
+    if type(s) ~= "string" then s = tostring(s) end
+    return (s:gsub("|", "||"))
+end
+
 ------------------------------------------------------------------ UTF-8 (WoW strings are UTF-8; Lua sees bytes)
 
 -- Strict check: well-formed sequences only (no overlong forms, surrogates or code points above U+10FFFF).
@@ -136,7 +175,8 @@ ns.Debug = {}
 function ns.Debug.Log(tag, ...)
     if not ns.db then return end
     local parts = { tostring(tag) }
-    for i = 1, select("#", ...) do parts[#parts + 1] = tostring((select(i, ...))) end
+    -- parts can contain peer text (names, message types); /ts debug prints them to the chat frame, so escape "|"
+    for i = 1, select("#", ...) do parts[#parts + 1] = U.Esc(tostring((select(i, ...)))) end
     local log = ns.db.debug
     log[#log + 1] = U.Now() .. " " .. table.concat(parts, " ")
     while #log > 200 do table.remove(log, 1) end

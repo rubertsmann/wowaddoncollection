@@ -28,7 +28,7 @@ return {
             local ok = pcall(ns.Codec.Decode, s)
             h.truthy(ok, "Decode threw")
             -- structurally plausible but hostile tables
-            local msg = { v = 1, t = ({ "HELLO", "WANT", "SNAP", "OPUSH", "ORDER", "X" })[math.random(1, 6)],
+            local msg = { v = ns.PROTOCOL, t = ({ "HELLO", "WANT", "SNAP", "OPUSH", "ORDER", "X" })[math.random(1, 6)],
                 rev = math.random(-5, 5) == 0 and "x" or math.random(0, 1e9), names = math.random(0, 1) == 0 and 5 or { "A-R" },
                 char = math.random(0, 1) == 0 and {} or { name = s, rev = 1, level = 999, professions = 3 },
                 orders = math.random(0, 1) == 0 and "no" or { {}, 5, { id = s } }, order = { id = s, qty = {} }, odig = "z" }

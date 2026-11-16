@@ -66,8 +66,9 @@ end
 
 function Sync:_onHELLO(msg, sender)
     local env = self.env
-    if type(msg.rev) ~= "number" then error("bad rev") end
     local now = env.now()
+    -- a rev is a server timestamp: finite, not negative, not from the future (+inf would make every client pull forever)
+    if not ns.Util.SafeInt(msg.rev, 0, ns.Store.Horizon()) then error("bad rev") end
     local cur = env.store.GetChar(sender)
     if (cur and cur.rev or 0) < msg.rev then
         -- pull once per (sender, rev) per minute; duplicate HELLOs must not trigger duplicate snapshots
@@ -118,15 +119,21 @@ end
 
 function Sync:_onSNAP(msg, sender)
     local env = self.env
-    local rec = msg.char
-    if not env.store.ValidateChar(rec) then error("invalid char") end
+    -- allow-list copy: only validated fields of the record are ever stored
+    local rec = env.store.SanitizeChar(msg.char)
+    if not rec then error("invalid char") end
     if rec.name ~= sender then error("char/sender mismatch") end
+    -- catalog entries are accepted only for recipes the sender itself knows (it cannot seed names for other recipes)
+    local known = {}
+    for _, p in pairs(rec.professions) do
+        for id in pairs(p.recipes) do known[id] = true end
+    end
     local good, n = {}, 0
     if type(msg.catalog) == "table" then
         for id, e in pairs(msg.catalog) do
             n = n + 1
             if n > 2000 then break end
-            if type(id) == "number" and env.store.ValidateCatalogEntry(e) then good[id] = e end
+            if known[id] then good[id] = e end   -- PutCatalog rebuilds each entry by allow-list copy
         end
     end
     env.store.PutCatalog(good)

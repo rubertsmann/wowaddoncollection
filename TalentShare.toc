@@ -21,6 +21,7 @@ Core\Names.lua
 Core\Api.lua
 Core\Scanner.lua
 Core\Codec.lua
+Core\Guard.lua
 Core\Orders.lua
 Core\Sync.lua
 Core\Model.lua

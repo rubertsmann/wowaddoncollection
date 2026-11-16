@@ -2,3 +2,4 @@ dist/
 .release/
 *.zip
 TalentShare-Dev.toc
+screens-debug/

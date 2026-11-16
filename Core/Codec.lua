@@ -4,8 +4,14 @@ local ADDON, ns = ...
 local Codec = {}
 ns.Codec = Codec
 
+-- Transport limits, defined ONCE: Comm chunks with CHUNK and rejects more than MAX_PARTS; Decode accepts exactly what
+-- the transport can deliver, so the two can never drift apart.
+Codec.CHUNK = 225                                   -- payload bytes per addon message (header adds < 30; limit is 255)
+Codec.MAX_PARTS = 200
+Codec.MAX_ENCODED = Codec.CHUNK * Codec.MAX_PARTS
+
 local MAX_RAW = 200000
-local MAX_ENCODED = 60000
+local MAX_ENCODED = Codec.MAX_ENCODED
 local MAX_DEPTH = 8
 local MAX_TABLE_ITEMS = 20000
 
@@ -45,7 +51,8 @@ local function parse(s, pos, depth)
         local e = s:find(";", pos, true)
         if not e then error("bad number") end
         local num = tonumber(s:sub(pos + 1, e - 1))
-        if not num then error("bad number") end
+        -- tonumber("1e999") is +inf: peers must not be able to smuggle non-finite values past the serializer's own check
+        if not num or num ~= num or num == math.huge or num == -math.huge then error("bad number") end
         return num, e + 1
     elseif c == "s" then
         local colon = s:find(":", pos, true)
@@ -115,4 +122,42 @@ function Codec.Decode(s)
     if msg.v ~= ns.PROTOCOL then return nil, "protocol version" end
     if type(msg.t) ~= "string" then return nil, "no type" end
     return msg
+end
+
+------------------------------------------------------------------ chunk header and version compatibility
+-- Wire layout of one addon message (plain text, so ANY version can read the version before buffering or inflating):
+--   <major>.<minor>|<id>|<idx>|<total>|<part>        e.g. "2.0|3fa2c|1|3|..."
+-- Compatibility rule (docs/protocol.md): major must match exactly; a different minor is compatible (additive changes).
+-- 0.1/0.2 builds used the legacy layout "<id>|<idx>|<total>|<part>" without a version.
+
+function Codec.Header(id, idx, total)
+    return ns.PROTO_MAJOR .. "." .. ns.PROTO_MINOR .. "|" .. id .. "|" .. idx .. "|" .. total .. "|"
+end
+
+-- Returns a table { major, minor [, id, idx, total, part] }, or nil, "legacy" | "malformed".
+-- The layout after the version is only parsed when the major is ours: a foreign major may have changed it, and only the
+-- version number is meaningful then.
+function Codec.ParseHeader(text)
+    if type(text) ~= "string" then return nil, "malformed" end
+    local maj, min, rest = text:match("^(%d%d?%d?)%.(%d%d?%d?)|(.*)$")
+    if not maj then
+        if text:match("^%x+|%d+|%d+|") then return nil, "legacy" end
+        return nil, "malformed"
+    end
+    local h = { major = tonumber(maj), minor = tonumber(min) }
+    if h.major ~= ns.PROTO_MAJOR then return h end
+    local id, idx, total, part = rest:match("^(%x+)|(%d+)|(%d+)|(.*)$")
+    if not id or #id > 12 or #idx > 4 or #total > 4 then return nil, "malformed" end
+    idx, total = tonumber(idx), tonumber(total)
+    if total < 1 or total > Codec.MAX_PARTS or idx < 1 or idx > total then return nil, "malformed" end
+    h.id, h.idx, h.total, h.part = id, idx, total, part
+    return h
+end
+
+-- "ok" | "newer-minor" (compatible, peer has more features) | "newer" | "older" (both: cannot talk)
+function Codec.Compat(major, minor)
+    if major == ns.PROTO_MAJOR then
+        return (minor > ns.PROTO_MINOR) and "newer-minor" or "ok"
+    end
+    return (major > ns.PROTO_MAJOR) and "newer" or "older"
 end
