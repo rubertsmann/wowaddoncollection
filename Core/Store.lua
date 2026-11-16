@@ -17,6 +17,7 @@ function S.Init(sv)
     sv.orders = sv.orders or {}
     sv.debug = sv.debug or {}
     sv.ui = sv.ui or {}
+    sv.profNames = sv.profNames or {}   -- [clientLocale][skillLineID] = name the viewer's own client reported
     S.db = sv
     ns.db = sv
     return sv
@@ -62,7 +63,7 @@ function S.Crafters(recipeID)
         for profName, p in pairs(rec.professions or {}) do
             if p.recipes and p.recipes[recipeID] then
                 out[#out + 1] = { name = rec.name, class = rec.class, level = rec.level, rev = rec.rev,
-                    profession = profName, rank = p.rank, max = p.max }
+                    profession = profName, pentry = p, rank = p.rank, max = p.max }
                 break
             end
         end
@@ -96,7 +97,8 @@ function S.ValidateChar(rec)
     if type(rec.professions) ~= "table" then return false end
     local total = 0
     for pname, p in pairs(rec.professions) do
-        if type(pname) ~= "string" or type(p) ~= "table" then return false end
+        if type(pname) ~= "string" or #pname > 60 or type(p) ~= "table" then return false end
+        if not S.ValidateProfessionMeta(p) then return false end
         if type(p.rank) ~= "number" or type(p.max) ~= "number" or p.rank > p.max then return false end
         if type(p.recipes) ~= "table" then return false end
         for id, v in pairs(p.recipes) do
@@ -108,9 +110,19 @@ function S.ValidateChar(rec)
     return true
 end
 
+-- optional localization fields: id = skill line id, loc = language code of the name snapshot, name = that snapshot
+local function validLoc(v) return v == nil or (type(v) == "string" and #v >= 2 and #v <= 8 and v:match("^[%a_]+$") ~= nil) end
+function S.ValidateProfessionMeta(p)
+    if p.id ~= nil and (type(p.id) ~= "number" or p.id ~= p.id or p.id < 1 or p.id > 1000000 or p.id ~= math.floor(p.id)) then return false end
+    if not validLoc(p.loc) then return false end
+    if p.name ~= nil and (type(p.name) ~= "string" or #p.name > 60 or not ns.Util.IsValidUtf8(p.name)) then return false end
+    return true
+end
+
 function S.ValidateCatalogEntry(e)
     if type(e) ~= "table" then return false end
-    if e.name ~= nil and (type(e.name) ~= "string" or #e.name > 100) then return false end
+    if not validLoc(e.loc) then return false end
+    if e.name ~= nil and (type(e.name) ~= "string" or #e.name > 100 or not ns.Util.IsValidUtf8(e.name)) then return false end
     if type(e.reagents) ~= "table" or #e.reagents > 12 then return false end
     for _, r in ipairs(e.reagents) do
         if type(r) ~= "table" or type(r.itemID) ~= "number" or type(r.count) ~= "number" then return false end

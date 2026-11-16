@@ -45,6 +45,7 @@ local onEvent = {}
 function onEvent.ADDON_LOADED(name)
     if name ~= ADDON then return end
     _G[ns.SVNAME] = ns.Store.Init(_G[ns.SVNAME])
+    ns.Locale.SetUI(ns.db.ui.locale)   -- /ts locale <code> override for testing translations; nil = game client language
     ns.orders = ns.Orders.New(ns.Util.Now, ns.db.orders)
     ns.Comm.Init()
 end

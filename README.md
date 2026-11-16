@@ -19,12 +19,16 @@ Source: https://github.com/rubertsmann/talentshare-ordering-system
 ## Install (manual)
 
 Run `powershell tools/package.ps1`, unzip `dist/TalentShare-<version>.zip` into
-`World of Warcraft\_forever_\Interface\AddOns\`. For development: `powershell tools/deploy.ps1` links the repo instead.
+`World of Warcraft\_forever_\Interface\AddOns\`. For development: `powershell tools/deploy.ps1` links the repo as a
+separate **TalentShare-Dev** addon (own data, prefix and `/tsd`), so it runs next to the live `TalentShare`;
+`powershell tools/deploy.ps1 -InstallLive` also installs the newest `dist` zip as the live addon.
 
 ## Use
 
 `/ts` (or the minimap button) opens the window. Open each profession once so recipes are scanned.
-`/ts scan`, `/ts dump`, `/ts chars`, `/ts comm`, `/ts hello`, `/ts debug`, `/ts version`.
+`/ts scan`, `/ts dump`, `/ts chars`, `/ts comm`, `/ts hello`, `/ts debug`, `/ts version`,
+`/ts locale <code>|auto` (UI language, then `/reload`), `/ts i18n` (what the client reports). In the dev build use `/tsd`.
+The UI is available in English and German; profession and recipe names always follow your own game client.
 
 ## Develop
 
@@ -32,6 +36,8 @@ Run `powershell tools/package.ps1`, unzip `dist/TalentShare-<version>.zip` into
 * `dev/TalentShareProbe` (`tools/deploy.ps1 -WithProbe`, `/tsp`, `/reload`) records which APIs exist on the client into
   `WTF\...\SavedVariables\TalentShareProbeDB.lua`.
 * Architecture and task breakdown: `eval/plan.md`. Verification status: `docs/status.md`.
+* New work is planned, logged, verified and documented per feature under `features/` (see `features/INDEX.md` and
+  `.claude/skills/feature-workflow/SKILL.md`).
 
 ## Trust model
 

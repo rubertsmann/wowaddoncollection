@@ -1,42 +1,57 @@
 local ADDON, ns = ...
 
 -- Pure view-models for the UI (unit-testable without frames).
+-- Everything a player reads is resolved HERE for the viewer's language (Names), never taken from the sender's text,
+-- and compared through Util.SearchKey so case and accents do not matter.
 local Model = {}
 ns.Model = Model
 
 local function recipeName(store, id)
-    local e = store.GetRecipe(id)
-    return (e and e.name) or ("Recipe #" .. id)
+    return ns.Names.Recipe(id, store.GetRecipe(id))
 end
 Model.RecipeName = recipeName
 
--- sorted unique profession names across all cached characters
+local function sortKey(s) return ns.Util.SearchKey(s or "") end
+
+-- unique professions across all cached characters: { { key = canonical id, name = display name }, ... } sorted by name
+-- 0.1.0 peers send name keys without an id; Names.ProfKey merges them with id-based entries ("Cooking" == "Kochkunst").
 function Model.Professions(store)
-    local set, out = {}, {}
+    local seen, out = {}, {}
     for _, rec in pairs(store.db.chars) do
         for pname, p in pairs(rec.professions or {}) do
-            if next(p.recipes or {}) and not set[pname] then set[pname] = true; out[#out + 1] = pname end
+            if next(p.recipes or {}) then
+                local key = ns.Names.ProfKey(pname, p)
+                if not seen[key] then
+                    seen[key] = true
+                    out[#out + 1] = { key = key, name = ns.Names.Profession(key, p) }
+                end
+            end
         end
     end
-    table.sort(out)
+    table.sort(out, function(a, b)
+        local x, y = sortKey(a.name), sortKey(b.name)
+        if x ~= y then return x < y end
+        return tostring(a.key) < tostring(b.key)
+    end)
     return out
 end
 
--- state = { profession = name|nil, text = string, mineOnly = bool, me = "Name-Realm" }
+-- state = { profession = canonical key|nil, text = string, mineOnly = bool, me = "Name-Realm" }
 -- nameFn(itemID) -> cached item name or nil (used for reagent search)
 function Model.BuildRecipeRows(store, state, nameFn)
-    local text = (state.text or ""):lower()
+    local text = sortKey(state.text)
     local byID, rows = {}, {}
     for _, rec in pairs(store.db.chars) do
         for pname, p in pairs(rec.professions or {}) do
-            if not state.profession or state.profession == pname then
+            local key = ns.Names.ProfKey(pname, p)
+            if state.profession == nil or state.profession == key then
                 for id in pairs(p.recipes or {}) do
                     if not state.mineOnly or rec.name == state.me then
                         local row = byID[id]
                         if not row then
                             local e = store.GetRecipe(id)
                             row = { recipeID = id, name = recipeName(store, id), icon = e and e.icon,
-                                profession = pname, crafters = {} }
+                                professionKey = key, profession = ns.Names.Profession(key, p), crafters = {} }
                             byID[id] = row
                             rows[#rows + 1] = row
                         end
@@ -50,12 +65,12 @@ function Model.BuildRecipeRows(store, state, nameFn)
     for _, row in ipairs(rows) do
         local keep = true
         if text ~= "" then
-            keep = row.name:lower():find(text, 1, true) ~= nil
+            keep = sortKey(row.name):find(text, 1, true) ~= nil
             if not keep then
                 local e = store.GetRecipe(row.recipeID)
                 for _, r in ipairs(e and e.reagents or {}) do
-                    local rn = r.name or (nameFn and nameFn(r.itemID))
-                    if rn and rn:lower():find(text, 1, true) then keep = true; break end
+                    local rn = (nameFn and nameFn(r.itemID)) or r.name   -- the viewer's client first
+                    if rn and sortKey(rn):find(text, 1, true) then keep = true; break end
                 end
             end
         end
@@ -65,8 +80,11 @@ function Model.BuildRecipeRows(store, state, nameFn)
         end
     end
     table.sort(out, function(a, b)
-        if a.profession ~= b.profession then return a.profession < b.profession end
-        return a.name < b.name
+        local pa, pb = sortKey(a.profession), sortKey(b.profession)
+        if pa ~= pb then return pa < pb end
+        local na, nb = sortKey(a.name), sortKey(b.name)
+        if na ~= nb then return na < nb end
+        return a.recipeID < b.recipeID
     end)
     return out
 end
@@ -76,10 +94,14 @@ function Model.RecipeDetail(store, recipeID, haveFn, nameFn)
     local e = store.GetRecipe(recipeID)
     local d = { recipeID = recipeID, name = recipeName(store, recipeID), icon = e and e.icon, produces = e and e.produces,
         reagents = {}, crafters = store.Crafters(recipeID) }
+    for _, c in ipairs(d.crafters) do
+        c.professionName = ns.Names.Profession(ns.Names.ProfKey(c.profession, c.pentry), c.pentry)
+    end
     for _, r in ipairs(e and e.reagents or {}) do
         local have = haveFn and haveFn(r.itemID) or 0
         d.reagents[#d.reagents + 1] = { itemID = r.itemID, count = r.count,
-            name = r.name or (nameFn and nameFn(r.itemID)) or ("item:" .. r.itemID), have = have, enough = have >= r.count }
+            name = (nameFn and nameFn(r.itemID)) or r.name or ns.Locale.Fmt(ns.L["Item #{id}"], { id = r.itemID }),
+            have = have, enough = have >= r.count }
     end
     return d
 end

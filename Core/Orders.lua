@@ -52,7 +52,8 @@ local function sanitize(o)
     if type(o.qty) ~= "number" or o.qty < 1 or o.qty > 99 or o.qty ~= math.floor(o.qty) then return nil end
     if type(o.createdAt) ~= "number" then return nil end
     local note = o.note
-    if note ~= nil and (type(note) ~= "string" or #note > MAX_NOTE) then return nil end
+    -- MAX_NOTE counts BYTES (the wire and storage limit); notes must be well-formed UTF-8 so peers never show garbage
+    if note ~= nil and (type(note) ~= "string" or #note > MAX_NOTE or not ns.Util.IsValidUtf8(note)) then return nil end
     if o.closed ~= nil and o.closed ~= "done" and o.closed ~= "cancelled" then return nil end
     if o.closed and type(o.closedAt) ~= "number" then return nil end
     if type(o.claims) ~= "table" then return nil end
@@ -105,8 +106,11 @@ end
 
 function Orders:Create(requester, recipeID, qty, note)
     local t = self.now()
+    note = note or ""
+    if not ns.Util.IsValidUtf8(note) then note = "" end
+    note = ns.Util.TruncateUtf8(note, MAX_NOTE)   -- never cut inside a multi-byte character; a long note must not drop the order
     local o = { id = requester .. ":" .. t .. ":" .. math.random(1000, 9999), requester = requester, recipeID = recipeID,
-        qty = qty, note = note or "", createdAt = t, claims = {} }
+        qty = qty, note = note, createdAt = t, claims = {} }
     local clean = sanitize(o)
     if not clean then return nil end
     self.db[clean.id] = clean

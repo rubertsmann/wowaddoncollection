@@ -15,10 +15,13 @@ function H.ns(opts)
     local now = (opts and opts.now) or 1000
     H.clock = now
     GetServerTime = function() return H.clock end
-    for _, f in ipairs({ "Util", "Store", "Orders", "Codec", "Sync", "Model" }) do
-        loadAddonFile(ns, "Core/" .. f .. ".lua")
+    -- same order as the TOC (pure modules only)
+    for _, path in ipairs({ "Core/Util.lua", "Core/Locale.lua", "Locales/enUS.lua", "Locales/deDE.lua", "Core/Store.lua",
+        "Core/Names.lua", "Core/Orders.lua", "Core/Codec.lua", "Core/Sync.lua", "Core/Model.lua" }) do
+        loadAddonFile(ns, path)
     end
     ns.Store.Init({})
+    ns.Locale.Register("enUS")  -- (no-op re-register keeps tests independent of GetLocale)
     return ns
 end
 

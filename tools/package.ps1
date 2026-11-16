@@ -6,7 +6,7 @@ $stage = Join-Path $env:TEMP "TalentShare-stage"
 $dist = Join-Path $repo "dist"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force (Join-Path $stage "TalentShare"), $dist | Out-Null
-foreach ($item in "TalentShare.toc", "Core", "UI", "Libs", "README.md") {
+foreach ($item in "TalentShare.toc", "Core", "Locales", "UI", "Libs", "README.md") {
     Copy-Item (Join-Path $repo $item) (Join-Path $stage "TalentShare") -Recurse
 }
 $zip = Join-Path $dist "TalentShare-$version.zip"

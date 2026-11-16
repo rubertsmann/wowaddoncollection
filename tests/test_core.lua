@@ -77,7 +77,9 @@ return {
         h.eq(byName["Spiced Wolf"].crafterCount, 2)
         h.eq(#ns.Model.BuildRecipeRows(ns.Store, { text = "boar" }), 1)
         h.eq(#ns.Model.BuildRecipeRows(ns.Store, { text = "wolf meat" }), 1)   -- reagent search
-        h.eq(#ns.Model.BuildRecipeRows(ns.Store, { profession = "Tailoring", text = "" }), 0)
+        -- profession filters use the canonical key (Names.ProfKey), not the raw name
+        h.eq(#ns.Model.BuildRecipeRows(ns.Store, { profession = ns.Names.ProfKey("Tailoring"), text = "" }), 0)
+        h.eq(#ns.Model.BuildRecipeRows(ns.Store, { profession = ns.Names.ProfKey("Cooking"), text = "" }), 2)
         h.eq(#ns.Model.BuildRecipeRows(ns.Store, { text = "", mineOnly = true, me = "B-R" }), 1)
     end,
 
@@ -85,7 +87,7 @@ return {
         local ns = h.ns()
         ns.Store.PutCatalog({ [1] = { name = "Roast", reagents = { { itemID = 10, count = 3 }, { itemID = 11, count = 1 } } } })
         local d = ns.Model.RecipeDetail(ns.Store, 1, function(id) return id == 10 and 2 or 5 end, function() return nil end)
-        h.eq(d.reagents[1].enough, false); h.eq(d.reagents[2].enough, true); h.eq(d.reagents[1].name, "item:10")
+        h.eq(d.reagents[1].enough, false); h.eq(d.reagents[2].enough, true); h.eq(d.reagents[1].name, "Item #10")
         h.eq(ns.Model.RecipeDetail(ns.Store, 999).name, "Recipe #999")
     end,
 }

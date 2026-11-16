@@ -1,6 +1,11 @@
-﻿# Implementation status (2026-11-16, written at ~01:45)
+﻿# Implementation status (updated 2026-11-16, after features 001 and 002)
 
-Legend: DONE = written; UNVERIFIED = needs the check in the last column. **Verified so far:** LuaJIT was installed with your approval; `luajit tests/run.lua` -> **24 passed, 0 failed** (Store, Codec, Model, Orders merge, Sync incl. 40-peer login storm); every Core/UI/probe file compiles. **Not verified:** anything that needs the game client (Api, Scanner, Events, Comm transport, UI) - the game was never started.
+**Current:** `luajit tests/run.lua` -> **51 passed, 0 failed**. Per-feature state lives in `features/INDEX.md` (001 dev/live coexistence, 002 localization: both `verifying`, waiting for the in-game checklists in their `verify.md`).
+**Verified in game (user, 0.1.0 dev build):** profession scan (23 recipes, reagents), `/ts scan` and `/ts dump`, window opens, API probe (see `docs/api-findings.md`). **Not verified in game:** two-player sync, the 0.2.0 changes (localized UI, dev/live side by side), CurseForge auto-release.
+
+Table below is the original plan status from the first night (T1-T19), kept for history.
+
+Legend: DONE = written; UNVERIFIED = needs the check in the last column.
 
 | Plan task | State | What proves it |
 |---|---|---|

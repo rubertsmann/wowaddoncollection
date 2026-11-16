@@ -13,7 +13,11 @@ Libs\LibDeflate\LibDeflate.lua
 
 Core\Init.lua
 Core\Util.lua
+Core\Locale.lua
+Locales\enUS.lua
+Locales\deDE.lua
 Core\Store.lua
+Core\Names.lua
 Core\Api.lua
 Core\Scanner.lua
 Core\Codec.lua

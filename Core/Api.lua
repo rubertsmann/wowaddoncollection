@@ -36,15 +36,35 @@ function Api.GetGuildRoster()
     return set
 end
 
--- Professions the character has, without needing a window: { {name, rank, max}, ... } or nil when unsupported.
+function Api.GetLocale()
+    return (GetLocale and GetLocale()) or "enUS"
+end
+
+-- Localized spell (= recipe) name from the viewer's client, or nil. Confirmed present on Forever: C_Spell.GetSpellInfo.
+function Api.SpellName(spellID)
+    if C_Spell and C_Spell.GetSpellInfo then
+        local info = try(C_Spell.GetSpellInfo, spellID)
+        if type(info) == "table" then return info.name end
+        if type(info) == "string" then return info end
+    end
+    if GetSpellInfo then return (try(GetSpellInfo, spellID)) end
+    return nil
+end
+if ns.Names then ns.Names.env.spellName = Api.SpellName end
+
+-- Professions the character has, without needing a window: { {name, rank, max, id}, ... } or nil when unsupported.
+-- id = skill line id, the 7th return of GetProfessionInfo (confirmed by the probe: Cooking 185, Skinning 393).
 function Api.GetPlayerProfessions()
     if not (GetProfessions and GetProfessionInfo) then return nil end
     local out = {}
     for i = 1, 5 do
         local idx = select(i, GetProfessions())
         if idx then
-            local name, _, rank, max = GetProfessionInfo(idx)
-            if name then out[#out + 1] = { name = name, rank = rank or 0, max = max or 0 } end
+            local name, _, rank, max, _, _, skillLine = GetProfessionInfo(idx)
+            if name then
+                out[#out + 1] = { name = name, rank = rank or 0, max = max or 0,
+                    id = type(skillLine) == "number" and skillLine > 0 and skillLine or nil }
+            end
         end
     end
     return out
@@ -119,18 +139,50 @@ local function legacyOpen()
 end
 
 -- The profession whose window is open: { name, rank, max, recipes = { {recipeID,name,icon,produces,reagents} } } or nil.
+-- The window reports the profession's name; its skill line id is looked up among my own professions by that name
+-- (same client, same language, so the names are identical).
+local function withId(res)
+    if res and not res.id then
+        for _, p in ipairs(Api.GetPlayerProfessions() or {}) do
+            if p.name == res.name then res.id = p.id break end
+        end
+    end
+    return res
+end
+
 function Api.GetOpenProfession()
     if C_TradeSkillUI and C_TradeSkillUI.GetAllRecipeIDs then
         local ok, res = pcall(modernOpen)
-        if ok and res then return res end
+        if ok and res then return withId(res) end
         if not ok then ns.Debug.Log("api.modernOpen", res) end
     end
     if GetNumTradeSkills and GetTradeSkillLine then
         local ok, res = pcall(legacyOpen)
-        if ok then return res end
+        if ok then return withId(res) end
         ns.Debug.Log("api.legacyOpen", res)
     end
     return nil
+end
+
+-- /ts i18n: what this client reports, to verify the localization assumptions in game.
+ns.Slash.i18n = function()
+    ns.Print(("client locale %s, UI locale %s"):format(Api.GetLocale(), tostring(ns.Locale and ns.Locale.code)))
+    for _, p in ipairs(Api.GetPlayerProfessions() or {}) do
+        ns.Print(("profession %s id=%s | static name: %s"):format(p.name, tostring(p.id),
+            tostring(ns.Locale.professions[Api.GetLocale()] and ns.Locale.professions[Api.GetLocale()][p.id])))
+    end
+    local base = C_TradeSkillUI and C_TradeSkillUI.GetBaseProfessionInfo and try(C_TradeSkillUI.GetBaseProfessionInfo)
+    if type(base) == "table" then
+        ns.Print(("open window: professionID=%s parentProfessionID=%s name=%s"):format(
+            tostring(base.professionID), tostring(base.parentProfessionID), tostring(base.professionName)))
+    else
+        ns.Print("open window: no profession window open (open one, then run this again)")
+    end
+    local open = Api.GetOpenProfession()
+    for i = 1, math.min(3, open and #open.recipes or 0) do
+        local r = open.recipes[i]
+        ns.Print(("recipe %d: window name '%s' | spell name '%s'"):format(r.recipeID, tostring(r.name), tostring(Api.SpellName(r.recipeID))))
+    end
 end
 
 -- Item helpers used by the UI (all tolerate missing APIs / uncached items).
