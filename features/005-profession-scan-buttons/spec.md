@@ -39,7 +39,7 @@ Feature 003 called `C_TradeSkillUI.OpenTradeSkill` from addon code. In game (use
 - [x] T2 (S): `Model.OwnProfessions` + test
 - [x] T3 (M): secure button bar in the Recipes tab, combat handling, locale
 - [x] T4 (S): window build smoke test (stubbed widgets) in tests/test_load.lua; docs
-- [ ] T5: in-game check by the user (verify.md)
+- [ ] T5: in-game check by the user (verify.md). Result so far: Kochkunst and Lederverarbeitung work, Kürschnerei does not open a window (see log 10:56)
 
 ## Review Focus
 1. RF1: Addon code must not call a blocked/protected function -> test asserts `Api.OpenProfession` and `ns.AutoScan` do not exist.

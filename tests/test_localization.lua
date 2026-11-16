@@ -172,6 +172,18 @@ return {
         h.eq(#ns.Model.OwnProfessions(ns.Store, "Me-R", nil), 0)
     end,
 
+    ["model: profession button macro casts the profession name first, then its other spellbook entries"] = function(h)
+        local M = viewer(h, "deDE").Model
+        h.eq(M.CastMacro({ spellName = "Kochkunst" }), "/cast Kochkunst")
+        h.eq(M.CastMacro({ spellName = "Kochkunst", spells = { "Kochkunst" } }), "/cast Kochkunst", "no duplicate line")
+        h.eq(M.CastMacro({ spellName = "Kürschnerei", spells = { "Kürschnerei", "Lagerstuhl" } }), "/cast Kürschnerei\n/cast Lagerstuhl")
+        h.eq(M.CastMacro({ spellName = "A", spells = { "B", "C", "D", "E" } }), "/cast A\n/cast B\n/cast C", "at most 3 lines")
+        h.eq(M.CastMacro({ spellName = "A", spells = { "B\n/run evil()", 5, "" } }), "/cast A", "line breaks, non-strings and empty names are dropped")
+        local ns = viewer(h, "deDE")
+        local rows = ns.Model.OwnProfessions(ns.Store, "X-R", { { name = "Kürschnerei", id = 393, rank = 1, max = 2, spells = { "Kürschnerei", "Lagerstuhl" } } })
+        h.eq(rows[1].spells[2], "Lagerstuhl")
+    end,
+
     ["model: reagent names come from the viewer's client before the sender's snapshot"] = function(h)
         local ns = viewer(h, "deDE")
         ns.Store.PutCatalog({ [1] = { name = "X", reagents = { { itemID = 10, count = 1, name = "Boar Meat" } } } })

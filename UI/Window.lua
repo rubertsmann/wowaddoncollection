@@ -194,7 +194,7 @@ local function refreshBar()
                 else b.count:SetTextColor(1, 0.3, 0.3); b.icon:SetVertexColor(1, 0.55, 0.55) end
                 if not locked then
                     b:SetAttribute("type", "macro")
-                    b:SetAttribute("macrotext", "/cast " .. r.spellName)
+                    b:SetAttribute("macrotext", ns.Model.CastMacro(r))
                     b:Show()
                 end
             elseif not locked then

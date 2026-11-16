@@ -49,7 +49,7 @@ function Model.OwnProfessions(store, me, live)
     local out = {}
     for _, lp in ipairs(live or {}) do
         local key = ns.Names.ProfKey(lp.name, { id = lp.id, name = lp.name })
-        out[#out + 1] = { key = key, id = lp.id, spellName = lp.name, icon = lp.icon, rank = lp.rank, max = lp.max,
+        out[#out + 1] = { key = key, id = lp.id, spellName = lp.name, spells = lp.spells, icon = lp.icon, rank = lp.rank, max = lp.max,
             name = ns.Names.Profession(key, { id = lp.id, name = lp.name, loc = ns.Locale.clientCode }),
             count = counts[key] or 0 }
     end
@@ -59,6 +59,22 @@ function Model.OwnProfessions(store, me, live)
         return tostring(a.key) < tostring(b.key)
     end)
     return out
+end
+
+-- Macro text of a profession button: the profession's own name first, then every other spellbook entry of that
+-- profession (e.g. Skinning has a second one on Forever; `/cast` of a passive or unusable spell just fails and the
+-- next line runs). Names only, no duplicates, at most 3 lines, nothing with line breaks (they come from our own client).
+function Model.CastMacro(row)
+    local lines, seen = {}, {}
+    local function add(name)
+        if type(name) == "string" and name ~= "" and not name:find("[\r\n]") and not seen[name] and #lines < 3 then
+            seen[name] = true
+            lines[#lines + 1] = "/cast " .. name
+        end
+    end
+    add(row.spellName)
+    for _, n in ipairs(row.spells or {}) do add(n) end
+    return table.concat(lines, "\n")
 end
 
 -- state = { profession = canonical key|nil, text = string, mineOnly = bool, me = "Name-Realm" }

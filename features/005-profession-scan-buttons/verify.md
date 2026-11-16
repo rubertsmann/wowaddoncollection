@@ -7,7 +7,7 @@ Result after work:    `luajit tests/run.lua` -> 53 passed, 0 failed (AutoScan te
 
 | ID | Requirement / Review Focus | How verified | Level | Evidence | Result | Date |
 |---|---|---|---|---|---|---|
-| R1 | One secure button per own profession, `/cast <name>` | window build smoke test; code read of `createBarButton`/`refreshBar` | OFFLINE (no errors) / NOT-VERIFIED (does a click open the window?) | tests/test_load.lua | builds; behaviour unverified | 2026-11-16 |
+| R1 | One secure button per own profession, `/cast <name>` | window build smoke test; user clicked the buttons in game | OFFLINE + IN-GAME (user report) | tests/test_load.lua, user message 2026-11-16 | Kochkunst and Lederverarbeitung open their window; Kürschnerei does NOT (second spellbook entry, under investigation) | 2026-11-16 |
 | R2 | Counter + tooltip | `model: own professions for the scan buttons ...`; tooltip code read | OFFLINE (data) / READ-ONLY (widgets) | tests/test_localization.lua | pass | 2026-11-16 |
 | R3 | No addon code opens professions | `load: ...` asserts `Api.OpenProfession == nil` and `ns.AutoScan == nil`; grep | OFFLINE | tests/test_load.lua | pass | 2026-11-16 |
 | R4 | Secure changes only out of combat | code read (`Api.InCombat` guard, `PLAYER_REGEN_ENABLED`) | READ-ONLY | UI/Window.lua | combat never simulated | 2026-11-16 |

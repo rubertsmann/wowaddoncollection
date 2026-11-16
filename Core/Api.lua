@@ -52,19 +52,57 @@ function Api.SpellName(spellID)
 end
 if ns.Names then ns.Names.env.spellName = Api.SpellName end
 
--- Professions the character has, without needing a window: { {name, rank, max, id}, ... } or nil when unsupported.
--- id = skill line id, the 7th return of GetProfessionInfo (confirmed by the probe: Cooking 185, Skinning 393).
+-- One spellbook entry: { name, spellID, passive } or nil. The index comes from GetProfessionInfo (spellOffset + 1 ..
+-- spellOffset + numSpells). Which spellbook API the client has is not known, so every known variant is tried.
+function Api.SpellBookEntry(index)
+    local bank = (Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player) or 0
+    if C_SpellBook and C_SpellBook.GetSpellBookItemInfo then
+        local info = try(C_SpellBook.GetSpellBookItemInfo, index, bank)
+        if type(info) == "table" and type(info.name) == "string" then
+            return { name = info.name, spellID = info.spellID, passive = info.isPassive }
+        end
+    end
+    if C_SpellBook and C_SpellBook.GetSpellBookItemName then
+        local name, _, id = try(C_SpellBook.GetSpellBookItemName, index, bank)
+        if type(name) == "string" then return { name = name, spellID = id } end
+    end
+    if GetSpellBookItemName then
+        local name, _, id = try(GetSpellBookItemName, index, "spell")
+        if type(name) == "string" then return { name = name, spellID = id } end
+    end
+    if GetSpellName then
+        local name = try(GetSpellName, index, "spell")
+        if type(name) == "string" then return { name = name } end
+    end
+    return nil
+end
+
+-- Spell names of a profession's spellbook entries (for the profession buttons), never more than 3.
+local function professionSpells(offset, count)
+    local out = {}
+    if type(offset) ~= "number" or type(count) ~= "number" then return out end
+    for i = offset + 1, offset + math.min(count, 3) do
+        local e = Api.SpellBookEntry(i)
+        if e then out[#out + 1] = e.name end
+    end
+    return out
+end
+
+-- Professions the character has, without needing a window: { {name, icon, rank, max, id, spells}, ... } or nil when
+-- unsupported. id = skill line id, the 7th return of GetProfessionInfo (confirmed by the probe: Cooking 185, Skinning 393).
+-- spells = names from the profession's spellbook entries (Skinning has 2 on Forever, the others 1).
 function Api.GetPlayerProfessions()
     if not (GetProfessions and GetProfessionInfo) then return nil end
     local out = {}
     for i = 1, 5 do
         local idx = select(i, GetProfessions())
         if idx then
-            local name, icon, rank, max, _, _, skillLine = GetProfessionInfo(idx)
+            local name, icon, rank, max, numSpells, spellOffset, skillLine = GetProfessionInfo(idx)
             if name then
-                -- icon is only used locally (profession buttons), it is never stored or sent
+                -- icon and spells are only used locally (profession buttons), they are never stored or sent
                 out[#out + 1] = { name = name, icon = icon, rank = rank or 0, max = max or 0,
-                    id = type(skillLine) == "number" and skillLine > 0 and skillLine or nil }
+                    id = type(skillLine) == "number" and skillLine > 0 and skillLine or nil,
+                    numSpells = numSpells, spellOffset = spellOffset, spells = professionSpells(spellOffset, numSpells) }
             end
         end
     end
@@ -178,7 +216,17 @@ ns.Slash.i18n = function()
     for _, p in ipairs(Api.GetPlayerProfessions() or {}) do
         ns.Print(("profession %s id=%s | static name: %s"):format(p.name, tostring(p.id),
             tostring(ns.Locale.professions[Api.GetLocale()] and ns.Locale.professions[Api.GetLocale()][p.id])))
+        -- spellbook entries of this profession and the macro its button runs (why does Skinning not open a window?)
+        ns.Print(("  spellOffset=%s numSpells=%s spells=[%s] macro: %s"):format(tostring(p.spellOffset), tostring(p.numSpells),
+            table.concat(p.spells or {}, ", "), (ns.Model.CastMacro({ spellName = p.name, spells = p.spells }):gsub("\n", " | "))))
+        for i = (p.spellOffset or 0) + 1, (p.spellOffset or 0) + math.min(p.numSpells or 0, 3) do
+            local e = Api.SpellBookEntry(i)
+            ns.Print(("  book[%d] = %s"):format(i, e and ("%s id=%s passive=%s"):format(e.name, tostring(e.spellID), tostring(e.passive)) or "nil (no spellbook API answered)"))
+        end
     end
+    ns.Print(("spellbook APIs: C_SpellBook.GetSpellBookItemInfo %s, C_SpellBook.GetSpellBookItemName %s, GetSpellBookItemName %s"):format(
+        tostring(C_SpellBook and C_SpellBook.GetSpellBookItemInfo ~= nil), tostring(C_SpellBook and C_SpellBook.GetSpellBookItemName ~= nil),
+        tostring(GetSpellBookItemName ~= nil)))
     local base = C_TradeSkillUI and C_TradeSkillUI.GetBaseProfessionInfo and try(C_TradeSkillUI.GetBaseProfessionInfo)
     if type(base) == "table" then
         ns.Print(("open window: professionID=%s parentProfessionID=%s name=%s"):format(

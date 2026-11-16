@@ -19,3 +19,9 @@ Append only. Newest entry at the bottom. The last entry must say what to do next
 - Result: NOT-VERIFIED: that `/cast <profession>` opens the window on Forever, that the secure button works the same, the layout of the icons
 - Evidence: n/a
 - Next: user runs the checklist in verify.md and reports
+
+## 2026-11-16 10:56 | VERIFY | first in-game result: 2 of 3 buttons work
+- Did: user: "the 3 talents button appear and open the correct menu besides Kürschnerei that doesn't open the menu". Kochkunst and Lederverarbeitung open their window via `/cast <name>` on the secure button: the approach works on Forever (R1 partly IN-GAME confirmed). Kürschnerei (Skinning) casts only the skinning spell. From the earlier probe: Skinning has `numSpells = 2` (spellOffset 67), the other professions 1; and a Skinning recipe list exists (recipe 1229517 Lagerstuhl was stored under Kürschnerei by the 0.1.0 scan), so some spellbook entry of Skinning opens that page
+- Result: unknown which spell; implemented a data-driven attempt: `Api.GetPlayerProfessions` now returns `spells` (names of the profession's spellbook entries via `Api.SpellBookEntry`, trying C_SpellBook.GetSpellBookItemInfo/Name, GetSpellBookItemName, GetSpellName); `Model.CastMacro` builds `/cast <profession>` + up to 2 more lines for the other entries; `/ts i18n` prints offset, numSpells, spell names, ids, passive flags and the final macro per profession
+- Evidence: `luajit tests/run.lua` -> 54 passed, 0 failed (new test for CastMacro incl. line-break and duplicate handling)
+- Next: user runs `/reload`, `/tsd i18n` and pastes the lines starting with "profession", "spellOffset", "book[" and "spellbook APIs"; then clicks the Kürschnerei icon again. If it still does nothing, the i18n output tells which spell to target
