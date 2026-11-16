@@ -33,6 +33,24 @@ runtime; the legacy branch is dead code on this client and can stay as a fallbac
 * `TRADE_SKILL_CLOSE` fired in the probe; scans also ran from the profession-window events (`scan changed` log lines).
 * Profession record: `{name, icon, skill, maxSkill, ...}`; Cooking 150/150, Leatherworking 35/75, Skinning 131/150.
 
+## Player names (VERIFIED from a user export, 2026-11-16, build 1.60.1 / 70938)
+
+Characters on Forever have a **first name and a surname**. Values from one client (dev build 0.4.1, German client):
+
+| Call | Returned |
+|---|---|
+| `UnitName("player")` | `"Drakk"`, `"Nuk"`: the surname comes in the 2nd value (retail: realm, nil for the player) |
+| `UnitFullName("player")` | `"Drakk"`, `"Nuk"` |
+| `GetRealmName()` / `GetNormalizedRealmName()` | `"CAMWOW EU4 Realm 5 PvE"` / `"CAMWOWEU4Realm5PvE"` (one realm for the whole guild) |
+| `GetGuildRosterInfo(i)` | `"Drakk Nuk"`, `"Mira Holt"`, ...: **first name + space + surname, no realm suffix** |
+| `CHAT_MSG_ADDON` sender (own GUILD echo) | `"Drakk Nuk"` |
+| `Ambiguate("Drakk-CAMWOWEU4Realm5PvE", "none")` | `"Drakk"` |
+
+Consequence: a player's identity is `"First Surname"`. Building it as `UnitName() .. "-" .. GetNormalizedRealmName()` (what
+0.4.0 did) gives `"Drakk-<realm>"`, which no other source ever uses. Handled in `Api.MyBaseName` / `Util.Canon` (feature 008).
+Not yet verified: whether a whisper addressed to `"First Surname"` is delivered (the trace shows it as `(to Mira Holt)`;
+pulls fall back to the guild channel if not).
+
 ## Blocked for addons (found in game 2026-11-16)
 
 * `C_TradeSkillUI.OpenTradeSkill(skillLineID)` exists, but calling it from addon code opens nothing and shows the red

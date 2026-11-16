@@ -15,9 +15,21 @@ function Api.IsGuilded()
     return (IsInGuild and IsInGuild()) and true or false
 end
 
+-- My base name as the server uses it: "First" on normal clients, "First Surname" on Forever, where UnitName("player")
+-- returns the surname as its second value (retail returns nil there for the player).
+function Api.MyBaseName()
+    local first, second = UnitName("player")
+    if type(second) == "string" and second ~= "" and not ns.Util.IsRealmSpelling(second) then
+        local base = first .. " " .. second
+        ns.Util.NoteMyFullName(base)
+        return base
+    end
+    return first
+end
+
 function Api.GetPlayerInfo()
     local _, class = UnitClass("player")
-    return { name = ns.Util.FullName((UnitName("player"))), class = class, level = UnitLevel("player") }
+    return { name = ns.Util.Canon(Api.MyBaseName()), class = class, level = UnitLevel("player") }
 end
 
 function Api.RequestRoster()
@@ -25,15 +37,61 @@ function Api.RequestRoster()
     elseif GuildRoster then GuildRoster() end
 end
 
--- set of "Name-Realm" for everyone in the guild (empty if the roster is not loaded yet)
+-- set of canonical "Name-Realm" for everyone in the guild (empty if the roster is not loaded yet). The roster's spelling
+-- of MY character teaches Util which realm string the server uses for my realm (Util.LearnFromRoster), before any name
+-- is canonicalized.
 function Api.GetGuildRoster()
-    local set = {}
+    local set, raw = {}, {}
     if not Api.IsGuilded() or not GetNumGuildMembers then return set end
     for i = 1, (GetNumGuildMembers()) do
         local name = GetGuildRosterInfo(i)
-        if name then set[ns.Util.FullName(name)] = true end
+        if type(name) == "string" and name ~= "" then raw[#raw + 1] = name end
+    end
+    ns.Util.LearnFromRoster(raw, Api.MyBaseName())
+    ns.Util.SetRosterNames(raw)
+    for _, name in ipairs(raw) do
+        local c = ns.Util.Canon(name)
+        if c then set[c] = true end
     end
     return set
+end
+
+-- Raw identity facts for the diagnostic report (feature 008): every source of "my name" and of the roster's names, so a
+-- mismatch between them (realm suffix form) can be seen without guessing. Values are what the client returned, untouched.
+function Api.IdentityInfo()
+    local info = {}
+    info.unitName, info.unitRealm = try(UnitName, "player")
+    if UnitFullName then
+        local n, r = try(UnitFullName, "player")
+        info.unitFullName = tostring(n) .. " / " .. tostring(r)
+    end
+    info.realmName = GetRealmName and try(GetRealmName)
+    info.normalizedRealm = GetNormalizedRealmName and try(GetNormalizedRealmName)
+    info.guild = GetGuildInfo and try(GetGuildInfo, "player")
+    local full = ns.Util.Canon(Api.MyBaseName())
+    info.base = Api.MyBaseName()
+    info.built = full
+    info.ambiguated = Ambiguate and full and try(Ambiguate, full, "none")
+    local sample, mine = {}, nil
+    if Api.IsGuilded() and GetNumGuildMembers then
+        local n = try(GetNumGuildMembers) or 0
+        info.rosterCount = n
+        for i = 1, n do
+            local name = try(GetGuildRosterInfo, i)
+            if name then
+                if #sample < 8 then sample[#sample + 1] = name end   -- the raw form the client reports
+                local part = name:match("^([^-]+)") or name
+                if info.base and (part == info.base or part == info.unitName) then mine = name end
+            end
+        end
+    end
+    info.rosterSample = sample
+    info.rosterMe = mine   -- how the roster spells MY name
+    if GetBuildInfo then
+        local v, b, _, iface = try(GetBuildInfo)
+        info.build = ("%s (%s) interface %s"):format(tostring(v), tostring(b), tostring(iface))
+    end
+    return info
 end
 
 function Api.GetLocale()

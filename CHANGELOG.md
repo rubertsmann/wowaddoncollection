@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.4.2
+Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`.
+
+- **Fix (cause of "recipes still do not sync" in 0.4.1, from a live export):** one Forever guild spans several realms
+  (`CAMWOW EU4 Realm 1/3/5 PvE`, `CAMWOW EU5 Realm 3 PvE`), while the roster and chat senders carry no realm. Every client
+  appended its own realm, so a member was `Drakk Nuk-...Realm5` on one client and `Drakk Nuk-...Realm3` on another:
+  requests were ignored as "name mismatch". Where names carry no realm (surnames, or a roster without realm suffixes) the
+  realm is no longer part of a player's identity (`Util.RealmFree`); stored keys from other realms are moved on load.
+- Members still on 0.4.0 on another realm: a whispered answer carries my record under the name they asked with, and
+  requests to them add their first name in their realm (learned from their own requests).
+- Name check: new row "realm in player names".
+- **Fix (UI broken after switching versions until `/ts clean confirm`):** on the first login with another version than
+  the saved data, everything other members sent is dropped once and fetched again (`Store.ResetPeerData`): characters,
+  offers, catalog entries of their recipes, hidden items, the trace. Kept: my own character record, my offers, the
+  catalog entries of my recipes, all orders, UI settings. `db.version` remembers the version.
+
+## 0.4.1
+Player-facing notes (English/Deutsch): `RELEASE_NOTES.md` (also the GitHub release text).
+
+- **Sync diagnostics (feature 008):** new **Debug** tab lists every sync message sent and received with what happened to it and why (filters All / Incoming / Outgoing / System / Problems, live status line, Send HELLO, Clear). **`/ts export`** (or the tab button) opens a copyable diagnostic report (identity sources, transport state, records held, orders with the source of their name, network trace, debug log) for the addon author. New `/ts trace [n] [problems]`, `/ts ident`, `/ts debug [n]`; `/ts comm` shows send failures. A one-time chat warning appears when the character name does not match the guild roster.
+- **Fix:** addon whispers to a same-realm player now always use the character name, also when the client's `Ambiguate` returns `Name-Realm` unchanged (the 0.3.2 "no player named ... online" failure could persist for background sync whispers and the realm suffix stayed visible in lists).
+- **Fix:** sync no longer starts before `PLAYER_LOGIN` and reads the character name at use time; an alt could otherwise answer and advertise as the previously played character (SavedVariables are account-wide).
+- **Fix (confirmed cause of "recipes and recipe items do not sync"):** on WoW Forever characters have a surname ("Drakk Nuk"). The addon called you only "Drakk", while the guild roster and all messages say "Drakk Nuk", so requests for your data were never answered, your data was refused, and your own messages were taken for another player. Your name is now first name + surname; data saved by 0.4.0 under the first name is moved automatically. Members still on 0.4.0 keep exchanging recipes and items with 0.4.1 (requests also carry their old first-name form).
+- **Fix:** player names are compared and stored in one canonical form, whatever spelling of the realm the guild roster, the chat events or the own client use; the server's spelling of the own realm is learned from the roster and from the own guild messages. Stored data is converted automatically.
+- **Sync no longer depends on whispers alone:** a request that gets no answer within 45 s is repeated on the guild channel and answered there (protocol **2.2**, additive); one answer serves every member that was behind. Every client also sends a HELLO every 15 minutes, so missed changes are found.
+- Orders carry the recipe name, so they show the right name even before the recipe data of a crafter has arrived.
+- Analysis of the 0.4.0 report "orders sync, recipes and recipe items do not": `review/sync-0.4.0-diagnosis.md`.
+- Retry rule: a pull that got no answer after three tries is started again by the member's next HELLO after 60 s (as in 0.4.0); a 10-minute lock in a draft made the 30-member soak test fail about once in 100 runs.
+- Wire protocol **2.2** (additive: `via` on WANT/WANTO, optional `name`/`loc` on orders; 2.1 clients keep syncing and show a one-time "newer version" notice). SavedVariables schema (3) unchanged (new additive key `trace`; names re-keyed in place).
+
 ## 0.4.0
 - **Available tab (feature 007):** tradeable recipe items (item class Recipe) in bags, bank, reagent bank, mail, guild bank (per tab) and own auctions are listed automatically for the whole guild, with owner, locations, profession and age. Anyone can call **dibs**; all dibs are visible (oldest first) and each player removes only their own by pressing the button again. "Remove from my list" hides an offer locally; it returns when its owner's list changes. Handing items over stays manual. `/ts offers` shows what the scan sees. See `features/007-recipe-items-board/doc.md`.
 - Wire protocol **2.1** (additive: optional HELLO field `orev`, new messages `WANTO`/`OFFERS`; 0.3.x clients ignore them and keep syncing everything else). SavedVariables **schema 3** (new `offers`, `hidden`; schema 2 data kept).

@@ -35,6 +35,7 @@ local function fresh(sv)
     sv.offers = type(sv.offers) == "table" and sv.offers or {}
     sv.hidden = type(sv.hidden) == "table" and sv.hidden or {}
     sv.debug = type(sv.debug) == "table" and sv.debug or {}
+    sv.trace = type(sv.trace) == "table" and sv.trace or {}     -- network trace ring (Core/Trace.lua, feature 008)
     sv.ui = type(sv.ui) == "table" and sv.ui or {}
     sv.profNames = type(sv.profNames) == "table" and sv.profNames or {}   -- [clientLocale][skillLineID] = name the viewer's own client reported
     return sv
@@ -58,11 +59,34 @@ end
 -- UI preferences, `schema` and `me` stay. Returns the counts that were removed.
 function S.Clean()
     local removed = S.Counts()
-    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "profNames", "debug" }) do
+    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "profNames", "debug", "trace" }) do
         local t = S.db[key]
         for k in pairs(t) do t[k] = nil end
     end
     return removed
+end
+
+-- After an update (or a switch to another version) everything that came from other members is dropped, because an older
+-- build may have stored it under other name keys or other rules, and mixed state broke the UI until /ts clean. Kept: my
+-- own character record and offers (re-scanning needs a profession window per profession), the catalog entries of my own
+-- recipes, the orders (the only copy of an order may be mine; Recanon has given them the current keys), UI settings.
+-- Everything dropped is fetched again from online members. Tables are emptied IN PLACE. Returns the counts removed.
+function S.ResetPeerData(me)
+    local db = S.db
+    local n = { chars = 0, offers = 0, catalog = 0 }
+    local keep = {}
+    local mine = me and db.chars[me]
+    for _, p in pairs(mine and mine.professions or {}) do
+        for id in pairs(p.recipes or {}) do keep[id] = true end
+    end
+    for name in pairs(db.chars) do if name ~= me then db.chars[name] = nil n.chars = n.chars + 1 end end
+    for name in pairs(db.offers) do if name ~= me then db.offers[name] = nil n.offers = n.offers + 1 end end
+    for id in pairs(db.catalog) do if not keep[id] then db.catalog[id] = nil n.catalog = n.catalog + 1 end end
+    for _, key in ipairs({ "hidden", "trace" }) do
+        local t = db[key]
+        for k in pairs(t) do t[k] = nil end
+    end
+    return n
 end
 
 -- Re-validates every persisted peer record by allow-list copy and drops what fails. Returns the number dropped.
@@ -116,6 +140,7 @@ function S.SanitizePersisted(sv)
         end
     end
     sv.profNames = names
+    if ns.Trace then ns.Trace.SanitizePersisted(sv) end
     return dropped
 end
 
@@ -225,17 +250,85 @@ function S.Crafters(recipeID)
     return out
 end
 
+-- Re-keys every stored player name with Util.Canon (on login, and whenever a new spelling of my realm was learned), so a
+-- record received under one spelling and the roster's other spelling become the same key. Two keys that become one keep
+-- the newer record. Tables are rewritten IN PLACE (Orders and Sync hold references). Returns the number of names changed.
+local function refill(t, from)
+    for k in pairs(t) do t[k] = nil end
+    for k, v in pairs(from) do t[k] = v end
+end
+
+function S.Recanon()
+    local Canon = ns.Util.Canon
+    local n = 0
+    local function c(x)
+        local y = type(x) == "string" and Canon(x) or nil
+        if y and y ~= x then n = n + 1 end
+        return y or x
+    end
+    local function ckey(key)   -- "Owner-Realm:itemID"
+        local owner, id = tostring(key):match("^(.+):(%d+)$")
+        if not owner then return key end
+        return c(owner) .. ":" .. id
+    end
+    local db = S.db
+    if db.me then db.me = c(db.me) end
+    local chars = {}
+    for key, rec in pairs(db.chars) do
+        local k = c(key)
+        rec.name = k
+        local cur = chars[k]
+        if not cur or (cur.rev or 0) < (rec.rev or 0) then chars[k] = rec end
+    end
+    refill(db.chars, chars)
+    local offers = {}
+    for key, rec in pairs(db.offers) do
+        local k = c(key)
+        rec.name = k
+        local dibs = {}
+        for dk, d in pairs(rec.dibs or {}) do dibs[ckey(dk)] = d end
+        rec.dibs = dibs
+        local cur = offers[k]
+        if not cur or (cur.rev or 0) < (rec.rev or 0) then offers[k] = rec end
+    end
+    refill(db.offers, offers)
+    local hidden = {}
+    for key, rev in pairs(db.hidden) do hidden[ckey(key)] = rev end
+    refill(db.hidden, hidden)
+    for _, o in pairs(db.orders) do
+        o.requester = c(o.requester)
+        if o.closedBy then o.closedBy = c(o.closedBy) end
+        local claims = {}
+        for name, cl in pairs(o.claims or {}) do
+            local k = c(name)
+            local cur = claims[k]
+            if not cur or (cl.t or 0) > (cur.t or 0) then claims[k] = cl end
+        end
+        o.claims = claims
+    end
+    return n
+end
+
 -- Drop cached characters that are no longer in the guild roster (never drops `keep`).
 function S.Prune(rosterNames, keep)
-    local n = 0
+    local n, removed = 0, {}
     for name in pairs(S.db.chars) do
         if not rosterNames[name] and name ~= keep then
             S.db.chars[name] = nil
             n = n + 1
+            removed[#removed + 1] = name
         end
     end
     for name in pairs(S.db.offers) do   -- offers of members who left the guild go with them
-        if not rosterNames[name] and name ~= keep then S.db.offers[name] = nil end
+        if not rosterNames[name] and name ~= keep then
+            S.db.offers[name] = nil
+            removed[#removed + 1] = name .. "(offers)"
+        end
+    end
+    -- a prune that removes records right after they arrived means the sender's name and the roster's form of it differ
+    if #removed > 0 and ns.Trace then
+        table.sort(removed)
+        ns.Trace.Sys("warn", "prune: not in guild roster", table.concat(removed, ", "))
     end
     return n
 end

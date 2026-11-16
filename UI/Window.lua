@@ -1,7 +1,7 @@
 local ADDON, ns = ...
 
--- Standalone window: "Recipes" tab (filter, search, reagents, crafters, request), "Orders" tab (shared board) and
--- "Available" tab (recipe items guild members hold, with dibs).
+-- Standalone window: "Recipes" tab (filter, search, reagents, crafters, request), "Orders" tab (shared board),
+-- "Available" tab (recipe items guild members hold, with dibs) and "Debug" tab (network trace, diagnostic export).
 -- Plain frames only (no secure templates), so it never taints and is safe to open in combat.
 -- All text goes through L (Locales/); game names are resolved for this client by Model/Names. tests/test_locale_files.lua
 -- fails on a hardcoded label.
@@ -25,6 +25,8 @@ local state = {
     offerText = "",
     offerMineProf = false,
     selectedOffer = nil,
+    debugFilterIdx = 1,
+    debugView = "trace",         -- "trace" (message log) | "names" (name check table)
 }
 local function orderFilters()
     return { { "all", L["All"] }, { "open", L["Open"] }, { "mine", L["My requests"] }, { "crafting", L["I'm crafting"] },
@@ -139,6 +141,7 @@ end
 
 local f
 local recipeList, orderList, offerList
+local refreshDebug   -- Debug tab (defined with the tab below)
 local offerRows = {}
 local detail = {}
 
@@ -356,7 +359,7 @@ end
 
 function UI.Refresh()
     if not f or not f:IsShown() then return end
-    refreshRecipes(); refreshDetail(); refreshOrders(); refreshOffers(); refreshBar()
+    refreshRecipes(); refreshDetail(); refreshOrders(); refreshOffers(); refreshDebug(); refreshBar()
 end
 
 local function setTab(name)
@@ -365,6 +368,7 @@ local function setTab(name)
     f.tabBtns.recipes:SetEnabled(name ~= "recipes")
     f.tabBtns.orders:SetEnabled(name ~= "orders")
     f.tabBtns.available:SetEnabled(name ~= "available")
+    f.tabBtns.debug:SetEnabled(name ~= "debug")
     UI.Refresh()
 end
 UI.SelectTab = function(name) if f then setTab(name) end end
@@ -378,6 +382,210 @@ end
 local function afterOrderChange(order)
     if order then ns.Comm.BroadcastOrder(order) end
     UI.Refresh()
+end
+
+------------------------------------------------------------------ Debug tab (feature 008): network trace + export
+
+local DEBUG_FILTERS = { "all", "in", "out", "sys", "problems" }
+local function debugFilterLabel(key)
+    local map = { all = L["All"], ["in"] = L["Incoming"], out = L["Outgoing"], sys = L["System"], problems = L["Problems"] }
+    return map[key] or key
+end
+local ST_COLOR = { ok = "33ff99", sent = "33ff99", info = "aaaaaa", queued = "ffd100", ignored = "bbbbbb",
+    failed = "ff5555", dropped = "ff5555", rejected = "ff5555", error = "ff5555", warn = "ff8800" }
+local DIR_TEXT = { ["in"] = "|cff66ccff<-|r", out = "|cffffd100->|r", sys = "|cffaaaaaa**|r" }
+
+local function debugLine(e)
+    local E = ns.Util.Esc
+    local parts = { "|cff888888" .. ns.Trace.Clock(e.t) .. "|r", DIR_TEXT[e.dir] or "?" }
+    if e.ch then parts[#parts + 1] = "|cff888888" .. E(e.ch) .. "|r" end
+    if e.peer then parts[#parts + 1] = E(short(e.peer)) end
+    if e.mt then parts[#parts + 1] = "|cffffffff" .. E(e.mt) .. "|r" end
+    parts[#parts + 1] = "|cff" .. (ST_COLOR[e.st] or "ffffff") .. E(e.st) .. "|r"
+    if e.why then parts[#parts + 1] = "|cffcccccc" .. E(e.why) .. "|r"
+    elseif e.info and e.info ~= "" then parts[#parts + 1] = "|cff999999" .. E(e.info) .. "|r" end
+    return table.concat(parts, " ")
+end
+
+-- name check table: column widths (the list is 736 wide, 16 of it for the slider); Location and the full behaviour are in the tooltip
+local NAME_COLS = { { key = "status", w = 82 }, { key = "method", w = 196 }, { key = "value", w = 168 }, { key = "expected", w = 150 },
+    { key = "behaviour", w = 120 } }
+local NAME_ST_COLOR = { ok = "33ff99", fixed = "ffd100", bad = "ff5555", info = "aaaaaa", unknown = "aaaaaa" }
+
+local function nameCell(r, key)
+    local E = ns.Util.Esc
+    if key == "status" then return "|cff" .. (NAME_ST_COLOR[r.status] or "ffffff") .. E(ns.Diag.StatusLabel(r.status)) .. "|r" end
+    if key == "method" then return "|cffffffff" .. E(r.method) .. "|r" end
+    if key == "behaviour" then return "|cff999999" .. E(r.behaviour) .. "|r" end
+    return E(tostring(r[key]))
+end
+
+local function makeColumns(parent, font)
+    local cols, x = {}, 2
+    for i, c in ipairs(NAME_COLS) do
+        local fs = text(parent, font)
+        fs:SetPoint("LEFT", x, 0); fs:SetWidth(c.w - 6); fs:SetWordWrap(false)
+        cols[i] = fs
+        x = x + c.w
+    end
+    return cols
+end
+
+local function makeDebugRow(list)
+    local r = CreateFrame("Button", nil, list)
+    local hl = r:CreateTexture(nil, "HIGHLIGHT"); hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0.1)
+    r.label = text(r, "GameFontHighlightSmall"); r.label:SetPoint("LEFT", 2, 0); r.label:SetPoint("RIGHT", -2, 0)
+    r.label:SetWordWrap(false)
+    r.cols = makeColumns(r, "GameFontHighlightSmall")
+    r:SetScript("OnEnter", function(self)
+        local it = self.item
+        if not it then return end
+        local E = ns.Util.Esc
+        GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+        if it.method then
+            GameTooltip:SetText(E(it.method), 1, 1, 1)
+            GameTooltip:AddLine(L["Status"] .. ": " .. nameCell(it, "status"), 1, 1, 1)
+            GameTooltip:AddLine(L["Location"] .. ": " .. E(it.where), 0.8, 0.8, 0.8, true)
+            GameTooltip:AddLine(L["Value"] .. ": " .. E(it.value), 1, 1, 1, true)
+            GameTooltip:AddLine(L["Expected"] .. ": " .. E(tostring(it.expected)), 1, 1, 1, true)
+            GameTooltip:AddLine(L["Behaviour"] .. ": " .. E(it.behaviour), 0.8, 0.8, 0.8, true)
+        else
+            GameTooltip:SetText(E(ns.Trace.Format(it)), 1, 1, 1, 1, true)
+        end
+        GameTooltip:Show()
+    end)
+    r:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    return r
+end
+
+local function fillDebugRow(r, e)
+    local isName = e.method ~= nil
+    r.label:SetShown(not isName)
+    for i, fs in ipairs(r.cols) do
+        fs:SetShown(isName)
+        if isName then fs:SetText(nameCell(e, NAME_COLS[i].key)) end
+    end
+    if not isName then r.label:SetText(debugLine(e)) end
+end
+
+local debugList
+local debugTop = 0   -- seq of the newest entry shown, to keep a scrolled-down view still while new entries arrive
+
+local function refreshNames()
+    local rows = ns.Diag.IdentityRows(ns.Diag.IdentityContext())
+    debugList.offset = math.min(debugList.offset, math.max(0, #rows - 1))
+    debugList:SetData(rows)
+    local n = { ok = 0, fixed = 0, bad = 0 }
+    for _, r in ipairs(rows) do if n[r.status] then n[r.status] = n[r.status] + 1 end end
+    f.debugStatus:SetText(F(L["Name check: {ok} OK, {fixed} normalized, {bad} problems. Hover a row for location and behaviour."],
+        { ok = n.ok, fixed = n.fixed, bad = n.bad }))
+    f.debugEmpty:Hide()
+end
+
+refreshDebug = function()
+    if not f or state.tab ~= "debug" then return end
+    local names = state.debugView == "names"
+    f.namesBtn:SetLabel(names and L["Message log"] or L["Name check"])
+    f.debugFilterBtn:SetEnabled(not names)
+    f.debugHeader:SetShown(names)
+    if names then refreshNames() return end
+    local key = DEBUG_FILTERS[state.debugFilterIdx] or "all"
+    f.debugFilterBtn:SetLabel(F(L["Show: {filter}"], { filter = debugFilterLabel(key) }))
+    local rows = ns.Trace.List(key)
+    if debugList.offset > 0 then
+        local added = 0
+        for _, e in ipairs(rows) do if (e.seq or 0) > debugTop then added = added + 1 else break end end
+        debugList.offset = debugList.offset + added
+    end
+    debugTop = rows[1] and rows[1].seq or debugTop
+    debugList:SetData(rows)
+    local C = ns.Comm
+    local my = ns.Store.db.me
+    f.debugStatus:SetText(F(L["Queue {q} chunks | incomplete {f} | roster {r} | me in roster: {m} | send failures {s}"], {
+        q = #C.queue, f = #C.InFlight(), r = ns.Util.Count(C.roster),
+        m = (ns.Util.Count(C.roster) == 0 and "?") or (my and C.roster[my] and L["yes"] or ("|cffff5555" .. L["NO"] .. "|r")),
+        s = C.sendFailures }))
+    f.debugEmpty:SetShown(#rows == 0)
+end
+
+local exportFrame
+function UI.ShowExport(report)
+    if not exportFrame then
+        local name = ns.FRAME .. "ExportFrame"
+        local ok, e = pcall(CreateFrame, "Frame", name, UIParent, "BasicFrameTemplateWithInset")
+        if not ok or not e then
+            e = CreateFrame("Frame", name, UIParent, "BackdropTemplate")
+            e:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+                edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
+            local x = CreateFrame("Button", nil, e, "UIPanelCloseButton"); x:SetPoint("TOPRIGHT", -2, -2)
+        end
+        e:SetSize(720, 500); e:SetPoint("CENTER")
+        e:SetFrameStrata("DIALOG")
+        e:SetMovable(true); e:EnableMouse(true); e:RegisterForDrag("LeftButton")
+        e:SetScript("OnDragStart", e.StartMoving); e:SetScript("OnDragStop", e.StopMovingOrSizing)
+        table.insert(UISpecialFrames, name)
+        local title = text(e, "GameFontNormalLarge"); title:SetPoint("TOP", 0, -6); title:SetText(L["Diagnostic report"])
+        local hint = text(e, "GameFontHighlightSmall"); hint:SetPoint("TOPLEFT", 14, -32); hint:SetPoint("RIGHT", -14, 0)
+        hint:SetText(L["Press Ctrl+A, then Ctrl+C to copy. Paste it into Discord, a whisper or a text file for the addon author."])
+        local sf = CreateFrame("ScrollFrame", nil, e, "UIPanelScrollFrameTemplate")
+        sf:SetPoint("TOPLEFT", 12, -52); sf:SetPoint("BOTTOMRIGHT", -32, 12)
+        local eb = CreateFrame("EditBox", nil, sf)
+        eb:SetMultiLine(true); eb:SetAutoFocus(false); eb:SetMaxLetters(0)
+        eb:SetFontObject(ChatFontNormal or GameFontHighlightSmall)
+        eb:SetWidth(660)
+        eb:SetScript("OnEscapePressed", function() e:Hide() end)
+        -- read-only: typing restores the report
+        eb:SetScript("OnTextChanged", function(self, user) if user and e.report then self:SetText(e.report) end end)
+        sf:SetScrollChild(eb)
+        e.eb = eb
+        exportFrame = e
+    end
+    exportFrame.report = ns.Util.Esc(report)
+    exportFrame.eb:SetText(exportFrame.report)
+    exportFrame:Show()
+    exportFrame.eb:SetFocus()
+    exportFrame.eb:HighlightText()
+end
+
+local function buildDebugTab()
+    local dt = CreateFrame("Frame", nil, f); dt:SetPoint("TOPLEFT", 12, -58); dt:SetPoint("BOTTOMRIGHT", -12, 12)
+    f.tabs.debug = dt
+    f.debugFilterBtn = button(dt, F(L["Show: {filter}"], { filter = L["All"] }), 150, 22, function()
+        state.debugFilterIdx = state.debugFilterIdx % #DEBUG_FILTERS + 1
+        debugList.offset = 0
+        refreshDebug()
+    end)
+    f.debugFilterBtn:SetPoint("TOPLEFT", 0, 0)
+    local hello = button(dt, L["Send HELLO"], 100, 22, function() ns.Comm.RequestHello(false, true); refreshDebug() end)
+    hello:SetPoint("LEFT", f.debugFilterBtn, "RIGHT", 8, 0)
+    local clear = button(dt, L["Clear"], 70, 22, function() ns.Trace.Clear(); debugList.offset = 0; refreshDebug() end)
+    clear:SetPoint("LEFT", hello, "RIGHT", 8, 0)
+    f.namesBtn = button(dt, L["Name check"], 110, 22, function()
+        state.debugView = state.debugView == "names" and "trace" or "names"
+        debugList.offset = 0
+        refreshDebug()
+    end)
+    f.namesBtn:SetPoint("LEFT", clear, "RIGHT", 8, 0)
+    local export = button(dt, L["Export report"], 120, 22, function() ns.Slash.export() end)
+    export:SetPoint("TOPRIGHT", 0, 0)
+    f.debugStatus = text(dt, "GameFontHighlightSmall"); f.debugStatus:SetPoint("TOPLEFT", 0, -28); f.debugStatus:SetPoint("RIGHT", 0, 0)
+    -- column headings of the name check (shown only in that view)
+    local header = CreateFrame("Frame", nil, dt); header:SetSize(720, 16); header:SetPoint("TOPLEFT", 0, -44)
+    local heads = makeColumns(header, "GameFontNormalSmall")
+    local titles = { L["Status"], L["Method"], L["Value"], L["Expected"], L["Behaviour"] }
+    for i, fs in ipairs(heads) do fs:SetText(titles[i]) end
+    header:Hide()
+    f.debugHeader = header
+    debugList = createList(dt, 736, 360, makeDebugRow, fillDebugRow)
+    debugList:SetPoint("TOPLEFT", 0, -62)
+    f.debugEmpty = text(dt, "GameFontDisable", "CENTER"); f.debugEmpty:SetPoint("CENTER", debugList, "CENTER", 0, 0)
+    f.debugEmpty:SetText(L["No network messages recorded yet."])
+    -- live view: entries change status after they were added (queued -> sent), so redraw once a second while visible
+    local acc = 0
+    dt:SetScript("OnUpdate", function(_, dt2)
+        acc = acc + dt2
+        if acc >= 1 then acc = 0; refreshDebug() end
+    end)
 end
 
 local function build()
@@ -406,10 +614,12 @@ local function build()
         recipes = button(f, L["Recipes"], 90, 22, function() setTab("recipes") end),
         orders = button(f, L["Orders"], 90, 22, function() setTab("orders") end),
         available = button(f, L["Available"], 90, 22, function() setTab("available") end),
+        debug = button(f, L["Debug"], 70, 22, function() setTab("debug") end),
     }
     f.tabBtns.recipes:SetPoint("TOPLEFT", 12, -30)
     f.tabBtns.orders:SetPoint("LEFT", f.tabBtns.recipes, "RIGHT", 4, 0)
     f.tabBtns.available:SetPoint("LEFT", f.tabBtns.orders, "RIGHT", 4, 0)
+    f.tabBtns.debug:SetPoint("LEFT", f.tabBtns.available, "RIGHT", 4, 0)
     f.tabs = {}
 
     -- Recipes tab
@@ -506,7 +716,8 @@ local function build()
         if not id then return end
         local qty = tonumber(detail.qty:GetText()) or 1
         if qty < 1 then qty = 1 end
-        local o = ns.orders:Create(me(), id, qty, detail.note:GetText() or "")
+        local entry = ns.Store.GetRecipe(id)
+        local o = ns.orders:Create(me(), id, qty, detail.note:GetText() or "", entry and entry.name, entry and entry.loc)
         if o then
             detail.note:SetText(""); detail.qty:SetText("1")
             afterOrderChange(o)
@@ -619,6 +830,8 @@ local function build()
     f.dibsBtn:SetPoint("BOTTOMLEFT", 0, 0)
     f.hideBtn:SetPoint("LEFT", f.dibsBtn, "RIGHT", 6, 0)
     f.whisperBtn:SetPoint("LEFT", f.hideBtn, "RIGHT", 6, 0)
+
+    buildDebugTab()
 
     ns.Events.On("DATA_CHANGED", UI.Refresh)
     ns.Events.On("ITEM_INFO", function() if f:IsShown() then refreshDetail(); refreshOffers() end end)

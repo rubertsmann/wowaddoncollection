@@ -1,6 +1,6 @@
 # Wire protocol, compatibility and stored data
 
-Applies from 0.3.0 (protocol 2.0, schema 2); 0.4.0 adds protocol 2.1 and schema 3 (sections 6 and 7). Source of truth in code: `Core/Init.lua` (versions), `Core/Codec.lua`
+Applies from 0.3.0 (protocol 2.0, schema 2); 0.4.0 adds protocol 2.1 and schema 3 (sections 6 and 7); 0.4.1 adds protocol 2.2 (section 8). Source of truth in code: `Core/Init.lua` (versions), `Core/Codec.lua`
 (format), `Core/Guard.lua` (gate), `Core/Comm.lua` (transport), `Core/Sync.lua` (messages), `Core/Store.lua` (schema).
 Tests: `tests/test_hardening.lua`.
 
@@ -86,6 +86,25 @@ Additive minor change: a 2.0 peer ignores everything below (unknown HELLO field 
 `offers[name]` (records above), `hidden["Owner:itemID"] = ownerRev` (local removal; void once the owner's `rev` changes).
 Migration 2 -> 3 only creates the two tables. Both are re-validated on every load; `/ts clean` empties them in place.
 
-## 8. Version source
+## 8. Canonical names, pull retry over GUILD, order name snapshot (protocol 2.2; feature 008)
+Additive minor change: a 2.1 peer ignores the new fields and keeps working as before.
+- **Names (local, no wire change):** every player name from the wire, the roster and the client is compared and stored as
+  `Util.Canon(name)`: any spelling of MY realm (case, spaces, apostrophes, hyphens; plus spellings learned from the roster's
+  entry for my own character and from the sender of my own GUILD echo) becomes `Name-<GetNormalizedRealmName>`; other
+  realms keep their suffix without spaces. Stored keys are rewritten on login and whenever a new spelling is learned
+  (`Store.Recanon`). `WANT`/`WANTO` names, `SNAP`/`OFFERS` record names and order names are compared in canonical form.
+- **`WANT`/`WANTO` field `via = "GUILD"`:** the first pull is a whisper. Without the record after 45 s it is repeated on
+  GUILD with `via = "GUILD"` (again after 90 s), then given up until the peer's next HELLO (at least 60 s later, as in 0.4.0). The owner answers
+  a `via = "GUILD"` request with `SNAP`/`OFFERS` on GUILD, at most once per rev per 60 s; every member that was behind takes
+  it. A 2.1 owner ignores `via` and whispers as before. Members ignore GUILD requests for other names.
+- **Order fields `name`, `loc` (optional):** the recipe name as the requester saw it (UTF-8, <= 100 bytes, no `|`) and its
+  language code. Shown when the viewer has no catalog entry for the recipe; a copy without the name is completed by `Merge`.
+- **Anti-entropy:** every client sends a HELLO every 15 minutes.
+- **Forever surnames:** a player's name is "First Surname-Realm" (see docs/api-findings.md). `WANT`/`WANTO` names carry the
+  full name plus the first-name form a 0.4.0 client uses for itself (`Util.LegacyName`, omitted when two members share the
+  first name), so 0.4.0 members answer; their records ("First-Realm") are mapped to the full name by `Util.Canon`.
+  Verified offline against the real 0.4.0 code (git 7c0a09b): records flow in both directions.
+
+## 9. Version source
 One source: the TOC `## Version` (`Core/Init.lua` reads it from addon metadata; a literal fallback exists for the offline
 tests and is pinned to the TOC by a test). The release workflow refuses a tag that does not match the TOC version.

@@ -32,7 +32,8 @@ Re-run `tools/deploy.ps1` after every change to `TalentShare.toc` (the dev TOC i
 ## Use
 
 `/ts` (or the minimap button) opens the window. Click each profession icon at the top right of the Recipes tab once so the recipes are read.
-`/ts offers` (what the item scan sees; `/ts offers scan` forces a scan), `/ts scan`, `/ts dump`, `/ts chars`, `/ts comm`, `/ts hello`, `/ts debug`, `/ts version`,
+`/ts offers` (what the item scan sees; `/ts offers scan` forces a scan), `/ts scan`, `/ts dump`, `/ts chars`, `/ts comm`, `/ts hello`, `/ts debug [n]`, `/ts version`,
+`/ts export` (diagnostic report to copy for the addon author; also the **Debug** tab), `/ts trace [n] [problems]`, `/ts ident`,
 `/ts locale <code>|auto` (UI language, then `/reload`), `/ts i18n` (what the client reports),
 profession icons at the top right of the Recipes tab (one click opens that profession and reads its recipes),
 `/ts clean` then `/ts clean confirm` (deletes everything stored locally). In the dev build use `/tsd`.

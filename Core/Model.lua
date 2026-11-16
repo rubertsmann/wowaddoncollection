@@ -21,6 +21,13 @@ local function recipeName(store, id)
 end
 Model.RecipeName = recipeName
 
+-- An order's recipe name: the catalog when the viewer has the recipe, else the snapshot the requester sent (2.2), and only
+-- then a spell lookup by recipe id (unreliable on Forever: recipe ids are not spell ids).
+function Model.OrderRecipeName(store, o)
+    if store.GetRecipe(o.recipeID) or not o.name then return recipeName(store, o.recipeID) end
+    return esc(o.name)
+end
+
 local function sortKey(s) return ns.Util.SearchKey(s or "") end
 
 -- unique professions across all cached characters: { { key = canonical id, name = display name }, ... } sorted by name
@@ -190,7 +197,7 @@ function Model.BuildOrderRows(store, orders, filterKey, showClosed, me)
         elseif filterKey == "can" then keep = knows(o.recipeID) end
         if keep then
             local live = (st == "open" or st == "claimed")
-            rows[#rows + 1] = { id = o.id, recipeID = o.recipeID, recipeName = recipeName(store, o.recipeID), qty = o.qty,
+            rows[#rows + 1] = { id = o.id, recipeID = o.recipeID, recipeName = Model.OrderRecipeName(store, o), qty = o.qty,
                 note = esc(o.note), requester = esc(o.requester), status = st, claimers = escAll(claimers), createdAt = o.createdAt,
                 canClaim = live and not iClaimed and knows(o.recipeID),
                 canWithdraw = live and iClaimed or false,

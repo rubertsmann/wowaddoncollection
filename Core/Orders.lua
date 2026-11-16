@@ -1,7 +1,7 @@
 local ADDON, ns = ...
 
 -- Crafting orders as a merge-able record (CRDT-style, so message arrival order never matters).
---   Order = { id, requester, recipeID, qty, note, createdAt,
+--   Order = { id, requester, recipeID, qty, note, createdAt, name?, loc?   (recipe name snapshot + its language, 2.2+)
 --             closed = nil|"done"|"cancelled", closedAt, closedBy,
 --             claims = { [crafter] = { state = "claimed"|"withdrawn", t = serverTime } } }
 -- Merge rules: claims merge per crafter (newer t wins; tie -> "withdrawn"); closed: earliest closedAt wins
@@ -63,6 +63,16 @@ local function sanitize(o)
         if type(note) ~= "string" or #note > MAX_NOTE or not U.IsValidUtf8(note) then return nil end
         note = U.StripControl(note)
     end
+    -- recipe name snapshot (optional, 2.2): shown when the viewer has no catalog entry for the recipe yet
+    local name, loc
+    if o.name ~= nil then
+        if not U.CleanString(o.name, 100) or o.name == "" or o.name:find("|", 1, true) then return nil end
+        name = o.name
+        if o.loc ~= nil then
+            if type(o.loc) ~= "string" or not o.loc:match("^[%a_]+$") or #o.loc > 8 then return nil end
+            loc = o.loc
+        end
+    end
     if o.closed ~= nil and o.closed ~= "done" and o.closed ~= "cancelled" then return nil end
     if o.closed and not U.SafeInt(o.closedAt, 0, horizon) then return nil end
     if o.closedBy ~= nil and not U.IsSafeName(o.closedBy) then return nil end
@@ -79,7 +89,7 @@ local function sanitize(o)
     end
     return { id = o.id, requester = o.requester, recipeID = o.recipeID, qty = o.qty, note = note or "",
         createdAt = o.createdAt, closed = o.closed, closedAt = o.closed and o.closedAt or nil, closedBy = o.closedBy,
-        claims = claims }
+        claims = claims, name = name, loc = name and loc or nil }
 end
 Orders.Sanitize = sanitize
 
@@ -94,6 +104,10 @@ function Orders:Merge(incoming)
     end
     local before = version(cur)
     local changed = false
+    if o.name and not cur.name then   -- a name snapshot from a 2.2 peer completes an order a 2.1 peer sent without it
+        cur.name, cur.loc = o.name, o.loc
+        changed = true
+    end
     for name, c in pairs(o.claims) do
         local mine = cur.claims[name]
         if not mine or c.t > mine.t or (c.t == mine.t and c.state == "withdrawn" and mine.state ~= "withdrawn") then
@@ -116,13 +130,15 @@ function Orders:Merge(incoming)
     return changed or version(cur) ~= before
 end
 
-function Orders:Create(requester, recipeID, qty, note)
+-- name/loc: the recipe name as the requester sees it (catalog entry), sent along so every viewer can show it
+function Orders:Create(requester, recipeID, qty, note, name, loc)
     local t = self.now()
     note = note or ""
     if not ns.Util.IsValidUtf8(note) then note = "" end
     note = ns.Util.TruncateUtf8(note, MAX_NOTE)   -- never cut inside a multi-byte character; a long note must not drop the order
     local o = { id = requester .. ":" .. t .. ":" .. math.random(1000, 9999), requester = requester, recipeID = recipeID,
-        qty = qty, note = note, createdAt = t, claims = {} }
+        qty = qty, note = note, createdAt = t, claims = {},
+        name = type(name) == "string" and name ~= "" and ns.Util.TruncateUtf8(name, 100) or nil, loc = loc }
     local clean = sanitize(o)
     if not clean then return nil end
     self.db[clean.id] = clean
