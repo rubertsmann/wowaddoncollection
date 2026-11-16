@@ -32,7 +32,7 @@ Legend: DONE = written; UNVERIFIED = needs the check in the last column. **Verif
 
 ## First things to do when you wake up
 
-1. `luajit tests/run.lua` -> 26 passed (LuaJIT is installed under %LOCALAPPDATA%Programsuajitbin; open a new shell for path).
+1. `luajit tests/run.lua` -> 26 passed (LuaJIT is installed under `%LOCALAPPDATA%\Programs\LuaJIT\bin`; open a new shell for PATH).
 2. `powershell tools/deploy.ps1 -WithProbe`; log in; open a profession; `/tsp`; `/reload`; check `/ts scan`, `/ts dump`.
 3. Watch for Lua errors (`/console scriptErrors 1`).
 
