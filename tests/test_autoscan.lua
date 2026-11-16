@@ -7,7 +7,7 @@ local function newScan(h, opts)
         opened = {}, closed = 0, scans = 0, timers = {}, doneCalls = {}, combat = opts.combat or false,
         window = opts.window or false, supported = opts.supported ~= false,
         -- recipes appear in `counts[id]` once loadAfter[id] scans of that profession happened (simulates async loading)
-        counts = {}, loadAfter = opts.loadAfter or {}, current = nil, seen = {}, failOpen = opts.failOpen or {},
+        counts = {}, loadAfter = opts.loadAfter or {}, current = nil, seen = {}, failOpen = opts.failOpen or {}, log = {},
     }
     local profs = opts.professions or { { id = 185, name = "Kochkunst" }, { id = 165, name = "Lederverarbeitung" }, { id = 393, name = "Kürschnerei" } }
     local env = {
@@ -32,6 +32,7 @@ local function newScan(h, opts)
             end
         end,
         after = function(sec, fn) fake.timers[#fake.timers + 1] = fn end,
+        log = function(...) fake.log[#fake.log + 1] = table.concat({ ... }, " ") end,
         done = function(results, aborted) fake.doneCalls[#fake.doneCalls + 1] = { results = results, aborted = aborted } end,
     }
     fake.scan = ns.AutoScan.New(env)
@@ -60,6 +61,17 @@ return {
         h.eq(f.scan.running, false)
     end,
 
+    ["autoscan: every step is logged so a failed run can be diagnosed from SavedVariables"] = function(h)
+        local f = newScan(h, { failOpen = { [165] = true } })
+        f.scan:Start(false); f.drain()
+        local text = table.concat(f.log, "\n")
+        h.truthy(text:find("start all", 1, true), "no start entry")
+        h.truthy(text:find("open 185 ok", 1, true), "no successful open entry")
+        h.truthy(text:find("open 165 FAILED", 1, true), "a failed open must be logged")
+        h.truthy(text:find("check 185 recipes=5", 1, true), "no check entry")
+        h.truthy(text:find("finish ok", 1, true) and text:find("Kochkunst=5", 1, true), "no finish summary")
+    end,
+
     ["autoscan: waits for lists that load late, with bounded retries (RF3)"] = function(h)
         local f = newScan(h, { loadAfter = { [185] = 3 } })      -- Kochkunst needs 3 scans before recipes show up
         f.scan:Start(false); f.drain()
@@ -71,7 +83,7 @@ return {
         h.truthy(rounds < 200, "run did not terminate")
         h.eq(never.doneCalls[1].results[2].count, 0)             -- reported as 0, run continued
         h.eq(never.doneCalls[1].results[3].count, 5, "a stuck profession must not block the next one")
-        h.truthy((never.seen[165] or 0) <= 5, "too many retries: " .. tostring(never.seen[165]))
+        h.truthy((never.seen[165] or 0) <= 8, "too many retries: " .. tostring(never.seen[165]))
     end,
 
     ["autoscan: refuses to start in combat, with a window open, unsupported, nothing to do, or while running"] = function(h)

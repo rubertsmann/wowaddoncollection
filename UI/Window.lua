@@ -249,7 +249,8 @@ local function build()
         ns.Events.Fire("WINDOW_OPENED")
         UI.Refresh()
         -- opening the window reads the player's professions (default on; /ts autoscan off disables), see AutoScan.Auto
-        ns.AutoScan.Auto()
+        -- deferred: the profession window must not be opened from inside our own frame's OnShow (taint)
+        if C_Timer and C_Timer.After then C_Timer.After(0.5, ns.AutoScan.Auto) else ns.AutoScan.Auto() end
     end)
 
     local title = text(f, "GameFontNormalLarge"); title:SetPoint("TOP", 0, -6); title:SetText(ns.TITLE)

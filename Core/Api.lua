@@ -147,8 +147,8 @@ end
 
 function Api.OpenProfession(skillLineID)
     if not Api.CanOpenProfession() then return false end
-    local ok = pcall(C_TradeSkillUI.OpenTradeSkill, skillLineID)
-    return ok
+    local ok, err = pcall(C_TradeSkillUI.OpenTradeSkill, skillLineID)
+    return ok, (not ok) and tostring(err) or nil
 end
 
 function Api.CloseProfession()

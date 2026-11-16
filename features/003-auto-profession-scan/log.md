@@ -38,3 +38,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: the texture path is the stock retail refresh icon; whether it exists on Forever is NOT-VERIFIED (a missing texture would show as a blank/green square)
 - Evidence: `luajit tests/run.lua` -> 61 passed, 0 failed (lint tests confirm the new strings exist in deDE)
 - Next: user opens `/tsd` and looks at the top right of the Recipes tab
+
+## 2026-11-16 10:44 | VERIFY | first in-game run: partly works, "Interface-Aktion ... Addon fehlgeschlagen"
+- Did: user reported "I still need to open the talent window once and need to cycle through the views" and the red message "Interface-Aktion auf Grund eines Addons fehlgeschlagen" (Blizzard's generic INTERFACE_ACTION_BLOCKED, no addon name). Read `TalentShare-Dev.lua`: `ui.autoScan = true`, `ui.lastAutoScan` set (so the automatic run started, i.e. OpenTradeSkill exists and nothing blocked the start), Kochkunst 11 recipes and Kürschnerei 1 stored, **Lederverarbeitung 0**; debug log has no autoscan steps (the run was not logged)
+- Result: OpenTradeSkill exists on Forever (R4/R1 partly confirmed); the run did not complete for all professions; cause of the blocked-action message unknown (suspect: opening/closing the Blizzard profession window from tainted code)
+- Evidence: `TalentShare-Dev.lua` (SavedVariables, read 2026-11-16)
+- Next: added step logging (`ns.Debug.Log("autoscan", ...)`: start/open/check/finish incl. the pcall error), 6 retries (list gets ~7.5 s), deferred start (0.5 s after our window shows, not inside OnShow); tests 62 passed. User: `/console taintLog 1`, `/reload`, open `/tsd`, wait 15 s, `/reload`; I read `_forever_\Logs\taint.log` and the SavedVariables debug log

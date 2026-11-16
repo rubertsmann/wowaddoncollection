@@ -11,10 +11,15 @@ local AutoScan = {}
 ns.AutoScan = AutoScan
 AutoScan.__index = AutoScan
 
-local FIRST_WAIT, RETRY_WAIT, MAX_RETRIES = 1.2, 1.0, 3
+local FIRST_WAIT, RETRY_WAIT, MAX_RETRIES = 1.5, 1.0, 6   -- a slow list gets about 7.5 s before the profession is skipped
 
 function AutoScan.New(env)
     return setmetatable({ env = env, running = false, gen = 0 }, AutoScan)
+end
+
+-- optional env.log(...): every step is written to the persisted debug log (readable in SavedVariables after /reload)
+function AutoScan:_log(...)
+    if self.env.log then self.env.log(...) end
 end
 
 -- Returns true when a run started, else false and a reason:
@@ -32,6 +37,9 @@ function AutoScan:Start(onlyMissing)
     if #queue == 0 then return false, "nothing" end
     self.running, self.queue, self.i, self.results = true, queue, 0, {}
     self.gen = self.gen + 1
+    local names = {}
+    for _, p in ipairs(queue) do names[#names + 1] = p.name .. "#" .. p.id end
+    self:_log("start", onlyMissing and "missing" or "all", table.concat(names, ","))
     self:_next(self.gen)
     return true
 end
@@ -53,7 +61,9 @@ function AutoScan:_next(gen)
             self.aborted = "combat"
             return self:_finish()
         end
-        if env.open(p.id) then
+        local ok, err = env.open(p.id)
+        self:_log("open", p.id, ok and "ok" or "FAILED", err)
+        if ok then
             self.tries = 0
             env.after(FIRST_WAIT, function() self:_check(gen) end)
             return
@@ -72,6 +82,7 @@ function AutoScan:_check(gen)
     end
     env.scan()
     local n = env.recipeCount(p)
+    self:_log("check", p.id, "recipes=" .. n, "try=" .. self.tries)
     if n == 0 and self.tries < MAX_RETRIES then
         self.tries = self.tries + 1     -- the recipe list loads asynchronously: bounded retries, never a stall
         return env.after(RETRY_WAIT, function() self:_check(gen) end)
@@ -85,6 +96,9 @@ function AutoScan:_finish()
     self.env.close()
     local aborted = self.aborted
     self.aborted = nil
+    local parts = {}
+    for _, r in ipairs(self.results) do parts[#parts + 1] = r.name .. "=" .. r.count end
+    self:_log("finish", aborted or "ok", table.concat(parts, ","))
     self.env.done(self.results, aborted)
 end
 
@@ -116,6 +130,7 @@ function AutoScan.Instance()
         end,
         open = Api.OpenProfession,
         close = Api.CloseProfession,
+        log = function(...) ns.Debug.Log("autoscan", ...) end,
         scan = function() if ns.Scanner.Refresh(ns.Util.Now()) then changed = true end end,
         after = function(sec, fn) C_Timer.After(sec, fn) end,
         done = function(results, aborted)
