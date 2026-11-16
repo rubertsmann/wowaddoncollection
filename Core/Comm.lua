@@ -48,7 +48,8 @@ local function pump(dt)
     Comm.tokens = math.min(BUCKET_MAX, Comm.tokens + dt * REFILL)
     while Comm.tokens >= 1 and #Comm.queue > 0 do
         local item = table.remove(Comm.queue, 1)
-        local ok, res = pcall(C_ChatInfo.SendAddonMessage, ns.PREFIX, item.text, item.dist, item.target)
+        local target = item.dist == "WHISPER" and ns.Util.WhisperTarget(item.target) or item.target   -- same realm: name only
+        local ok, res = pcall(C_ChatInfo.SendAddonMessage, ns.PREFIX, item.text, item.dist, target)
         if ok and type(res) == "number" and res == 3 then   -- AddonMessageThrottle: retry later
             table.insert(Comm.queue, 1, item)
             Comm.tokens = 0

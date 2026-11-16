@@ -33,6 +33,7 @@ local function statusLabel(st)
 end
 
 local function me() return ns.Store.db.me or ns.Api.GetPlayerInfo().name end
+local function short(n) return ns.Util.ShortName(n) end   -- display form of a character name (realm hidden on my own realm)
 
 local function classColor(class, text)
     local c = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
@@ -291,7 +292,7 @@ local function refreshDetail()
         local c = d and d.crafters[i]
         if c then
             line.who = c.name
-            line.label:SetText(("%s  |cffaaaaaa%s %d/%d, %s|r"):format(classColor(c.class, c.name), c.professionName or c.profession,
+            line.label:SetText(("%s  |cffaaaaaa%s %d/%d, %s|r"):format(classColor(c.class, short(c.name)), c.professionName or c.profession,
                 c.rank or 0, c.max or 0, ago(c.rev)))
             line:Show()
         else
@@ -333,6 +334,8 @@ end
 UI.SelectTab = function(name) if f then setTab(name) end end
 
 local function whisper(name)
+    if not name or name == me() then return end   -- you cannot whisper yourself: the game answers "no player named ... online"
+    name = ns.Util.WhisperTarget(name)   -- same-realm players by character name only (the "Name-Realm" form is not found)
     if ChatFrame_SendTell then ChatFrame_SendTell(name) elseif ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. name .. " ") end
 end
 
@@ -489,9 +492,11 @@ local function build()
     help:SetText(L["Request recipes on the Recipes tab. Everyone in the guild sees this board."])
     orderList = createList(ot, 736, 380, makeSelectableRow, function(r, row)
         r.icon:SetTexture((ns.Store.GetRecipe(row.recipeID) or {}).icon or "Interface\\Icons\\INV_Misc_QuestionMark")
-        local who = #row.claimers > 0 and ("  -> |cff33ff99" .. table.concat(row.claimers, ", ") .. "|r") or ""
+        local claimers = {}
+        for i, c in ipairs(row.claimers) do claimers[i] = short(c) end
+        local who = #claimers > 0 and ("  -> |cff33ff99" .. table.concat(claimers, ", ") .. "|r") or ""
         local note = row.note ~= "" and ("  |cff999999\"" .. row.note .. "\"|r") or ""
-        r.label:SetText(("%dx %s  |cffaaaaaa%s|r%s%s"):format(row.qty, row.recipeName, F(L["for {name}"], { name = row.requester }), who, note))
+        r.label:SetText(("%dx %s  |cffaaaaaa%s|r%s%s"):format(row.qty, row.recipeName, F(L["for {name}"], { name = short(row.requester) }), who, note))
         r.right:SetText("|cff" .. (STATUS_COLOR[row.status] or "ffffff") .. statusLabel(row.status) .. "|r  " .. ago(row.createdAt))
         r.label:SetPoint("RIGHT", -130, 0)
         r.sel:SetShown(row.id == state.selectedOrder)
