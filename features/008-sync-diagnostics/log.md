@@ -74,3 +74,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: tests/test_version_reset.lua
 - Evidence: see test run below; the exact UI breakage was not reproduced (no screenshot/export of the broken state)
 - Next: if it happens again after 0.4.2, /ts export in the broken state
+
+## 2026-11-16 22:05 | VERIFY | Live 0.4.2 in the guild
+- Did: release 0.4.2 used by about 6 guild members on several realms
+- Result: user reports that recipe, recipe item and order sync work as expected
+- Evidence: user report (no export attached)
+- Next: merge release/0.4.2 to master, tag v0.4.2; review-talentshare run before marking 008 done
