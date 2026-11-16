@@ -18,7 +18,7 @@ function H.ns(opts)
     GetServerTime = function() return H.clock end
     -- same order as the TOC (pure modules only)
     for _, path in ipairs({ "Core/Util.lua", "Core/Trace.lua", "Core/Locale.lua", "Locales/enUS.lua", "Locales/deDE.lua", "Core/Store.lua",
-        "Core/Names.lua", "Core/Orders.lua", "Core/Offers.lua", "Core/Codec.lua", "Core/Guard.lua", "Core/Sync.lua", "Core/Model.lua", "Core/Comm.lua", "Core/Diag.lua" }) do
+        "Core/Names.lua", "Core/Orders.lua", "Core/Offers.lua", "Core/Codec.lua", "Core/Guard.lua", "Core/Sync.lua", "Core/Model.lua", "Core/Notify.lua", "Core/Comm.lua", "Core/Diag.lua" }) do
         loadAddonFile(ns, path)
     end
     ns.Store.Init({})

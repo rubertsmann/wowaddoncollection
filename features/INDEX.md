@@ -13,3 +13,5 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 006 | Hardening and version compatibility | verifying | 0.3.0 (protocol 2.0, schema 2), fixes 0.3.1, 0.3.2 | fc21757, 9b76d90, d43333b, 91b5f67, 5261868 | [006-hardening-and-version-compatibility](006-hardening-and-version-compatibility/spec.md) |
 | 007 | Recipe items board | verifying | 0.4.0 (protocol 2.1, schema 3) | 61eff86 | [007-recipe-items-board](007-recipe-items-board/spec.md) |
 | 008 | Sync diagnostics and name/retry fixes | verifying | 0.4.2 (protocol 2.2, schema 3) | - | [008-sync-diagnostics](008-sync-diagnostics/spec.md) |
+| 009 | Craft and whisper from lists | verifying | next (UI only) | - | [009-craft-and-whisper-from-lists](009-craft-and-whisper-from-lists/spec.md) |
+| 010 | Order notifications | verifying | next (UI + local settings) | - | [010-order-notifications](010-order-notifications/spec.md) |

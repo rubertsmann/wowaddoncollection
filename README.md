@@ -7,6 +7,10 @@ shared crafting-order board.
 * **Recipes tab** – filter by profession, search recipe or reagent names, see reagents (with how many you have), see
   who can craft it (click to whisper), request it.
 * **Orders tab** – guild-wide board: requests, "I'll craft it" claims, done/cancel; everyone sees who claimed what.
+  **Craft** opens the order's profession with the recipe selected, a second click crafts the ordered quantity.
+* Hover a recipe icon in any list to see the recipe; click it to whisper the crafter/requester with the link typed in.
+* **Notifications** – new orders for your professions (and claims/completions of your own orders) show as a number on the
+  minimap button, plus a sound and a chat line; screen message and taskbar flash optional. `/ts options` to configure.
 * **Available tab** – tradeable recipe items (patterns, plans, formulas such as "Recipe: Savory Deviate Delight") that
   guild members hold in bags, bank, reagent bank, mail, guild bank or auctions, listed automatically so nobody sells
   them elsewhere unknowingly. Anyone can call **dibs** (several players can; all are listed, oldest first; press again

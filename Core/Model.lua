@@ -200,6 +200,8 @@ function Model.BuildOrderRows(store, orders, filterKey, showClosed, me)
             rows[#rows + 1] = { id = o.id, recipeID = o.recipeID, recipeName = Model.OrderRecipeName(store, o), qty = o.qty,
                 note = esc(o.note), requester = esc(o.requester), status = st, claimers = escAll(claimers), createdAt = o.createdAt,
                 canClaim = live and not iClaimed and knows(o.recipeID),
+                canCraft = live and knows(o.recipeID) or false,
+                claimersRaw = claimers,
                 canWithdraw = live and iClaimed or false,
                 canDone = live and (o.requester == me or iClaimed) or false,
                 canCancel = live and o.requester == me }
@@ -268,4 +270,50 @@ function Model.BuildOfferRows(store, state, classFn, nameFn)
         return a.itemID < b.itemID
     end)
     return out
+end
+
+------------------------------------------------------------------ craft and whisper from lists (feature 009)
+
+-- The own profession that holds recipeID, as an OwnProfessions row (spellName/spells for CastMacro), or nil + why:
+-- "unknown" (I do not know the recipe), "noprof" (my record has it, but the profession is not in my live spellbook).
+function Model.CraftTarget(store, me, recipeID, live)
+    local rec = store.GetChar(me or "")
+    local key
+    for pname, p in pairs(rec and rec.professions or {}) do
+        if p.recipes and p.recipes[recipeID] then key = ns.Names.ProfKey(pname, p) break end
+    end
+    if not key then return nil, "unknown" end
+    for _, row in ipairs(Model.OwnProfessions(store, me, live)) do
+        if row.key == key and type(row.spellName) == "string" and row.spellName ~= "" then return row end
+    end
+    return nil, "noprof"
+end
+
+-- Whom an icon click on an order row whispers: the requester, or on my own order the first claimer (nil: nobody but me).
+function Model.OrderContact(row, me)
+    if row.requester ~= me then return row.requester end
+    for _, c in ipairs(row.claimersRaw or row.claimers or {}) do
+        if c ~= me then return c end
+    end
+    return nil
+end
+
+-- Whom an icon click on a recipe row whispers: the first crafter (Store.Crafters order: highest rank) who is not me.
+function Model.RecipeContact(crafters, me)
+    for _, c in ipairs(crafters or {}) do
+        local name = type(c) == "table" and c.name or c
+        if name ~= me then return name end
+    end
+    return nil
+end
+
+-- Text inserted into a whisper. link: a hyperlink built by THIS client (Api.RecipeLink), else the recipe name as plain
+-- "[Name]" with every "|" and bracket removed, so text a peer sent can never become a link or escape code in chat.
+function Model.ChatText(link, name, qty)
+    local t = link
+    if type(t) ~= "string" or t == "" then
+        t = "[" .. (tostring(name or "?"):gsub("[|%[%]\r\n]", "")) .. "]"
+    end
+    if qty and qty > 1 then t = t .. " x" .. qty end
+    return t
 end

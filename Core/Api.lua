@@ -328,7 +328,7 @@ end
 
 -- Which windows are open right now. Set by Events.lua (bank, mail, guild bank and auction house contents are only
 -- readable while their window is open); a location that is not open is not scanned and keeps its last known state.
-Api.open = { bank = false, mail = false, gbank = false, auction = false }
+Api.open = { bank = false, mail = false, gbank = false, auction = false, tradeskill = false }
 
 -- class id, subclass id, icon of an item WITHOUT loading it (nil when the client does not know the id).
 function Api.ItemClass(itemID)
@@ -468,4 +468,83 @@ function Api.ScanItems()
     end
     if Api.open.auction then out.auction = scanAuctions() end
     return out
+end
+
+------------------------------------------------------------------ craft and whisper from lists (feature 009)
+
+local function isLink(s) return type(s) == "string" and s:find("|H", 1, true) ~= nil and s:find("|h", 1, true) ~= nil end
+
+-- A chat link for a recipe, built by THIS client: my own recipe link while the client knows it, else the crafted item's
+-- link (needs the item cached; a load is requested), else nil (the caller falls back to plain "[Name]").
+function Api.RecipeLink(recipeID, produces)
+    if C_TradeSkillUI and C_TradeSkillUI.GetRecipeLink then
+        local ok, link = pcall(C_TradeSkillUI.GetRecipeLink, recipeID)
+        if ok and isLink(link) then return link end
+    end
+    return Api.ItemLink(produces)
+end
+
+function Api.ItemLink(itemID)
+    if type(itemID) ~= "number" then return nil end
+    local fn = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    local ok, _, link = false, nil, nil
+    if fn then ok, _, link = pcall(fn, itemID) end
+    if ok and isLink(link) then return link end
+    if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, itemID) end
+    return nil
+end
+
+-- Name of the profession whose window is open (nil when none). Same client, so it equals the spellbook name.
+function Api.OpenProfessionName()
+    if not Api.open.tradeskill then return nil end
+    if C_TradeSkillUI and C_TradeSkillUI.GetBaseProfessionInfo then
+        local ok, info = pcall(C_TradeSkillUI.GetBaseProfessionInfo)
+        if ok and type(info) == "table" and info.professionName then return info.professionName end
+    end
+    if C_TradeSkillUI and C_TradeSkillUI.GetTradeSkillLine then
+        local ok, _, name = pcall(C_TradeSkillUI.GetTradeSkillLine)
+        if ok and type(name) == "string" then return name end
+    end
+    if GetTradeSkillLine then
+        local ok, name = pcall(GetTradeSkillLine)
+        if ok and type(name) == "string" then return name end
+    end
+    return nil
+end
+
+-- Select a recipe in the open profession window (so the game's own Create button crafts it). true if a call was made.
+function Api.SelectRecipe(recipeID)
+    if C_TradeSkillUI and C_TradeSkillUI.OpenRecipe then
+        local ok, err = pcall(C_TradeSkillUI.OpenRecipe, recipeID)
+        if not ok then ns.Debug.Log("craft.select", tostring(err)) end
+        return ok
+    end
+    if C_TradeSkillUI and C_TradeSkillUI.SetRecipeItemNameFilter then   -- fallback: filter the list down to it
+        local e = ns.Store.GetRecipe(recipeID)
+        if e and e.name then return (pcall(C_TradeSkillUI.SetRecipeItemNameFilter, e.name)) end
+    end
+    return false
+end
+
+-- Craft qty of recipeID in the open profession window (must run from a hardware click). true if the call raised no error;
+-- a call the client blocks still "succeeds" here (see docs/api-findings.md), so the UI also keeps the recipe selected.
+function Api.CraftRecipe(recipeID, qty)
+    if not (C_TradeSkillUI and C_TradeSkillUI.CraftRecipe) then return false, "no CraftRecipe" end
+    local ok, err = pcall(C_TradeSkillUI.CraftRecipe, recipeID, qty)
+    return ok, err
+end
+
+-- Is a profession window open that lists recipeID? (the window's own recipe list, so no name compare is needed)
+-- The open flag comes from TRADE_SKILL_SHOW/CLOSE; the default frames are also checked (window open before a /reload).
+function Api.OpenWindowHasRecipe(recipeID)
+    local shown = Api.open.tradeskill
+    for _, n in ipairs({ "ProfessionsFrame", "TradeSkillFrame" }) do
+        local fr = _G[n]
+        if fr and fr.IsShown and fr:IsShown() then shown = true end
+    end
+    if not shown or not (C_TradeSkillUI and C_TradeSkillUI.GetAllRecipeIDs) then return false end
+    local ok, ids = pcall(C_TradeSkillUI.GetAllRecipeIDs)
+    if not ok or type(ids) ~= "table" then return false end
+    for _, id in ipairs(ids) do if id == recipeID then return true end end
+    return false
 end

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+- Orders tab: **Craft** button: the first click opens the order's profession with the recipe selected, the next click
+  crafts the ordered quantity (feature 009).
+- Recipes, Orders and Available tabs: hovering a row's icon shows the recipe or item; clicking it opens a whisper with
+  the link already typed in (crafter, requester/claimer, owner). Clicking a crafter in the recipe details also inserts the link.
+- Notifications (feature 010): a new order for one of your professions, or someone claiming/finishing your order, shows
+  a red number on the minimap button and the Orders tab, a letter icon, a chat line and a sound; optional screen message
+  and taskbar flash. Everything can be switched in the new options panel (**Options** button, `/ts options`, game
+  settings > AddOns).
+
 ## 0.4.2
 Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`.
 

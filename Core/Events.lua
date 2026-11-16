@@ -173,7 +173,13 @@ function onEvent.PLAYER_GUILD_UPDATE() ns.Comm.Start() end
 function onEvent.PLAYER_LEVEL_UP() scheduleScan(2) end
 function onEvent.TRADE_SKILL_SHOW()
     ns.Debug.Log("event", "TRADE_SKILL_SHOW")   -- a profession window really opened (after a click on a profession button)
+    ns.Api.open.tradeskill = true
     scheduleScan(1.5)
+    Ev.Fire("TRADESKILL", true)   -- Orders tab: select a pending recipe, switch the Craft button (feature 009)
+end
+function onEvent.TRADE_SKILL_CLOSE()
+    ns.Api.open.tradeskill = false
+    Ev.Fire("TRADESKILL", false)
 end
 
 -- The game's red error text (e.g. "no target", "action blocked") for 6 s after a click on a profession button, so a

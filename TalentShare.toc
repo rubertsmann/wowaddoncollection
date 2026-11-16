@@ -27,8 +27,10 @@ Core\Orders.lua
 Core\Offers.lua
 Core\Sync.lua
 Core\Model.lua
+Core\Notify.lua
 Core\Comm.lua
 Core\Diag.lua
 Core\Events.lua
 
 UI\Window.lua
+UI\Alerts.lua
