@@ -371,6 +371,26 @@ return {
         h.eq(ns.db.schema, ns.Store.SCHEMA)
     end,
 
+    ["store: /ts clean during a downgrade-guarded session only empties the throwaway DB, never the saved file (RF6)"] = function(h)
+        local ns = h.ns()
+        local saved = { schema = ns.Store.SCHEMA + 1, chars = { ["X-R"] = { future = true } }, orders = { keep = { future = true } } }
+        ns.Store.Init(saved)
+        ns.Store.PutChar(h.char("Me-R", 50, { 1 }))
+        local removed = ns.Store.Clean()
+        h.eq(removed.chars, 1)                                   -- only the session's own record
+        h.truthy(saved.chars["X-R"].future); h.truthy(saved.orders.keep.future)
+        h.eq(saved.schema, ns.Store.SCHEMA + 1)
+    end,
+
+    ["store: /ts clean keeps the schema marker, so the next load does not re-migrate"] = function(h)
+        local ns = h.ns()
+        ns.Store.PutChar(h.char("A-R", 50, { 1 }))
+        ns.Store.Clean()
+        h.eq(ns.db.schema, ns.Store.SCHEMA)
+        local _, status = ns.Store.Init(ns.db)
+        h.eq(status, "ok")
+    end,
+
     ["store: schema 1 data is migrated: valid records kept, hostile or corrupt ones dropped (RF6)"] = function(h)
         local ns = h.ns({ now = 1.8e9 })
         local legacy = {

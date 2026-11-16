@@ -57,7 +57,7 @@ Trust model (unchanged, README): guild members are trusted; order forgery by a m
 - [x] T5 (M): `Store.Migrate` + downgrade guard, `Events` wiring, notices. Verify: migration tests
 - [x] T6 (S): version source: metadata read, tests, release workflow tag check. Verify: test + workflow review
 - [x] T7 (S): hygiene (`.gitignore`, workflow scope), docs (`protocol.md`, `vendored-libs.md`, CHANGELOG, README, status, review files)
-- [x] T8 (S): update existing tests/harness for the new protocol; full suite green (89/0)
+- [x] T8 (S): update existing tests/harness for the new protocol; full suite green
 - [ ] T9 (S): self-review with `review-talentshare` (done) + `verify.md`/`doc.md`/INDEX (done); stays open until the in-game rows in verify.md are run by the user
 
 ## Review Focus (failure modes a happy-path test would miss)

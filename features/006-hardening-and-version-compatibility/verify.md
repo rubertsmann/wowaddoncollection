@@ -3,15 +3,15 @@
 Levels: `OFFLINE` (luajit suite) | `IN-GAME` (WoW client, evidence from user or disk) | `MULTI-CLIENT` (two real guild members) | `READ-ONLY` (reasoned, not run) | `NOT-VERIFIED`.
 `done` needs every row at OFFLINE, IN-GAME or MULTI-CLIENT, or an explicit user acceptance below.
 
-Baseline before work: `luajit tests/run.lua` -> 59 passed, 0 failed
-Result after work:    `luajit tests/run.lua` -> 89 passed, 0 failed (30 new tests in `tests/test_hardening.lua`, 3 older tests updated to the new protocol constants)
+Baseline before work (branch point 6e660a1): `luajit tests/run.lua` -> 59 passed, 0 failed. Baseline on master tip 2ea7200 after the rebase (checked on a `git archive` snapshot): 55 passed, 0 failed
+Result after work (rebased onto master 2ea7200): `luajit tests/run.lua` -> 87 passed, 0 failed (32 new tests in `tests/test_hardening.lua`; older tests updated to the new protocol constants and schema)
 
-Mutation check (2026-11-16, script kept out of the repo): each protection was broken on its own and the suite must fail; every one was caught, files restored, suite back to 89/0:
+Mutation check (2026-11-16, script kept out of the repo): each protection was broken on its own and the suite must fail; every one was caught (re-run after the rebase with the same result), files restored, suite back to green:
 whisper gate accepts anyone -> 3 failing | parser accepts inf -> 1 | catalog ids unrestricted -> 1 | note not escaped -> 1 | no downgrade guard -> 1 | foreign major not rejected -> 2.
 
 | ID | Requirement / Review Focus | How verified (test name) | Level | Evidence | Result | Date |
 |---|---|---|---|---|---|---|
-| R1 / RF1 | non-guild WHISPER and foreign channels dropped before parse/buffer/answer | `guard: only GUILD, or WHISPER from a roster member...`, `comm: a WHISPER from a non-guild character is dropped...`, `comm: foreign channels and a missing roster are rejected...` | OFFLINE | suite 89 passed, 0 failed | pass | 2026-11-16 |
+| R1 / RF1 | non-guild WHISPER and foreign channels dropped before parse/buffer/answer | `guard: only GUILD, or WHISPER from a roster member...`, `comm: a WHISPER from a non-guild character is dropped...`, `comm: foreign channels and a missing roster are rejected...` | OFFLINE | suite green | pass | 2026-11-16 |
 | R1 (live) | the roster cache is filled in the real client and legit whispers (WANT/SNAP) still get through right after login | needs the game: two guild members, `/ts comm` shows `roster=N` and `received` grows | NOT-VERIFIED | needs user + second guild member | open | |
 | R2 / RF2 | newer major or legacy header: no buffer, one notice per kind | `comm: a newer major or a legacy header creates no buffer...`, `codec: malformed headers are rejected, legacy ... recognised` | OFFLINE | suite | pass | 2026-11-16 |
 | R2 (live) | the notice text appears in the chat frame in English and German | needs the game | NOT-VERIFIED | needs user | open | |
@@ -24,14 +24,14 @@ whisper gate accepts anyone -> 3 failing | parser accepts inf -> 1 | catalog ids
 | R8 / RF4 | catalog ids only for the sender's own recipes | `sync: SNAP stores a clean copy...` (recipe 2 refused); mutation "catalog ids unrestricted" fails it | OFFLINE | suite + mutation check | pass | 2026-11-16 |
 | R9 / RF5 | peer text escaped in view-models; debug log escaped | `model: peer text is escaped...`, `util: the debug log escapes peer text...`; mutation "note not escaped" fails it | OFFLINE | suite + mutation check | pass | 2026-11-16 |
 | R9 (live) | a note containing `\|cffff0000...` shows as literal text in the order list | needs the game (type the note in the request box, look at the board) | NOT-VERIFIED | needs user | open | |
-| R10 / RF6 | migration 1 -> 2, downgrade guard, corrupt/non-table SV | `store: a missing, corrupt or non-table SavedVariable starts empty`, `store: saved data from a NEWER schema is left untouched...`, `store: schema 1 data is migrated...` | OFFLINE | suite | pass | 2026-11-16 |
+| R10 / RF6 | migration 1 -> 2, downgrade guard, corrupt/non-table SV, interplay with `/ts clean` (feature 004-clean-command) | `store: a missing, corrupt or non-table SavedVariable starts empty`, `store: /ts clean during a downgrade-guarded session...`, `store: /ts clean keeps the schema marker...`, `store: saved data from a NEWER schema is left untouched...`, `store: schema 1 data is migrated...` | OFFLINE | suite | pass | 2026-11-16 |
 | R10 (live) | `Events.lua` really assigns the original table back for "newer" so the file stays intact; notice shows 5 s after login | READ-ONLY: `Core/Events.lua` ADDON_LOADED/PLAYER_LOGIN; needs the game with a hand-edited `schema = 99` in `TalentShareDB.lua` | NOT-VERIFIED | needs user | open | |
 | R11 | version from TOC metadata with a pinned fallback | `version: the protocol constants match Core/Init.lua and the TOC version has a CHANGELOG entry`, `version: Init reads the version from addon metadata...` (stubbed `GetAddOnMetadata`) | OFFLINE | suite | pass | 2026-11-16 |
 | R11 (live) | `C_AddOns.GetAddOnMetadata` / `GetAddOnMetadata` exists on Forever (otherwise the fallback is used) | `/ts version` prints the TOC version | NOT-VERIFIED | needs user | open | |
 | R12 | tag filter `v*`, token scoped to the step, tag/TOC check | `workflow: releases trigger on v* tags only...` checks the file text; real run not done | OFFLINE (text) / NOT-VERIFIED (CI run) | suite; GitHub Actions run needs a pushed tag | partial | 2026-11-16 |
-| R13 | adversarial regression tests exist | `tests/test_hardening.lua` (30 tests) + mutation check above | OFFLINE | suite | pass | 2026-11-16 |
+| R13 | adversarial regression tests exist | `tests/test_hardening.lua` (32 tests) + mutation check above | OFFLINE | suite | pass | 2026-11-16 |
 | R14 | docs | `docs/protocol.md`, `docs/vendored-libs.md`, CHANGELOG, README, `docs/status.md`, review files updated | READ-ONLY | files exist; content reviewed by the author only | n/a | 2026-11-16 |
-| (pkg) | package script output | `powershell tools/package.ps1` -> 23 files, every TOC file present, no backslash entries | OFFLINE (script run) | `built ...TalentShare-0.2.0.zip (23 files)`, check script: `missing from zip: []`, `backslash names: []` | pass | 2026-11-16 |
+| (pkg) | package script output | `powershell tools/package.ps1` -> 22 files after the rebase (AutoScan.lua is gone on master), every TOC file present, no backslash entries | OFFLINE (script run) | `built ...TalentShare-0.2.0.zip (22 files)`, check script: `missing from zip: []`, `backslash names: []` | pass | 2026-11-16 |
 
 ## In-game checklist (things only the user can do)
 - [ ] `/reload`, then `/ts version`: shows the TOC version, `protocol 2.0, schema 2`. No Lua errors (`/console scriptErrors 1`).
