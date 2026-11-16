@@ -6,6 +6,7 @@
 ## SavedVariables: TalentShareDB
 ## IconTexture: Interface\Icons\INV_Misc_Note_01
 ## X-Category: Professions
+## X-Website: https://legacy.curseforge.com/wow/addons/guild-talentshare
 
 Libs\LibStub\LibStub.lua
 Libs\LibDeflate\LibDeflate.lua

@@ -21,6 +21,15 @@ Legend: DONE = written; UNVERIFIED = needs the check in the last column. **Verif
 | T18 packaging | `tools/package.ps1`, `.pkgmeta`, workflow written; CurseForge project/token not created | `powershell tools/package.ps1`, install zip |
 | T19 soak | offline half DONE and passing (`tests/test_soak.lua`: 3000-case fuzz, 30 peers x 20 min at 10% loss converge); real-guild half not started | needs a real guild evening |
 
+## Publishing
+
+* CurseForge project (slug `guild-talentshare`), files uploaded **manually** from `dist/TalentShare-<version>.zip`
+  (built by `tools/package.ps1`): https://legacy.curseforge.com/wow/addons/guild-talentshare
+* Screenshots page: https://legacy.curseforge.com/wow/addons/guild-talentshare/screenshots
+* GitHub: https://github.com/rubertsmann/talentshare-ordering-system
+* Automated release (`.github/workflows/release.yml`) is NOT active: it needs `## X-Curse-Project-ID` in the TOC and the
+  repo secret `CF_API_TOKEN`.
+
 ## Differences from the plan
 
 * No AceComm / LibSerialize / ChatThrottleLib (no network access used). Messages are chunked at 225 bytes with header

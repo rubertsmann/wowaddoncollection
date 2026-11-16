@@ -10,6 +10,12 @@ shared crafting-order board.
 * No server. Data travels over hidden guild addon messages (prefix `TShare`) and is stored in the `TalentShareDB`
   SavedVariable.
 
+## Download
+
+CurseForge (manual uploads for now): https://legacy.curseforge.com/wow/addons/guild-talentshare
+(screenshots: https://legacy.curseforge.com/wow/addons/guild-talentshare/screenshots)
+Source: https://github.com/rubertsmann/talentshare-ordering-system
+
 ## Install (manual)
 
 Run `powershell tools/package.ps1`, unzip `dist/TalentShare-<version>.zip` into
