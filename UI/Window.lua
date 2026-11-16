@@ -205,24 +205,25 @@ end
 
 local function build()
     local ok
-    ok, f = pcall(CreateFrame, "Frame", "TalentShareFrame", UIParent, "BasicFrameTemplateWithInset")
+    local frameName = ns.FRAME .. "Frame"
+    ok, f = pcall(CreateFrame, "Frame", frameName, UIParent, "BasicFrameTemplateWithInset")
     if not ok or not f then
-        f = CreateFrame("Frame", "TalentShareFrame", UIParent, "BackdropTemplate")
+        f = CreateFrame("Frame", frameName, UIParent, "BackdropTemplate")
         f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
             edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
         local x = CreateFrame("Button", nil, f, "UIPanelCloseButton"); x:SetPoint("TOPRIGHT", -2, -2)
     end
     f:SetSize(780, 520)
-    f:SetPoint("CENTER")
+    f:SetPoint("CENTER", ns.IS_DEV and 40 or 0, ns.IS_DEV and -40 or 0)   -- dev window is offset so both can be open
     f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", f.StartMoving)
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
     f:SetFrameStrata("HIGH")
     f:Hide()
-    table.insert(UISpecialFrames, "TalentShareFrame")
+    table.insert(UISpecialFrames, frameName)
     f:SetScript("OnShow", function() ns.Events.Fire("WINDOW_OPENED"); UI.Refresh() end)
 
-    local title = text(f, "GameFontNormalLarge"); title:SetPoint("TOP", 0, -6); title:SetText("TalentShare")
+    local title = text(f, "GameFontNormalLarge"); title:SetPoint("TOP", 0, -6); title:SetText(ns.TITLE)
 
     f.tabBtns = {
         recipes = button(f, "Recipes", 90, 22, function() setTab("recipes") end),
@@ -381,13 +382,13 @@ end
 ------------------------------------------------------------------ minimap button
 
 local function placeMinimapButton(b)
-    local a = math.rad(ns.db and ns.db.ui.minimapAngle or 215)
+    local a = math.rad(ns.db and ns.db.ui.minimapAngle or (ns.IS_DEV and 245 or 215))
     b:ClearAllPoints()
     b:SetPoint("CENTER", Minimap, "CENTER", math.cos(a) * 80, math.sin(a) * 80)
 end
 
 local function buildMinimapButton()
-    local b = CreateFrame("Button", "TalentShareMinimapButton", Minimap)
+    local b = CreateFrame("Button", ns.FRAME .. "MinimapButton", Minimap)
     b:SetSize(31, 31); b:SetFrameStrata("MEDIUM"); b:SetFrameLevel(8)
     local icon = b:CreateTexture(nil, "BACKGROUND"); icon:SetSize(20, 20); icon:SetPoint("CENTER")
     icon:SetTexture("Interface\\Icons\\INV_Misc_Note_01")
@@ -398,7 +399,7 @@ local function buildMinimapButton()
     b:SetScript("OnClick", UI.Toggle)
     b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:SetText("TalentShare"); GameTooltip:AddLine("Click: open window. Right-drag: move.", 1, 1, 1); GameTooltip:Show()
+        GameTooltip:SetText(ns.TITLE); GameTooltip:AddLine("Click: open window. Right-drag: move.", 1, 1, 1); GameTooltip:Show()
     end)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
     b:SetScript("OnDragStart", function(self)

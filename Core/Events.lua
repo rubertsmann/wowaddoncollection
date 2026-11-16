@@ -44,7 +44,7 @@ local onEvent = {}
 
 function onEvent.ADDON_LOADED(name)
     if name ~= ADDON then return end
-    TalentShareDB = ns.Store.Init(TalentShareDB)
+    _G[ns.SVNAME] = ns.Store.Init(_G[ns.SVNAME])
     ns.orders = ns.Orders.New(ns.Util.Now, ns.db.orders)
     ns.Comm.Init()
 end

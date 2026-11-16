@@ -10,6 +10,7 @@ ignore:
   - screens-debug
   - review
   - features
+  - TalentShare-Dev.toc
   - .claude
   - .github
   - .gitignore
