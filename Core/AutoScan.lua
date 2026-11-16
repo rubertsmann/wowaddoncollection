@@ -140,10 +140,11 @@ function AutoScan.Instance()
     return AutoScan.inst
 end
 
--- manual = the player asked (button / slash): every failure is explained. Automatic runs stay quiet when there is
--- nothing to do. Returns true when a run started.
-function AutoScan.Run(manual)
-    local ok, reason = AutoScan.Instance():Start(not manual)
+-- manual = the player asked (button / slash): every failure is explained, and every profession is scanned.
+-- Automatic runs (onlyMissing, default for non-manual) stay quiet when there is nothing to do. Returns true when a run started.
+function AutoScan.Run(manual, onlyMissing)
+    if onlyMissing == nil then onlyMissing = not manual end
+    local ok, reason = AutoScan.Instance():Start(onlyMissing)
     if ok then
         ns.Print(ns.L["Scanning your professions (a few seconds) ..."])
         return true
@@ -155,10 +156,26 @@ function AutoScan.Run(manual)
         unsupported = L["This client cannot open professions automatically: open each profession window once."],
         nothing = L["Nothing to scan: no professions found."],
     }
-    if manual or reason == "unsupported" then
-        if msg[reason] then ns.Print(msg[reason]) end
-    end
+    -- an unsupported client is reported once per session, not on every window open
+    local speak = manual or (reason == "unsupported" and not AutoScan.warned)
+    if reason == "unsupported" then AutoScan.warned = true end
+    if speak and msg[reason] then ns.Print(msg[reason]) end
     return false
+end
+
+local AUTO_INTERVAL = 600   -- seconds: within this time an automatic run only reads professions that have no recipes yet
+
+-- Called whenever the addon window opens (default on; /ts autoscan off disables). Scans all professions when the last
+-- automatic scan is older than AUTO_INTERVAL, otherwise only the ones with nothing cached, so the Blizzard profession
+-- windows do not flash every time the window is opened. Returns true when a run started.
+function AutoScan.Auto()
+    local ui = ns.db and ns.db.ui
+    if not ui or ui.autoScan == false then return false end
+    local now = ns.Util.Now()
+    local stale = now - (ui.lastAutoScan or 0) >= AUTO_INTERVAL
+    local started = AutoScan.Run(false, not stale)
+    if started then ui.lastAutoScan = now end
+    return started
 end
 
 ns.Slash.autoscan = function(arg)

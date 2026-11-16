@@ -141,6 +141,39 @@ return {
         h.eq(#f.doneCalls, 1)
     end,
 
+    ["autoscan: opening the window scans by default, all professions at most every 10 minutes, otherwise only missing ones"] = function(h)
+        local ns = h.ns()
+        assert(loadfile("Core/AutoScan.lua"))("TalentShare", ns)
+        local calls, printed, result = {}, {}, { true }
+        ns.Print = function(msg) printed[#printed + 1] = msg end
+        ns.AutoScan.inst = { Start = function(_, onlyMissing) calls[#calls + 1] = onlyMissing; return result[1], result[2] end }
+        h.eq(ns.db.ui.autoScan, true, "must default to on")
+
+        h.eq(ns.AutoScan.Auto(), true)
+        h.eq(calls[1], false, "first open: scan everything")
+        h.clock = h.clock + 30
+        ns.AutoScan.Auto()
+        h.eq(calls[2], true, "reopened soon after: only professions with nothing cached")
+        h.clock = h.clock + 601
+        ns.AutoScan.Auto()
+        h.eq(calls[3], false, "after 10 minutes: scan everything again")
+
+        ns.db.ui.autoScan = false
+        h.eq(ns.AutoScan.Auto(), false); h.eq(#calls, 3, "switched off")
+        ns.db.ui.autoScan = true
+
+        -- failures: quiet when there is nothing to do, "unsupported" is said once per session, a failed start is not remembered
+        ns.db.ui.lastAutoScan = nil; printed = {}
+        result = { false, "nothing" }
+        h.eq(ns.AutoScan.Auto(), false); h.eq(#printed, 0); h.eq(ns.db.ui.lastAutoScan, nil)
+        result = { false, "unsupported" }
+        ns.AutoScan.Auto(); ns.AutoScan.Auto(); ns.AutoScan.Auto()
+        h.eq(#printed, 1, "unsupported must be reported once, not on every open")
+        result = { false, "combat" }
+        ns.AutoScan.Auto(); h.eq(#printed, 1, "automatic runs are silent in combat")
+        h.eq(ns.AutoScan.Run(true), false); h.eq(#printed, 2, "a manual run always explains")
+    end,
+
     ["autoscan: Cancel while idle is harmless"] = function(h)
         local f = newScan(h)
         f.scan:Cancel()

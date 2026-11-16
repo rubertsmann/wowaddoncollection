@@ -26,3 +26,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: NOT-VERIFIED: that OpenTradeSkill exists on Forever, that a second open switches the list, how the window looks while scanning
 - Evidence: n/a
 - Next: user runs `/reload`, `/tsd i18n` (look at the "auto scan:" line), then `/tsd autoscan` and pastes the chat output
+
+## 2026-11-16 10:34 | DEVIATION | automatic scan on every window open, default on
+- Did: user asked "auto scan should default be on - so opening the window auto scans". Old behaviour: once per session, only if recipes were missing (and `autoScan` was merely "not false"). New: `Store.Init` sets `ui.autoScan = true`; `UI/Window.lua` OnShow calls `AutoScan.Auto()` on every open; Auto scans everything if the last automatic scan is 10+ minutes old, else only missing professions; "unsupported" is reported once per session; `/ts clean` resets `lastAutoScan`; `AutoScan.Run(manual, onlyMissing)`; spec R2, doc.md and verify.md updated
+- Result: window flashing is bounded to once per 10 minutes (kept deliberately: the user did not ask for a scan on every single open)
+- Evidence: `luajit tests/run.lua` -> 61 passed, 0 failed (60 before; new test "autoscan: opening the window scans by default ...")
+- Next: in-game check (verify.md): open `/tsd` twice within 10 minutes (second time only scans if something is missing), and after 10 minutes (scans everything again)

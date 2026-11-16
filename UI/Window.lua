@@ -248,11 +248,8 @@ local function build()
     f:SetScript("OnShow", function()
         ns.Events.Fire("WINDOW_OPENED")
         UI.Refresh()
-        -- first open of this session and some profession has no cached recipes: read them now (disable: /ts autoscan off)
-        if not UI.autoScanTried and ns.db.ui.autoScan ~= false then
-            UI.autoScanTried = true
-            ns.AutoScan.Run(false)
-        end
+        -- opening the window reads the player's professions (default on; /ts autoscan off disables), see AutoScan.Auto
+        ns.AutoScan.Auto()
     end)
 
     local title = text(f, "GameFontNormalLarge"); title:SetPoint("TOP", 0, -6); title:SetText(ns.TITLE)

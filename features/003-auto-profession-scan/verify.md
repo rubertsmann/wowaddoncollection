@@ -9,7 +9,7 @@ Result after work:    `luajit tests/run.lua` -> 59 passed, 0 failed
 | ID | Requirement / Review Focus | How verified | Level | Evidence | Result | Date |
 |---|---|---|---|---|---|---|
 | R1 | One click / `/ts autoscan` scans every profession in turn | `autoscan: opens every profession in turn, ...` (state machine with a fake client) | OFFLINE (logic) / NOT-VERIFIED (real client: does OpenTradeSkill exist and take 165/185/393?) | tests/test_autoscan.lua | logic pass | 2026-11-16 |
-| R2 | Automatic first-open run when data is missing | `autoscan: onlyMissing ...`; UI hook read, never run | OFFLINE (filter) / READ-ONLY (UI hook) | tests/test_autoscan.lua | partly | 2026-11-16 |
+| R2 | Automatic run on every window open, default on, 10-minute throttle | `autoscan: opening the window scans by default, ...`, `autoscan: onlyMissing ...`; UI hook (`OnShow` -> `AutoScan.Auto`) read, never run | OFFLINE (policy) / READ-ONLY (UI hook) | tests/test_autoscan.lua | partly | 2026-11-16 |
 | R3 | Safe: combat, busy window, stuck list, window closed at end | `autoscan: refuses to start ...`, `... combat during the run ...`, `... waits for lists that load late ...` | OFFLINE | tests/test_autoscan.lua | pass | 2026-11-16 |
 | R4 | Client without the API: message, no error | `load: all TOC files run ...` (OpenTradeSkill missing -> Start returns false) | OFFLINE | tests/test_load.lua | pass | 2026-11-16 |
 | R5 | `NEW_RECIPE_LEARNED` rescans | code read (registered via pcall, so an unknown event is harmless) | READ-ONLY | Core/Events.lua | not run | 2026-11-16 |
@@ -23,7 +23,7 @@ Result after work:    `luajit tests/run.lua` -> 59 passed, 0 failed
 ## In-game checklist (things only the user can do)
 - [ ] `/reload`, then `/tsd i18n`: paste the line "auto scan: OpenTradeSkill true|false, CloseTradeSkill true|false".
 - [ ] No profession window open, `/tsd autoscan`: chat shows "Scanning your professions ..." then "Gescannt: Kochkunst 10, Lederverarbeitung 12, Kürschnerei 1" (numbers will differ); windows open and close by themselves.
-- [ ] `/tsd`: the recipe list is filled and the "Berufe scannen" button is at the top right of the Recipes tab.
+- [ ] `/tsd`: opening it starts the scan by itself (default on); the recipe list is filled and the "Berufe scannen" button is at the top right of the Recipes tab.
 - [ ] Fresh state (delete nothing: use `/tsd autoscan` once, or log in with an empty database): opening `/tsd` for the first time starts the scan by itself.
 - [ ] With a profession window open, the button says "Schließe zuerst dein Berufsfenster ...".
 - [ ] Start a scan and enter combat (or just verify it does not start in combat).

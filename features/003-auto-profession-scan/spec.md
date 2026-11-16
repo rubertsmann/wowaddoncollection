@@ -14,7 +14,7 @@ In game the recipe list of a profession is only readable while THAT profession's
 
 ## Requirements
 - R1: One click on "Scan professions" (Recipes tab) or `/ts autoscan` scans every profession of the character that has a skill line id, sequentially, and prints a one-line result per run ("Scanned: Kochkunst 10, ...").
-- R2: Automatic: the first time the addon window opens in a session and at least one of the player's professions has no cached recipes, the same run starts by itself (can be disabled: `/ts autoscan off`, re-enable `on`).
+- R2: Automatic and ON by default (`db.ui.autoScan`): every time the addon window opens, all professions are scanned if the last automatic scan is 10+ minutes old, otherwise only professions with no cached recipes (so the Blizzard windows do not flash on every open). Disable: `/ts autoscan off`, re-enable `on`. (Changed 2026-11-16 after the user asked "auto scan should default be on - so opening the window auto scans"; first version ran once per session and only for missing recipes.)
 - R3: Safe: never starts or continues in combat; never hijacks a profession window the player has open (it tells them to close it); a profession whose list does not load is skipped after ~4 s and the run continues; the player's window is closed at the end.
 - R4: A run that cannot work (no `C_TradeSkillUI.OpenTradeSkill` on the client) says so once and falls back to the manual hint; nothing errors.
 - R5: Learning a new recipe updates the cache by itself (`NEW_RECIPE_LEARNED` triggers the debounced scan).
