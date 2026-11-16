@@ -8,6 +8,7 @@ ignore:
   - tools
   - dist
   - screens-debug
+  - icon.png
   - review
   - features
   - TalentShare-Dev.toc
