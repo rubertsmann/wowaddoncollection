@@ -44,11 +44,11 @@ local function scheduleScan(delay)
     C_Timer.After(delay or 1.0, function()
         pendingScan = false
         local changed = ns.Scanner.Refresh(ns.Util.Now())
-        ns.Debug.Log("scan", changed and "changed" or "same")
+        ns.Debug.Log("scan", changed and "changed" or "same", ns.Scanner.lastOpen)
         if changed then
             Ev.Fire("LOCAL_CHANGED")
-            Ev.Fire("DATA_CHANGED", "chars")
         end
+        Ev.Fire("DATA_CHANGED", "chars")   -- also when unchanged: the profession buttons' counters must stay current
     end)
 end
 
@@ -92,7 +92,22 @@ end
 
 function onEvent.PLAYER_GUILD_UPDATE() ns.Comm.Start() end
 function onEvent.PLAYER_LEVEL_UP() scheduleScan(2) end
-function onEvent.TRADE_SKILL_SHOW() scheduleScan(1.5) end
+function onEvent.TRADE_SKILL_SHOW()
+    ns.Debug.Log("event", "TRADE_SKILL_SHOW")   -- a profession window really opened (after a click on a profession button)
+    scheduleScan(1.5)
+end
+
+-- The game's red error text (e.g. "no target", "action blocked") for 6 s after a click on a profession button, so a
+-- button that opens nothing can be explained from the log.
+function onEvent.UI_ERROR_MESSAGE(...)
+    if not (ns.UI and ns.UI.RecentBarClick and ns.UI.RecentBarClick()) then return end
+    local msg
+    for i = 1, select("#", ...) do
+        local v = select(i, ...)
+        if type(v) == "string" then msg = v end
+    end
+    ns.Debug.Log("uierror", msg)
+end
 function onEvent.TRADE_SKILL_LIST_UPDATE() scheduleScan(1.0) end
 function onEvent.TRADE_SKILL_DATA_SOURCE_CHANGED() scheduleScan(1.0) end
 function onEvent.SKILL_LINES_CHANGED() scheduleScan(2.0) end

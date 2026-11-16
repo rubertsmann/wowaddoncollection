@@ -170,6 +170,12 @@ local function createBarButton(parent, i)
     b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
     b:SetScript("OnEnter", barTooltip)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- log every click (PostClick runs after the secure action; it does not touch it)
+    b:HookScript("PostClick", function(self)
+        bar.clickAt = GetTime and GetTime() or 0
+        local r = self.row
+        ns.Debug.Log("click", r and r.name or "?", "macro=" .. (r and ns.Model.CastMacro(r):gsub("\n", " | ") or "?"))
+    end)
     if i == 1 then b:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
     else b:SetPoint("RIGHT", bar.buttons[i - 1], "LEFT", -4, 0) end
     b:Hide()
@@ -178,9 +184,35 @@ end
 
 -- Attributes and visibility of secure frames may not change in combat: then only the counters are updated and the
 -- rest is applied when combat ends (PLAYER_REGEN_ENABLED).
+-- true for 6 seconds after a click on a profession button (used to attribute the game's error messages)
+function UI.RecentBarClick()
+    return bar.clickAt ~= nil and GetTime and (GetTime() - bar.clickAt) < 6 or false
+end
+
+-- once per profession set and session: what the spellbook says about each profession (names, ids, passive flag), so a
+-- button that opens nothing (Skinning) can be diagnosed from SavedVariables without typing commands
+local function logProfessions(live)
+    local parts = {}
+    for _, p in ipairs(live) do
+        local spells = {}
+        for _, e in ipairs(p.spellEntries or {}) do
+            spells[#spells + 1] = ("%s#%s%s"):format(e.name, tostring(e.spellID), e.passive and "(passive)" or "")
+        end
+        parts[#parts + 1] = ("%s#%s offset=%s num=%s spells=[%s]"):format(p.name, tostring(p.id), tostring(p.spellOffset),
+            tostring(p.numSpells), table.concat(spells, ","))
+    end
+    local line = table.concat(parts, " ; ")
+    if line ~= bar.loggedLine then
+        bar.loggedLine = line
+        ns.Debug.Log("professions", line)
+    end
+end
+
 local function refreshBar()
     if not f then return end
-    bar.rows = ns.Model.OwnProfessions(ns.Store, me(), ns.Api.GetPlayerProfessions() or {})
+    local live = ns.Api.GetPlayerProfessions() or {}
+    logProfessions(live)
+    bar.rows = ns.Model.OwnProfessions(ns.Store, me(), live)
     local locked = ns.Api.InCombat()
     if locked then bar.dirty = true end
     for i = 1, MAX_BAR do

@@ -68,6 +68,8 @@ function Scanner.Refresh(now)
 
     -- recipes (only while a profession window is open and its list is loaded). An empty list never wipes data (RF2).
     local open = Api.GetOpenProfession()
+    -- what the scan saw, for the debug log (Events.lua): which profession window is open and how many recipes it lists
+    Scanner.lastOpen = open and ("%s#%s recipes=%d"):format(tostring(open.name), tostring(open.id), #open.recipes) or "no profession window"
     if open and #open.recipes > 0 then
         local oldKey = findKey(rec, open.id, open.name)
         local e = (oldKey and rec.professions[oldKey]) or { recipes = {} }
