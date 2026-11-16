@@ -7,7 +7,7 @@ The game only shows a profession's recipes while that profession's window is ope
 
 ## How to use
 - Automatic (default on): every time you open the TalentShare window your professions are scanned. To keep the profession windows from flashing on every open, all professions are re-read at most every 10 minutes; in between, only professions with no cached recipes are scanned.
-- Button: **Scan professions** (top right of the Recipes tab) or `/ts autoscan` (dev build: `/tsd autoscan`).
+- Button: the small reload symbol at the top right of the Recipes tab (tooltip: "Scan professions") or `/ts autoscan` (dev build: `/tsd autoscan`).
 - Turn the automatic run off or on: `/ts autoscan off` / `/ts autoscan on`.
 - New recipes you learn are picked up automatically afterwards (`NEW_RECIPE_LEARNED`).
 

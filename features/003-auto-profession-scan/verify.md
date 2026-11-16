@@ -23,7 +23,7 @@ Result after work:    `luajit tests/run.lua` -> 59 passed, 0 failed
 ## In-game checklist (things only the user can do)
 - [ ] `/reload`, then `/tsd i18n`: paste the line "auto scan: OpenTradeSkill true|false, CloseTradeSkill true|false".
 - [ ] No profession window open, `/tsd autoscan`: chat shows "Scanning your professions ..." then "Gescannt: Kochkunst 10, Lederverarbeitung 12, Kürschnerei 1" (numbers will differ); windows open and close by themselves.
-- [ ] `/tsd`: opening it starts the scan by itself (default on); the recipe list is filled and the "Berufe scannen" button is at the top right of the Recipes tab.
+- [ ] `/tsd`: opening it starts the scan by itself (default on); the recipe list is filled and the small reload symbol (tooltip "Berufe scannen") is at the top right of the Recipes tab; if the symbol shows as a blank or green square, the texture does not exist on Forever.
 - [ ] Fresh state (delete nothing: use `/tsd autoscan` once, or log in with an empty database): opening `/tsd` for the first time starts the scan by itself.
 - [ ] With a profession window open, the button says "Schließe zuerst dein Berufsfenster ...".
 - [ ] Start a scan and enter combat (or just verify it does not start in combat).

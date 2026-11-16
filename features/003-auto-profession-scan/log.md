@@ -32,3 +32,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: window flashing is bounded to once per 10 minutes (kept deliberately: the user did not ask for a scan on every single open)
 - Evidence: `luajit tests/run.lua` -> 61 passed, 0 failed (60 before; new test "autoscan: opening the window scans by default ...")
 - Next: in-game check (verify.md): open `/tsd` twice within 10 minutes (second time only scans if something is missing), and after 10 minutes (scans everything again)
+
+## 2026-11-16 10:38 | DEVIATION | scan button became a small reload symbol
+- Did: user asked "replace the button 'berufe scan' with a small reload symbol". `UI/Window.lua`: 20x20 icon button (texture `Interface\Buttons\UI-RefreshButton`, highlight, pressed offset) with tooltip "Scan professions" + one explanatory line; hint text now says "reload symbol at the top right"; `Locales/deDE.lua` updated; README, doc.md, verify.md adjusted
+- Result: the texture path is the stock retail refresh icon; whether it exists on Forever is NOT-VERIFIED (a missing texture would show as a blank/green square)
+- Evidence: `luajit tests/run.lua` -> 61 passed, 0 failed (lint tests confirm the new strings exist in deDE)
+- Next: user opens `/tsd` and looks at the top right of the Recipes tab
