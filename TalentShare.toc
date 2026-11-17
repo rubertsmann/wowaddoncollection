@@ -2,7 +2,7 @@
 ## Title: TalentShare
 ## Notes: Shares guild members' professions, recipes and reagents, plus a crafting order board.
 ## Author: rubertsmann
-## Version: 0.5.0
+## Version: 0.6.0
 ## SavedVariables: TalentShareDB
 ## IconTexture: Interface\Icons\INV_Misc_Note_01
 ## X-Category: Professions
@@ -11,28 +11,35 @@
 Libs\LibStub\LibStub.lua
 Libs\LibDeflate\LibDeflate.lua
 
-Core\Init.lua
-Core\Util.lua
-Core\Trace.lua
-Core\Locale.lua
+Core\Base\Init.lua
+Core\Base\Utility.lua
+Core\Base\Log.lua
+Core\Debug\Trace.lua
+Core\Base\Locale.lua
 Locales\enUS.lua
 Locales\deDE.lua
-Core\Store.lua
-Core\Names.lua
-Core\Api.lua
-Core\Scanner.lua
-Core\Codec.lua
-Core\Guard.lua
-Core\Orders.lua
-Core\Offers.lua
-Core\Sync.lua
-Core\Model.lua
-Core\ItemText.lua
-Core\Notify.lua
-Core\Comm.lua
-Core\Diag.lua
-Core\Events.lua
+Core\Data\Store.lua
+Core\View\Names.lua
+Core\Game\Api.lua
+Core\Data\Scanner.lua
+Core\Net\Codec.lua
+Core\Net\Guard.lua
+Core\Data\Orders.lua
+Core\Data\Offers.lua
+Core\Play\Games.lua
+Core\Play\CoinFlip.lua
+Core\Play\Slots.lua
+Core\Net\Sync.lua
+Core\View\Model.lua
+Core\View\ItemText.lua
+Core\View\Notify.lua
+Core\Net\Communication.lua
+Core\Debug\Diagnostics.lua
+Core\Game\Events.lua
 
 UI\Window.lua
+UI\Animate.lua
+UI\GamesTab.lua
+UI\SlotMachine.lua
 UI\Alerts.lua
 UI\DevProbe.lua

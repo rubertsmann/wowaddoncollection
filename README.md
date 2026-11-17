@@ -45,11 +45,32 @@ profession icons at the top right of the Recipes tab (one click opens that profe
 `/ts clean` then `/ts clean confirm` (deletes everything stored locally). In the dev build use `/tsd`.
 The UI is available in English and German; profession and recipe names always follow your own game client.
 
+**Games tab:** pick a game at the top: a coin flip (heads or tails) or a slot machine (3 reels, 5 paylines). Enter a stake
+in gold, silver and copper and play; your wins and losses show on that game's guild leaderboard (this week / all time)
+next to everyone else's. For fun only: no gold changes hands, the addon
+never reads or moves your gold.
+
 ## Develop
 
 * Offline tests (pure logic): install LuaJIT (`winget install DEVCOM.LuaJIT`), then `luajit tests/run.lua`.
 * `dev/TalentShareProbe` (`tools/deploy.ps1 -WithProbe`, `/tsp`, `/reload`) records which APIs exist on the client into
   `WTF\...\SavedVariables\TalentShareProbeDB.lua`.
+* Code layout (load order is the TOC, not the folders):
+
+  | Folder | Layer | Files |
+  |---|---|---|
+  | `Core/Base/` | identity, shared helpers, logging, localization | Init, Utility, Log, Locale (+ `Locales/`) |
+  | `Core/Debug/` | network trace, diagnostic report | Trace, Diagnostics |
+  | `Core/Data/` | SavedVariables schema and records | Store, Orders, Offers, Scanner |
+  | `Core/Net/` | addon-channel communication | Codec, Guard, Sync, Communication |
+  | `Core/Game/` | the WoW API boundary | Api, Events |
+  | `Core/View/` | view-models for the UI (pure) | Model, Names, ItemText, Notify |
+  | `Core/Play/` | guild games: rules, records, animation math (pure) | Games, CoinFlip, Slots |
+  | `UI/` | frames | Window, Animate, GamesTab, SlotMachine, Alerts, DevProbe (dev build only) |
+
+  Everything in `Core/` except `Core/Game/` is pure Lua and runs in the offline tests.
+* Naming, type annotations and logging rules: `docs/coding-conventions.md`. Every diagnostic goes through
+  `Core/Base/Log.lua`; read it with `/ts debug` or in the `/ts export` report.
 * Architecture and task breakdown: `eval/plan.md`. Verification status: `docs/status.md`.
 * New work is planned, logged, verified and documented per feature under `features/` (see `features/INDEX.md` and
   `.claude/skills/feature-workflow/SKILL.md`).
@@ -57,7 +78,8 @@ The UI is available in English and German; profession and recipe names always fo
 ## Trust model
 
 Any guild member running the addon can create/claim/close orders and can only publish **their own** character record
-(and their own offers and dibs: nobody can set or remove another player's dib).
+(and their own offers and dibs: nobody can set or remove another player's dib; and their own coin-flip results, which are
+self-reported: other clients check that the numbers are well-formed and consistent, not that they are true).
 There is no authentication beyond guild membership, but nothing from outside the guild is processed: only guild
 messages and whispers from guild-roster members are accepted, and all received data is validated before it is stored or shown.
 

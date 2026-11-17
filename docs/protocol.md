@@ -1,7 +1,7 @@
 # Wire protocol, compatibility and stored data
 
-Applies from 0.3.0 (protocol 2.0, schema 2); 0.4.0 adds protocol 2.1 and schema 3 (sections 6 and 7); 0.4.1 adds protocol 2.2 (section 8). Source of truth in code: `Core/Init.lua` (versions), `Core/Codec.lua`
-(format), `Core/Guard.lua` (gate), `Core/Comm.lua` (transport), `Core/Sync.lua` (messages), `Core/Store.lua` (schema).
+Applies from 0.3.0 (protocol 2.0, schema 2); 0.4.0 adds protocol 2.1 and schema 3 (sections 6 and 7); 0.4.1 adds protocol 2.2 (section 8). Source of truth in code: `Core/Base/Init.lua` (versions), `Core/Net/Codec.lua`
+(format), `Core/Net/Guard.lua` (gate), `Core/Net/Communication.lua` (transport), `Core/Net/Sync.lua` (messages), `Core/Data/Store.lua` (schema).
 Tests: `tests/test_hardening.lua`.
 
 ## 1. Transport
@@ -27,10 +27,10 @@ Tests: `tests/test_hardening.lua`.
 | **older major** or legacy layout | dropped; one notice "older version cannot sync" |
 | malformed header | silently ignored |
 
-- **Major** (`ns.PROTO_MAJOR`): any breaking change: chunk header, serializer, compression/encoding, meaning or required
+- **Major** (`addon.PROTOCOL_MAJOR`): any breaking change: chunk header, serializer, compression/encoding, meaning or required
   fields of an existing message. Peers with a different major never exchange data. Bump it deliberately and say so in the
   CHANGELOG.
-- **Minor** (`ns.PROTO_MINOR`): additive only: new optional fields, new message types. Receivers ignore unknown fields
+- **Minor** (`addon.PROTOCOL_MINOR`): additive only: new optional fields, new message types. Receivers ignore unknown fields
   and unknown message types (already the behaviour: `Sync` drops unknown `t`, the sanitizers copy known fields only).
   Never remove, retype or repurpose a field inside a major.
 - The payload also carries `v = major` (checked after decoding) so a header/payload mismatch is dropped.
@@ -38,10 +38,10 @@ Tests: `tests/test_hardening.lua`.
   `/ts comm` shows `protocol`, `rejected` and `incompatible peers`.
 - Old clients cannot be told about newer ones (they cannot read the new header): the notice only works from 0.3.0 on.
 
-## 3. Inbound gate (`Core/Guard.lua`)
-Run first in `Comm.OnAddonMessage`; nothing from outside the guild is parsed, buffered or answered.
+## 3. Inbound gate (`Core/Net/Guard.lua`)
+Run first in `Communication.OnAddonMessage`; nothing from outside the guild is parsed, buffered or answered.
 - `GUILD`: accepted (the server delivers it only to guild members).
-- `WHISPER`: accepted only if the sender is in the cached guild roster (`Comm.roster`, refreshed on every roster update).
+- `WHISPER`: accepted only if the sender is in the cached guild roster (`Communication.roster`, refreshed on every roster update).
   An empty/unknown roster rejects (fail closed); right after login early whispers may be dropped and are re-requested by the
   next HELLO.
 - Any other channel: rejected.
@@ -53,7 +53,7 @@ Everything received (and everything loaded from SavedVariables) is rebuilt by al
 `Store.SanitizeChar`, `Store.SanitizeCatalogEntry`, `Orders.Sanitize`. Rules: finite numbers only (parser rejects `inf`/`nan`),
 integers within ranges, timestamps in `[0, now + 1 day]`, strings UTF-8 + length-bounded + no control characters, names
 without `|`, `icon` = numeric file id or plain path. A SNAP may only carry catalog entries for recipes the sender knows.
-Display: every peer-originated string leaves `Core/Model.lua` escaped (`|` -> `||`).
+Display: every peer-originated string leaves `Core/View/Model.lua` escaped (`|` -> `||`).
 
 ## 5. Stored data (SavedVariables `TalentShareDB`)
 `Store.SCHEMA`:
@@ -80,7 +80,7 @@ Additive minor change: a 2.0 peer ignores everything below (unknown HELLO field 
 - `Offers.Sanitize` (allow-list, one bad entry rejects the record): <= 300 items, <= 200 dibs, counts 1..9999, `rev`/`t` in
   `[0, now + 1 day]`, dib keys parse to a safe owner name + item id, no dib on the author's own items.
 - Display safety: item names/icons/profession come from the viewer's client (`C_Item.GetItemInfoInstant`: only class Recipe is shown);
-  owner and dibber names are escaped in `Core/Model.lua`.
+  owner and dibber names are escaped in `Core/View/Model.lua`.
 
 ## 7. Stored data additions (schema 3)
 `offers[name]` (records above), `hidden["Owner:itemID"] = ownerRev` (local removal; void once the owner's `rev` changes).
@@ -89,7 +89,7 @@ Migration 2 -> 3 only creates the two tables. Both are re-validated on every loa
 ## 8. Canonical names, pull retry over GUILD, order name snapshot (protocol 2.2; feature 008)
 Additive minor change: a 2.1 peer ignores the new fields and keeps working as before.
 - **Names (local, no wire change):** every player name from the wire, the roster and the client is compared and stored as
-  `Util.Canon(name)`: any spelling of MY realm (case, spaces, apostrophes, hyphens; plus spellings learned from the roster's
+  `Utility.CanonicalName(name)`: any spelling of MY realm (case, spaces, apostrophes, hyphens; plus spellings learned from the roster's
   entry for my own character and from the sender of my own GUILD echo) becomes `Name-<GetNormalizedRealmName>`; other
   realms keep their suffix without spaces. Stored keys are rewritten on login and whenever a new spelling is learned
   (`Store.Recanon`). `WANT`/`WANTO` names, `SNAP`/`OFFERS` record names and order names are compared in canonical form.
@@ -102,9 +102,32 @@ Additive minor change: a 2.1 peer ignores the new fields and keeps working as be
 - **Anti-entropy:** every client sends a HELLO every 15 minutes.
 - **Forever surnames:** a player's name is "First Surname-Realm" (see docs/api-findings.md). `WANT`/`WANTO` names carry the
   full name plus the first-name form a 0.4.0 client uses for itself (`Util.LegacyName`, omitted when two members share the
-  first name), so 0.4.0 members answer; their records ("First-Realm") are mapped to the full name by `Util.Canon`.
+  first name), so 0.4.0 members answer; their records ("First-Realm") are mapped to the full name by `Utility.CanonicalName`.
   Verified offline against the real 0.4.0 code (git 7c0a09b): records flow in both directions.
 
-## 9. Version source
-One source: the TOC `## Version` (`Core/Init.lua` reads it from addon metadata; a literal fallback exists for the offline
+## 9. Guild games: coin flip results (protocol 2.3, schema 4; feature 014)
+Additive minor change: a 2.2 peer ignores `grev` and drops `WANTG`/`GAMES` as unknown types, so everything else keeps syncing.
+- **Record** (`Core/Play/Games.lua`), one per character, authored only by that character, replaced as a whole by a newer `rev`:
+  `{ name, rev, total = {won, lost, wins, losses}, weeks = { ["YYYY-Www"] = {won, lost, wins, losses} } (<= 4 keys),
+  recent = { {c = stake, r = "W"|"L", t = time} } (<= 20, newest first) }`. Amounts are in **copper** (1g = 10 000c),
+  bookkeeping only (no real gold is read or moved). Week keys are ISO 8601 weeks in UTC.
+- **Slot machine section (optional) `slots = { total, weeks, recent }`:** same shape and limits as the coin section, but
+  recent entries are `{c = stake, n = net, t}` with `n = -c` (a loss) or `c <= n <= c * 374` (a win; 5 paylines x 75 is the
+  highest multiplier). Win totals may reach `wins * 1e9 * 374`. Every game has its own section and its own leaderboard;
+  a client that does not know a section drops it (allow-list copy).
+- **`HELLO` field `grev` (optional):** my record's `rev` when I have one. Pulled exactly like `orev`: `WANTG {names, via?}`
+  (whisper first, then GUILD with `via = "GUILD"` after 45/90 s), answered with `GAMES {games}`.
+- **Validation (whole record rejected on one bad entry):** safe name equal to the sender (canonical form); `rev` in
+  `[0, now + 1 day]`; totals integers with `won, lost <= 2e13` copper, `wins, losses <= 1 000 000` and consistent
+  (`wins <= won <= wins * 1e9`, same for losses); week keys `YYYY-Www` with year 2020..2100, week 1..53, not after the week
+  of `now + 1 day`; `recent` a dense array of at most 20 flips with `c` in 1..1e9 (1c to 100 000g), `r` "W"/"L", `t` in `[0, now + 1 day]`.
+  Results are self-reported (trust model): bounds and consistency are checked, truth is not.
+- **Announce:** a flip sends a coalesced HELLO (at once when the last one is 30 s old, else one when the 30 s are over).
+- **Stored data (schema 4):** `games[name]`. Migration 3 -> 4 only creates the table; it is re-validated on every load,
+  emptied by `/ts clean`, pruned with players who left the guild, and peer records are dropped by the version-change reset.
+- **Display:** names are escaped in `Core/View/Model.lua`. Dev-build simulated players (`/tsd game sim`) live outside the
+  database and are never sent.
+
+## 10. Version source
+One source: the TOC `## Version` (`Core/Base/Init.lua` reads it from addon metadata; a literal fallback exists for the offline
 tests and is pinned to the TOC by a test). The release workflow refuses a tag that does not match the TOC version.

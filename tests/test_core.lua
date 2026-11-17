@@ -1,118 +1,118 @@
 -- Util, Store, Codec, Model
 return {
-    ["util: FullName strips realm spaces and keeps existing realms"] = function(h)
-        local ns = h.ns()
-        h.eq(ns.Util.FullName("Bob", "Area 52"), "Bob-Area52")
-        h.eq(ns.Util.FullName("Bob-Area52"), "Bob-Area52")
-        h.eq(ns.Util.Count({ a = 1, b = 2 }), 2)
+    ["util: FullName strips realm spaces and keeps existing realms"] = function(harness)
+        local addon = harness.addon()
+        harness.equal(addon.Utility.FullName("Bob", "Area 52"), "Bob-Area52")
+        harness.equal(addon.Utility.FullName("Bob-Area52"), "Bob-Area52")
+        harness.equal(addon.Utility.Count({ a = 1, b = 2 }), 2)
     end,
 
-    ["store: PutChar keeps the newer rev only"] = function(h)
-        local ns = h.ns()
-        h.truthy(ns.Store.PutChar(h.char("A-R", 10, { 1 })))
-        h.eq(ns.Store.PutChar(h.char("A-R", 5, { 1, 2 })), false)
-        h.eq(ns.Store.GetChar("A-R").rev, 10)
+    ["store: PutChar keeps the newer rev only"] = function(harness)
+        local addon = harness.addon()
+        harness.truthy(addon.Store.PutCharacter(harness.character("A-R", 10, { 1 })))
+        harness.equal(addon.Store.PutCharacter(harness.character("A-R", 5, { 1, 2 })), false)
+        harness.equal(addon.Store.GetCharacter("A-R").rev, 10)
     end,
 
-    ["store: Crafters lists only characters knowing the recipe, best rank first"] = function(h)
-        local ns = h.ns()
-        ns.Store.PutChar(h.char("A-R", 1, { 42 }, 50))
-        ns.Store.PutChar(h.char("B-R", 1, { 42 }, 200))
-        ns.Store.PutChar(h.char("C-R", 1, { 7 }, 300))
-        local c = ns.Store.Crafters(42)
-        h.eq(#c, 2); h.eq(c[1].name, "B-R")
+    ["store: Crafters lists only characters knowing the recipe, best rank first"] = function(harness)
+        local addon = harness.addon()
+        addon.Store.PutCharacter(harness.character("A-R", 1, { 42 }, 50))
+        addon.Store.PutCharacter(harness.character("B-R", 1, { 42 }, 200))
+        addon.Store.PutCharacter(harness.character("C-R", 1, { 7 }, 300))
+        local c = addon.Store.Crafters(42)
+        harness.equal(#c, 2); harness.equal(c[1].name, "B-R")
     end,
 
-    ["store: Prune removes members who left the guild but never me"] = function(h)
-        local ns = h.ns()
-        ns.Store.PutChar(h.char("A-R", 1, {})); ns.Store.PutChar(h.char("Gone-R", 1, {})); ns.Store.PutChar(h.char("Me-R", 1, {}))
-        h.eq(ns.Store.Prune({ ["A-R"] = true }, "Me-R"), 1)
-        h.truthy(ns.Store.GetChar("Me-R")); h.eq(ns.Store.GetChar("Gone-R"), nil)
+    ["store: Prune removes members who left the guild but never me"] = function(harness)
+        local addon = harness.addon()
+        addon.Store.PutCharacter(harness.character("A-R", 1, {})); addon.Store.PutCharacter(harness.character("Gone-R", 1, {})); addon.Store.PutCharacter(harness.character("Me-R", 1, {}))
+        harness.equal(addon.Store.Prune({ ["A-R"] = true }, "Me-R"), 1)
+        harness.truthy(addon.Store.GetCharacter("Me-R")); harness.equal(addon.Store.GetCharacter("Gone-R"), nil)
     end,
 
-    ["store: ValidateChar rejects rank > max and non-numeric recipe ids"] = function(h)
-        local ns = h.ns()
-        h.truthy(ns.Store.ValidateChar(h.char("A-R", 1, { 1 })))
-        local bad = h.char("A-R", 1, { 1 }, 400)
-        h.eq(ns.Store.ValidateChar(bad), false)
-        local bad2 = h.char("A-R", 1, {}); bad2.professions.Cooking.recipes.x = true
-        h.eq(ns.Store.ValidateChar(bad2), false)
+    ["store: ValidateChar rejects rank > max and non-numeric recipe ids"] = function(harness)
+        local addon = harness.addon()
+        harness.truthy(addon.Store.ValidateCharacter(harness.character("A-R", 1, { 1 })))
+        local bad = harness.character("A-R", 1, { 1 }, 400)
+        harness.equal(addon.Store.ValidateCharacter(bad), false)
+        local bad2 = harness.character("A-R", 1, {}); bad2.professions.Cooking.recipes.x = true
+        harness.equal(addon.Store.ValidateCharacter(bad2), false)
     end,
 
-    ["codec: round trip a snapshot message"] = function(h)
-        local ns = h.ns()
-        local msg = { t = "SNAP", char = h.char("A-R", 99, { 1, 2, 3 }), catalog = { [1] = { name = "x", reagents = { { itemID = 5, count = 2 } } } } }
-        local out = assert(ns.Codec.Decode(ns.Codec.Encode(msg)))
-        h.eq(out.t, "SNAP"); h.eq(out.char.rev, 99); h.eq(out.catalog[1].reagents[1].count, 2)
+    ["codec: round trip a snapshot message"] = function(harness)
+        local addon = harness.addon()
+        local msg = { t = "SNAP", char = harness.character("A-R", 99, { 1, 2, 3 }), catalog = { [1] = { name = "x", reagents = { { itemID = 5, count = 2 } } } } }
+        local out = assert(addon.Codec.Decode(addon.Codec.Encode(msg)))
+        harness.equal(out.t, "SNAP"); harness.equal(out.char.rev, 99); harness.equal(out.catalog[1].reagents[1].count, 2)
     end,
 
-    ["codec: garbage never throws (RF5)"] = function(h)
-        local ns = h.ns()
+    ["codec: garbage never throws (RF5)"] = function(harness)
+        local addon = harness.addon()
         for _, s in ipairs({ "", "garbage", string.rep("x", 100), "\1\2\3" }) do
-            local m, err = ns.Codec.Decode(s)
-            h.eq(m, nil); h.truthy(err)
+            local m, err = addon.Codec.Decode(s)
+            harness.equal(m, nil); harness.truthy(err)
         end
-        h.eq((ns.Codec.Decode(nil)), nil)
-        h.eq((ns.Codec.Deserialize("{n1;")), nil)
-        h.eq((ns.Codec.Deserialize(("{"):rep(50))), nil)
+        harness.equal((addon.Codec.Decode(nil)), nil)
+        harness.equal((addon.Codec.Deserialize("{n1;")), nil)
+        harness.equal((addon.Codec.Deserialize(("{"):rep(50))), nil)
     end,
 
-    ["codec: a different protocol version is rejected"] = function(h)
-        local ns = h.ns()
-        local enc = ns.Codec.Encode({ t = "HELLO" })
-        ns.PROTOCOL = ns.PROTO_MAJOR + 1
-        h.eq((ns.Codec.Decode(enc)), nil)
+    ["codec: a different protocol version is rejected"] = function(harness)
+        local addon = harness.addon()
+        local enc = addon.Codec.Encode({ t = "HELLO" })
+        addon.PROTOCOL = addon.PROTOCOL_MAJOR + 1
+        harness.equal((addon.Codec.Decode(enc)), nil)
     end,
 
-    ["model: recipe rows filter by profession and search recipe or reagent, merging crafters"] = function(h)
-        local ns = h.ns()
-        ns.Store.PutChar(h.char("A-R", 1, { 1, 2 }))
-        ns.Store.PutChar(h.char("B-R", 1, { 2 }))
-        ns.Store.PutCatalog({ [1] = { name = "Roast Boar", reagents = { { itemID = 10, count = 1, name = "Boar Meat" } } },
+    ["model: recipe rows filter by profession and search recipe or reagent, merging crafters"] = function(harness)
+        local addon = harness.addon()
+        addon.Store.PutCharacter(harness.character("A-R", 1, { 1, 2 }))
+        addon.Store.PutCharacter(harness.character("B-R", 1, { 2 }))
+        addon.Store.PutCatalog({ [1] = { name = "Roast Boar", reagents = { { itemID = 10, count = 1, name = "Boar Meat" } } },
             [2] = { name = "Spiced Wolf", reagents = { { itemID = 11, count = 2, name = "Wolf Meat" } } } })
-        local rows = ns.Model.BuildRecipeRows(ns.Store, { text = "" })
-        h.eq(#rows, 2)
+        local rows = addon.Model.BuildRecipeRows(addon.Store, { text = "" })
+        harness.equal(#rows, 2)
         local byName = {}
         for _, r in ipairs(rows) do byName[r.name] = r end
-        h.eq(byName["Spiced Wolf"].crafterCount, 2)
-        h.eq(#ns.Model.BuildRecipeRows(ns.Store, { text = "boar" }), 1)
-        h.eq(#ns.Model.BuildRecipeRows(ns.Store, { text = "wolf meat" }), 1)   -- reagent search
+        harness.equal(byName["Spiced Wolf"].crafterCount, 2)
+        harness.equal(#addon.Model.BuildRecipeRows(addon.Store, { text = "boar" }), 1)
+        harness.equal(#addon.Model.BuildRecipeRows(addon.Store, { text = "wolf meat" }), 1)   -- reagent search
         -- profession filters use the canonical key (Names.ProfKey), not the raw name
-        h.eq(#ns.Model.BuildRecipeRows(ns.Store, { profession = ns.Names.ProfKey("Tailoring"), text = "" }), 0)
-        h.eq(#ns.Model.BuildRecipeRows(ns.Store, { profession = ns.Names.ProfKey("Cooking"), text = "" }), 2)
-        h.eq(#ns.Model.BuildRecipeRows(ns.Store, { text = "", mineOnly = true, me = "B-R" }), 1)
+        harness.equal(#addon.Model.BuildRecipeRows(addon.Store, { profession = addon.Names.ProfessionKey("Tailoring"), text = "" }), 0)
+        harness.equal(#addon.Model.BuildRecipeRows(addon.Store, { profession = addon.Names.ProfessionKey("Cooking"), text = "" }), 2)
+        harness.equal(#addon.Model.BuildRecipeRows(addon.Store, { text = "", mineOnly = true, me = "B-R" }), 1)
     end,
 
-    ["store: Clean empties everything in place, keeps preferences, and holders of the tables keep working"] = function(h)
-        local ns = h.ns()
-        ns.db.ui.minimapAngle = 99; ns.db.me = "A-R"
-        ns.Store.PutChar(h.char("A-R", 1, { 1, 2 })); ns.Store.PutChar(h.char("B-R", 1, { 2 }))
-        ns.Store.PutCatalog({ [1] = { name = "x", reagents = {} } })
-        ns.db.profNames.deDE = { [185] = "Kochkunst" }
-        ns.db.debug[1] = "log"
-        local orders = ns.Orders.New(function() return h.clock end, ns.db.orders)
+    ["store: Clean empties everything in place, keeps preferences, and holders of the tables keep working"] = function(harness)
+        local addon = harness.addon()
+        addon.db.ui.minimapAngle = 99; addon.db.me = "A-R"
+        addon.Store.PutCharacter(harness.character("A-R", 1, { 1, 2 })); addon.Store.PutCharacter(harness.character("B-R", 1, { 2 }))
+        addon.Store.PutCatalog({ [1] = { name = "x", reagents = {} } })
+        addon.db.profNames.deDE = { [185] = "Kochkunst" }
+        addon.db.debug[1] = "log"
+        local orders = addon.Orders.New(function() return harness.clock end, addon.db.orders)
         orders:Create("A-R", 1, 1, "")
-        local n = ns.Store.Counts()
-        h.eq(n.chars, 2); h.eq(n.recipes, 3); h.eq(n.orders, 1); h.eq(n.catalog, 1); h.eq(n.names, 1)
+        local n = addon.Store.Counts()
+        harness.equal(n.chars, 2); harness.equal(n.recipes, 3); harness.equal(n.orders, 1); harness.equal(n.catalog, 1); harness.equal(n.names, 1)
 
-        local removed = ns.Store.Clean()
-        h.eq(removed.chars, 2); h.eq(removed.orders, 1)
-        local after = ns.Store.Counts()
-        h.eq(after.chars + after.recipes + after.orders + after.catalog + after.names, 0)
-        h.eq(#ns.db.debug, 0)
-        h.eq(ns.db.ui.minimapAngle, 99, "preferences must survive"); h.eq(ns.db.me, "A-R"); h.eq(ns.db.schema, ns.Store.SCHEMA)
-        h.eq(#orders:List({ showClosed = true }), 0, "the order board must see the wipe")
+        local removed = addon.Store.Clean()
+        harness.equal(removed.chars, 2); harness.equal(removed.orders, 1)
+        local after = addon.Store.Counts()
+        harness.equal(after.chars + after.recipes + after.orders + after.catalog + after.names, 0)
+        harness.equal(#addon.db.debug, 0)
+        harness.equal(addon.db.ui.minimapAngle, 99, "preferences must survive"); harness.equal(addon.db.me, "A-R"); harness.equal(addon.db.schema, addon.Store.SCHEMA)
+        harness.equal(#orders:List({ showClosed = true }), 0, "the order board must see the wipe")
         local o = orders:Create("A-R", 2, 1, "")                    -- the same object still stores into the live table
-        h.truthy(o and ns.db.orders[o.id], "orders holder lost its table")
-        h.eq(ns.Store.PutChar(h.char("C-R", 1, { 1 })), true)
-        h.eq(ns.Store.Clean().chars, 1)
+        harness.truthy(o and addon.db.orders[o.id], "orders holder lost its table")
+        harness.equal(addon.Store.PutCharacter(harness.character("C-R", 1, { 1 })), true)
+        harness.equal(addon.Store.Clean().chars, 1)
     end,
 
-    ["model: recipe detail computes have/enough and tolerates missing item names"] = function(h)
-        local ns = h.ns()
-        ns.Store.PutCatalog({ [1] = { name = "Roast", reagents = { { itemID = 10, count = 3 }, { itemID = 11, count = 1 } } } })
-        local d = ns.Model.RecipeDetail(ns.Store, 1, function(id) return id == 10 and 2 or 5 end, function() return nil end)
-        h.eq(d.reagents[1].enough, false); h.eq(d.reagents[2].enough, true); h.eq(d.reagents[1].name, "Item #10")
-        h.eq(ns.Model.RecipeDetail(ns.Store, 999).name, "Recipe #999")
+    ["model: recipe detail computes have/enough and tolerates missing item names"] = function(harness)
+        local addon = harness.addon()
+        addon.Store.PutCatalog({ [1] = { name = "Roast", reagents = { { itemID = 10, count = 3 }, { itemID = 11, count = 1 } } } })
+        local d = addon.Model.RecipeDetail(addon.Store, 1, function(id) return id == 10 and 2 or 5 end, function() return nil end)
+        harness.equal(d.reagents[1].enough, false); harness.equal(d.reagents[2].enough, true); harness.equal(d.reagents[1].name, "Item #10")
+        harness.equal(addon.Model.RecipeDetail(addon.Store, 999).name, "Recipe #999")
     end,
 }

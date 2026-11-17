@@ -4,7 +4,7 @@ Both libraries are copied verbatim into `Libs/` and shipped in the package. Keep
 
 | Library | Version | Upstream | Licence | Used for |
 |---|---|---|---|---|
-| LibDeflate | 1.0.2-release (file header) | https://github.com/SafeteeWoW/LibDeflate (author Haoqian He) | zlib (`Libs/LibDeflate/LICENSE.txt`) | `Core/Codec.lua`: DEFLATE compression and `EncodeForWoWAddonChannel` |
+| LibDeflate | 1.0.2-release (file header) | https://github.com/SafeteeWoW/LibDeflate (author Haoqian He) | zlib (`Libs/LibDeflate/LICENSE.txt`) | `Core/Net/Codec.lua`: DEFLATE compression and `EncodeForWoWAddonChannel` |
 | LibStub | MINOR 2 | WoWAce / CurseForge standard copy | public domain (file header) | resolving LibDeflate (`LibStub:GetLibrary`) |
 
 ## Provenance
@@ -27,7 +27,7 @@ acbecf8578f4febb766a1dd0217336e2e7ec19e66d13c907e38b01b1b727d7df  Libs/LibDeflat
 - `LibDeflate.lua` contains a command-line section (uses `io.open`, near line 3419). It never runs inside WoW (no `io`).
   It is left in so the file stays identical to upstream; stripping it would make updates harder to verify.
 - `LibDeflate:DecompressDeflate` has no output limit, so a small compressed message can inflate to a large buffer. Mitigations
-  in this addon: only guild messages are processed (`Core/Guard.lua`), the encoded size is capped at
+  in this addon: only guild messages are processed (`Core/Net/Guard.lua`), the encoded size is capped at
   `Codec.MAX_ENCODED`, and the raw size after inflate is rejected above `MAX_RAW` (checked after inflating).
 - Update procedure: replace the files from the upstream release, update the versions and hashes above, run
   `luajit tests/run.lua`, then bump nothing else unless the wire output changed (a change in compression output that old

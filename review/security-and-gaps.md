@@ -7,12 +7,12 @@ Date: 2026-11-16 · Scope: whole repo (working tree + all commits) · Status: **
 ## Secrets: clean
 - No tokens, keys, PEM blocks or webhook URLs in the tree or in git history.
 - Workflow uses `${{ secrets.CF_API_TOKEN }}` / `${{ secrets.GITHUB_TOKEN }}` only.
-- No `loadstring` / `RunScript` / `setfenv` in addon code; `Core/Codec.lua` is a bounded hand-written serializer.
+- No `loadstring` / `RunScript` / `setfenv` in addon code; `Core/Net/Codec.lua` is a bounded hand-written serializer.
 
 ## Findings (in scope)
 
-### S1. Non-guild senders are accepted (Medium) - FIXED in 006 (`Core/Guard.lua`, `Comm.OnAddonMessage`)
-`Core/Comm.lua:89 OnAddonMessage` ignores `channel` and never checks the guild roster; WHISPER addon messages from anyone using the `TShare` prefix are processed.
+### S1. Non-guild senders are accepted (Medium) - FIXED in 006 (`Core/Net/Guard.lua`, `Comm.OnAddonMessage`)
+`Core/Net/Communication.lua:89 OnAddonMessage` ignores `channel` and never checks the guild roster; WHISPER addon messages from anyone using the `TShare` prefix are processed.
 - A stranger can send WANT and receive the full profession/recipe list, or inject SNAP/ORDER/OPUSH (injected orders are never roster-pruned).
 - **Fix:** one gate at the top: `channel == "GUILD"`, or for WHISPER, `ns.Api.GetGuildRoster()[sender]`. Reply only to roster members. Add a test with a non-guild sender.
 

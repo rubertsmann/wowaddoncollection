@@ -1,6 +1,6 @@
 # Review: how members share data (sync architecture) and whether it is best practice
 
-Date: 2026-11-16 · Scope: `Core/Sync.lua`, `Comm.lua`, `Codec.lua`, `Guard.lua`, `Orders.lua`, `Offers.lua`, `Events.lua`, `docs/protocol.md` · Build: master @ 61eff86 (protocol 2.1, schema 3)
+Date: 2026-11-16 · Scope: `Core/Net/Sync.lua`, `Comm.lua`, `Codec.lua`, `Guard.lua`, `Orders.lua`, `Offers.lua`, `Events.lua`, `docs/protocol.md` · Build: master @ 61eff86 (protocol 2.1, schema 3)
 
 **Verified vs. only read.** Code was read in full for the files above; `luajit tests/run.lua` = 134 passed, 0 failed. Message sizes in
 section 4 were **measured offline** with the real Codec and LibDeflate on synthetic data (random words, so compression is

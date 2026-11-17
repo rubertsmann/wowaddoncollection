@@ -34,9 +34,11 @@ end
 
 local function listDir(pattern)
     local out = {}
-    local p = io.popen('dir /b /s ' .. pattern:gsub("/", "\\") .. ' 2>nul || find ' .. pattern:match("^[^*]+") .. ' -name "*.lua"')
+    local top = pattern:match("^([%w_]+)/")
+    local p = io.popen('dir /b /s ' .. pattern:gsub("/", "\\") .. ' 2>nul || find ' .. top .. ' -name "*.lua"')
     for line in p:lines() do
-        local rel = line:gsub("\\", "/"):match("([%w_]+/[%w_]+%.lua)$")
+        -- repo-relative path from the top folder on, at any depth (Core/Net/Communication.lua)
+        local rel = ("/" .. line:gsub("\\", "/")):match(".*/(" .. top .. "/[%w_/]+%.lua)$")
         if rel then out[#out + 1] = rel end
     end
     p:close()
@@ -44,60 +46,79 @@ local function listDir(pattern)
 end
 
 return {
-    ["load: the TOC lists every addon file and every listed file exists"] = function(h)
+    ["load: the TOC lists every addon file and every listed file exists"] = function(harness)
         local listed = {}
         for _, f in ipairs(tocFiles("TalentShare.toc")) do listed[f] = true; assert(io.open(f, "rb"), "TOC lists missing file " .. f):close() end
         for _, dir in ipairs({ "Core/*.lua", "UI/*.lua", "Locales/*.lua" }) do
-            for _, f in ipairs(listDir(dir)) do h.truthy(listed[f], f .. " exists but is not in TalentShare.toc") end
+            for _, f in ipairs(listDir(dir)) do harness.truthy(listed[f], f .. " exists but is not in TalentShare.toc") end
         end
     end,
 
-    ["load: all TOC files run in order for both identities without errors"] = function(h)
+    ["load: all TOC files run in order for both identities without errors"] = function(harness)
         local saved = {}
         local globals = { CreateFrame = stub, UIParent = stub(), Minimap = stub(), GameTooltip = stub(), C_Timer = stub(),
             C_ChatInfo = stub(), UISpecialFrames = {}, SlashCmdList = {}, RAID_CLASS_COLORS = {}, print = function() end }
         for k, v in pairs(globals) do saved[k] = _G[k]; _G[k] = (k == "CreateFrame") and function() return stub() end or v end
         local ok, err = pcall(function()
-            for _, addon in ipairs({ "TalentShare", "TalentShare-Dev" }) do
-                local ns = {}
+            for _, addonFolderName in ipairs({ "TalentShare", "TalentShare-Dev" }) do
+                local addon = {}
                 for _, file in ipairs(tocFiles("TalentShare.toc")) do
                     if not file:match("^Libs/") then
                         local chunk = assert(loadfile(file), file)
-                        chunk(addon, ns)
+                        chunk(addonFolderName, addon)
                     end
                 end
-                h.truthy(ns.UI and ns.Comm and ns.Scanner and ns.Names and ns.Locale and ns.L and ns.Model, "namespace incomplete")
-                h.truthy(ns.Slash.i18n and ns.Slash.locale and ns.Slash.scan and ns.Slash.version and ns.Slash.clean, "slash commands missing")
+                harness.truthy(addon.UI and addon.Communication and addon.Scanner and addon.Names and addon.Locale and addon.Text and addon.Model, "namespace incomplete")
+                harness.truthy(addon.SlashCommands.i18n and addon.SlashCommands.locale and addon.SlashCommands.scan and addon.SlashCommands.version and addon.SlashCommands.clean, "slash commands missing")
                 -- addon code must never try to open professions itself (blocked on Forever): the API must not exist
-                h.eq(ns.Api.OpenProfession, nil, "Api.OpenProfession would be blocked by the client")
-                h.eq(ns.AutoScan, nil)
+                harness.equal(addon.Api.OpenProfession, nil, "Api.OpenProfession would be blocked by the client")
+                harness.equal(addon.AutoScan, nil)
 
                 -- build the window against stubbed widgets and refresh it with some data: catches runtime errors in the
                 -- UI code (typos, nil globals, wrong argument types). It cannot judge layout or secure-button behaviour.
-                ns.Store.Init({})
-                ns.Store.db.me = "A-R"
-                ns.orders = ns.Orders.New(ns.Util.Now, ns.db.orders)
-                ns.Events = ns.Events or { On = function() end, Fire = function() end }
-                ns.Store.PutChar({ name = "A-R", class = "MAGE", level = 30, rev = 1, professions = {
+                addon.Store.Init({})
+                addon.Store.db.me = "A-R"
+                addon.orders = addon.Orders.New(addon.Utility.Now, addon.db.orders)
+                addon.Events = addon.Events or { On = function() end, Fire = function() end }
+                addon.Store.PutCharacter({ name = "A-R", class = "MAGE", level = 30, rev = 1, professions = {
                     Kochkunst = { name = "Kochkunst", id = 185, loc = "deDE", rank = 10, max = 75, recipes = { [1] = true } } } })
-                ns.Store.PutCatalog({ [1] = { name = "Gebratener Eber", loc = "deDE", reagents = { { itemID = 5, count = 2 } } } })
-                ns.orders:Create("A-R", 1, 1, "Notiz")
-                local okT, errT = pcall(ns.UI.Toggle); h.truthy(okT, "building the window failed: " .. tostring(errT))
-                h.truthy(pcall(ns.UI.Refresh), "refreshing the window failed")
-                h.truthy(pcall(ns.UI.SelectTab, "orders"), "switching to the orders tab failed")
-                ns.Offers.Put({ name = "B-R", rev = 5, items = { [6661] = { bag = 1 } }, dibs = {} })
-                h.truthy(pcall(ns.UI.SelectTab, "available"), "switching to the available tab failed")
-                h.truthy(pcall(ns.UI.Refresh), "refreshing the available tab failed")
-                ns.Trace.Add({ dir = "in", ch = "GUILD", peer = "B-R", mt = "HELLO", st = "ok", why = "char: up to date" })
-                local okD, errD = pcall(ns.UI.SelectTab, "debug")
-                h.truthy(okD, "switching to the debug tab failed: " .. tostring(errD))
-                local okN, errN = pcall(ns.Diag.IdentityRows, { info = {}, me = "A-R", roster = {} })
-                h.truthy(okN, "name check rows failed: " .. tostring(errN))
-                local okE, errE = pcall(ns.UI.ShowExport, ns.Diag.Report({ comm = ns.Comm }))
-                h.truthy(okE, "the export window failed: " .. tostring(errE))
-                h.truthy(ns.Slash.offers, "/ts offers missing")
-                h.truthy(ns.Events.ScanItems, "item scan hook missing")
-                h.truthy(ns.Names.env.spellName, "Api did not wire Names.env.spellName")
+                addon.Store.PutCatalog({ [1] = { name = "Gebratener Eber", loc = "deDE", reagents = { { itemID = 5, count = 2 } } } })
+                addon.orders:Create("A-R", 1, 1, "Notiz")
+                local okT, errT = pcall(addon.UI.Toggle); harness.truthy(okT, "building the window failed: " .. tostring(errT))
+                harness.truthy(pcall(addon.UI.Refresh), "refreshing the window failed")
+                harness.truthy(pcall(addon.UI.SelectTab, "orders"), "switching to the orders tab failed")
+                addon.Offers.Put({ name = "B-R", rev = 5, items = { [6661] = { bag = 1 } }, dibs = {} })
+                harness.truthy(pcall(addon.UI.SelectTab, "available"), "switching to the available tab failed")
+                harness.truthy(pcall(addon.UI.Refresh), "refreshing the available tab failed")
+                -- feature 014: the Games tab is built by the window and refreshes with records
+                addon.Games.Put({ name = "B-R", rev = 5, total = { won = 10, lost = 0, wins = 1, losses = 0 }, weeks = {},
+                    recent = { { c = 10, r = "W", t = 4 } } })
+                local okG, errG = pcall(addon.UI.SelectTab, "games")
+                harness.truthy(okG, "switching to the games tab failed: " .. tostring(errG))
+                harness.truthy(addon.GamesTab.widgets.flipButton, "the games tab was not built (see Log: window.games)")
+                harness.truthy(addon.SlotMachine.widgets.spinButton, "the slot machine was not built (see Log: games.slots)")
+                addon.GamesTab.SelectGame("slots")
+                local okS, errS = pcall(addon.SlotMachine.Spin)
+                harness.truthy(okS, "spinning failed: " .. tostring(errS))
+                harness.equal(addon.UI.CurrentTab(), "games")
+                if addon.IS_DEVELOPMENT_BUILD then
+                    harness.truthy(addon.SlashCommands.anim and addon.SlashCommands.game, "dev commands anim/game missing")
+                    harness.truthy(pcall(addon.SlashCommands.game, "sim 3"), "/tsd game sim failed")
+                    harness.equal(addon.Utility.Count(addon.Store.db.games), 1, "simulated players must not be stored")
+                    addon.SlashCommands.game("sim 0")
+                else
+                    harness.equal(addon.SlashCommands.anim, nil, "dev command in the live build")
+                end
+                addon.Trace.Add({ dir = "in", ch = "GUILD", peer = "B-R", mt = "HELLO", st = "ok", why = "char: up to date" })
+                local okD, errD = pcall(addon.UI.SelectTab, "debug")
+                harness.truthy(okD, "switching to the debug tab failed: " .. tostring(errD))
+                local okN, errN = pcall(addon.Diagnostics.IdentityRows, { identity = {}, me = "A-R", roster = {} })
+                harness.truthy(okN, "name check rows failed: " .. tostring(errN))
+                local okE, errE = pcall(addon.UI.ShowExport, addon.Diagnostics.Report({ communication = addon.Communication }))
+                harness.truthy(okE, "the export window failed: " .. tostring(errE))
+                harness.truthy(addon.SlashCommands.offers, "/ts offers missing")
+                harness.truthy(addon.Events.ScanItems, "item scan hook missing")
+                harness.truthy(addon.Names.environment.spellName, "Api did not wire Names.env.spellName")
             end
         end)
         for k in pairs(globals) do _G[k] = saved[k] end
@@ -106,7 +127,7 @@ return {
 
     -- TalentShare-Dev.toc is GENERATED by tools/deploy.ps1 from TalentShare.toc and is not versioned. It goes stale as soon
     -- as the live TOC gains a file, and the dev client then dies with "attempt to index local 'Guard' (a nil value)".
-    ["load: the generated TalentShare-Dev.toc (when present) lists the same files, in the same order, as TalentShare.toc"] = function(h)
+    ["load: the generated TalentShare-Dev.toc (when present) lists the same files, in the same order, as TalentShare.toc"] = function(harness)
         local f = io.open("TalentShare-Dev.toc", "rb")
         if not f then return end   -- not generated on this machine (CI): nothing to compare
         f:close()
@@ -117,29 +138,29 @@ return {
         for _, x in ipairs(dev) do if not inLive[x] then extra[#extra + 1] = x end end
         local why = "TalentShare-Dev.toc is stale (missing: " .. table.concat(missing, ", ") .. "; extra: " .. table.concat(extra, ", ") ..
             "). Regenerate it: powershell tools/deploy.ps1, then restart the game"
-        h.eq(#missing + #extra, 0, why)
-        h.eq(table.concat(dev, "\n"), table.concat(live, "\n"), "TalentShare-Dev.toc loads the files in a different order")
+        harness.equal(#missing + #extra, 0, why)
+        harness.equal(table.concat(dev, "\n"), table.concat(live, "\n"), "TalentShare-Dev.toc loads the files in a different order")
         local liveVersion = slurp("TalentShare.toc"):match("## Version:%s*(%S+)")
-        h.eq(slurp("TalentShare-Dev.toc"):match("## Version:%s*(%S+)"), liveVersion .. "-dev", "dev TOC version is stale: run tools/deploy.ps1")
+        harness.equal(slurp("TalentShare-Dev.toc"):match("## Version:%s*(%S+)"), liveVersion .. "-dev", "dev TOC version is stale: run tools/deploy.ps1")
     end,
 
     -- a TOC that misses a file must produce ONE plain message instead of a chain of nil-index errors
-    ["load: Events names the missing modules and the fix when a TOC lacks a file"] = function(h)
+    ["load: Events names the missing modules and the fix when a TOC lacks a file"] = function(harness)
         local saved, said = {}, {}
         local globals = { CreateFrame = function() return stub() end, UIParent = stub(), Minimap = stub(), GameTooltip = stub(),
             C_Timer = stub(), C_ChatInfo = stub(), UISpecialFrames = {}, SlashCmdList = {}, RAID_CLASS_COLORS = {},
             print = function(...) said[#said + 1] = table.concat({ ... }, " ") end }
         for k, v in pairs(globals) do saved[k] = _G[k]; _G[k] = v end
-        local ns = {}
+        local addon = {}
         for _, file in ipairs(tocFiles("TalentShare.toc")) do
-            if not file:match("^Libs/") and file ~= "Core/Guard.lua" then   -- the stale dev TOC
+            if not file:match("^Libs/") and file ~= "Core/Net/Guard.lua" then   -- the stale dev TOC
                 local chunk = assert(loadfile(file), file)
-                pcall(chunk, "TalentShare-Dev", ns)                          -- Comm.lua fails here, later files must still load
+                pcall(chunk, "TalentShare-Dev", addon)                          -- Comm.lua fails here, later files must still load
             end
         end
         for k in pairs(globals) do _G[k] = saved[k] end
         local text = table.concat(said, "\n")
-        h.truthy(text:find("Guard", 1, true), "no message naming the missing module: " .. text)
-        h.truthy(text:find("deploy.ps1", 1, true), "no message naming the fix: " .. text)
+        harness.truthy(text:find("Guard", 1, true), "no message naming the missing module: " .. text)
+        harness.truthy(text:find("deploy.ps1", 1, true), "no message naming the fix: " .. text)
     end,
 }

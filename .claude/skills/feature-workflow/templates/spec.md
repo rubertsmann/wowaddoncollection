@@ -20,7 +20,7 @@
 - Files touched: `<path>` (new|changed): <why>
 - Data shape change: <none | describe>
 - Message shape change: <none | describe>
-- Pure logic lives in: <module>; WoW calls only in `Core/Api.lua`.
+- Pure logic lives in: <module>; WoW calls only in `Core/Game/Api.lua`.
 
 ## Tasks
 - [ ] T1 (S): <task>. Verify: <test name or in-game step>

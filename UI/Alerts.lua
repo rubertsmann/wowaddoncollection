@@ -1,287 +1,342 @@
-local ADDON, ns = ...
+local addonName, addon = ...
 
 -- Feature 010: tell the player about new orders (and news on their own orders) while the window is closed:
 -- number on the minimap button and the Orders tab, letter icon, sound, chat line, screen message, taskbar flash.
--- What counts as new is decided in Core/Notify.lua (pure); this file only shows it and holds the options panel.
+-- What counts as new is decided in Core/View/Notify.lua (pure); this file only shows it and holds the options panel.
+---@class AlertsModule
 local Alerts = {}
-ns.Alerts = Alerts
+addon.Alerts = Alerts
 
-local L, F = ns.L, ns.Locale.Fmt
-local N = ns.Notify
+local Text, Format = addon.Text, addon.Locale.Format
+local Notify = addon.Notify
 
-local st = { started = false, prev = nil, lastLoud = -math.huge }
+---@class AlertsState
+---@field started boolean
+---@field previousKeys table<string, boolean>|nil keys of the last unseen list (nil until the first update of the session)
+---@field lastLoudAlertAt number GetTime() of the last sound / screen message / flash
+local alertState = { started = false, previousKeys = nil, lastLoudAlertAt = -math.huge }
 
-local function me() return ns.Store.db.me or ns.Api.GetPlayerInfo().name end
-local function ui() return ns.db and ns.db.ui end
-local function opt(key) return N.Get(ui(), key) end
+---@return string|nil
+local function me() return addon.Utility.Me() end
+---@return table|nil the SavedVariables ui table
+local function interfaceSettings() return addon.db and addon.db.ui end
+---@param settingKey string
+---@return any
+local function setting(settingKey) return Notify.Get(interfaceSettings(), settingKey) end
 
-local function ordersVisible()
-    return ns.UI and ns.UI.OrdersVisible and ns.UI.OrdersVisible() or false
+---@return boolean
+local function ordersTabVisible()
+    return addon.UI.OrdersVisible()
 end
 
-local function plainName(o)
-    -- peer-supplied recipe names never reach chat as markup (Model.ChatText strips | [ ] and line breaks)
-    return ns.Model.ChatText(nil, ns.Model.OrderRecipeName(ns.Store, o))
+-- peer-supplied recipe names never reach chat as markup (Model.ChatText strips | [ ] and line breaks)
+---@param order Order
+---@return string
+local function plainRecipeName(order)
+    return addon.Model.ChatText(nil, addon.Model.OrderRecipeName(addon.Store, order))
 end
 
-local function describe(it)
-    local o = it.order
-    if it.kind == "new" then
-        return F(L["New order: {qty}x {name} from {who}"], { qty = o.qty, name = plainName(o), who = ns.Util.ShortName(o.requester) })
-    elseif it.kind == "claimed" then
-        local who = {}
-        for _, c in ipairs(ns.orders:Claimers(o)) do if c ~= me() then who[#who + 1] = ns.Util.ShortName(c) end end
-        return F(L["{who} will craft your order {name}"], { who = table.concat(who, ", "), name = plainName(o) })
+---@param unseenOrder UnseenOrder
+---@return string
+local function describe(unseenOrder)
+    local order = unseenOrder.order
+    if unseenOrder.kind == "new" then
+        return Format(Text["New order: {qty}x {name} from {who}"],
+            { qty = order.qty, name = plainRecipeName(order), who = addon.Utility.ShortName(order.requester) })
+    elseif unseenOrder.kind == "claimed" then
+        local crafterNames = {}
+        for _, crafter in ipairs(addon.orders:Claimers(order)) do
+            if crafter ~= me() then crafterNames[#crafterNames + 1] = addon.Utility.ShortName(crafter) end
+        end
+        return Format(Text["{who} will craft your order {name}"], { who = table.concat(crafterNames, ", "), name = plainRecipeName(order) })
     end
-    return F(L["{who} finished your order {name}"], { who = ns.Util.ShortName(o.closedBy or "?"), name = plainName(o) })
+    return Format(Text["{who} finished your order {name}"],
+        { who = addon.Utility.ShortName(order.closedBy or "?"), name = plainRecipeName(order) })
 end
 
 local function playSound()
-    local name = opt("soundName")
-    local id
-    for _, s in ipairs(N.SOUNDS) do if s[1] == name then id = (SOUNDKIT and SOUNDKIT[name]) or s[2] end end
-    if id and PlaySound then pcall(PlaySound, id, "Master") end
+    local soundName = setting("soundName")
+    local soundKitID
+    for _, sound in ipairs(Notify.SOUNDS) do
+        if sound[1] == soundName then soundKitID = (SOUNDKIT and SOUNDKIT[soundName]) or sound[2] end
+    end
+    if soundKitID and PlaySound then
+        local ok, errorMessage = pcall(PlaySound, soundKitID, "Master")
+        if not ok then addon.Log.Warning("alerts.sound", "playing the notification sound failed", { sound = soundName, error = tostring(errorMessage) }) end
+    end
 end
 Alerts.PlaySound = playSound
 
-local function screenMessage(text)
-    local ok = false
+---@param message string
+local function screenMessage(message)
+    local shown = false
     if RaidNotice_AddMessage and RaidWarningFrame then
-        ok = pcall(RaidNotice_AddMessage, RaidWarningFrame, text, { r = 1, g = 0.82, b = 0 })
+        shown = pcall(RaidNotice_AddMessage, RaidWarningFrame, message, { r = 1, g = 0.82, b = 0 })
     end
-    if not ok and UIErrorsFrame then pcall(UIErrorsFrame.AddMessage, UIErrorsFrame, text, 1, 0.82, 0) end
+    if not shown and UIErrorsFrame then shown = pcall(UIErrorsFrame.AddMessage, UIErrorsFrame, message, 1, 0.82, 0) end
+    if not shown then addon.Log.Warning("alerts.screen", "no frame could show the screen message") end
 end
 
-local function alert(fresh, nowT)
-    if opt("chat") then
-        for i, it in ipairs(fresh) do
-            if i > 3 then
-                ns.Print(F(L["... and {n} more on the order board"], { n = #fresh - 3 }))
+local function flashTaskbarIcon()
+    if not FlashClientIcon then return end
+    local ok, errorMessage = pcall(FlashClientIcon)
+    if not ok then addon.Log.Warning("alerts.flash", "flashing the taskbar icon failed", { error = tostring(errorMessage) }) end
+end
+
+---@param freshOrders UnseenOrder[]
+---@param now number GetTime()
+local function alert(freshOrders, now)
+    if setting("chat") then
+        for index in ipairs(freshOrders) do
+            if index > 3 then
+                addon.Print(Format(Text["... and {n} more on the order board"], { n = #freshOrders - 3 }))
                 break
             end
-            ns.Print(describe(fresh[i]))
+            addon.Print(describe(freshOrders[index]))
         end
     end
-    if nowT - st.lastLoud < N.THROTTLE then return end   -- a login sync can bring many orders at once: one ping
-    st.lastLoud = nowT
-    if opt("sound") then playSound() end
-    if opt("screen") then
-        screenMessage(#fresh == 1 and describe(fresh[1]) or F(L["{n} new on the order board"], { n = #fresh }))
+    -- a login sync can bring many orders at once: one ping
+    if now - alertState.lastLoudAlertAt < Notify.THROTTLE_SECONDS then return end
+    alertState.lastLoudAlertAt = now
+    if setting("sound") then playSound() end
+    if setting("screen") then
+        screenMessage(#freshOrders == 1 and describe(freshOrders[1]) or Format(Text["{n} new on the order board"], { n = #freshOrders }))
     end
-    if opt("flash") and FlashClientIcon then pcall(FlashClientIcon) end
+    if setting("flash") then flashTaskbarIcon() end
 end
 
 -- Options "Test all": every switched-on effect once with a sample text, the badge/letter for 8 s. The taskbar flash
 -- comes after 3 s (it is only visible while the game is in the background, so there is time to switch windows).
-local testToken = 0
+---@type integer increases with every test, so an older test's timer does not reset a newer one
+local testGeneration = 0
 function Alerts.Test()
-    local text = L["TalentShare test notification"]
-    if opt("chat") then ns.Print(text) end
-    if opt("sound") then playSound() end
-    if opt("screen") then screenMessage(text) end
-    if ns.UI and ns.UI.SetNotice and (opt("badge") or opt("icon")) then
-        testToken = testToken + 1
-        local token = testToken
-        ns.UI.SetNotice(1, opt("icon"), not opt("badge"))
+    local sampleText = Text["TalentShare test notification"]
+    if setting("chat") then addon.Print(sampleText) end
+    if setting("sound") then playSound() end
+    if setting("screen") then screenMessage(sampleText) end
+    if setting("badge") or setting("icon") then
+        testGeneration = testGeneration + 1
+        local thisGeneration = testGeneration
+        addon.UI.SetNotice(1, setting("icon"), not setting("badge"))
         C_Timer.After(8, function()
-            if token ~= testToken then return end
-            ns.UI.SetNotice(0, false)
+            if thisGeneration ~= testGeneration then return end
+            addon.UI.SetNotice(0, false)
             Alerts.Update()   -- back to the real state
         end)
     end
-    if opt("flash") and FlashClientIcon then C_Timer.After(3, function() pcall(FlashClientIcon) end) end
+    if setting("flash") then C_Timer.After(3, flashTaskbarIcon) end
 end
 
 -- Recompute the unseen list; alert about items that are new since the last call (never on the first call of a session:
 -- what was unseen at logout was already announced then, the badge still shows it).
 function Alerts.Update()
-    local db = ui()
-    if not st.started or not db or not ns.orders then return end
-    if db.notifySeen == nil then db.notifySeen = N.MarkSeen(ns.orders, nil) end   -- first run: the existing board is not news
-    if ordersVisible() then db.notifySeen = N.MarkSeen(ns.orders, db.notifySeen) end
-    local list = N.Unseen(ns.Store, ns.orders, me(), db.notifySeen, { scope = opt("scope"), mine = opt("mine") })
-    local fresh, now = N.Fresh(st.prev, list)
-    local primed = st.prev ~= nil
-    st.prev = now
-    if ns.UI and ns.UI.SetNotice then ns.UI.SetNotice(#list, opt("icon"), not opt("badge")) end
-    if primed and #fresh > 0 then
-        ns.Debug.Log("notify", #fresh, #list)
-        alert(fresh, GetTime and GetTime() or 0)
+    local settings = interfaceSettings()
+    if not alertState.started or not settings or not addon.orders then return end
+    if settings.notifySeen == nil then settings.notifySeen = Notify.MarkSeen(addon.orders, nil) end   -- first run: the existing board is not news
+    if ordersTabVisible() then settings.notifySeen = Notify.MarkSeen(addon.orders, settings.notifySeen) end
+    local unseenOrders = Notify.Unseen(addon.Store, addon.orders, me(), settings.notifySeen,
+        { scope = setting("scope"), mine = setting("mine") })
+    local freshOrders, currentKeys = Notify.Fresh(alertState.previousKeys, unseenOrders)
+    local primed = alertState.previousKeys ~= nil
+    alertState.previousKeys = currentKeys
+    addon.UI.SetNotice(#unseenOrders, setting("icon"), not setting("badge"))
+    if primed and #freshOrders > 0 then
+        addon.Log.Information("alerts.update", "new items on the order board", { fresh = #freshOrders, unseen = #unseenOrders })
+        alert(freshOrders, GetTime and GetTime() or 0)
     end
 end
 
 -- The player looks at the Orders tab.
 function Alerts.Seen()
-    local db = ui()
-    if not db or not ns.orders then return end
-    db.notifySeen = N.MarkSeen(ns.orders, db.notifySeen)
-    if st.started then
-        st.prev = {}   -- nothing is unseen now; what comes later is fresh again
-        if ns.UI and ns.UI.SetNotice then ns.UI.SetNotice(0, false) end
+    local settings = interfaceSettings()
+    if not settings or not addon.orders then return end
+    settings.notifySeen = Notify.MarkSeen(addon.orders, settings.notifySeen)
+    if alertState.started then
+        alertState.previousKeys = {}   -- nothing is unseen now; what comes later is fresh again
+        addon.UI.SetNotice(0, false)
     end
 end
 
 function Alerts.Start()
-    if st.started then return end
-    st.started = true
+    if alertState.started then return end
+    alertState.started = true
     Alerts.Update()
 end
 
-ns.Events.On("DATA_CHANGED", function(kind)
+addon.Events.On("DATA_CHANGED", function(kind)
     if kind == "orders" or kind == "chars" or kind == nil then Alerts.Update() end
 end)
 
 ------------------------------------------------------------------ options panel
 
-local panel, category
+---@type table|nil
+local optionsPanel
+---@type table|nil the game's Settings category (modern settings API)
+local settingsCategory
 
-local function scopeLabel(s)
-    local map = { profession = L["Orders for my professions"], known = L["Orders for recipes I know"], all = L["All orders"] }
-    return map[s] or s
+---@param scope NotifyScope
+---@return string
+local function scopeLabel(scope)
+    local labels = { profession = Text["Orders for my professions"], known = Text["Orders for recipes I know"], all = Text["All orders"] }
+    return labels[scope] or scope
 end
 
-local function soundLabel(name)
-    local map = { IG_PLAYER_INVITE = L["Invite"], MAP_PING = L["Map ping"], AUCTION_WINDOW_OPEN = L["Auction house"],
-        READY_CHECK = L["Ready check"] }
-    return map[name] or name
+---@param soundName string
+---@return string
+local function soundLabel(soundName)
+    local labels = { IG_PLAYER_INVITE = Text["Invite"], MAP_PING = Text["Map ping"], AUCTION_WINDOW_OPEN = Text["Auction house"],
+        READY_CHECK = Text["Ready check"] }
+    return labels[soundName] or soundName
 end
 
-local function cycle(list, cur, field)
-    for i, v in ipairs(list) do
-        local key = field and v[field] or v
-        if key == cur then
-            local nx = list[i % #list + 1]
-            return field and nx[field] or nx
+-- the entry after `currentValue` in `choices` (wrapping); `field` picks the value out of table entries
+---@param choices any[]
+---@param currentValue any
+---@param field? any
+---@return any
+local function nextChoice(choices, currentValue, field)
+    for index, choice in ipairs(choices) do
+        local value = field and choice[field] or choice
+        if value == currentValue then
+            local following = choices[index % #choices + 1]
+            return field and following[field] or following
         end
     end
-    return field and list[1][field] or list[1]
+    return field and choices[1][field] or choices[1]
 end
 
-local function buildPanel()
-    panel = CreateFrame("Frame", ns.FRAME .. "OptionsPanel")
-    panel.name = ns.TITLE
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 16, -16); title:SetText(ns.TITLE .. " - " .. L["Notifications"])
-    local sub = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6); sub:SetWidth(560); sub:SetJustifyH("LEFT")
-    sub:SetText(L["How TalentShare tells you about new orders on the board and news on your own orders."])
+local function buildOptionsPanel()
+    optionsPanel = CreateFrame("Frame", addon.FRAME_PREFIX .. "OptionsPanel")
+    optionsPanel.name = addon.TITLE
+    local titleText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    titleText:SetPoint("TOPLEFT", 16, -16); titleText:SetText(addon.TITLE .. " - " .. Text["Notifications"])
+    local subtitleText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    subtitleText:SetPoint("TOPLEFT", titleText, "BOTTOMLEFT", 0, -6); subtitleText:SetWidth(560); subtitleText:SetJustifyH("LEFT")
+    subtitleText:SetText(Text["How TalentShare tells you about new orders on the board and news on your own orders."])
 
-    local y, checks = -64, {}
-    local function check(key, label, tip)
-        local cb = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-        cb:SetSize(26, 26); cb:SetPoint("TOPLEFT", 16, y)
-        local fs = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        fs:SetPoint("LEFT", cb, "RIGHT", 4, 0); fs:SetText(label)
-        cb:SetScript("OnClick", function(self)
-            N.Set(ui(), key, self:GetChecked() and true or false)
+    local nextTop, checkButtons = -64, {}
+    ---@param settingKey string
+    ---@param label string
+    ---@param tooltipText? string
+    local function addCheckButton(settingKey, label, tooltipText)
+        local checkButton = CreateFrame("CheckButton", nil, optionsPanel, "UICheckButtonTemplate")
+        checkButton:SetSize(26, 26); checkButton:SetPoint("TOPLEFT", 16, nextTop)
+        local labelText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        labelText:SetPoint("LEFT", checkButton, "RIGHT", 4, 0); labelText:SetText(label)
+        checkButton:SetScript("OnClick", function(self)
+            Notify.Set(interfaceSettings(), settingKey, self:GetChecked() and true or false)
             Alerts.Update()
         end)
-        if tip then
-            cb:SetScript("OnEnter", function(self)
+        if tooltipText then
+            checkButton:SetScript("OnEnter", function(self)
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(label)
-                GameTooltip:AddLine(tip, 1, 1, 1, true); GameTooltip:Show()
+                GameTooltip:AddLine(tooltipText, 1, 1, 1, true); GameTooltip:Show()
             end)
-            cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
+            checkButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
         end
-        checks[key] = cb
-        y = y - 28
-        return cb
+        checkButtons[settingKey] = checkButton
+        nextTop = nextTop - 28
+        return checkButton
     end
-    check("badge", L["Number of new orders on the minimap button and the Orders tab"])
-    check("icon", L["Minimap button shows a letter while something is new"])
-    check("sound", L["Play a sound"])
-    local soundBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    soundBtn:SetSize(150, 22); soundBtn:SetPoint("LEFT", checks.sound, "RIGHT", 220, 0)
-    local testBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    testBtn:SetSize(70, 22); testBtn:SetPoint("LEFT", soundBtn, "RIGHT", 4, 0); testBtn:SetText(L["Test"])
-    testBtn:SetScript("OnClick", playSound)
-    check("chat", L["Chat message"])
-    check("screen", L["Message in the middle of the screen"])
-    check("flash", L["Flash the game icon in the taskbar"], L["Only visible while the game is in the background."])
-    check("mine", L["My orders: tell me when someone claims or finishes them"])
+    addCheckButton("badge", Text["Number of new orders on the minimap button and the Orders tab"])
+    addCheckButton("icon", Text["Minimap button shows a letter while something is new"])
+    addCheckButton("sound", Text["Play a sound"])
+    local soundButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
+    soundButton:SetSize(150, 22); soundButton:SetPoint("LEFT", checkButtons.sound, "RIGHT", 220, 0)
+    local soundTestButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
+    soundTestButton:SetSize(70, 22); soundTestButton:SetPoint("LEFT", soundButton, "RIGHT", 4, 0); soundTestButton:SetText(Text["Test"])
+    soundTestButton:SetScript("OnClick", playSound)
+    addCheckButton("chat", Text["Chat message"])
+    addCheckButton("screen", Text["Message in the middle of the screen"])
+    addCheckButton("flash", Text["Flash the game icon in the taskbar"], Text["Only visible while the game is in the background."])
+    addCheckButton("mine", Text["My orders: tell me when someone claims or finishes them"])
 
-    local scopeLbl = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    scopeLbl:SetPoint("TOPLEFT", 20, y - 10); scopeLbl:SetText(L["Tell me about"])
-    local scopeBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    scopeBtn:SetSize(220, 22); scopeBtn:SetPoint("LEFT", scopeLbl, "RIGHT", 10, 0)
-    local scopeTip = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    scopeTip:SetPoint("TOPLEFT", scopeLbl, "BOTTOMLEFT", 0, -10); scopeTip:SetWidth(560); scopeTip:SetJustifyH("LEFT")
-    scopeTip:SetText(L["My professions: also orders for recipes of a profession you have that you do not know yet."])
+    local scopeLabelText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    scopeLabelText:SetPoint("TOPLEFT", 20, nextTop - 10); scopeLabelText:SetText(Text["Tell me about"])
+    local scopeButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
+    scopeButton:SetSize(220, 22); scopeButton:SetPoint("LEFT", scopeLabelText, "RIGHT", 10, 0)
+    local scopeHintText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    scopeHintText:SetPoint("TOPLEFT", scopeLabelText, "BOTTOMLEFT", 0, -10); scopeHintText:SetWidth(560); scopeHintText:SetJustifyH("LEFT")
+    scopeHintText:SetText(Text["My professions: also orders for recipes of a profession you have that you do not know yet."])
 
-    local testAll = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    testAll:SetSize(220, 24); testAll:SetPoint("TOPLEFT", scopeTip, "BOTTOMLEFT", 0, -16)
-    testAll:SetText(L["Test all notifications"])
-    testAll:SetScript("OnClick", function() Alerts.Test() end)
-    testAll:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(L["Test all notifications"])
-        GameTooltip:AddLine(L["Shows every switched-on effect once. The taskbar flash follows after 3 seconds: switch to another window to see it."], 1, 1, 1, true)
+    local testAllButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
+    testAllButton:SetSize(220, 24); testAllButton:SetPoint("TOPLEFT", scopeHintText, "BOTTOMLEFT", 0, -16)
+    testAllButton:SetText(Text["Test all notifications"])
+    testAllButton:SetScript("OnClick", function() Alerts.Test() end)
+    testAllButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(Text["Test all notifications"])
+        GameTooltip:AddLine(Text["Shows every switched-on effect once. The taskbar flash follows after 3 seconds: switch to another window to see it."], 1, 1, 1, true)
         GameTooltip:Show()
     end)
-    testAll:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    testAllButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    local function refresh()
-        for key, cb in pairs(checks) do cb:SetChecked(opt(key)) end
-        scopeBtn:SetText(scopeLabel(opt("scope")))
-        soundBtn:SetText(soundLabel(opt("soundName")))
-        soundBtn:SetEnabled(opt("sound")); testBtn:SetEnabled(opt("sound"))
+    local function refreshPanel()
+        for settingKey, checkButton in pairs(checkButtons) do checkButton:SetChecked(setting(settingKey)) end
+        scopeButton:SetText(scopeLabel(setting("scope")))
+        soundButton:SetText(soundLabel(setting("soundName")))
+        soundButton:SetEnabled(setting("sound")); soundTestButton:SetEnabled(setting("sound"))
     end
-    scopeBtn:SetScript("OnClick", function()
-        N.Set(ui(), "scope", cycle(N.SCOPES, opt("scope"))); refresh(); Alerts.Update()
+    scopeButton:SetScript("OnClick", function()
+        Notify.Set(interfaceSettings(), "scope", nextChoice(Notify.SCOPES, setting("scope"))); refreshPanel(); Alerts.Update()
     end)
-    soundBtn:SetScript("OnClick", function()
-        N.Set(ui(), "soundName", cycle(N.SOUNDS, opt("soundName"), 1)); refresh(); playSound()
+    soundButton:SetScript("OnClick", function()
+        Notify.Set(interfaceSettings(), "soundName", nextChoice(Notify.SOUNDS, setting("soundName"), 1)); refreshPanel(); playSound()
     end)
-    for _, cb in pairs(checks) do cb:HookScript("OnClick", refresh) end
-    panel:SetScript("OnShow", refresh)
-    panel.refresh = refresh
+    for _, checkButton in pairs(checkButtons) do checkButton:HookScript("OnClick", refreshPanel) end
+    optionsPanel:SetScript("OnShow", refreshPanel)
+    optionsPanel.refresh = refreshPanel
 
     -- Settings panel of the game (modern API first, then the old interface options), else a plain window.
-    local ok = false
+    local registered = false
     if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
-        ok = pcall(function()
-            category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
-            Settings.RegisterAddOnCategory(category)
+        local errorMessage
+        registered, errorMessage = pcall(function()
+            settingsCategory = Settings.RegisterCanvasLayoutCategory(optionsPanel, optionsPanel.name)
+            Settings.RegisterAddOnCategory(settingsCategory)
         end)
-        if not ok then category = nil end
+        if not registered then
+            settingsCategory = nil
+            addon.Log.Warning("alerts.options", "the modern settings API refused the options panel", { error = tostring(errorMessage) })
+        end
     end
-    if not ok and InterfaceOptions_AddCategory then ok = pcall(InterfaceOptions_AddCategory, panel) end
-    panel.registered = ok
-    if not ok then
-        panel:SetParent(UIParent); panel:SetSize(620, 420); panel:SetPoint("CENTER"); panel:SetFrameStrata("DIALOG")
-        local bg = panel:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(); bg:SetColorTexture(0, 0, 0, 0.9)
-        local x = CreateFrame("Button", nil, panel, "UIPanelCloseButton"); x:SetPoint("TOPRIGHT", -2, -2)
-        panel:EnableMouse(true); panel:SetMovable(true); panel:RegisterForDrag("LeftButton")
-        panel:SetScript("OnDragStart", panel.StartMoving); panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
-        table.insert(UISpecialFrames, panel:GetName())
-        panel:Hide()
+    if not registered and InterfaceOptions_AddCategory then registered = pcall(InterfaceOptions_AddCategory, optionsPanel) end
+    optionsPanel.registered = registered
+    if not registered then
+        addon.Log.Information("alerts.options", "the options panel opens as a plain window (no settings API took it)")
+        optionsPanel:SetParent(UIParent); optionsPanel:SetSize(620, 420); optionsPanel:SetPoint("CENTER"); optionsPanel:SetFrameStrata("DIALOG")
+        local background = optionsPanel:CreateTexture(nil, "BACKGROUND"); background:SetAllPoints(); background:SetColorTexture(0, 0, 0, 0.9)
+        local closeButton = CreateFrame("Button", nil, optionsPanel, "UIPanelCloseButton"); closeButton:SetPoint("TOPRIGHT", -2, -2)
+        optionsPanel:EnableMouse(true); optionsPanel:SetMovable(true); optionsPanel:RegisterForDrag("LeftButton")
+        optionsPanel:SetScript("OnDragStart", optionsPanel.StartMoving); optionsPanel:SetScript("OnDragStop", optionsPanel.StopMovingOrSizing)
+        table.insert(UISpecialFrames, optionsPanel:GetName())
+        optionsPanel:Hide()
     end
 end
 
 function Alerts.OpenOptions()
-    if not panel then
-        local ok, err = pcall(buildPanel)
-        if not ok then ns.Util.ReportError(err) return end
+    if not optionsPanel then
+        local ok = addon.Log.Protected("alerts.options", "building the options panel failed", buildOptionsPanel)
+        if not ok then return end
     end
-    if category and Settings and Settings.OpenToCategory then
-        local id = category.GetID and category:GetID() or category.ID
-        if pcall(Settings.OpenToCategory, id) then return end
+    if settingsCategory and Settings and Settings.OpenToCategory then
+        local categoryID = settingsCategory.GetID and settingsCategory:GetID() or settingsCategory.ID
+        if pcall(Settings.OpenToCategory, categoryID) then return end
     end
-    if panel.registered and InterfaceOptionsFrame_OpenToCategory then
-        pcall(InterfaceOptionsFrame_OpenToCategory, panel)
-        pcall(InterfaceOptionsFrame_OpenToCategory, panel)   -- the old frame needs two calls the first time
+    if optionsPanel.registered and InterfaceOptionsFrame_OpenToCategory then
+        pcall(InterfaceOptionsFrame_OpenToCategory, optionsPanel)
+        pcall(InterfaceOptionsFrame_OpenToCategory, optionsPanel)   -- the old frame needs two calls the first time
         return
     end
-    panel:SetShown(not panel:IsShown())
+    optionsPanel:SetShown(not optionsPanel:IsShown())
 end
 
-ns.Slash.options = function() Alerts.OpenOptions() end
+addon.SlashCommands.options = function() Alerts.OpenOptions() end
 
 -- Register the panel at login, so it is in the game's AddOns options list without opening it from here first.
-local loader = CreateFrame("Frame")
-loader:RegisterEvent("PLAYER_LOGIN")
-loader:SetScript("OnEvent", function()
-    if not panel then
-        local ok, err = pcall(buildPanel)
-        if not ok then ns.Util.ReportError(err) end
+local loginFrame = CreateFrame("Frame")
+loginFrame:RegisterEvent("PLAYER_LOGIN")
+loginFrame:SetScript("OnEvent", function()
+    if not optionsPanel then
+        addon.Log.Protected("alerts.options", "building the options panel failed", buildOptionsPanel)
     end
 end)

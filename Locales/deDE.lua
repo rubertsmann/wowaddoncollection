@@ -1,7 +1,7 @@
-local ADDON, ns = ...
+local addonName, addon = ...
 
 -- German. Keys are the English UI texts; {placeholders} must stay identical (tests/test_locale_files.lua checks this).
-ns.Locale.Register("deDE", {
+addon.Locale.Register("deDE", {
     strings = {
         ["Recipes"] = "Rezepte",
         ["Orders"] = "Bestellungen",
@@ -188,6 +188,42 @@ ns.Locale.Register("deDE", {
         ["yes"] = "ja",
         ["NO"] = "NEIN",
         ["Sync problem: your character name does not match the guild roster, so recipes and items cannot be exchanged. Please send the {cmd} export report to the addon author."] = "Sync-Problem: Dein Charaktername passt nicht zur Gildenliste, daher können Rezepte und Gegenstände nicht ausgetauscht werden. Bitte schicke den Bericht von {cmd} export an den Addon-Autor.",
+        -- feature 014: Games tab (coin flip)
+        ["Games"] = "Spiele",
+        ["Coin flip"] = "Münzwurf",
+        ["Heads"] = "Kopf",
+        ["Tails"] = "Zahl",
+        ["Stake"] = "Einsatz",
+        ["Flip"] = "Werfen",
+        ["You won {gold}"] = "Du hast {gold} gewonnen",
+        ["You lost {gold}"] = "Du hast {gold} verloren",
+        ["Enter a stake from 1c to {max}"] = "Gib einen Einsatz von 1k bis {max} ein",
+        ["Saved data is read-only in this session."] = "Gespeicherte Daten sind in dieser Sitzung schreibgeschützt.",
+        ["Your character is not known yet."] = "Dein Charakter ist noch nicht bekannt.",
+        ["This week"] = "Diese Woche",
+        ["All time"] = "Gesamt",
+        ["Player"] = "Spieler",
+        ["Net"] = "Netto",
+        ["Won"] = "Gewonnen",
+        ["Lost"] = "Verloren",
+        ["Flips"] = "Würfe",
+        ["Recent flips"] = "Letzte Würfe",
+        ["Last week's winner: {name} ({gold})"] = "Gewinner der letzten Woche: {name} ({gold})",
+        ["No flips yet"] = "Noch keine Würfe",
+        ["For fun only: no gold changes hands."] = "Nur zum Spaß: Es wird kein Gold bewegt.",
+        ["{n}g"] = "{n}g",
+        ["Slots"] = "Spielautomat",
+        ["Spin"] = "Drehen",
+        ["Recent spins"] = "Letzte Drehungen",
+        ["No spins yet"] = "Noch keine Drehungen",
+        ["Spins"] = "Drehungen",
+        ["Big win!"] = "Großer Gewinn!",
+        ["Jackpot!"] = "Jackpot!",
+        ["x{n}"] = "x{n}",
+        ["Paytable: three in a line"] = "Gewinne: drei in einer Linie",
+        ["5 lines: 3 rows and 2 diagonals"] = "5 Linien: 3 Reihen und 2 Diagonalen",
+        ["{n}s"] = "{n}s",
+        ["{n}c"] = "{n}k",
     },
     -- skill line id -> name (165, 185, 393 confirmed by the in-game probe: Lederverarbeitung, Kochkunst, Kürschnerei)
     professions = {

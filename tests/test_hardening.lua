@@ -7,28 +7,28 @@ local function slurp(path)
 end
 
 -- a namespace with Comm wired to a recording Sync, as in the game after Comm.Start()
-local function commNs(h, me, roster, now)
-    local ns = h.ns({ now = now })
+local function commNs(harness, me, roster, now)
+    local addon = harness.addon({ now = now })
     local out = { prints = {}, sent = {} }
-    ns.Print = function(m) out.prints[#out.prints + 1] = m end
-    ns.Store.db.me = me
-    ns.Api = { GetPlayerInfo = function() return { name = me } end, GetGuildRoster = function() return roster or {} end,
+    addon.Print = function(m) out.prints[#out.prints + 1] = m end
+    addon.Store.db.me = me
+    addon.Api = { GetPlayerInformation = function() return { name = me } end, GetGuildRoster = function() return roster or {} end,
         IsGuilded = function() return true end, RequestRoster = function() end }
-    ns.orders = ns.Orders.New(function() return h.clock end, ns.db.orders)
-    local C = ns.Comm
+    addon.orders = addon.Orders.New(function() return harness.clock end, addon.db.orders)
+    local C = addon.Communication
     C.active = true
     C.roster = roster or {}
-    C.sync = ns.Sync.New({
+    C.sync = addon.Sync.New({
         send = function(msg, dist, target) out.sent[#out.sent + 1] = { msg = msg, dist = dist, target = target } end,
-        now = function() return h.clock end, rand = function() return 0 end,
-        store = ns.Store, orders = ns.orders, me = me, onChange = function() end,
+        now = function() return harness.clock end, random = function() return 0 end,
+        store = addon.Store, orders = addon.orders, me = me, onChange = function() end,
     })
-    out.ns, out.C = ns, C
+    out.addon, out.C = addon, C
     return out
 end
 
-local function chunk(ns, msg, id)
-    return ns.Codec.Header(id or "a1", 1, 1) .. ns.Codec.Encode(msg)
+local function chunk(addon, msg, id)
+    return addon.Codec.Header(id or "a1", 1, 1) .. addon.Codec.Encode(msg)
 end
 
 local function bufferCount(C)
@@ -39,156 +39,148 @@ end
 
 return {
     ---------------------------------------------------------------- helpers (T1)
-    ["util: finite numbers, bounded integers, clean strings, names and escaping"] = function(h)
-        local U = h.ns().Util
-        h.eq(U.IsFinite(1), true); h.eq(U.IsFinite(math.huge), false); h.eq(U.IsFinite(-math.huge), false)
-        h.eq(U.IsFinite(0 / 0), false); h.eq(U.IsFinite("1"), false); h.eq(U.IsFinite(nil), false)
-        h.eq(U.SafeInt(5, 1, 10), 5); h.eq(U.SafeInt(0, 1, 10), nil); h.eq(U.SafeInt(11, 1, 10), nil)
-        h.eq(U.SafeInt(1.5, 1, 10), nil); h.eq(U.SafeInt(math.huge, 1, nil), nil); h.eq(U.SafeInt("5", 1, 10), nil)
-        h.eq(U.CleanString("Kürschnerei", 20), "Kürschnerei"); h.eq(U.CleanString("a\nb", 20), nil)
-        h.eq(U.CleanString("a\0b", 20), nil); h.eq(U.CleanString("x\128", 20), nil); h.eq(U.CleanString("toolong", 3), nil)
-        h.eq(U.CleanString({}, 5), nil)
-        h.eq(U.IsSafeName("Bob-Area52"), true); h.eq(U.IsSafeName("Bo|b"), false); h.eq(U.IsSafeName(""), false)
-        h.eq(U.IsSafeName(string.rep("x", 65)), false); h.eq(U.IsSafeName("a\tb"), false)
-        h.eq(U.StripControl("a\1b\127c\0d"), "abcd")
-        h.eq(U.Esc("|cffff0000red|r"), "||cffff0000red||r"); h.eq(U.Esc(5), "5")
+    ["util: finite numbers, bounded integers, clean strings, names and escaping"] = function(harness)
+        local U = harness.addon().Utility
+        harness.equal(U.IsFinite(1), true); harness.equal(U.IsFinite(math.huge), false); harness.equal(U.IsFinite(-math.huge), false)
+        harness.equal(U.IsFinite(0 / 0), false); harness.equal(U.IsFinite("1"), false); harness.equal(U.IsFinite(nil), false)
+        harness.equal(U.SafeInteger(5, 1, 10), 5); harness.equal(U.SafeInteger(0, 1, 10), nil); harness.equal(U.SafeInteger(11, 1, 10), nil)
+        harness.equal(U.SafeInteger(1.5, 1, 10), nil); harness.equal(U.SafeInteger(math.huge, 1, nil), nil); harness.equal(U.SafeInteger("5", 1, 10), nil)
+        harness.equal(U.CleanString("Kürschnerei", 20), "Kürschnerei"); harness.equal(U.CleanString("a\nb", 20), nil)
+        harness.equal(U.CleanString("a\0b", 20), nil); harness.equal(U.CleanString("x\128", 20), nil); harness.equal(U.CleanString("toolong", 3), nil)
+        harness.equal(U.CleanString({}, 5), nil)
+        harness.equal(U.IsSafeName("Bob-Area52"), true); harness.equal(U.IsSafeName("Bo|b"), false); harness.equal(U.IsSafeName(""), false)
+        harness.equal(U.IsSafeName(string.rep("x", 65)), false); harness.equal(U.IsSafeName("a\tb"), false)
+        harness.equal(U.StripControlCharacters("a\1b\127c\0d"), "abcd")
+        harness.equal(U.Escape("|cffff0000red|r"), "||cffff0000red||r"); harness.equal(U.Escape(5), "5")
     end,
 
-    ["util: the debug log escapes peer text, because /ts debug prints it to the chat frame"] = function(h)
-        local ns = h.ns()
-        ns.Debug.Log("comm.decode", "|cffff0000Evil-R", "|Hitem:1|h")
-        local line = ns.db.debug[#ns.db.debug]
-        h.truthy(line:find("||cffff0000Evil-R", 1, true), line)
-        h.truthy(not line:find("[^|]|[^|]"), "unescaped | in: " .. line)
-    end,
-
-    ["codec: the parser rejects non-finite numbers that tonumber() would accept (RF3)"] = function(h)
-        local ns = h.ns()
+    ["codec: the parser rejects non-finite numbers that tonumber() would accept (RF3)"] = function(harness)
+        local addon = harness.addon()
         for _, raw in ipairs({ "{s1:an1e999;}", "{s1:an-1e999;}", "{s1:ann;}", "n1e400;" }) do
-            local t, err = ns.Codec.Deserialize(raw)
-            h.eq(t, nil, "accepted " .. raw)
-            h.truthy(err)
+            local t, err = addon.Codec.Deserialize(raw)
+            harness.equal(t, nil, "accepted " .. raw)
+            harness.truthy(err)
         end
-        h.truthy(ns.Codec.Deserialize("{s1:an1.5;}"))
+        harness.truthy(addon.Codec.Deserialize("{s1:an1.5;}"))
     end,
 
     ---------------------------------------------------------------- header / compat / limits (T2)
-    ["codec: chunk header round-trips and carries major.minor"] = function(h)
-        local ns = h.ns()
-        local text = ns.Codec.Header("3fa2", 2, 5) .. "payload|with|bars"
-        h.truthy(text:find("^2%." .. ns.PROTO_MINOR .. "|3fa2|2|5|"))
-        local p = assert(ns.Codec.ParseHeader(text))
-        h.eq(p.major, 2); h.eq(p.minor, ns.PROTO_MINOR); h.eq(p.id, "3fa2"); h.eq(p.idx, 2); h.eq(p.total, 5); h.eq(p.part, "payload|with|bars")
+    ["codec: chunk header round-trips and carries major.minor"] = function(harness)
+        local addon = harness.addon()
+        local text = addon.Codec.Header("3fa2", 2, 5) .. "payload|with|bars"
+        harness.truthy(text:find("^2%." .. addon.PROTOCOL_MINOR .. "|3fa2|2|5|"))
+        local p = assert(addon.Codec.ParseHeader(text))
+        harness.equal(p.major, 2); harness.equal(p.minor, addon.PROTOCOL_MINOR); harness.equal(p.transferID, "3fa2"); harness.equal(p.partIndex, 2); harness.equal(p.partCount, 5); harness.equal(p.payload, "payload|with|bars")
     end,
 
-    ["codec: malformed headers are rejected, legacy 0.1/0.2 headers are recognised, foreign majors only expose the version"] = function(h)
-        local ns = h.ns()
+    ["codec: malformed headers are rejected, legacy 0.1/0.2 headers are recognised, foreign majors only expose the version"] = function(harness)
+        local addon = harness.addon()
         for _, bad in ipairs({ "", "garbage", "2.0|", "2.0|zz|1|1|x", "2.0|a|0|1|x", "2.0|a|2|1|x", "2.0|a|1|0|x",
             "2.0|a|1|201|x", "2.0|a|1|99999|x", "2.0|" .. string.rep("a", 13) .. "|1|1|x", "1234.0|a|1|1|x" }) do
-            h.eq((ns.Codec.ParseHeader(bad)), nil, "accepted: " .. bad)
+            harness.equal((addon.Codec.ParseHeader(bad)), nil, "accepted: " .. bad)
         end
-        local _, why = ns.Codec.ParseHeader("3fa|1|2|abc")   -- the 0.1/0.2 layout
-        h.eq(why, "legacy")
-        local f = assert(ns.Codec.ParseHeader("3.7|anything we cannot know|"))
-        h.eq(f.major, 3); h.eq(f.minor, 7); h.eq(f.id, nil)
-        h.eq((ns.Codec.ParseHeader(nil)), nil)
+        local _, why = addon.Codec.ParseHeader("3fa|1|2|abc")   -- the 0.1/0.2 layout
+        harness.equal(why, "legacy")
+        local f = assert(addon.Codec.ParseHeader("3.7|anything we cannot know|"))
+        harness.equal(f.major, 3); harness.equal(f.minor, 7); harness.equal(f.id, nil)
+        harness.equal((addon.Codec.ParseHeader(nil)), nil)
     end,
 
-    ["codec: compatibility rule: major must match, minor may differ"] = function(h)
-        local ns = h.ns()
-        h.eq(ns.Codec.Compat(2, 0), "ok"); h.eq(ns.Codec.Compat(ns.PROTO_MAJOR, 0), "ok")
-        h.eq(ns.Codec.Compat(ns.PROTO_MAJOR, ns.PROTO_MINOR + 1), "newer-minor")
-        h.eq(ns.Codec.Compat(ns.PROTO_MAJOR + 1, 0), "newer"); h.eq(ns.Codec.Compat(ns.PROTO_MAJOR - 1, 9), "older")
+    ["codec: compatibility rule: major must match, minor may differ"] = function(harness)
+        local addon = harness.addon()
+        harness.equal(addon.Codec.Compatibility(2, 0), "ok"); harness.equal(addon.Codec.Compatibility(addon.PROTOCOL_MAJOR, 0), "ok")
+        harness.equal(addon.Codec.Compatibility(addon.PROTOCOL_MAJOR, addon.PROTOCOL_MINOR + 1), "newer-minor")
+        harness.equal(addon.Codec.Compatibility(addon.PROTOCOL_MAJOR + 1, 0), "newer"); harness.equal(addon.Codec.Compatibility(addon.PROTOCOL_MAJOR - 1, 9), "older")
     end,
 
-    ["codec: transport limits are defined once and Decode accepts what the transport can deliver"] = function(h)
-        local ns = h.ns()
-        h.eq(ns.Codec.MAX_ENCODED, ns.Codec.CHUNK * ns.Codec.MAX_PARTS)
-        h.truthy(ns.Codec.CHUNK + 30 <= 255, "header + payload must fit one addon message")
-        h.eq((ns.Codec.Decode(string.rep("x", ns.Codec.MAX_ENCODED + 1))), nil)
-        local comm = slurp("Core/Comm.lua")
-        h.truthy(not comm:find("local CHUNK = %d"), "Comm must not define its own CHUNK")
-        h.truthy(not comm:find("local MAX_PARTS = %d"), "Comm must not define its own MAX_PARTS")
+    ["codec: transport limits are defined once and Decode accepts what the transport can deliver"] = function(harness)
+        local addon = harness.addon()
+        harness.equal(addon.Codec.MAXIMUM_ENCODED_BYTES, addon.Codec.CHUNK_BYTES * addon.Codec.MAXIMUM_PARTS)
+        harness.truthy(addon.Codec.CHUNK_BYTES + 30 <= 255, "header + payload must fit one addon message")
+        harness.equal((addon.Codec.Decode(string.rep("x", addon.Codec.MAXIMUM_ENCODED_BYTES + 1))), nil)
+        local comm = slurp("Core/Net/Communication.lua")
+        harness.truthy(not comm:find("local CHUNK_BYTES = %d"), "Communication must not define its own CHUNK_BYTES")
+        harness.truthy(not comm:find("local MAXIMUM_PARTS = %d"), "Communication must not define its own MAXIMUM_PARTS")
     end,
 
-    ["guard: only GUILD, or WHISPER from a roster member, is accepted; everything else fails closed"] = function(h)
-        local G = h.ns().Guard
+    ["guard: only GUILD, or WHISPER from a roster member, is accepted; everything else fails closed"] = function(harness)
+        local G = harness.addon().Guard
         local roster = { ["Bob-R"] = true }
-        h.eq((G.Accept("GUILD", "Anyone-R", roster)), true)
-        h.eq((G.Accept("GUILD", "Anyone-R", nil)), true)
-        h.eq((G.Accept("WHISPER", "Bob-R", roster)), true)
-        h.eq((G.Accept("WHISPER", "Stranger-R", roster)), false)
-        h.eq((G.Accept("WHISPER", "Bob-R", {})), false)       -- roster not loaded yet: fail closed
-        h.eq((G.Accept("WHISPER", "Bob-R", nil)), false)
+        harness.equal((G.Accept("GUILD", "Anyone-R", roster)), true)
+        harness.equal((G.Accept("GUILD", "Anyone-R", nil)), true)
+        harness.equal((G.Accept("WHISPER", "Bob-R", roster)), true)
+        harness.equal((G.Accept("WHISPER", "Stranger-R", roster)), false)
+        harness.equal((G.Accept("WHISPER", "Bob-R", {})), false)       -- roster not loaded yet: fail closed
+        harness.equal((G.Accept("WHISPER", "Bob-R", nil)), false)
         for _, ch in ipairs({ "PARTY", "RAID", "SAY", "YELL", "CHANNEL", "INSTANCE_CHAT", "OFFICER", "", "guild" }) do
-            h.eq((G.Accept(ch, "Bob-R", roster)), false, ch)
+            harness.equal((G.Accept(ch, "Bob-R", roster)), false, ch)
         end
-        h.eq((G.Accept(nil, "Bob-R", roster)), false)
-        h.eq((G.Accept("GUILD", nil, roster)), false); h.eq((G.Accept("GUILD", "", roster)), false)
+        harness.equal((G.Accept(nil, "Bob-R", roster)), false)
+        harness.equal((G.Accept("GUILD", nil, roster)), false); harness.equal((G.Accept("GUILD", "", roster)), false)
     end,
 
-    ["guard: one notice per kind and a bounded record of who was seen"] = function(h)
-        local G = h.ns().Guard
+    ["guard: one notice per kind and a bounded record of who was seen"] = function(harness)
+        local G = harness.addon().Guard
         local hints = G.NewHints()
-        h.eq(G.Note(hints, "newer", "A-R"), true)
-        h.eq(G.Note(hints, "newer", "B-R"), false)
-        h.eq(G.Note(hints, "older", "B-R"), true)
-        for i = 1, G.MAX_SEEN + 50 do G.Note(hints, "older", "P" .. i) end
-        h.truthy(hints.count <= G.MAX_SEEN, "seen record grew unbounded: " .. hints.count)
+        harness.equal(G.Note(hints, "newer", "A-R"), true)
+        harness.equal(G.Note(hints, "newer", "B-R"), false)
+        harness.equal(G.Note(hints, "older", "B-R"), true)
+        for i = 1, G.MAXIMUM_SEEN + 50 do G.Note(hints, "older", "P" .. i) end
+        harness.truthy(hints.count <= G.MAXIMUM_SEEN, "seen record grew unbounded: " .. hints.count)
     end,
 
     ---------------------------------------------------------------- Comm gate and versions (RF1, RF2, RF7)
-    ["comm: a WHISPER from a non-guild character is dropped before anything is buffered or answered (RF1)"] = function(h)
-        local c = commNs(h, "Me-R", { ["Bob-R"] = true })
-        c.ns.Store.PutChar(h.char("Me-R", 50, { 1 }))
-        local want = chunk(c.ns, { t = "WANT", names = { "Me-R" } })
+    ["comm: a WHISPER from a non-guild character is dropped before anything is buffered or answered (RF1)"] = function(harness)
+        local c = commNs(harness, "Me-R", { ["Bob-R"] = true })
+        c.addon.Store.PutCharacter(harness.character("Me-R", 50, { 1 }))
+        local want = chunk(c.addon, { t = "WANT", names = { "Me-R" } })
         c.C.OnAddonMessage("TShare", want, "WHISPER", "Stranger-R")
-        h.eq(bufferCount(c.C), 0); h.eq(c.C.sync.stats.received, 0); h.eq(#c.C.sync.pending, 0)
-        h.eq(c.C.rejected, 1)
+        harness.equal(bufferCount(c.C), 0); harness.equal(c.C.sync.statistics.received, 0); harness.equal(#c.C.sync.pending, 0)
+        harness.equal(c.C.rejected, 1)
         c.C.OnAddonMessage("TShare", want, "WHISPER", "Bob-R")       -- a roster member is served
-        h.eq(c.C.sync.stats.received, 1); h.eq(#c.C.sync.pending, 1)
+        harness.equal(c.C.sync.statistics.received, 1); harness.equal(#c.C.sync.pending, 1)
     end,
 
-    ["comm: foreign channels and a missing roster are rejected; GUILD is accepted"] = function(h)
-        local c = commNs(h, "Me-R", {})
-        local hello = chunk(c.ns, { t = "HELLO", rev = 0 })
+    ["comm: foreign channels and a missing roster are rejected; GUILD is accepted"] = function(harness)
+        local c = commNs(harness, "Me-R", {})
+        local hello = chunk(c.addon, { t = "HELLO", rev = 0 })
         for _, ch in ipairs({ "PARTY", "RAID", "SAY", "CHANNEL", "WHISPER" }) do c.C.OnAddonMessage("TShare", hello, ch, "Bob-R") end
-        h.eq(c.C.sync.stats.received, 0)
+        harness.equal(c.C.sync.statistics.received, 0)
         c.C.OnAddonMessage("TShare", hello, "GUILD", "Bob-R")
-        h.eq(c.C.sync.stats.received, 1)
+        harness.equal(c.C.sync.statistics.received, 1)
         c.C.OnAddonMessage("Other", hello, "GUILD", "Bob-R")         -- not our prefix
         c.C.OnAddonMessage("TShare", hello, "GUILD", "Me-R")         -- own echo
-        h.eq(c.C.sync.stats.received, 1)
+        harness.equal(c.C.sync.statistics.received, 1)
     end,
 
-    ["comm: a newer major or a legacy header creates no buffer and prints ONE hint per kind (RF2)"] = function(h)
-        local c = commNs(h, "Me-R", {})
+    ["comm: a newer major or a legacy header creates no buffer and prints ONE hint per kind (RF2)"] = function(harness)
+        local c = commNs(harness, "Me-R", {})
         local newer = "3.0|aa|1|1|" .. string.rep("x", 40)
         c.C.OnAddonMessage("TShare", newer, "GUILD", "A-R")
         c.C.OnAddonMessage("TShare", newer, "GUILD", "B-R")
-        h.eq(#c.prints, 1); h.truthy(c.prints[1]:lower():find("newer", 1, true), c.prints[1])
+        harness.equal(#c.prints, 1); harness.truthy(c.prints[1]:lower():find("newer", 1, true), c.prints[1])
         c.C.OnAddonMessage("TShare", "3fa|1|1|legacypayload", "GUILD", "C-R")
         c.C.OnAddonMessage("TShare", "3fa|1|1|legacypayload", "GUILD", "D-R")
-        h.eq(#c.prints, 2); h.truthy(c.prints[2]:lower():find("older", 1, true), c.prints[2])
-        h.eq(bufferCount(c.C), 0); h.eq(c.C.sync.stats.received, 0); h.eq(c.C.hints.count, 4)
+        harness.equal(#c.prints, 2); harness.truthy(c.prints[2]:lower():find("older", 1, true), c.prints[2])
+        harness.equal(bufferCount(c.C), 0); harness.equal(c.C.sync.statistics.received, 0); harness.equal(c.C.hints.count, 4)
         c.C.OnAddonMessage("TShare", "total garbage", "GUILD", "E-R")   -- malformed: silently ignored, no hint
-        h.eq(#c.prints, 2)
+        harness.equal(#c.prints, 2)
     end,
 
-    ["comm: a newer MINOR is processed and noted; an older minor is processed silently (RF7)"] = function(h)
-        local c = commNs(h, "Me-R", {})
-        local enc = c.ns.Codec.Encode({ t = "HELLO", rev = 0 })
+    ["comm: a newer MINOR is processed and noted; an older minor is processed silently (RF7)"] = function(harness)
+        local c = commNs(harness, "Me-R", {})
+        local enc = c.addon.Codec.Encode({ t = "HELLO", rev = 0 })
         c.C.OnAddonMessage("TShare", "2.9|a1|1|1|" .. enc, "GUILD", "A-R")
-        h.eq(c.C.sync.stats.received, 1); h.eq(#c.prints, 1)
+        harness.equal(c.C.sync.statistics.received, 1); harness.equal(#c.prints, 1)
         c.C.OnAddonMessage("TShare", "2.0|a2|1|1|" .. enc, "GUILD", "B-R")
-        h.eq(c.C.sync.stats.received, 2); h.eq(#c.prints, 1)
+        harness.equal(c.C.sync.statistics.received, 2); harness.equal(#c.prints, 1)
     end,
 
-    ["comm: two clients on different minors sync; different majors do not (RF7)"] = function(h)
+    ["comm: two clients on different minors sync; different majors do not (RF7)"] = function(harness)
         local function pair(minorB, majorB)
-            local a, b = commNs(h, "A-R", {}), commNs(h, "B-R", {})
-            b.ns.PROTO_MINOR, b.ns.PROTO_MAJOR, b.ns.PROTOCOL = minorB, majorB, majorB
-            a.ns.Store.PutChar(h.char("A-R", 50, { 1 }))
+            local a, b = commNs(harness, "A-R", {}), commNs(harness, "B-R", {})
+            b.addon.PROTOCOL_MINOR, b.addon.PROTOCOL_MAJOR, b.addon.PROTOCOL = minorB, majorB, majorB
+            a.addon.Store.PutCharacter(harness.character("A-R", 50, { 1 }))
             a.C.Send({ t = "HELLO", rev = 50 }, "GUILD")
             b.C.Send({ t = "HELLO", rev = 0 }, "GUILD")
             for _, item in ipairs(a.C.queue) do b.C.OnAddonMessage("TShare", item.text, "GUILD", "A-R") end
@@ -196,93 +188,93 @@ return {
             return a, b
         end
         local a, b = pair(3, 2)                                  -- B has extra (additive) features
-        h.eq(a.C.sync.stats.received, 1); h.eq(b.C.sync.stats.received, 1)
+        harness.equal(a.C.sync.statistics.received, 1); harness.equal(b.C.sync.statistics.received, 1)
         local a2, b2 = pair(0, 3)                                -- B speaks a different major
-        h.eq(a2.C.sync.stats.received, 0); h.eq(b2.C.sync.stats.received, 0)
-        h.eq(#a2.prints, 1); h.eq(#b2.prints, 1)                 -- both sides are told
+        harness.equal(a2.C.sync.statistics.received, 0); harness.equal(b2.C.sync.statistics.received, 0)
+        harness.equal(#a2.prints, 1); harness.equal(#b2.prints, 1)                 -- both sides are told
     end,
 
-    ["comm: message ids start with the per-session salt, so a reload cannot reuse an id (V6)"] = function(h)
-        local c1, c2 = commNs(h, "A-R", {}), commNs(h, "A-R", {})
+    ["comm: message ids start with the per-session salt, so a reload cannot reuse an id (V6)"] = function(harness)
+        local c1, c2 = commNs(harness, "A-R", {}), commNs(harness, "A-R", {})
         c1.C.salt, c2.C.salt = 0x1234, 0x5678
         c1.C.Send({ t = "HELLO", rev = 1 }, "GUILD"); c2.C.Send({ t = "HELLO", rev = 1 }, "GUILD")
-        local id1 = c1.ns.Codec.ParseHeader(c1.C.queue[1].text).id
-        local id2 = c2.ns.Codec.ParseHeader(c2.C.queue[1].text).id
-        h.truthy(id1:find("^1234"), id1); h.truthy(id2:find("^5678"), id2); h.truthy(id1 ~= id2)
-        h.truthy(#id1 <= 12)
+        local id1 = c1.addon.Codec.ParseHeader(c1.C.queue[1].text).transferID
+        local id2 = c2.addon.Codec.ParseHeader(c2.C.queue[1].text).transferID
+        harness.truthy(id1:find("^1234"), id1); harness.truthy(id2:find("^5678"), id2); harness.truthy(id1 ~= id2)
+        harness.truthy(#id1 <= 12)
     end,
 
-    ["comm: every chunk fits one addon message"] = function(h)
-        local c = commNs(h, "A-R", {})
+    ["comm: every chunk fits one addon message"] = function(harness)
+        local c = commNs(harness, "A-R", {})
         local big = {}
         for i = 1, 4000 do big[i] = math.random(1, 1e9) end    -- incompressible-ish payload
         c.C.Send({ t = "OPUSH", orders = { { id = table.concat(big, ",") } } }, "WHISPER", "B-R")
-        h.truthy(#c.C.queue > 1)
-        for _, item in ipairs(c.C.queue) do h.truthy(#item.text <= 255, "chunk of " .. #item.text .. " bytes") end
+        harness.truthy(#c.C.queue > 1)
+        for _, item in ipairs(c.C.queue) do harness.truthy(#item.text <= 255, "chunk of " .. #item.text .. " bytes") end
     end,
 
     ---------------------------------------------------------------- numeric bounds (RF3, R6)
-    ["sync: HELLO with a non-finite, negative or future rev is dropped and triggers no pull (RF3)"] = function(h)
-        local c = commNs(h, "Me-R", { ["Bob-R"] = true }, 1.8e9)   -- a realistic server time: "future" is judged against it
+    ["sync: HELLO with a non-finite, negative or future rev is dropped and triggers no pull (RF3)"] = function(harness)
+        local c = commNs(harness, "Me-R", { ["Bob-R"] = true }, 1.8e9)   -- a realistic server time: "future" is judged against it
         local sync = c.C.sync
-        for _, rev in ipairs({ 2 ^ 60, -5, 1e15, h.clock + 86400 + 1 }) do
-            sync:OnMessage({ v = c.ns.PROTOCOL, t = "HELLO", rev = rev }, "Bob-R")
+        for _, rev in ipairs({ 2 ^ 60, -5, 1e15, harness.clock + 86400 + 1 }) do
+            sync:OnMessage({ v = c.addon.PROTOCOL, t = "HELLO", rev = rev }, "Bob-R")
         end
-        h.eq(sync.stats.dropped, 4); h.eq(#c.sent, 0)
-        sync:OnMessage({ v = c.ns.PROTOCOL, t = "HELLO", rev = h.clock + 10 }, "Bob-R")   -- small clock skew is fine
-        h.eq(sync.stats.dropped, 4); h.eq(#c.sent, 1); h.eq(c.sent[1].msg.t, "WANT")
+        harness.equal(sync.statistics.dropped, 4); harness.equal(#c.sent, 0)
+        sync:OnMessage({ v = c.addon.PROTOCOL, t = "HELLO", rev = harness.clock + 10 }, "Bob-R")   -- small clock skew is fine
+        harness.equal(sync.statistics.dropped, 4); harness.equal(#c.sent, 1); harness.equal(c.sent[1].msg.t, "WANT")
     end,
 
-    ["orders: far-future or negative timestamps and unsafe names are rejected, so they cannot win merges or evade pruning (RF3)"] = function(h)
-        local ns = h.ns({ now = 1.8e9 })
-        local o = ns.Orders.New(function() return h.clock end, {})
+    ["orders: far-future or negative timestamps and unsafe names are rejected, so they cannot win merges or evade pruning (RF3)"] = function(harness)
+        local addon = harness.addon({ now = 1.8e9 })
+        local o = addon.Orders.New(function() return harness.clock end, {})
         local base = function() return { id = "Bob-R:1:1", requester = "Bob-R", recipeID = 5, qty = 1, createdAt = 900, claims = {} } end
-        h.truthy(o:Merge(base()))
+        harness.truthy(o:Merge(base()))
         local function rejected(mut) local x = base(); x.id = "X" .. math.random(1e9); mut(x); return o:Merge(x) == false end
-        h.truthy(rejected(function(x) x.createdAt = 1e15 end))
-        h.truthy(rejected(function(x) x.createdAt = -1 end))
-        h.truthy(rejected(function(x) x.createdAt = 2 ^ 60 end))
-        h.truthy(rejected(function(x) x.closed, x.closedAt = "cancelled", -1e18 end))
-        h.truthy(rejected(function(x) x.closed, x.closedAt = "done", 1e15 end))
-        h.truthy(rejected(function(x) x.claims = { ["A-R"] = { state = "claimed", t = 1e15 } } end))
-        h.truthy(rejected(function(x) x.claims = { ["A|cffff0000-R"] = { state = "claimed", t = 1 } } end))
-        h.truthy(rejected(function(x) x.requester = "Bob|cffff0000" end))
-        h.truthy(rejected(function(x) x.requester = {} end))
-        h.truthy(rejected(function(x) x.closedBy = {} end))
-        h.truthy(rejected(function(x) x.recipeID = 1e15 end))
-        h.truthy(rejected(function(x) x.recipeID = 0 end))
+        harness.truthy(rejected(function(x) x.createdAt = 1e15 end))
+        harness.truthy(rejected(function(x) x.createdAt = -1 end))
+        harness.truthy(rejected(function(x) x.createdAt = 2 ^ 60 end))
+        harness.truthy(rejected(function(x) x.closed, x.closedAt = "cancelled", -1e18 end))
+        harness.truthy(rejected(function(x) x.closed, x.closedAt = "done", 1e15 end))
+        harness.truthy(rejected(function(x) x.claims = { ["A-R"] = { state = "claimed", t = 1e15 } } end))
+        harness.truthy(rejected(function(x) x.claims = { ["A|cffff0000-R"] = { state = "claimed", t = 1 } } end))
+        harness.truthy(rejected(function(x) x.requester = "Bob|cffff0000" end))
+        harness.truthy(rejected(function(x) x.requester = {} end))
+        harness.truthy(rejected(function(x) x.closedBy = {} end))
+        harness.truthy(rejected(function(x) x.recipeID = 1e15 end))
+        harness.truthy(rejected(function(x) x.recipeID = 0 end))
         -- an attack on an EXISTING order: a tiny closedAt would have won every merge forever
         local cancel = base(); cancel.closed, cancel.closedAt = "cancelled", -1e18
-        h.eq(o:Merge(cancel), false); h.eq(o:Get("Bob-R:1:1").closed, nil)
+        harness.equal(o:Merge(cancel), false); harness.equal(o:Get("Bob-R:1:1").closed, nil)
     end,
 
-    ["orders: control characters are stripped from notes; the note stays UTF-8"] = function(h)
-        local ns = h.ns()
-        local o = ns.Orders.New(function() return h.clock end, {})
+    ["orders: control characters are stripped from notes; the note stays UTF-8"] = function(harness)
+        local addon = harness.addon()
+        local o = addon.Orders.New(function() return harness.clock end, {})
         local ord = { id = "Bob-R:1:2", requester = "Bob-R", recipeID = 5, qty = 1, createdAt = 900, claims = {}, note = "a\nb\0c" }
-        h.truthy(o:Merge(ord)); h.eq(o:Get("Bob-R:1:2").note, "abc")
+        harness.truthy(o:Merge(ord)); harness.equal(o:Get("Bob-R:1:2").note, "abc")
         ord.id, ord.note = "Bob-R:1:3", "x\255y"
-        h.eq(o:Merge(ord), false)
+        harness.equal(o:Merge(ord), false)
     end,
 
     ---------------------------------------------------------------- strict sanitizing (RF4, R7, R8)
-    ["sync: SNAP stores a clean copy: unknown keys are dropped, extra catalog ids are refused, bad entries never stored (RF4)"] = function(h)
-        local c = commNs(h, "Me-R", { ["Bob-R"] = true })
-        local char = h.char("Bob-R", 50, { 1 })
+    ["sync: SNAP stores a clean copy: unknown keys are dropped, extra catalog ids are refused, bad entries never stored (RF4)"] = function(harness)
+        local c = commNs(harness, "Me-R", { ["Bob-R"] = true })
+        local char = harness.character("Bob-R", 50, { 1 })
         char.evil, char.professions.Cooking.evil, char.professions.Cooking.recipes[1] = { 1, 2, 3 }, "x", true
         local good = { name = "Roast Boar", reagents = { { itemID = 10, count = 2 } }, evil = "x", icon = 133 }
-        c.C.sync:OnMessage({ v = c.ns.PROTOCOL, t = "SNAP", char = char, catalog = {
+        c.C.sync:OnMessage({ v = c.addon.PROTOCOL, t = "SNAP", char = char, catalog = {
             [1] = good,
             [2] = { name = "Not Bobs Recipe", reagents = {} },                          -- Bob does not know recipe 2
         } }, "Bob-R")
-        local stored = c.ns.Store.GetChar("Bob-R")
-        h.truthy(stored); h.eq(stored.evil, nil); h.eq(stored.professions.Cooking.evil, nil)
-        h.eq(c.ns.Store.GetRecipe(1).name, "Roast Boar"); h.eq(c.ns.Store.GetRecipe(1).evil, nil)
-        h.eq(c.ns.Store.GetRecipe(2), nil)
+        local stored = c.addon.Store.GetCharacter("Bob-R")
+        harness.truthy(stored); harness.equal(stored.evil, nil); harness.equal(stored.professions.Cooking.evil, nil)
+        harness.equal(c.addon.Store.GetRecipe(1).name, "Roast Boar"); harness.equal(c.addon.Store.GetRecipe(1).evil, nil)
+        harness.equal(c.addon.Store.GetRecipe(2), nil)
     end,
 
-    ["store: catalog entries with hostile or wrongly typed fields are rejected (RF4)"] = function(h)
-        local S = h.ns().Store
+    ["store: catalog entries with hostile or wrongly typed fields are rejected (RF4)"] = function(harness)
+        local S = harness.addon().Store
         local function entry(mut) local e = { name = "X", reagents = { { itemID = 1, count = 1, name = "R" } } }; mut(e); return e end
         local bad = {
             entry(function(e) e.reagents[1].name = {} end), entry(function(e) e.reagents[1].name = 5 end),
@@ -295,22 +287,22 @@ return {
             entry(function(e) e.minSkill = {} end), entry(function(e) e.loc = "|cffff0000" end),
             entry(function(e) e.reagents = string.rep("x", 10) end),
         }
-        for i, e in ipairs(bad) do h.eq(S.ValidateCatalogEntry(e), false, "entry " .. i .. " accepted") end
+        for i, e in ipairs(bad) do harness.equal(S.ValidateCatalogEntry(e), false, "entry " .. i .. " accepted") end
         local many = {}
         for i = 1, 13 do many[i] = { itemID = i, count = 1 } end
-        h.eq(S.ValidateCatalogEntry({ name = "X", reagents = many }), false)
-        h.eq(S.ValidateCatalogEntry({ name = "Kürschnerei", loc = "deDE", icon = 133, produces = 5, reagents = {} }), true)
-        h.eq(S.ValidateCatalogEntry({ name = "X", icon = "Interface\\Icons\\INV_Misc_Food_01", reagents = {} }), true)
+        harness.equal(S.ValidateCatalogEntry({ name = "X", reagents = many }), false)
+        harness.equal(S.ValidateCatalogEntry({ name = "Kürschnerei", loc = "deDE", icon = 133, produces = 5, reagents = {} }), true)
+        harness.equal(S.ValidateCatalogEntry({ name = "X", icon = "Interface\\Icons\\INV_Misc_Food_01", reagents = {} }), true)
         -- PutCatalog stores nothing but clean copies, and a bad entry does not block a later good one
         S.PutCatalog({ [7] = { name = "X", reagents = { { itemID = 1, count = 1, name = {} } } } })
-        h.eq(S.GetRecipe(7), nil)
+        harness.equal(S.GetRecipe(7), nil)
         S.PutCatalog({ [7] = { name = "X", reagents = {} }, [-3] = { name = "neg", reagents = {} }, [1.5] = { name = "frac", reagents = {} } })
-        h.truthy(S.GetRecipe(7)); h.eq(S.GetRecipe(-3), nil); h.eq(S.GetRecipe(1.5), nil)
+        harness.truthy(S.GetRecipe(7)); harness.equal(S.GetRecipe(-3), nil); harness.equal(S.GetRecipe(1.5), nil)
     end,
 
-    ["store: character records with out-of-range or hostile values are rejected (RF3)"] = function(h)
-        local S = h.ns({ now = 1.8e9 }).Store
-        local function rec(mut) local r = h.char("Bob-R", 50, { 1 }); mut(r); return r end
+    ["store: character records with out-of-range or hostile values are rejected (RF3)"] = function(harness)
+        local S = harness.addon({ now = 1.8e9 }).Store
+        local function rec(mut) local r = harness.character("Bob-R", 50, { 1 }); mut(r); return r end
         local bad = {
             rec(function(r) r.rev = 2 ^ 60 end), rec(function(r) r.rev = -1 end), rec(function(r) r.rev = 0.5 end),
             rec(function(r) r.level = 0 end), rec(function(r) r.level = 101 end), rec(function(r) r.level = 1 / 0 end),
@@ -321,84 +313,84 @@ return {
             rec(function(r) r.professions.Cooking.id = 1e9 end), rec(function(r) r.professions.Cooking.name = "x\n" end),
             rec(function(r) for i = 1, 17 do r.professions["P" .. i] = { rank = 1, max = 1, recipes = {} } end end),
         }
-        for i, r in ipairs(bad) do h.eq(S.ValidateChar(r), false, "record " .. i .. " accepted") end
-        h.eq(S.ValidateChar(h.char("Bob-R", 50, { 1, 2, 3 })), true)
-        h.eq(S.ValidateChar(h.char("Bob-R", h.clock + 3600, { 1 })), true)      -- small skew is fine
+        for i, r in ipairs(bad) do harness.equal(S.ValidateCharacter(r), false, "record " .. i .. " accepted") end
+        harness.equal(S.ValidateCharacter(harness.character("Bob-R", 50, { 1, 2, 3 })), true)
+        harness.equal(S.ValidateCharacter(harness.character("Bob-R", harness.clock + 3600, { 1 })), true)      -- small skew is fine
     end,
 
     ---------------------------------------------------------------- display escaping (RF5)
-    ["model: peer text is escaped so colour, texture and hyperlink codes show as literal text (RF5)"] = function(h)
-        local ns = h.ns()
+    ["model: peer text is escaped so colour, texture and hyperlink codes show as literal text (RF5)"] = function(harness)
+        local addon = harness.addon()
         local attack = "|cffff0000|Hitem:1|h[Free gold]|h|r|TInterface\\Icons\\x:16|t"
         local escaped = attack:gsub("|", "||")
-        local o = ns.Orders.New(function() return h.clock end, {})
-        h.truthy(o:Merge({ id = "Bob-R:1:9", requester = "Bob-R", recipeID = 5, qty = 1, createdAt = 900, note = attack,
+        local o = addon.Orders.New(function() return harness.clock end, {})
+        harness.truthy(o:Merge({ id = "Bob-R:1:9", requester = "Bob-R", recipeID = 5, qty = 1, createdAt = 900, note = attack,
             claims = { ["Al-R"] = { state = "claimed", t = 901 } } }))
-        local rows = ns.Model.BuildOrderRows(ns.Store, o, "all", false, "Me-R")
-        h.eq(rows[1].note, escaped)
-        h.eq(rows[1].claimers[1], "Al-R")
+        local rows = addon.Model.BuildOrderRows(addon.Store, o, "all", false, "Me-R")
+        harness.equal(rows[1].note, escaped)
+        harness.equal(rows[1].claimers[1], "Al-R")
         -- defence in depth: values that were stored before the sanitizer existed still cannot inject codes
-        ns.Store.db.catalog[5] = { name = "A|cff00ff00B", reagents = { { itemID = 9, count = 1, name = "R|r" } } }
-        h.eq(ns.Model.RecipeName(ns.Store, 5), "A||cff00ff00B")
-        h.eq(ns.Model.RecipeDetail(ns.Store, 5).reagents[1].name, "R||r")
-        ns.Store.db.chars["Bob-R"] = { name = "Bob-R", rev = 1, level = 1, professions = { ["Cook|cffff0000ing"] =
+        addon.Store.db.catalog[5] = { name = "A|cff00ff00B", reagents = { { itemID = 9, count = 1, name = "R|r" } } }
+        harness.equal(addon.Model.RecipeName(addon.Store, 5), "A||cff00ff00B")
+        harness.equal(addon.Model.RecipeDetail(addon.Store, 5).reagents[1].name, "R||r")
+        addon.Store.db.chars["Bob-R"] = { name = "Bob-R", rev = 1, level = 1, professions = { ["Cook|cffff0000ing"] =
             { name = "Cook|cffff0000ing", rank = 1, max = 1, recipes = { [5] = true } } } }
-        h.eq(ns.Model.Professions(ns.Store)[1].name, "Cook||cffff0000ing")
-        h.eq(ns.Model.BuildRecipeRows(ns.Store, { text = "" })[1].profession, "Cook||cffff0000ing")
+        harness.equal(addon.Model.Professions(addon.Store)[1].name, "Cook||cffff0000ing")
+        harness.equal(addon.Model.BuildRecipeRows(addon.Store, { text = "" })[1].profession, "Cook||cffff0000ing")
     end,
 
     ---------------------------------------------------------------- migration and downgrade guard (RF6)
-    ["store: a missing, corrupt or non-table SavedVariable starts empty"] = function(h)
-        local ns = h.ns()
+    ["store: a missing, corrupt or non-table SavedVariable starts empty"] = function(harness)
+        local addon = harness.addon()
         for _, junk in ipairs({ false, "text", 42, { schema = "x" }, { schema = 0 }, { schema = 1.5 }, { schema = 0 / 0 } }) do
-            local sv, status = ns.Store.Init(junk)
-            h.eq(status, "reset", tostring(junk)); h.eq(sv.schema, ns.Store.SCHEMA); h.truthy(sv.chars and sv.orders and sv.catalog)
-            h.truthy(sv == ns.db)
+            local sv, status = addon.Store.Init(junk)
+            harness.equal(status, "reset", tostring(junk)); harness.equal(sv.schema, addon.Store.SCHEMA); harness.truthy(sv.chars and sv.orders and sv.catalog)
+            harness.truthy(sv == addon.db)
         end
-        local sv, status = ns.Store.Init(nil)
-        h.eq(status, "ok"); h.eq(sv.schema, ns.Store.SCHEMA)
+        local sv, status = addon.Store.Init(nil)
+        harness.equal(status, "ok"); harness.equal(sv.schema, addon.Store.SCHEMA)
     end,
 
-    ["store: saved data from a NEWER schema is left untouched and the session runs on a throwaway DB (RF6)"] = function(h)
-        local ns = h.ns()
-        local saved = { schema = ns.Store.SCHEMA + 1, chars = { ["X-R"] = { future = true } }, shiny = "new feature data" }
-        local sv, status = ns.Store.Init(saved)
-        h.eq(status, "newer"); h.truthy(sv == saved, "must hand back the ORIGINAL table so the file is not overwritten")
-        h.eq(saved.schema, ns.Store.SCHEMA + 1); h.truthy(saved.chars["X-R"].future); h.eq(saved.shiny, "new feature data")
-        h.truthy(ns.db ~= saved); h.eq(ns.db.readonly, true)
-        ns.Store.PutChar(h.char("Me-R", 50, { 1 }))              -- the session still works...
-        h.eq(saved.chars["Me-R"], nil)                           -- ...but never writes into the saved table
-        h.eq(ns.db.schema, ns.Store.SCHEMA)
+    ["store: saved data from a NEWER schema is left untouched and the session runs on a throwaway DB (RF6)"] = function(harness)
+        local addon = harness.addon()
+        local saved = { schema = addon.Store.SCHEMA + 1, chars = { ["X-R"] = { future = true } }, shiny = "new feature data" }
+        local sv, status = addon.Store.Init(saved)
+        harness.equal(status, "newer"); harness.truthy(sv == saved, "must hand back the ORIGINAL table so the file is not overwritten")
+        harness.equal(saved.schema, addon.Store.SCHEMA + 1); harness.truthy(saved.chars["X-R"].future); harness.equal(saved.shiny, "new feature data")
+        harness.truthy(addon.db ~= saved); harness.equal(addon.db.readonly, true)
+        addon.Store.PutCharacter(harness.character("Me-R", 50, { 1 }))              -- the session still works...
+        harness.equal(saved.chars["Me-R"], nil)                           -- ...but never writes into the saved table
+        harness.equal(addon.db.schema, addon.Store.SCHEMA)
     end,
 
-    ["store: /ts clean during a downgrade-guarded session only empties the throwaway DB, never the saved file (RF6)"] = function(h)
-        local ns = h.ns()
-        local saved = { schema = ns.Store.SCHEMA + 1, chars = { ["X-R"] = { future = true } }, orders = { keep = { future = true } } }
-        ns.Store.Init(saved)
-        ns.Store.PutChar(h.char("Me-R", 50, { 1 }))
-        local removed = ns.Store.Clean()
-        h.eq(removed.chars, 1)                                   -- only the session's own record
-        h.truthy(saved.chars["X-R"].future); h.truthy(saved.orders.keep.future)
-        h.eq(saved.schema, ns.Store.SCHEMA + 1)
+    ["store: /ts clean during a downgrade-guarded session only empties the throwaway DB, never the saved file (RF6)"] = function(harness)
+        local addon = harness.addon()
+        local saved = { schema = addon.Store.SCHEMA + 1, chars = { ["X-R"] = { future = true } }, orders = { keep = { future = true } } }
+        addon.Store.Init(saved)
+        addon.Store.PutCharacter(harness.character("Me-R", 50, { 1 }))
+        local removed = addon.Store.Clean()
+        harness.equal(removed.chars, 1)                                   -- only the session's own record
+        harness.truthy(saved.chars["X-R"].future); harness.truthy(saved.orders.keep.future)
+        harness.equal(saved.schema, addon.Store.SCHEMA + 1)
     end,
 
-    ["store: /ts clean keeps the schema marker, so the next load does not re-migrate"] = function(h)
-        local ns = h.ns()
-        ns.Store.PutChar(h.char("A-R", 50, { 1 }))
-        ns.Store.Clean()
-        h.eq(ns.db.schema, ns.Store.SCHEMA)
-        local _, status = ns.Store.Init(ns.db)
-        h.eq(status, "ok")
+    ["store: /ts clean keeps the schema marker, so the next load does not re-migrate"] = function(harness)
+        local addon = harness.addon()
+        addon.Store.PutCharacter(harness.character("A-R", 50, { 1 }))
+        addon.Store.Clean()
+        harness.equal(addon.db.schema, addon.Store.SCHEMA)
+        local _, status = addon.Store.Init(addon.db)
+        harness.equal(status, "ok")
     end,
 
-    ["store: schema 1 data is migrated: valid records kept, hostile or corrupt ones dropped (RF6)"] = function(h)
-        local ns = h.ns({ now = 1.8e9 })
+    ["store: schema 1 data is migrated: valid records kept, hostile or corrupt ones dropped (RF6)"] = function(harness)
+        local addon = harness.addon({ now = 1.8e9 })
         local legacy = {
             schema = 1,
             chars = {
-                ["A-R"] = h.char("A-R", 50, { 1, 2 }),
+                ["A-R"] = harness.character("A-R", 50, { 1, 2 }),
                 ["B-R"] = { name = "B-R", rev = 1 / 0, level = 60, professions = {} },                 -- inf rev
-                ["C-R"] = h.char("D-R", 50, { 1 }),                                                     -- key does not match name
+                ["C-R"] = harness.character("D-R", 50, { 1 }),                                                     -- key does not match name
                 ["E-R"] = "garbage",
             },
             catalog = {
@@ -414,58 +406,89 @@ return {
             profNames = { deDE = { [165] = "Lederverarbeitung", [166] = {} }, ["bad|code"] = { [1] = "x" } },
             debug = "not a table", ui = 5,
         }
-        local sv, status = ns.Store.Init(legacy)
-        h.eq(status, "migrated"); h.eq(sv.schema, ns.Store.SCHEMA)
-        h.truthy(sv.chars["A-R"]); h.eq(sv.chars["B-R"], nil); h.eq(sv.chars["C-R"], nil); h.eq(sv.chars["E-R"], nil)
-        h.truthy(sv.catalog[1]); h.eq(sv.catalog[2], nil); h.eq(sv.catalog["x"], nil)
-        h.truthy(sv.orders["Bob-R:1:1"]); h.eq(sv.orders["Bob-R:1:2"], nil); h.eq(sv.orders["wrong-key"], nil)
-        h.eq(sv.profNames.deDE[165], "Lederverarbeitung"); h.eq(sv.profNames.deDE[166], nil)
-        h.eq(sv.profNames["bad|code"], nil)
-        h.eq(type(sv.debug), "table"); h.eq(type(sv.ui), "table")
-        local again, st2 = ns.Store.Init(sv)                      -- idempotent: a second load changes nothing
-        h.eq(st2, "ok"); h.truthy(again.chars["A-R"] and again.orders["Bob-R:1:1"])
+        local sv, status = addon.Store.Init(legacy)
+        harness.equal(status, "migrated"); harness.equal(sv.schema, addon.Store.SCHEMA)
+        harness.truthy(sv.chars["A-R"]); harness.equal(sv.chars["B-R"], nil); harness.equal(sv.chars["C-R"], nil); harness.equal(sv.chars["E-R"], nil)
+        harness.truthy(sv.catalog[1]); harness.equal(sv.catalog[2], nil); harness.equal(sv.catalog["x"], nil)
+        harness.truthy(sv.orders["Bob-R:1:1"]); harness.equal(sv.orders["Bob-R:1:2"], nil); harness.equal(sv.orders["wrong-key"], nil)
+        harness.equal(sv.profNames.deDE[165], "Lederverarbeitung"); harness.equal(sv.profNames.deDE[166], nil)
+        harness.equal(sv.profNames["bad|code"], nil)
+        harness.equal(type(sv.debug), "table"); harness.equal(type(sv.ui), "table")
+        local again, st2 = addon.Store.Init(sv)                      -- idempotent: a second load changes nothing
+        harness.equal(st2, "ok"); harness.truthy(again.chars["A-R"] and again.orders["Bob-R:1:1"])
     end,
 
-    ["store: an unsynced clock (server time 0) never wipes saved data; the future bound only applies once time is known"] = function(h)
-        local ns = h.ns({ now = 0 })
-        h.eq(ns.Store.Horizon(), math.huge)
-        local sv, status = ns.Store.Init({ schema = 1, chars = { ["A-R"] = h.char("A-R", 1.79e9, { 1 }) },
+    ["store: an unsynced clock (server time 0) never wipes saved data; the future bound only applies once time is known"] = function(harness)
+        local addon = harness.addon({ now = 0 })
+        harness.equal(addon.Store.Horizon(), math.huge)
+        local sv, status = addon.Store.Init({ schema = 1, chars = { ["A-R"] = harness.character("A-R", 1.79e9, { 1 }) },
             orders = { ["Bob-R:1:1"] = { id = "Bob-R:1:1", requester = "Bob-R", recipeID = 5, qty = 1, createdAt = 1.79e9, claims = {} } } })
-        h.eq(status, "migrated"); h.truthy(sv.chars["A-R"]); h.truthy(sv.orders["Bob-R:1:1"])
-        local synced = h.ns({ now = 1.8e9 })
-        h.eq(synced.Store.Horizon(), 1.8e9 + synced.Store.TIME_SLACK)
+        harness.equal(status, "migrated"); harness.truthy(sv.chars["A-R"]); harness.truthy(sv.orders["Bob-R:1:1"])
+        local synced = harness.addon({ now = 1.8e9 })
+        harness.equal(synced.Store.Horizon(), 1.8e9 + synced.Store.TIME_SLACK)
     end,
 
     ---------------------------------------------------------------- one version source (R11)
-    ["version: the protocol constants match Core/Init.lua and the TOC version has a CHANGELOG entry"] = function(h)
-        local ns = {}
-        assert(loadfile("Core/Init.lua"))("TalentShare", ns)
-        local pure = h.ns()
-        h.eq(pure.PROTO_MAJOR, ns.PROTO_MAJOR, "tests/run.lua harness differs from Init.lua")
-        h.eq(pure.PROTO_MINOR, ns.PROTO_MINOR); h.eq(pure.PROTOCOL, ns.PROTOCOL); h.eq(ns.PROTOCOL, ns.PROTO_MAJOR)
+    ["version: the protocol constants match Core/Base/Init.lua and the TOC version has a CHANGELOG entry"] = function(harness)
+        local addon = {}
+        assert(loadfile("Core/Base/Init.lua"))("TalentShare", addon)
+        local pure = harness.addon()
+        harness.equal(pure.PROTOCOL_MAJOR, addon.PROTOCOL_MAJOR, "tests/run.lua harness differs from Init.lua")
+        harness.equal(pure.PROTOCOL_MINOR, addon.PROTOCOL_MINOR); harness.equal(pure.PROTOCOL, addon.PROTOCOL); harness.equal(addon.PROTOCOL, addon.PROTOCOL_MAJOR)
         local toc = slurp("TalentShare.toc")
         local version = toc:match("## Version:%s*(%S+)")
-        h.truthy(version, "no ## Version in the TOC")
-        h.eq(ns.BASE_VERSION, version, "Init.lua fallback differs from the TOC version")
-        h.truthy(slurp("CHANGELOG.md"):find("## " .. version:gsub("%.", "%%."), 1), "CHANGELOG.md has no '## " .. version .. "' section")
+        harness.truthy(version, "no ## Version in the TOC")
+        harness.equal(addon.BASE_VERSION, version, "Init.lua fallback differs from the TOC version")
+        harness.truthy(slurp("CHANGELOG.md"):find("## " .. version:gsub("%.", "%%."), 1), "CHANGELOG.md has no '## " .. version .. "' section")
     end,
 
-    ["version: Init reads the version from addon metadata when the client provides it"] = function(h)
+    ["version: Init reads the version from addon metadata when the client provides it"] = function(harness)
         local saved = _G.GetAddOnMetadata
-        _G.GetAddOnMetadata = function(addon, field) return (addon == "TalentShare" and field == "Version") and "9.9.9" or nil end
-        local ns = {}
-        local ok, err = pcall(function() assert(loadfile("Core/Init.lua"))("TalentShare", ns) end)
+        _G.GetAddOnMetadata = function(addonFolderName, field) return (addonFolderName == "TalentShare" and field == "Version") and "9.9.9" or nil end
+        local addon = {}
+        local ok, err = pcall(function() assert(loadfile("Core/Base/Init.lua"))("TalentShare", addon) end)
         _G.GetAddOnMetadata = saved
         assert(ok, err)
-        h.eq(ns.BASE_VERSION, "9.9.9")
+        harness.equal(addon.BASE_VERSION, "9.9.9")
     end,
 
-    ["workflow: releases trigger on v* tags only and the token is not workflow-wide"] = function(h)
+    ["workflow: releases trigger on v* tags only and the token is not workflow-wide"] = function(harness)
         local wf = slurp(".github/workflows/release.yml")
-        h.truthy(wf:find("'v%*'") or wf:find('"v%*"'), "tag filter must be v*")
-        h.truthy(not wf:find("'%*%*'"), "tag filter must not be '**'")
+        harness.truthy(wf:find("'v%*'") or wf:find('"v%*"'), "tag filter must be v*")
+        harness.truthy(not wf:find("'%*%*'"), "tag filter must not be '**'")
         local top = wf:match("^(.-)\njobs:") or ""
-        h.truthy(not top:find("CF_API_TOKEN"), "CF_API_TOKEN must be scoped to the packager step, not the whole workflow")
-        h.truthy(wf:find("CF_API_TOKEN"), "packager step lost its token")
+        harness.truthy(not top:find("CF_API_TOKEN"), "CF_API_TOKEN must be scoped to the packager step, not the whole workflow")
+        harness.truthy(wf:find("CF_API_TOKEN"), "packager step lost its token")
+    end,
+    ---------------------------------------------------------------- feature 014: protocol 2.3, schema 4
+    ["014: protocol 2.3 and schema 4 are pinned; migration 3 -> 4 adds games and keeps everything else (RF4)"] = function(harness)
+        local addon = harness.addon({ now = 1.8e9 })
+        harness.equal(addon.PROTOCOL_MAJOR, 2); harness.equal(addon.PROTOCOL_MINOR, 3); harness.equal(addon.Store.SCHEMA, 4)
+        local sv = { schema = 3, chars = {}, catalog = {}, orders = {}, ui = { lastStake = 50 }, me = "Me-R",
+            offers = { ["A-R"] = { name = "A-R", rev = 1.79e9, items = { [6661] = { bag = 1 } }, dibs = {} } }, hidden = {} }
+        local out, status = addon.Store.Init(sv)
+        harness.equal(status, "migrated"); harness.equal(out.schema, 4)
+        harness.equal(type(out.games), "table"); harness.truthy(out.offers["A-R"]); harness.equal(out.ui.lastStake, 50)
+        -- a schema-5 file (a later build) stays untouched and this session does not save
+        local later = harness.addon({ now = 1.8e9 })
+        local saved = { schema = 5, games = { ["X-R"] = { future = true } } }
+        local kept, laterStatus = later.Store.Init(saved)
+        harness.equal(laterStatus, "newer"); harness.truthy(kept == saved); harness.truthy(saved.games["X-R"].future)
+        harness.truthy(later.db.readonly)
+        harness.equal(select(2, later.Games.Flip("Me-R", 10, "H", 1.8e9, function() return 0.1 end)), "readonly")
+    end,
+
+    ["014: clean, peer reset and roster prune treat game records like offers"] = function(harness)
+        local addon = harness.addon({ now = 1.8e9 })
+        local random = function() return 0.1 end
+        addon.Games.Flip("Me-R", 10, "H", 1.8e9, random)
+        addon.Games.Flip("Peer-R", 10, "H", 1.8e9, random)
+        addon.Games.Flip("Gone-R", 10, "H", 1.8e9, random)
+        addon.Store.Prune({ ["Me-R"] = true, ["Peer-R"] = true }, "Me-R")
+        harness.equal(addon.Games.Get("Gone-R"), nil); harness.truthy(addon.Games.Get("Peer-R"))
+        local removed = addon.Store.ResetPeerData("Me-R")
+        harness.equal(removed.games, 1); harness.truthy(addon.Games.Get("Me-R")); harness.equal(addon.Games.Get("Peer-R"), nil)
+        addon.Store.Clean()
+        harness.equal(addon.Games.Get("Me-R"), nil)
     end,
 }

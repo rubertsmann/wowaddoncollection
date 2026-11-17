@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.6.0
+Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.3, schema 4.
+- **Games tab** (feature 014, protocol 2.3, schema 4): an animated coin flip. Enter a stake in gold, silver and copper (1c to 100 000g), pick heads or tails,
+  flip; the coin is tossed and spins before it lands. Every member's wins and losses (gold amounts) appear on a guild
+  leaderboard (this week / all time), with the 15 latest flips and last week's winner. For fun only: no gold changes
+  hands, the addon never reads or moves gold. 2.2 members keep syncing everything else. Dev build: `/tsd anim` (animation
+  probe), `/tsd anim speed <x>`, `/tsd game sim <n>`; offline: `luajit tools/coinflip.lua`.
+- **Slot machine** (Games tab -> Slots): 3 reels x 3 rows, 5 paylines (3 rows, 2 diagonals), animated reels with
+  staggered stops, lever, chasing lights, payline highlights, payout count-up and a coin shower on big wins. Its own
+  leaderboard and recent spins; the game selector at the top of the tab switches between the games.
+- Internal: duplicated helpers merged into one copy each (`Util.Count/SortedKeys/Wipe/Refill/SanitizeMap/Me/ChatSafe`,
+  `Store.Knows/RecipeCount`); the safer variant won where copies differed (feature 012). No player-visible change.
+- Internal: `Core/` grouped into layer folders `Base`, `Debug`, `Data`, `Net`, `Game`, `View` (see README "Develop").
+  Load order unchanged. Dev setups: re-run `tools/deploy.ps1` and restart the game.
+- Internal (feature 013): every code name written in full words (`docs/coding-conventions.md`), LuaLS type annotations
+  on every module function and shared table shape, files `Util.lua` / `Comm.lua` / `Diag.lua` renamed to `Utility.lua` /
+  `Communication.lua` / `Diagnostics.lua`. Wire fields, SavedVariables keys and slash commands are unchanged.
+- Logging: one helper, `Core/Base/Log.lua` (`Log.Error/Warning/Information/Debug/Exception/Protected`), with one line
+  format `time LEVEL [area] message :: key=value`. Errors that were swallowed before (failed saved-data migration,
+  failing event handlers, refused sends, failed whispers, profession window reads) are now logged with their details;
+  `/ts debug` and the `/ts export` report show the log.
+- Fixed: `Utility.ResetRealmAliases` (used by the tests) assigned globals instead of resetting the first-name index.
+
 ## 0.5.0
 Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.2 and schema 3 unchanged.
 
