@@ -50,6 +50,21 @@ The UI is available in English and German; profession and recipe names always fo
 * Offline tests (pure logic): install LuaJIT (`winget install DEVCOM.LuaJIT`), then `luajit tests/run.lua`.
 * `dev/TalentShareProbe` (`tools/deploy.ps1 -WithProbe`, `/tsp`, `/reload`) records which APIs exist on the client into
   `WTF\...\SavedVariables\TalentShareProbeDB.lua`.
+* Code layout (load order is the TOC, not the folders):
+
+  | Folder | Layer | Files |
+  |---|---|---|
+  | `Core/Base/` | identity, shared helpers, logging, localization | Init, Utility, Log, Locale (+ `Locales/`) |
+  | `Core/Debug/` | network trace, diagnostic report | Trace, Diagnostics |
+  | `Core/Data/` | SavedVariables schema and records | Store, Orders, Offers, Scanner |
+  | `Core/Net/` | addon-channel communication | Codec, Guard, Sync, Communication |
+  | `Core/Game/` | the WoW API boundary | Api, Events |
+  | `Core/View/` | view-models for the UI (pure) | Model, Names, ItemText, Notify |
+  | `UI/` | frames | Window, Alerts, DevProbe (dev build only) |
+
+  Everything in `Core/` except `Core/Game/` is pure Lua and runs in the offline tests.
+* Naming, type annotations and logging rules: `docs/coding-conventions.md`. Every diagnostic goes through
+  `Core/Base/Log.lua`; read it with `/ts debug` or in the `/ts export` report.
 * Architecture and task breakdown: `eval/plan.md`. Verification status: `docs/status.md`.
 * New work is planned, logged, verified and documented per feature under `features/` (see `features/INDEX.md` and
   `.claude/skills/feature-workflow/SKILL.md`).

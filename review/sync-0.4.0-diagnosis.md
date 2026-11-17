@@ -3,7 +3,7 @@
 Date: 2026-11-16 · Build analysed: master @ 7c0a09b (v0.4.0, protocol 2.1, schema 3) · Fixes and instrumentation: feature 008.
 
 **Evidence level.** User report from a live guild (orders reach the others but show a wrong name; recipes and the Available tab
-never arrive). Code read in full: `Core/Comm.lua`, `Sync.lua`, `Codec.lua`, `Guard.lua`, `Store.lua`, `Util.lua`, `Events.lua`,
+never arrive). Code read in full: `Core/Net/Communication.lua`, `Sync.lua`, `Codec.lua`, `Guard.lua`, `Store.lua`, `Util.lua`, `Events.lua`,
 `Orders.lua`. Nothing was run in the game client. The **cause** below is reasoned from code plus the symptom pattern
 (READ-ONLY); the **exact failing string** needs one `/ts export` from two members (section 5).
 
@@ -78,7 +78,7 @@ How to read it:
 
 ## 6. Instrumentation added (feature 008)
 
-* **Network trace** (`Core/Trace.lua`): one entry per message in and out, persisted (last 400, survives `/reload`):
+* **Network trace** (`Core/Debug/Trace.lua`): one entry per message in and out, persisted (last 400, survives `/reload`):
   time, direction, channel, peer, raw sender form, whisper target actually used, type, chunks/bytes, payload summary
   (revs, record names, counts; never the full payload), status and **reason**. Outbound entries move `queued -> sent | failed`
   with the decoded `SendAddonMessage` result name; inbound entries carry Sync's decision ("char: have 0 < 1763299950 -> WANT",

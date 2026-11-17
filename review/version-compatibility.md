@@ -6,10 +6,10 @@ Date: 2026-11-16 · Scope: wire protocol, SavedVariables schema, version constan
 
 | Concern | Mechanism | Where |
 |---|---|---|
-| Wire compatibility | Every message carries `v = ns.PROTOCOL` (currently `1`); `Codec.Decode` drops any message whose `v` is not **exactly equal** to the local value. `Sync:OnMessage` re-checks. | `Core/Init.lua:4`, `Core/Codec.lua:98,115`, `Core/Sync.lua:50` |
-| Unknown message types | Dropped (`self["_on"..msg.t]` is nil -> `stats.dropped`). Unknown extra fields are tolerated by the serializer. | `Core/Sync.lua:55-60` |
-| Local data schema | `Store.SCHEMA = 1`; `Store.Init` only does `sv.schema = sv.schema or SCHEMA`. **No migration code, no downgrade check.** | `Core/Store.lua:10,14` |
-| Addon version | Hard-coded `ns.VERSION = "0.1.0"` **and** `## Version: 0.1.0` in the TOC (package script reads the TOC). | `Core/Init.lua:3`, `TalentShare.toc` |
+| Wire compatibility | Every message carries `v = ns.PROTOCOL` (currently `1`); `Codec.Decode` drops any message whose `v` is not **exactly equal** to the local value. `Sync:OnMessage` re-checks. | `Core/Base/Init.lua:4`, `Core/Net/Codec.lua:98,115`, `Core/Net/Sync.lua:50` |
+| Unknown message types | Dropped (`self["_on"..msg.t]` is nil -> `stats.dropped`). Unknown extra fields are tolerated by the serializer. | `Core/Net/Sync.lua:55-60` |
+| Local data schema | `Store.SCHEMA = 1`; `Store.Init` only does `sv.schema = sv.schema or SCHEMA`. **No migration code, no downgrade check.** | `Core/Data/Store.lua:10,14` |
+| Addon version | Hard-coded `ns.VERSION = "0.1.0"` **and** `## Version: 0.1.0` in the TOC (package script reads the TOC). | `Core/Base/Init.lua:3`, `TalentShare.toc` |
 | Tests | One test: a message encoded at protocol 1 is rejected at protocol 2. | `tests/test_core.lua:61` |
 
 **Answer to "do only compatible versions talk to each other?"** Yes, today: a peer on a different `PROTOCOL` is ignored in both directions, and the offline suite (26 tests) passes. The guarantee is crude, though, and there is **no migration story at all** for stored data. Details below.

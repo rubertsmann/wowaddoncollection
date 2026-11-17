@@ -1,4 +1,4 @@
--- Build flag (ns.BUILD / ns.IS_DEV, defined only in Core/Init.lua): live and dev builds run side by side in one client
+-- Build flag (addon.BUILD / addon.IS_DEVELOPMENT_BUILD, defined only in Core/Base/Init.lua): live and dev builds run side by side in one client
 -- and must share no comms prefix, SavedVariables, frame names or slash commands.
 
 local function slurp(path)
@@ -9,14 +9,14 @@ local function slurp(path)
 end
 
 -- runs Init.lua as the addon folder `addon`, with `tocMeta` as the TOC metadata the client would return
-local function loadInit(addon, tocMeta)
+local function loadInit(addonFolderName, tocMeta)
     local saved = { C_AddOns = C_AddOns }
     C_AddOns = tocMeta and { GetAddOnMetadata = function(_, field) return tocMeta[field] end } or nil
-    local ns = {}
-    local ok, err = pcall(function() assert(loadfile("Core/Init.lua"))(addon, ns) end)
+    local addon = {}
+    local ok, err = pcall(function() assert(loadfile("Core/Base/Init.lua"))(addonFolderName, addon) end)
     C_AddOns = saved.C_AddOns
     if not ok then error(err, 0) end
-    return ns
+    return addon
 end
 
 -- files the TOC loads, except the vendored libs and Init.lua itself
@@ -24,7 +24,7 @@ local function sourceFiles()
     local files = {}
     for line in slurp("TalentShare.toc"):gmatch("[^\r\n]+") do
         local path = line:match("^%s*([^#%s][^%s]*)%s*$")
-        if path and path:match("%.lua$") and not path:match("^Libs[\\/]") and path ~= "Core\\Init.lua" and path ~= "Core/Init.lua" then
+        if path and path:match("%.lua$") and not path:match("^Libs[\\/]") and path ~= "Core\\Base\\Init.lua" and path ~= "Core/Base/Init.lua" then
             files[#files + 1] = path:gsub("\\", "/")
         end
     end
@@ -32,63 +32,63 @@ local function sourceFiles()
 end
 
 return {
-    ["build: the folder name alone selects the build"] = function(h)
-        h.eq(loadInit("TalentShare").BUILD, "live")
-        h.eq(loadInit("TalentShare-Dev").BUILD, "dev")
-        h.eq(loadInit("Foo-DEV").BUILD, "dev")
-        h.eq(loadInit("TalentShare").IS_DEV, false)
-        h.eq(loadInit("TalentShare-Dev").IS_DEV, true)
+    ["build: the folder name alone selects the build"] = function(harness)
+        harness.equal(loadInit("TalentShare").BUILD, "live")
+        harness.equal(loadInit("TalentShare-Dev").BUILD, "dev")
+        harness.equal(loadInit("Foo-DEV").BUILD, "dev")
+        harness.equal(loadInit("TalentShare").IS_DEVELOPMENT_BUILD, false)
+        harness.equal(loadInit("TalentShare-Dev").IS_DEVELOPMENT_BUILD, true)
     end,
 
-    ["build: X-Build=dev in the TOC makes a dev build even in a folder without 'dev' in its name"] = function(h)
-        local ns = loadInit("TalentShare", { ["X-Build"] = "dev" })
-        h.eq(ns.BUILD, "dev")
-        h.eq(ns.PREFIX, "TShareDev"); h.eq(ns.SVNAME, "TalentShareDevDB"); h.eq(ns.SLASH[1], "/tsd")
-        h.eq(loadInit("TalentShare", { ["X-Build"] = "  Dev " }).BUILD, "dev")   -- case and padding do not matter
+    ["build: X-Build=dev in the TOC makes a dev build even in a folder without 'dev' in its name"] = function(harness)
+        local addon = loadInit("TalentShare", { ["X-Build"] = "dev" })
+        harness.equal(addon.BUILD, "dev")
+        harness.equal(addon.PREFIX, "TShareDev"); harness.equal(addon.SAVED_VARIABLES_NAME, "TalentShareDevDB"); harness.equal(addon.SLASH_COMMANDS[1], "/tsd")
+        harness.equal(loadInit("TalentShare", { ["X-Build"] = "  Dev " }).BUILD, "dev")   -- case and padding do not matter
     end,
 
-    ["build: no signal can switch a dev folder to live (mismatches fail toward isolation)"] = function(h)
-        h.eq(loadInit("TalentShare-Dev", { ["X-Build"] = "live" }).BUILD, "dev")
-        h.eq(loadInit("TalentShare", { ["X-Build"] = "live" }).BUILD, "live")
-        h.eq(loadInit("TalentShare", { ["X-Build"] = "" }).BUILD, "live")
+    ["build: no signal can switch a dev folder to live (mismatches fail toward isolation)"] = function(harness)
+        harness.equal(loadInit("TalentShare-Dev", { ["X-Build"] = "live" }).BUILD, "dev")
+        harness.equal(loadInit("TalentShare", { ["X-Build"] = "live" }).BUILD, "live")
+        harness.equal(loadInit("TalentShare", { ["X-Build"] = "" }).BUILD, "live")
     end,
 
-    ["build: every identity field derives from the flag and the two builds share none"] = function(h)
+    ["build: every identity field derives from the flag and the two builds share none"] = function(harness)
         local live, dev = loadInit("TalentShare"), loadInit("TalentShare-Dev")
-        for _, field in ipairs({ "PREFIX", "SVNAME", "FRAME", "TITLE", "BUILD" }) do
-            h.truthy(live[field] ~= dev[field], field .. " is shared between live and dev")
+        for _, field in ipairs({ "PREFIX", "SAVED_VARIABLES_NAME", "FRAME_PREFIX", "TITLE", "BUILD" }) do
+            harness.truthy(live[field] ~= dev[field], field .. " is shared between live and dev")
         end
-        h.truthy(live.PREFIX:find("^TShare") and dev.PREFIX:find("^TShare") and #dev.PREFIX <= 16, "prefix shape")
+        harness.truthy(live.PREFIX:find("^TShare") and dev.PREFIX:find("^TShare") and #dev.PREFIX <= 16, "prefix shape")
     end,
 
-    ["build: a TOC whose SavedVariables differs from the build's global is reported"] = function(h)
+    ["build: a TOC whose SavedVariables differs from the build's global is reported"] = function(harness)
         local printed = {}
         local realPrint = print
         print = function(...) printed[#printed + 1] = table.concat({ ... }, " ") end
         local ok, err = pcall(loadInit, "TalentShare-Dev", { SavedVariables = "TalentShareDB" })
-        local ns = ok and loadInit("TalentShare-Dev", { SavedVariables = "TalentShareDB" })
+        local addon = ok and loadInit("TalentShare-Dev", { SavedVariables = "TalentShareDB" })
         print = realPrint
         if not ok then error(err, 0) end
-        h.truthy(#printed >= 1 and printed[1]:find("nothing will be saved", 1, true), "no warning for a mismatched SavedVariables")
-        h.eq(ns.SVNAME, "TalentShareDevDB")
+        harness.truthy(#printed >= 1 and printed[1]:find("nothing will be saved", 1, true), "no warning for a mismatched SavedVariables")
+        harness.equal(addon.SAVED_VARIABLES_NAME, "TalentShareDevDB")
     end,
 
-    ["toc: the live TOC has no build flag and saves the live global"] = function(h)
+    ["toc: the live TOC has no build flag and saves the live global"] = function(harness)
         local toc = slurp("TalentShare.toc")
-        h.truthy(not toc:find("X%-Build"), "TalentShare.toc must not carry X-Build")
-        h.eq(toc:match("## SavedVariables:%s*(%S+)"), "TalentShareDB")
+        harness.truthy(not toc:find("X%-Build"), "TalentShare.toc must not carry X-Build")
+        harness.equal(toc:match("## SavedVariables:%s*(%S+)"), "TalentShareDB")
     end,
 
-    ["toc: the generated dev TOC (when present) carries the build flag and only the dev global"] = function(h)
+    ["toc: the generated dev TOC (when present) carries the build flag and only the dev global"] = function(harness)
         local toc = slurp("TalentShare-Dev.toc")
         if not toc then return end   -- generated by tools/deploy.ps1; absent in CI
-        h.eq(toc:match("## X%-Build:%s*(%S+)"), "dev", "dev TOC lost X-Build: run tools/deploy.ps1")
-        h.eq(toc:match("## SavedVariables:%s*(%S+)"), "TalentShareDevDB", "dev TOC saves the wrong global: run tools/deploy.ps1")
-        h.truthy(not toc:find("TalentShareDB", 1, true), "dev TOC mentions the live global")
+        harness.equal(toc:match("## X%-Build:%s*(%S+)"), "dev", "dev TOC lost X-Build: run tools/deploy.ps1")
+        harness.equal(toc:match("## SavedVariables:%s*(%S+)"), "TalentShareDevDB", "dev TOC saves the wrong global: run tools/deploy.ps1")
+        harness.truthy(not toc:find("TalentShareDB", 1, true), "dev TOC mentions the live global")
     end,
 
-    -- the identity strings live in Core/Init.lua only; everything else must read ns.PREFIX / ns.SVNAME / ns.SLASH / ns.FRAME
-    ["build: no source file outside Init.lua hard-codes a prefix, a SavedVariables name or a slash command"] = function(h)
+    -- the identity strings live in Core/Base/Init.lua only; everything else must read addon.PREFIX / addon.SAVED_VARIABLES_NAME / addon.SLASH_COMMANDS / addon.FRAME_PREFIX
+    ["build: no source file outside Init.lua hard-codes a prefix, a SavedVariables name or a slash command"] = function(harness)
         local bad = {}
         for _, path in ipairs(sourceFiles()) do
             local n = 0
@@ -101,37 +101,37 @@ return {
                 if code:find("[\"']/ts[%s\"'d]") or code:find("[\"']/talentshare") then bad[#bad + 1] = path .. ":" .. n .. " slash literal" end
             end
         end
-        h.eq(#bad, 0, "hard-coded identity (use the ns.* field): " .. table.concat(bad, "; "))
+        harness.equal(#bad, 0, "hard-coded identity (use the addon.* field): " .. table.concat(bad, "; "))
     end,
 
-    ["build: Comm sends and registers only ns.PREFIX"] = function(h)
+    ["build: Communication sends and registers only addon.PREFIX"] = function(harness)
         local seen = 0
-        for line in slurp("Core/Comm.lua"):gmatch("[^\r\n]+") do
+        for line in slurp("Core/Net/Communication.lua"):gmatch("[^\r\n]+") do
             local code = line:gsub("%-%-.*$", "")
             -- the calls themselves (not the `if C_ChatInfo.RegisterAddonMessagePrefix then` existence check)
             if code:find("SendAddonMessage,", 1, true) or code:find("RegisterAddonMessagePrefix(", 1, true) then
                 seen = seen + 1
-                h.truthy(code:find("ns.PREFIX", 1, true), "not ns.PREFIX: " .. line)
+                harness.truthy(code:find("addon.PREFIX", 1, true), "not addon.PREFIX: " .. line)
             end
         end
-        h.truthy(seen >= 2, "expected the send and register calls in Comm.lua")
+        harness.truthy(seen >= 2, "expected the send and register calls in Communication.lua")
     end,
 
-    ["build: a message with the other build's prefix is ignored before any parsing"] = function(h)
+    ["build: a message with the other build's prefix is ignored before any parsing"] = function(harness)
         for _, case in ipairs({ { mine = "TShare", other = "TShareDev" }, { mine = "TShareDev", other = "TShare" } }) do
-            local ns = h.ns()
-            ns.PREFIX = case.mine
-            local C = ns.Comm
+            local addon = harness.addon()
+            addon.PREFIX = case.mine
+            local C = addon.Communication
             C.active = true
             C.roster = { ["Peer-Realm"] = true }
             local got = 0
-            C.sync = { OnMessage = function() got = got + 1 end, stats = { sent = 0, received = 0, dropped = 0 } }
-            local text = ns.Codec.Header("a1", 1, 1) .. ns.Codec.Encode({ t = "HELLO", v = ns.PROTOCOL, rev = 1, odig = "" })
+            C.sync = { OnMessage = function() got = got + 1 end, statistics = { sent = 0, received = 0, dropped = 0 } }
+            local text = addon.Codec.Header("a1", 1, 1) .. addon.Codec.Encode({ t = "HELLO", v = addon.PROTOCOL, rev = 1, odig = "" })
             local before = C.rejected
             C.OnAddonMessage(case.other, text, "GUILD", "Peer-Realm")
-            h.eq(got, 0, case.mine .. " build processed a " .. case.other .. " message")
-            h.eq(C.rejected, before, "a foreign prefix must not even reach the guild gate")
-            h.eq(next(C.buffers), nil, "a foreign prefix allocated a reassembly buffer")
+            harness.equal(got, 0, case.mine .. " build processed a " .. case.other .. " message")
+            harness.equal(C.rejected, before, "a foreign prefix must not even reach the guild gate")
+            harness.equal(next(C.buffers), nil, "a foreign prefix allocated a reassembly buffer")
         end
     end,
 }

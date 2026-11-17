@@ -1,6 +1,6 @@
 # Builds dist/TalentShare-<version>.zip containing a single top-level TalentShare/ folder (manual release).
 # Entries are written with forward slashes: Windows PowerShell 5.1's Compress-Archive stores backslashes
-# ("TalentShare\Core\Api.lua"), which zip tools on other platforms (and CurseForge) treat as flat file names.
+# ("TalentShare\Core\Game\Api.lua"), which zip tools on other platforms (and CurseForge) treat as flat file names.
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem

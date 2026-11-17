@@ -8,73 +8,73 @@ local function withRealm(realm, fn)
 end
 
 return {
-    ["whisper: same-realm characters are addressed by name only"] = function(h)
-        local U = h.ns().Util
+    ["whisper: same-realm characters are addressed by name only"] = function(harness)
+        local U = harness.addon().Utility
         withRealm("Test Realm-1", function()
-            h.eq(U.WhisperTarget("Alice-TestRealm-1"), "Alice")
+            harness.equal(U.WhisperTarget("Alice-TestRealm-1"), "Alice")
         end)
     end,
 
-    ["names: lists show the short form on my realm (ShortName = WhisperTarget)"] = function(h)
-        local U = h.ns().Util
+    ["names: lists show the short form on my realm (ShortName = WhisperTarget)"] = function(harness)
+        local U = harness.addon().Utility
         withRealm("TestRealm", function()
-            h.eq(U.ShortName("Alice-TestRealm"), "Alice")
-            h.eq(U.ShortName("Bob-OtherRealm"), "Bob-OtherRealm")
+            harness.equal(U.ShortName("Alice-TestRealm"), "Alice")
+            harness.equal(U.ShortName("Bob-OtherRealm"), "Bob-OtherRealm")
         end)
     end,
 
     -- for realms other than my own, the game's Ambiguate decides when the client has it (connected realms)
-    ["names: the game's Ambiguate is used when available"] = function(h)
-        local U = h.ns().Util
+    ["names: the game's Ambiguate is used when available"] = function(harness)
+        local U = harness.addon().Utility
         local saved = Ambiguate
         local calls = {}
         Ambiguate = function(name, ctx) calls[#calls + 1] = ctx; return "Short" end
-        local ok, err = pcall(function() h.eq(U.ShortName("Alice-AnyRealm"), "Short") end)
+        local ok, err = pcall(function() harness.equal(U.ShortName("Alice-AnyRealm"), "Short") end)
         Ambiguate = saved
         if not ok then error(err, 0) end
-        h.eq(calls[1], "none")
+        harness.equal(calls[1], "none")
     end,
 
     -- Ambiguate that does not know the normalized realm returns the name unchanged: my own realm must still be stripped
-    ["whisper: my own realm is stripped even when Ambiguate returns the full name"] = function(h)
-        local U = h.ns().Util
+    ["whisper: my own realm is stripped even when Ambiguate returns the full name"] = function(harness)
+        local U = harness.addon().Utility
         local saved = Ambiguate
         Ambiguate = function(name) return name end
         local ok, err = pcall(withRealm, "Mine", function()
-            h.eq(U.WhisperTarget("Peer-Mine"), "Peer")
-            h.eq(U.WhisperTarget("Peer-Other"), "Peer-Other")
+            harness.equal(U.WhisperTarget("Peer-Mine"), "Peer")
+            harness.equal(U.WhisperTarget("Peer-Other"), "Peer-Other")
         end)
         Ambiguate = saved
         if not ok then error(err, 0) end
     end,
 
-    ["whisper: other realms keep the realm suffix"] = function(h)
-        local U = h.ns().Util
+    ["whisper: other realms keep the realm suffix"] = function(harness)
+        local U = harness.addon().Utility
         withRealm("Mine", function()
-            h.eq(U.WhisperTarget("Peer-Other"), "Peer-Other")
+            harness.equal(U.WhisperTarget("Peer-Other"), "Peer-Other")
         end)
     end,
 
-    ["whisper: realm spaces are ignored in the comparison, odd input passes through"] = function(h)
-        local U = h.ns().Util
+    ["whisper: realm spaces are ignored in the comparison, odd input passes through"] = function(harness)
+        local U = harness.addon().Utility
         withRealm("Die Aldor", function()
-            h.eq(U.WhisperTarget("Peer-DieAldor"), "Peer")
-            h.eq(U.WhisperTarget("Peer"), "Peer")
-            h.eq(U.WhisperTarget(nil), nil)
+            harness.equal(U.WhisperTarget("Peer-DieAldor"), "Peer")
+            harness.equal(U.WhisperTarget("Peer"), "Peer")
+            harness.equal(U.WhisperTarget(nil), nil)
         end)
     end,
 
     -- the same "no player named 'Name-Realm' is online" error comes from addon whispers (WANT/SNAP/OPUSH replies)
-    ["whisper: addon whispers use the same target rule"] = function(h)
-        local f = assert(io.open("Core/Comm.lua", "rb"))
+    ["whisper: addon whispers use the same target rule"] = function(harness)
+        local f = assert(io.open("Core/Net/Communication.lua", "rb"))
         local src = f:read("*a"); f:close()
         local line = src:match("[^\r\n]*SendAddonMessage,[^\r\n]*")
-        h.truthy(line and line:find("target", 1, true) and not line:find("item.target", 1, true), "SendAddonMessage must get the resolved target")
-        h.truthy(src:find('item.dist == "WHISPER" and ns.Util.WhisperTarget(item.target)', 1, true), "pump must resolve whisper targets")
+        harness.truthy(line and line:find("resolvedTarget", 1, true) and not line:find("queuedChunk.target", 1, true), "SendAddonMessage must get the resolved target")
+        harness.truthy(src:find('queuedChunk.channel == "WHISPER" and addon.Utility.WhisperTarget(queuedChunk.target)', 1, true), "pump must resolve whisper targets")
     end,
 
-    ["whisper: without a known own realm the full name is kept"] = function(h)
-        local U = h.ns().Util
-        withRealm(nil, function() h.eq(U.WhisperTarget("Peer-Realm"), "Peer-Realm") end)
+    ["whisper: without a known own realm the full name is kept"] = function(harness)
+        local U = harness.addon().Utility
+        withRealm(nil, function() harness.equal(U.WhisperTarget("Peer-Realm"), "Peer-Realm") end)
     end,
 }

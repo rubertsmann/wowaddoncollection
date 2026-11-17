@@ -15,10 +15,10 @@ local TEXT = { [2680] = "Benutzen: ... erhaltet 15 Min. lang 1 Beweglichkeit.", 
 local FNS = { class = classFn, label = function(k) return LABELS[k] end, text = function(id) return TEXT[id] end,
     groupLabel = function(g) return ({ [4] = "Rüstung", [0] = "Verbrauchbar", [7] = "Handwerkswaren", [-1] = "Andere" })[g] end }
 
-local function setup(h)
-    local ns = h.ns()
-    ns.Store.PutChar(h.char("A-R", 1, { 1, 2, 3, 4, 5, 6, 7 }))
-    ns.Store.PutCatalog({
+local function setup(harness)
+    local addon = harness.addon()
+    addon.Store.PutCharacter(harness.character("A-R", 1, { 1, 2, 3, 4, 5, 6, 7 }))
+    addon.Store.PutCatalog({
         [1] = { name = "Lederstiefel", produces = 2302, reagents = {} },
         [2] = { name = "Ledergürtel", produces = 4237, reagents = { { itemID = 2318, count = 2, name = "Leichtes Leder" } } },
         [3] = { name = "Robe", produces = 3000, reagents = {} },
@@ -27,7 +27,7 @@ local function setup(h)
         [6] = { name = "Verzauberung: Brust", reagents = {} },          -- no item
         [7] = { name = "Lederweste", produces = 5957, reagents = {} },
     })
-    return ns
+    return addon
 end
 
 local function names(rows)
@@ -38,109 +38,109 @@ local function names(rows)
 end
 
 return {
-    ["categories: key from class, subclass and slot; robe is chest; no item is none"] = function(h)
-        local ns = h.ns()
-        local M = ns.Model
-        h.eq((M.CategoryKey(4, 2, "INVTYPE_HEAD")), "slot:INVTYPE_HEAD")
-        h.eq((M.CategoryKey(4, 1, "INVTYPE_ROBE")), "slot:INVTYPE_CHEST")
-        h.eq((M.CategoryKey(0, 5, "INVTYPE_NON_EQUIP_IGNORE")), "class:0:5")
-        h.eq((M.CategoryKey(2, 7, "INVTYPE_WEAPON")), "class:2:7")      -- weapons by weapon type
-        h.eq((M.CategoryKey(4, 0, "INVTYPE_NON_EQUIP_IGNORE")), "class:4:0")
+    ["categories: key from class, subclass and slot; robe is chest; no item is none"] = function(harness)
+        local addon = harness.addon()
+        local M = addon.Model
+        harness.equal((M.CategoryKey(4, 2, "INVTYPE_HEAD")), "slot:INVTYPE_HEAD")
+        harness.equal((M.CategoryKey(4, 1, "INVTYPE_ROBE")), "slot:INVTYPE_CHEST")
+        harness.equal((M.CategoryKey(0, 5, "INVTYPE_NON_EQUIP_IGNORE")), "class:0:5")
+        harness.equal((M.CategoryKey(2, 7, "INVTYPE_WEAPON")), "class:2:7")      -- weapons by weapon type
+        harness.equal((M.CategoryKey(4, 0, "INVTYPE_NON_EQUIP_IGNORE")), "class:4:0")
         local k, g = M.CategoryKey(nil)
-        h.eq(k, "none"); h.eq(g, -1)
-        h.eq((M.CategoryKey("4", 2, "INVTYPE_HEAD")), "none")         -- garbage
+        harness.equal(k, "none"); harness.equal(g, -1)
+        harness.equal((M.CategoryKey("4", 2, "INVTYPE_HEAD")), "none")         -- garbage
     end,
 
-    ["categories: filter by checked categories, several at once, empty set = all"] = function(h)
-        local ns = setup(h)
-        local B = ns.Model.BuildRecipeRows
-        h.eq(#B(ns.Store, { text = "" }, nil, FNS), 7)
-        h.eq(names(B(ns.Store, { text = "", categories = { ["slot:INVTYPE_CHEST"] = true } }, nil, FNS)), "Lederweste,Robe")
-        h.eq(names(B(ns.Store, { text = "", categories = { ["slot:INVTYPE_FEET"] = true, ["class:0:5"] = true } }, nil, FNS)),
+    ["categories: filter by checked categories, several at once, empty set = all"] = function(harness)
+        local addon = setup(harness)
+        local B = addon.Model.BuildRecipeRows
+        harness.equal(#B(addon.Store, { text = "" }, nil, FNS), 7)
+        harness.equal(names(B(addon.Store, { text = "", categories = { ["slot:INVTYPE_CHEST"] = true } }, nil, FNS)), "Lederweste,Robe")
+        harness.equal(names(B(addon.Store, { text = "", categories = { ["slot:INVTYPE_FEET"] = true, ["class:0:5"] = true } }, nil, FNS)),
             "Gewürztes Wolfsfleisch,Lederstiefel")
-        h.eq(names(B(ns.Store, { text = "", categories = { none = true } }, nil, FNS)), "Verzauberung: Brust")
-        h.eq(#B(ns.Store, { text = "", categories = {} }, nil, FNS), 7)
+        harness.equal(names(B(addon.Store, { text = "", categories = { none = true } }, nil, FNS)), "Verzauberung: Brust")
+        harness.equal(#B(addon.Store, { text = "", categories = {} }, nil, FNS), 7)
         -- without client item data everything is "none" (and nothing breaks)
-        h.eq(#B(ns.Store, { text = "", categories = { none = true } }), 7)
+        harness.equal(#B(addon.Store, { text = "", categories = { none = true } }), 7)
     end,
 
-    ["categories: list per profession in display order with counts"] = function(h)
-        local ns = setup(h)
-        local groups = ns.Model.RecipeCategories(ns.Store, {}, FNS)
+    ["categories: list per profession in display order with counts"] = function(harness)
+        local addon = setup(harness)
+        local groups = addon.Model.RecipeCategories(addon.Store, {}, FNS)
         local got = {}
         for _, g in ipairs(groups) do
             local cats = {}
-            for _, c in ipairs(g.cats) do cats[#cats + 1] = c.label .. "=" .. c.n end
+            for _, c in ipairs(g.categories) do cats[#cats + 1] = c.label .. "=" .. c.count end
             got[#got + 1] = g.label .. ":" .. table.concat(cats, "/")
         end
-        h.eq(table.concat(got, " | "),
+        harness.equal(table.concat(got, " | "),
             "Rüstung:Brust=2/Taille=1/Füße=1 | Verbrauchbar:Essen & Trinken=1 | Handwerkswaren:Leder=1 | Andere:Kein Gegenstand=1")
-        h.eq(#ns.Model.RecipeCategories(ns.Store, { profession = ns.Names.ProfKey("Tailoring") }, FNS), 0)
+        harness.equal(#addon.Model.RecipeCategories(addon.Store, { profession = addon.Names.ProfessionKey("Tailoring") }, FNS), 0)
     end,
 
-    ["search: free text, words in any order, across name, reagent, category and effect text"] = function(h)
-        local ns = setup(h)
-        local B = ns.Model.BuildRecipeRows
-        h.eq(names(B(ns.Store, { text = "beweglichkeit" }, nil, FNS)), "Gewürztes Wolfsfleisch")      -- effect text
-        h.eq(names(B(ns.Store, { text = "füße" }, nil, FNS)), "Lederstiefel")                          -- category label
-        h.eq(names(B(ns.Store, { text = "leicht gurtel" }, nil, FNS)), "Ledergürtel")                  -- reagent + name, accents
-        h.eq(names(B(ns.Store, { text = "brust leder" }, nil, FNS)), "Lederweste")                     -- any order
-        h.eq(#B(ns.Store, { text = "brust zzz" }, nil, FNS), 0)                                        -- every word must match
-        h.eq(names(B(ns.Store, { text = "  WOLFS  " }, nil, FNS)), "Gewürztes Wolfsfleisch")           -- spaces, case
-        h.eq(names(B(ns.Store, { text = "leder", categories = { ["slot:INVTYPE_FEET"] = true } }, nil, FNS)), "Lederstiefel")
+    ["search: free text, words in any order, across name, reagent, category and effect text"] = function(harness)
+        local addon = setup(harness)
+        local B = addon.Model.BuildRecipeRows
+        harness.equal(names(B(addon.Store, { text = "beweglichkeit" }, nil, FNS)), "Gewürztes Wolfsfleisch")      -- effect text
+        harness.equal(names(B(addon.Store, { text = "füße" }, nil, FNS)), "Lederstiefel")                          -- category label
+        harness.equal(names(B(addon.Store, { text = "leicht gurtel" }, nil, FNS)), "Ledergürtel")                  -- reagent + name, accents
+        harness.equal(names(B(addon.Store, { text = "brust leder" }, nil, FNS)), "Lederweste")                     -- any order
+        harness.equal(#B(addon.Store, { text = "brust zzz" }, nil, FNS), 0)                                        -- every word must match
+        harness.equal(names(B(addon.Store, { text = "  WOLFS  " }, nil, FNS)), "Gewürztes Wolfsfleisch")           -- spaces, case
+        harness.equal(names(B(addon.Store, { text = "leder", categories = { ["slot:INVTYPE_FEET"] = true } }, nil, FNS)), "Lederstiefel")
     end,
 
-    ["search: tooltip text drops the name line and every escape sequence, cuts on a character boundary"] = function(h)
-        local ns = h.ns()
-        local T = ns.Model.TooltipSearchText
+    ["search: tooltip text drops the name line and every escape sequence, cuts on a character boundary"] = function(harness)
+        local addon = harness.addon()
+        local T = addon.Model.TooltipSearchText
         local s = T({ "Gewürztes Wolfsfleisch",
             "Benutzen: Stellt 58 Punkt(e) wieder her. (1 |4Sek.:Sek.; Abklingzeit)",
             "|cffff0000Rot|r |Hitem:1|h[Link]|h",
             "Verkaufspreis: 10|A:coin-copper:14:14:2:0|a |TInterface\\x:0|t",
             "|cnIQ1:Blau|r", "", "Zeile\r\n\r\nzwei" })
-        h.eq(s, "Benutzen: Stellt 58 Punkt(e) wieder her. (1 Sek. Abklingzeit) Rot [Link] Verkaufspreis: 10 Blau Zeile zwei")
-        h.eq(s:find("|", 1, true), nil)
+        harness.equal(s, "Benutzen: Stellt 58 Punkt(e) wieder her. (1 Sek. Abklingzeit) Rot [Link] Verkaufspreis: 10 Blau Zeile zwei")
+        harness.equal(s:find("|", 1, true), nil)
         local cut = T({ "x", "aü" }, 2)      -- "ü" is 2 bytes: never cut in half
-        h.eq(cut, "a")
-        h.eq(T(nil), ""); h.eq(T({ "only the name" }), "")
+        harness.equal(cut, "a")
+        harness.equal(T(nil), ""); harness.equal(T({ "only the name" }), "")
     end,
 
-    ["search: item text cache reads once, retries uncached items, starts over with a new language"] = function(h)
-        local ns = h.ns()
-        loadfile("Core/ItemText.lua")("TalentShare", ns)
-        local IT = ns.ItemText
+    ["search: item text cache reads once, retries uncached items, starts over with a new language"] = function(harness)
+        local addon = harness.addon()
+        loadfile("Core/View/ItemText.lua")("TalentShare", addon)
+        local IT = addon.ItemText
         local loc = "deDE"
         GetLocale = function() return loc end
         local reads, loaded = 0, {}
-        ns.Api = { ItemTooltipLines = function(id)
+        addon.Api = { ItemTooltipLines = function(id)
             reads = reads + 1
             if not loaded[id] then loaded[id] = true; return nil end      -- first time: not loaded yet
             return { "Name", "Erhöht Intelligenz um 10." }
         end }
-        h.eq(IT.Get(5), nil); h.eq(IT.Pending(), 1)
-        h.eq(IT.Pump(10), 0)                       -- not loaded: one try used
-        h.eq(IT.Get(5), nil)                       -- queued again
-        h.eq(IT.Pump(10), 1)
-        h.eq(IT.Get(5), "Erhöht Intelligenz um 10.")
-        h.eq(IT.Pending(), 0)
-        IT.Pump(10); h.eq(reads, 2)                -- cached: no more reads
+        harness.equal(IT.Get(5), nil); harness.equal(IT.Pending(), 1)
+        harness.equal(IT.Pump(10), 0)                       -- not loaded: one try used
+        harness.equal(IT.Get(5), nil)                       -- queued again
+        harness.equal(IT.Pump(10), 1)
+        harness.equal(IT.Get(5), "Erhöht Intelligenz um 10.")
+        harness.equal(IT.Pending(), 0)
+        IT.Pump(10); harness.equal(reads, 2)                -- cached: no more reads
         loc = "enUS"
-        h.eq(IT.Get(5), nil)                       -- other language: cache starts over
-        h.eq(ns.db.itemText.locale, "enUS")
-        -- an item that never loads stops after MAX_TRIES
-        ns.Api.ItemTooltipLines = function() return nil end
-        for _ = 1, IT.MAX_TRIES + 2 do IT.Get(9); IT.Pump(10) end
-        h.eq(IT.Get(9), nil); h.eq(IT.Pending(), 0)
+        harness.equal(IT.Get(5), nil)                       -- other language: cache starts over
+        harness.equal(addon.db.itemText.locale, "enUS")
+        -- an item that never loads stops after MAXIMUM_TRIES
+        addon.Api.ItemTooltipLines = function() return nil end
+        for _ = 1, IT.MAXIMUM_TRIES + 2 do IT.Get(9); IT.Pump(10) end
+        harness.equal(IT.Get(9), nil); harness.equal(IT.Pending(), 0)
         -- garbage in the saved cache is replaced, not used
-        ns.db.itemText = { locale = "enUS", items = { [7] = { "x" } } }
-        h.eq(IT.Get(7), nil)
+        addon.db.itemText = { locale = "enUS", items = { [7] = { "x" } } }
+        harness.equal(IT.Get(7), nil)
         IT._Reset(); GetLocale = nil
     end,
 
-    ["search: Clean also drops the item text cache"] = function(h)
-        local ns = h.ns()
-        ns.db.itemText.items = { [1] = "x" }; ns.db.itemText.locale = "deDE"
-        ns.Store.Clean()
-        h.eq(next(ns.db.itemText), nil)
+    ["search: Clean also drops the item text cache"] = function(harness)
+        local addon = harness.addon()
+        addon.db.itemText.items = { [1] = "x" }; addon.db.itemText.locale = "deDE"
+        addon.Store.Clean()
+        harness.equal(next(addon.db.itemText), nil)
     end,
 }

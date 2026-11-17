@@ -47,16 +47,16 @@ Failure modes the requirements imply but a happy-path test would miss. Each is p
 talentshare/                      (repo root == addon root)
   TalentShare.toc
   Libs/                           vendored libs + Libs.xml            (T4)
-  Core/Init.lua                   namespace `ns`, slash command, version   (T1)
-  Core/Util.lua                   small pure helpers                       (T2)
-  Core/Store.lua                  SavedVariables schema, pruning (pure)    (T5)
-  Core/Api.lua                    ALL WoW-version-specific calls           (T6)
-  Core/Scanner.lua                professions/recipes -> Store             (T7)
-  Core/Events.lua                 event wiring, debounce, level-up         (T8)
-  Core/Codec.lua                  serialize + compress + validate (pure)   (T9)
-  Core/Sync.lua                   protocol state machine (pure)            (T10)
-  Core/Comm.lua                   AceComm transport + guild gating         (T11)
-  Core/Orders.lua                 order model + merge (pure)               (T12)
+  Core/Base/Init.lua                   namespace `ns`, slash command, version   (T1)
+  Core/Base/Utility.lua                   small pure helpers                       (T2)
+  Core/Data/Store.lua                  SavedVariables schema, pruning (pure)    (T5)
+  Core/Game/Api.lua                    ALL WoW-version-specific calls           (T6)
+  Core/Data/Scanner.lua                professions/recipes -> Store             (T7)
+  Core/Game/Events.lua                 event wiring, debounce, level-up         (T8)
+  Core/Net/Codec.lua                  serialize + compress + validate (pure)   (T9)
+  Core/Net/Sync.lua                   protocol state machine (pure)            (T10)
+  Core/Net/Communication.lua                   AceComm transport + guild gating         (T11)
+  Core/Data/Orders.lua                 order model + merge (pure)               (T12)
   UI/Window.lua                   shell, slash, minimap button             (T14)
   UI/RecipeList.lua               filter/search/list                       (T15)
   UI/RecipeDetail.lua             reagents, crafters                       (T16)
@@ -124,14 +124,14 @@ Total ≈ 30-45 agent-hours; user time ≈ 10 short in-game checks.
 **Size:** S · **Agent:** Implementer · **Depends on:** none
 
 **Files:**
-- Create: `TalentShare.toc`, `Core/Init.lua`, `tools/deploy.ps1`, `.gitignore`, `README.md`
+- Create: `TalentShare.toc`, `Core/Base/Init.lua`, `tools/deploy.ps1`, `.gitignore`, `README.md`
 
 **Interfaces:**
 - Produces: global-free namespace `ns` (second vararg of every file) with `ns.VERSION = "0.1.0"`, `ns.PROTOCOL = 1`, `ns.Print(msg: string)`; slash `/ts` and `/talentshare`.
 
 - [ ] **Step 1:** `talentshare/` sits inside an unrelated parent git repo (Unity project). Ask the user, then run `git init` in `wowaddons/talentshare` so this addon has its own history.
-- [ ] **Step 2:** Write `TalentShare.toc`: `## Interface: 16001`, `## Title: TalentShare`, `## Notes`, `## Author`, `## Version: 0.1.0`, `## SavedVariables: TalentShareDB`, then `Core\Init.lua`.
-- [ ] **Step 3:** `Core/Init.lua`: create `ns`, register `SLASH_TALENTSHARE1 = "/ts"`; `/ts` prints `TalentShare 0.1.0`; `/ts version` same.
+- [ ] **Step 2:** Write `TalentShare.toc`: `## Interface: 16001`, `## Title: TalentShare`, `## Notes`, `## Author`, `## Version: 0.1.0`, `## SavedVariables: TalentShareDB`, then `Core\Base\Init.lua`.
+- [ ] **Step 3:** `Core/Base/Init.lua`: create `ns`, register `SLASH_TALENTSHARE1 = "/ts"`; `/ts` prints `TalentShare 0.1.0`; `/ts version` same.
 - [ ] **Step 4:** `tools/deploy.ps1 -WowDir <path>`: creates a directory junction `<WowDir>\_forever_\Interface\AddOns\TalentShare` → repo root (idempotent; refuses to overwrite a real folder). `.gitignore` ignores `*.zip`, `.release/`.
 - [ ] **Step 5 – USER GATE verify:** run `powershell tools/deploy.ps1 -WowDir "<path>"`, start the Forever client, enable `/console scriptErrors 1`. Expected: addon listed on the character-select AddOns screen (not "out of date"); `/ts` prints `TalentShare 0.1.0`; zero Lua errors.
 - [ ] **Step 6:** Commit `feat: scaffold addon and deploy script`.
@@ -140,7 +140,7 @@ Total ≈ 30-45 agent-hours; user time ≈ 10 short in-game checks.
 
 **Size:** S · **Agent:** Implementer · **Depends on:** T1
 
-**Files:** Create `tests/run.lua`, `tests/wowstubs.lua`, `tests/test_util.lua`, `Core/Util.lua`; modify `TalentShare.toc`.
+**Files:** Create `tests/run.lua`, `tests/wowstubs.lua`, `tests/test_util.lua`, `Core/Base/Utility.lua`; modify `TalentShare.toc`.
 
 **Interfaces:**
 - Produces: `tests/run.lua` (discovers `tests/test_*.lua`, each returns a table `{ name = function() ... end }`; prints `N passed, M failed`; exit code 1 on failure). `tests/wowstubs.lua` returns `function install(env) -> ns` defining stubs: `GetServerTime() -> number` (settable via `env.now`), `C_Timer.After`, `LibStub`, `IsInGuild() -> bool`. `Util.lua`: `ns.Util.DeepCopy(t) -> table`, `ns.Util.FullName(name: string, realm: string?) -> string` (`"Name-Realm"`, realm spaces stripped), `ns.Util.Count(t) -> number`.
@@ -148,7 +148,7 @@ Total ≈ 30-45 agent-hours; user time ≈ 10 short in-game checks.
 - [ ] **Step 1:** Install LuaJIT (any Lua 5.1-compatible), confirm `luajit -v`.
 - [ ] **Step 2:** Write failing tests in `tests/test_util.lua`: `FullName("Bob","Area 52") == "Bob-Area52"`; `FullName("Bob-Area52") == "Bob-Area52"`; `DeepCopy` produces an independent table; `Count({a=1,b=2}) == 2`.
 - [ ] **Step 3:** Run `luajit tests/run.lua` → expect FAIL (Util missing).
-- [ ] **Step 4:** Implement `Core/Util.lua` and `run.lua`/`wowstubs.lua`; add `Core\Util.lua` to the TOC.
+- [ ] **Step 4:** Implement `Core/Base/Utility.lua` and `run.lua`/`wowstubs.lua`; add `Core\Base\Utility.lua` to the TOC.
 - [ ] **Step 5:** Run `luajit tests/run.lua` → `4 passed, 0 failed`, exit code 0.
 - [ ] **Step 6:** Commit.
 
@@ -193,7 +193,7 @@ Total ≈ 30-45 agent-hours; user time ≈ 10 short in-game checks.
 
 **Size:** S · **Agent:** Implementer · **Depends on:** T2
 
-**Files:** Create `Core/Store.lua`, `tests/test_store.lua`.
+**Files:** Create `Core/Data/Store.lua`, `tests/test_store.lua`.
 
 **Interfaces:**
 - Produces (`ns.Store`):
@@ -215,7 +215,7 @@ Total ≈ 30-45 agent-hours; user time ≈ 10 short in-game checks.
 
 **Size:** M · **Agent:** Implementer · **Depends on:** T3, T5
 
-**Files:** Create `Core/Api.lua`, `tests/test_api.lua`; modify TOC.
+**Files:** Create `Core/Game/Api.lua`, `tests/test_api.lua`; modify TOC.
 
 **Interfaces:**
 - Produces (`ns.Api`) — the *only* file that calls profession/guild WoW APIs:
@@ -235,7 +235,7 @@ Total ≈ 30-45 agent-hours; user time ≈ 10 short in-game checks.
 
 **Size:** M · **Agent:** Implementer · **Depends on:** T5, T6
 
-**Files:** Create `Core/Scanner.lua`, `tests/test_scanner.lua`; modify TOC.
+**Files:** Create `Core/Data/Scanner.lua`, `tests/test_scanner.lua`; modify TOC.
 
 **Interfaces:**
 - Consumes: `ns.Api.*`, `ns.Store.*`.
@@ -250,7 +250,7 @@ Total ≈ 30-45 agent-hours; user time ≈ 10 short in-game checks.
 
 **Size:** S · **Agent:** Implementer · **Depends on:** T7
 
-**Files:** Create `Core/Events.lua`, `tests/test_events.lua`; modify TOC. Also create `ns.Debug.Log(tag: string, ...)` (ring buffer 200 in `TalentShareDB.debug`) in `Core/Util.lua`.
+**Files:** Create `Core/Game/Events.lua`, `tests/test_events.lua`; modify TOC. Also create `ns.Debug.Log(tag: string, ...)` (ring buffer 200 in `TalentShareDB.debug`) in `Core/Base/Utility.lua`.
 
 **Interfaces:**
 - Produces: `ns.Events.On(name: string, fn)`, `ns.Events.Fire(name: string, ...)` for internal events: `LOCAL_CHANGED` (my record changed), `WINDOW_OPENED`. WoW events handled: `PLAYER_LOGIN`, `PLAYER_LEVEL_UP`, `TRADE_SKILL_SHOW`, `TRADE_SKILL_LIST_UPDATE`, `SKILL_LINES_CHANGED` (names per T3 findings) → debounced (1.0 s, `C_Timer.After`) call to `Scanner.Refresh(GetServerTime())`; fires `LOCAL_CHANGED` if changed.
@@ -268,7 +268,7 @@ Total ≈ 30-45 agent-hours; user time ≈ 10 short in-game checks.
 
 **Size:** S · **Agent:** Implementer · **Depends on:** T2, T4
 
-**Files:** Create `Core/Codec.lua`, `tests/test_codec.lua`.
+**Files:** Create `Core/Net/Codec.lua`, `tests/test_codec.lua`.
 
 **Interfaces:**
 - Produces (`ns.Codec`): `Encode(msg: table) -> string` (LibSerialize → LibDeflate compress → `EncodeForWoWAddonChannel`), `Decode(s: string) -> table|nil, err:string|nil`. `Decode` returns `nil, "..."` (never throws) for: non-string, bad encoding, bad inflate, non-table, missing/`~= ns.PROTOCOL` `v`, missing string `t`, decoded size > 64 KB (RF5).
@@ -280,7 +280,7 @@ Total ≈ 30-45 agent-hours; user time ≈ 10 short in-game checks.
 
 **Size:** L · **Agent:** Architect (main session) · **Depends on:** T5, T9
 
-**Files:** Create `Core/Sync.lua`, `tests/test_sync.lua`.
+**Files:** Create `Core/Net/Sync.lua`, `tests/test_sync.lua`.
 
 **Design:**
 - Messages (all tables, `v`, `t`): `HELLO {chars = {[fullName]=rev}}` — digest of every character record I hold (only my own `rev` is authoritative, but I advertise all I hold so late joiners learn from anyone); `WANT {names={fullName...}}`; `SNAP {char=CharRecord, catalog={...}}`. Orders messages are added in T13.
@@ -302,7 +302,7 @@ Total ≈ 30-45 agent-hours; user time ≈ 10 short in-game checks.
 
 **Size:** M · **Agent:** Implementer · **Depends on:** T8, T10
 
-**Files:** Create `Core/Comm.lua`, `tests/test_comm.lua`; modify TOC (after Sync/Events).
+**Files:** Create `Core/Net/Communication.lua`, `tests/test_comm.lua`; modify TOC (after Sync/Events).
 
 **Interfaces:**
 - Consumes: `ns.Sync.New`, `ns.Codec`, AceComm (`RegisterComm("TShare", cb)`, `SendCommMessage(prefix, text, dist, target, prio)`), `ns.Api.IsGuilded/GetGuildRoster`.
@@ -321,7 +321,7 @@ Total ≈ 30-45 agent-hours; user time ≈ 10 short in-game checks.
 
 **Size:** M · **Agent:** Architect (main session) · **Depends on:** T2
 
-**Files:** Create `Core/Orders.lua`, `tests/test_orders.lua`.
+**Files:** Create `Core/Data/Orders.lua`, `tests/test_orders.lua`.
 
 **Data model:**
 ```
@@ -343,7 +343,7 @@ Merge rules (CRDT-style, so order of arrival never matters): claims merge per cr
 
 **Size:** M · **Agent:** Implementer · **Depends on:** T11, T12
 
-**Files:** Modify `Core/Sync.lua`, `Core/Comm.lua`, `Core/Store.lua` (persist `orders`), `tests/test_sync.lua`.
+**Files:** Modify `Core/Net/Sync.lua`, `Core/Net/Communication.lua`, `Core/Data/Store.lua` (persist `orders`), `tests/test_sync.lua`.
 
 **Interfaces:**
 - Adds messages: `ORDER {order=Order}` (broadcast to GUILD on any local create/claim/withdraw/close); `ODIGEST {orders={[id]=v}}` (included in HELLO as `HELLO.orders`); `OPUSH {orders={Order...}}` (WHISPER reply with `orders:Missing(remote)`, max 10 per message, jittered + suppressed like SNAP).

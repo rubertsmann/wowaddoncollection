@@ -31,7 +31,7 @@ Statuses (INDEX.md and the `Status:` line in spec.md, keep both in sync): `plann
 
 ## Phase 1: Plan (`spec.md`)
 - Goal in one sentence, requirements as a numbered list (`R1`, `R2`, ...), explicit non-goals.
-- Design: files touched (exact paths), new modules, data shape changes, message shape changes. Keep logic in the **pure modules** (Util, Store, Orders, Codec, Sync, Model) so it is testable offline; WoW calls only in `Core/Api.lua`.
+- Design: files touched (exact paths), new modules, data shape changes, message shape changes. Keep logic in the **pure modules** (Util, Store, Orders, Codec, Sync, Model) so it is testable offline; WoW calls only in `Core/Game/Api.lua`.
 - Tasks as checkboxes `T1..Tn`, each small, independently finishable and verifiable, with its own test/verify line and a complexity `S/M/L`.
 - Run the **cross-cutting checklist** (spec.md has it; answer every line, "n/a" with a reason is fine):
   protocol version, SavedVariables schema + migration, trust model, localization (no display strings stored/sent), TOC load order, packaging (`.pkgmeta`, `tools/package.ps1`), tests, docs.

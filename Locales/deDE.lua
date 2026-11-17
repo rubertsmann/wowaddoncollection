@@ -1,7 +1,7 @@
-local ADDON, ns = ...
+local addonName, addon = ...
 
 -- German. Keys are the English UI texts; {placeholders} must stay identical (tests/test_locale_files.lua checks this).
-ns.Locale.Register("deDE", {
+addon.Locale.Register("deDE", {
     strings = {
         ["Recipes"] = "Rezepte",
         ["Orders"] = "Bestellungen",

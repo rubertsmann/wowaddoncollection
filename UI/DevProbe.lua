@@ -1,27 +1,33 @@
-local ADDON, ns = ...
+local addonName, addon = ...
 
 -- DEV BUILD ONLY (feature 011 T1): records what this client can tell about the items our recipes make, so the
 -- category filter and the effect-text search are built on facts instead of guesses. Button "Item probe" on the Debug tab,
--- or /tsd itemprobe [itemID ...]. Writes ns.db.devProbe (TalentShareDevDB); /reload flushes it to
+-- or /tsd itemprobe [itemID ...]. Writes addon.db.devProbe (TalentShareDevDB); /reload flushes it to
 -- WTF\Account\<ACCOUNT>\SavedVariables\TalentShare-Dev.lua. The live build never runs it (no button, no command).
--- Plain English strings on purpose: dev-only, not localized.
-local Probe = {}
-ns.DevProbe = Probe
+-- Plain English strings on purpose: dev-only, not localized. The keys of the recorded tables are the file format the
+-- feature 011 analysis reads; they stay as they are.
+---@class DevProbeModule
+local DevProbe = {}
+addon.DevProbe = DevProbe
 
-local MAX_SAMPLES = 150      -- detailed item records
-local PER_BUCKET = 3         -- detailed records per class/subclass/slot bucket
-local WAITS = { 3, 8 }       -- seconds after the click: first collect, then a retry for items the server had not sent yet
+local MAXIMUM_SAMPLES = 150          -- detailed item records
+local SAMPLES_PER_BUCKET = 3         -- detailed records per class/subclass/slot bucket
+local WAIT_SECONDS = { 3, 8 }        -- seconds after the click: first collect, then a retry for items the server had not sent yet
 
-local function fnAt(path)
-    local v = _G
-    for part in path:gmatch("[^.]+") do
-        if type(v) ~= "table" then return nil end
-        v = v[part]
+-- the global function at a dotted path ("C_Item.GetItemInfo"), or nil
+---@param path string
+---@return function|nil
+local function functionAtPath(path)
+    local value = _G
+    for pathPart in path:gmatch("[^.]+") do
+        if type(value) ~= "table" then return nil end
+        value = value[pathPart]
     end
-    return type(v) == "function" and v or nil
+    return type(value) == "function" and value or nil
 end
 
-local APIS = {
+---@type string[]
+local PROBED_APIS = {
     -- item data
     "GetItemInfoInstant", "C_Item.GetItemInfoInstant", "GetItemInfo", "C_Item.GetItemInfo", "C_Item.RequestLoadItemDataByID",
     "C_Item.GetItemInventoryTypeByID", "C_Item.GetItemClassInfo", "GetItemClassInfo", "C_Item.GetItemSubClassInfo",
@@ -38,257 +44,297 @@ local APIS = {
     "MenuUtil.CreateContextMenu", "MenuUtil.CreateCheckboxContextMenu", "MenuUtil.CreateRadioContextMenu",
     "SearchBoxTemplate_OnTextChanged",
 }
-local TEMPLATES = {   -- { frame type, template }: does CreateFrame accept it?
+---@type { [1]: string, [2]: string }[] frame type, template: does CreateFrame accept it?
+local PROBED_TEMPLATES = {
     { "Frame", "UIDropDownMenuTemplate" }, { "DropdownButton", "WowStyle1DropdownTemplate" },
     { "DropdownButton", "WowStyle1FilterDropdownTemplate" }, { "EditBox", "SearchBoxTemplate" },
     { "EditBox", "InputBoxTemplate" }, { "CheckButton", "UICheckButtonTemplate" },
 }
 
 -- readable dump of any value (strings quoted so "" and nil differ)
-local function show(v, depth)
+---@param value any
+---@param depth? integer
+---@return string
+local function describeValue(value, depth)
     depth = depth or 0
-    local t = type(v)
-    if t == "string" then return string.format("%q", v) end
-    if t ~= "table" then return tostring(v) end
+    local valueType = type(value)
+    if valueType == "string" then return string.format("%q", value) end
+    if valueType ~= "table" then return tostring(value) end
     if depth > 3 then return "{...}" end
-    local keys = {}
-    for k in pairs(v) do keys[#keys + 1] = k end
-    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
-    local out = {}
-    for _, k in ipairs(keys) do out[#out + 1] = tostring(k) .. "=" .. show(v[k], depth + 1) end
-    return "{" .. table.concat(out, ", ") .. "}"
+    local parts = {}
+    for _, key in ipairs(addon.Utility.SortedKeys(value)) do parts[#parts + 1] = tostring(key) .. "=" .. describeValue(value[key], depth + 1) end
+    return "{" .. table.concat(parts, ", ") .. "}"
 end
 
--- every return value of fn(...), nils included: "1=..., 2=nil, ..." or "error ..." / "missing"
-local function call(fn, ...)
-    if not fn then return "missing" end
-    local res = { pcall(fn, ...) }
-    if not res[1] then return "error " .. tostring(res[2]) end
-    local n = table.maxn(res)
-    if n <= 1 then return "(no values)" end
-    local out = {}
-    for i = 2, n do out[#out + 1] = (i - 1) .. "=" .. show(res[i]) end
-    return table.concat(out, ", ")
+-- every return value of func(...), nils included: "1=..., 2=nil, ..." or "error ..." / "missing"
+---@param func function|nil
+---@return string
+local function describeCall(func, ...)
+    if not func then return "missing" end
+    local results = { pcall(func, ...) }
+    if not results[1] then return "error " .. tostring(results[2]) end
+    local resultCount = table.maxn(results)
+    if resultCount <= 1 then return "(no values)" end
+    local parts = {}
+    for resultIndex = 2, resultCount do parts[#parts + 1] = (resultIndex - 1) .. "=" .. describeValue(results[resultIndex]) end
+    return table.concat(parts, ", ")
 end
 
-local function first(fn, ...)
-    if not fn then return nil end
-    local res = { pcall(fn, ...) }
-    if res[1] then return select(2, unpack(res, 1, table.maxn(res))) end
+-- the return values of func(...), or nothing when it is missing or raises an error
+---@param func function|nil
+---@return any ...
+local function callResults(func, ...)
+    if not func then return nil end
+    local results = { pcall(func, ...) }
+    if results[1] then return select(2, unpack(results, 1, table.maxn(results))) end
     return nil
 end
 
 ------------------------------------------------------------------ tooltip text
 
-local tip
-local function scanTooltip(setter, arg)
-    if not tip then
-        local ok, t = pcall(CreateFrame, "GameTooltip", ns.FRAME .. "ProbeTip", UIParent, "GameTooltipTemplate")
-        if not ok then return "error " .. tostring(t) end
-        tip = t
+---@type table|nil
+local probeTooltip
+---@param setterName string tooltip method, e.g. "SetHyperlink"
+---@param argument any
+---@return string[]|string lines, or an error description
+local function readHiddenTooltip(setterName, argument)
+    if not probeTooltip then
+        local ok, tooltipOrError = pcall(CreateFrame, "GameTooltip", addon.FRAME_PREFIX .. "ProbeTip", UIParent, "GameTooltipTemplate")
+        if not ok then return "error " .. tostring(tooltipOrError) end
+        probeTooltip = tooltipOrError
     end
-    tip:SetOwner(UIParent, "ANCHOR_NONE")
-    tip:ClearLines()
-    local ok, err = pcall(tip[setter], tip, arg)
-    if not ok then return "error " .. tostring(err) end
-    local lines = {}
-    for i = 1, tip:NumLines() or 0 do
-        local l = _G[ns.FRAME .. "ProbeTipTextLeft" .. i]
-        local r = _G[ns.FRAME .. "ProbeTipTextRight" .. i]
-        local lt, rt = l and l:GetText(), r and r:IsShown() and r:GetText()
-        lines[#lines + 1] = (lt or "") .. ((rt and rt ~= "") and (" || " .. rt) or "")
+    probeTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+    probeTooltip:ClearLines()
+    local ok, errorMessage = pcall(probeTooltip[setterName], probeTooltip, argument)
+    if not ok then return "error " .. tostring(errorMessage) end
+    local tooltipLines = {}
+    for lineIndex = 1, probeTooltip:NumLines() or 0 do
+        local leftFontString = _G[addon.FRAME_PREFIX .. "ProbeTipTextLeft" .. lineIndex]
+        local rightFontString = _G[addon.FRAME_PREFIX .. "ProbeTipTextRight" .. lineIndex]
+        local leftText = leftFontString and leftFontString:GetText()
+        local rightText = rightFontString and rightFontString:IsShown() and rightFontString:GetText()
+        tooltipLines[#tooltipLines + 1] = (leftText or "") .. ((rightText and rightText ~= "") and (" || " .. rightText) or "")
     end
-    tip:Hide()
-    return lines
+    probeTooltip:Hide()
+    return tooltipLines
 end
 
-local function tooltipInfoLines(fn, arg)
-    if not fn then return "missing" end
-    local ok, data = pcall(fn, arg)
-    if not ok then return "error " .. tostring(data) end
-    if type(data) ~= "table" then return "returned " .. show(data) end
-    local lines = {}
-    for i, line in ipairs(data.lines or {}) do
-        if line.leftText == nil and TooltipUtil and TooltipUtil.SurfaceArgs then pcall(TooltipUtil.SurfaceArgs, line) end
-        lines[#lines + 1] = tostring(line.leftText or "") .. ((line.rightText and line.rightText ~= "") and (" || " .. line.rightText) or "")
-        if i == 1 then lines.firstRaw = show(line) end
+---@param tooltipInfoFunction function|nil
+---@param argument any
+---@return table|string
+local function tooltipInfoLines(tooltipInfoFunction, argument)
+    if not tooltipInfoFunction then return "missing" end
+    local ok, tooltipData = pcall(tooltipInfoFunction, argument)
+    if not ok then return "error " .. tostring(tooltipData) end
+    if type(tooltipData) ~= "table" then return "returned " .. describeValue(tooltipData) end
+    local tooltipLines = {}
+    for lineIndex, tooltipLine in ipairs(tooltipData.lines or {}) do
+        if tooltipLine.leftText == nil and TooltipUtil and TooltipUtil.SurfaceArgs then pcall(TooltipUtil.SurfaceArgs, tooltipLine) end
+        tooltipLines[#tooltipLines + 1] = tostring(tooltipLine.leftText or "")
+            .. ((tooltipLine.rightText and tooltipLine.rightText ~= "") and (" || " .. tooltipLine.rightText) or "")
+        if lineIndex == 1 then tooltipLines.firstRaw = describeValue(tooltipLine) end
     end
-    return lines
+    return tooltipLines
 end
 
 ------------------------------------------------------------------ one item / one recipe without an item
 
-local itemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
-local instant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
-local itemSpell = (C_Item and C_Item.GetItemSpell) or GetItemSpell
-local spellDesc = (C_Spell and C_Spell.GetSpellDescription) or GetSpellDescription
-local itemStats = (C_Item and C_Item.GetItemStats) or GetItemStats
-local classInfo = (C_Item and C_Item.GetItemClassInfo) or GetItemClassInfo
-local subClassInfo = (C_Item and C_Item.GetItemSubClassInfo) or GetItemSubClassInfo
+local getItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+local getItemInfoInstant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+local getItemSpell = (C_Item and C_Item.GetItemSpell) or GetItemSpell
+local getSpellDescription = (C_Spell and C_Spell.GetSpellDescription) or GetSpellDescription
+local getItemStats = (C_Item and C_Item.GetItemStats) or GetItemStats
+local getItemClassInfo = (C_Item and C_Item.GetItemClassInfo) or GetItemClassInfo
+local getItemSubClassInfo = (C_Item and C_Item.GetItemSubClassInfo) or GetItemSubClassInfo
 
-local function request(itemID, spellID)
+-- asks the server for item / spell data the client has not loaded yet
+---@param itemID integer|nil
+---@param spellID? integer
+local function requestData(itemID, spellID)
     if itemID and C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, itemID) end
     if spellID and C_Spell and C_Spell.RequestLoadSpellData then pcall(C_Spell.RequestLoadSpellData, spellID) end
 end
 
+---@param itemID integer
+---@return table itemRecord
 local function probeItem(itemID)
-    local r = { itemID = itemID }
-    r.instant = call(instant, itemID)
-    r.info = call(itemInfo, itemID)
-    r.cached = first(itemInfo, itemID) ~= nil
-    local _, _, _, equipLoc, _, classID, subID = first(instant, itemID)
-    r.equipLocText = equipLoc and equipLoc ~= "" and tostring(_G[equipLoc]) or nil
+    local itemRecord = { itemID = itemID }
+    itemRecord.instant = describeCall(getItemInfoInstant, itemID)
+    itemRecord.info = describeCall(getItemInfo, itemID)
+    itemRecord.cached = callResults(getItemInfo, itemID) ~= nil
+    local _, _, _, equipLocation, _, classID, subclassID = callResults(getItemInfoInstant, itemID)
+    itemRecord.equipLocText = equipLocation and equipLocation ~= "" and tostring(_G[equipLocation]) or nil
     if classID then
-        r.className = call(classInfo, classID)
-        r.subClassName = call(subClassInfo, classID, subID)
+        itemRecord.className = describeCall(getItemClassInfo, classID)
+        itemRecord.subClassName = describeCall(getItemSubClassInfo, classID, subclassID)
     end
-    if C_Item and C_Item.GetItemInventoryTypeByID then r.invType = call(C_Item.GetItemInventoryTypeByID, itemID) end
-    local link = ns.Api.ItemLink(itemID) or ("item:" .. itemID)
-    r.link = link
-    r.stats = call(itemStats, link)
-    r.spell = call(itemSpell, itemID)
-    local _, spellID = first(itemSpell, itemID)
+    if C_Item and C_Item.GetItemInventoryTypeByID then itemRecord.invType = describeCall(C_Item.GetItemInventoryTypeByID, itemID) end
+    local link = addon.Api.ItemLink(itemID) or ("item:" .. itemID)
+    itemRecord.link = link
+    itemRecord.statistics = describeCall(getItemStats, link)
+    itemRecord.spell = describeCall(getItemSpell, itemID)
+    local _, spellID = callResults(getItemSpell, itemID)
     if spellID then
-        request(nil, spellID)
-        r.spellDesc = call(spellDesc, spellID)
+        requestData(nil, spellID)
+        itemRecord.spellDesc = describeCall(getSpellDescription, spellID)
     end
-    r.tipInfo = C_TooltipInfo and tooltipInfoLines(C_TooltipInfo.GetItemByID, itemID) or "missing"
-    r.tipScan = scanTooltip("SetHyperlink", "item:" .. itemID)
-    return r
+    itemRecord.tipInfo = C_TooltipInfo and tooltipInfoLines(C_TooltipInfo.GetItemByID, itemID) or "missing"
+    itemRecord.tipScan = readHiddenTooltip("SetHyperlink", "item:" .. itemID)
+    return itemRecord
 end
 
+---@param spellID integer
+---@return table spellRecord
 local function probeSpell(spellID)
-    local r = { spellID = spellID }
-    r.spellInfo = call((C_Spell and C_Spell.GetSpellInfo) or GetSpellInfo, spellID)
-    r.spellDesc = call(spellDesc, spellID)
-    r.tipInfo = C_TooltipInfo and tooltipInfoLines(C_TooltipInfo.GetSpellByID, spellID) or "missing"
-    r.tipScanSpell = scanTooltip("SetHyperlink", "spell:" .. spellID)
-    r.tipScanEnchant = scanTooltip("SetHyperlink", "enchant:" .. spellID)
-    return r
+    local spellRecord = { spellID = spellID }
+    spellRecord.spellInfo = describeCall((C_Spell and C_Spell.GetSpellInfo) or GetSpellInfo, spellID)
+    spellRecord.spellDesc = describeCall(getSpellDescription, spellID)
+    spellRecord.tipInfo = C_TooltipInfo and tooltipInfoLines(C_TooltipInfo.GetSpellByID, spellID) or "missing"
+    spellRecord.tipScanSpell = readHiddenTooltip("SetHyperlink", "spell:" .. spellID)
+    spellRecord.tipScanEnchant = readHiddenTooltip("SetHyperlink", "enchant:" .. spellID)
+    return spellRecord
 end
 
 ------------------------------------------------------------------ open profession window: its own categories/filters
 
+---@return table tradeSkillRecord
 local function probeTradeSkill()
-    local t = {}
-    t.openProfession = tostring(ns.Api.OpenProfessionName and ns.Api.OpenProfessionName())
-    if GetTradeSkillSubClasses then t.subClasses = call(GetTradeSkillSubClasses) end
-    if GetTradeSkillInvSlots then t.invSlots = call(GetTradeSkillInvSlots) end
+    local tradeSkillRecord = {}
+    tradeSkillRecord.openProfession = tostring(addon.Api.OpenProfessionName and addon.Api.OpenProfessionName())
+    if GetTradeSkillSubClasses then tradeSkillRecord.subClasses = describeCall(GetTradeSkillSubClasses) end
+    if GetTradeSkillInvSlots then tradeSkillRecord.invSlots = describeCall(GetTradeSkillInvSlots) end
     if GetNumTradeSkills then
         local headers = {}
-        for i = 1, math.min(400, first(GetNumTradeSkills) or 0) do
-            local name, kind = first(GetTradeSkillInfo, i)
-            if kind == "header" or kind == "subheader" then headers[#headers + 1] = tostring(name) .. " (" .. kind .. ")" end
+        for skillIndex = 1, math.min(400, callResults(GetNumTradeSkills) or 0) do
+            local skillName, skillType = callResults(GetTradeSkillInfo, skillIndex)
+            if skillType == "header" or skillType == "subheader" then headers[#headers + 1] = tostring(skillName) .. " (" .. skillType .. ")" end
         end
-        t.legacyHeaders = headers
+        tradeSkillRecord.legacyHeaders = headers
     end
     if C_TradeSkillUI and C_TradeSkillUI.GetCategories then
-        local cats = {}
-        local ok, ids = pcall(function() return { C_TradeSkillUI.GetCategories() } end)
+        local categoryDescriptions = {}
+        local ok, categoryIDs = pcall(function() return { C_TradeSkillUI.GetCategories() } end)
         if ok then
-            for _, id in ipairs(ids) do
-                cats[#cats + 1] = tostring(id) .. ": " .. call(C_TradeSkillUI.GetCategoryInfo, id)
-                if #cats >= 60 then break end
+            for _, categoryID in ipairs(categoryIDs) do
+                categoryDescriptions[#categoryDescriptions + 1] = tostring(categoryID) .. ": " .. describeCall(C_TradeSkillUI.GetCategoryInfo, categoryID)
+                if #categoryDescriptions >= 60 then break end
             end
         end
-        t.categories = cats
+        tradeSkillRecord.categories = categoryDescriptions
     end
-    return t
+    return tradeSkillRecord
 end
 
 ------------------------------------------------------------------ run
 
-local running = false
+local probeRunning = false
 
+---@param itemID integer|nil
+---@return string bucket "class:subclass:slot" or a reason
 local function bucketOf(itemID)
     if not itemID then return "no item (enchant or unknown)" end
-    local _, _, _, equipLoc, _, classID, subID = first(instant, itemID)
+    local _, _, _, equipLocation, _, classID, subclassID = callResults(getItemInfoInstant, itemID)
     if not classID then return "unknown to this client" end
-    return tostring(classID) .. ":" .. tostring(subID) .. ":" .. tostring(equipLoc ~= "" and equipLoc or "-")
+    return tostring(classID) .. ":" .. tostring(subclassID) .. ":" .. tostring(equipLocation ~= "" and equipLocation or "-")
 end
 
-local function collect(out, plan)
-    out.items, out.spells = {}, {}
-    for _, p in ipairs(plan) do
-        if p.itemID then
-            local r = probeItem(p.itemID)
-            r.recipeID, r.recipe, r.bucket = p.recipeID, p.recipe, p.bucket
-            out.items[#out.items + 1] = r
+---@class ProbePlanEntry
+---@field itemID integer|nil
+---@field recipeID integer|nil
+---@field recipe string|nil
+---@field bucket string
+
+-- probes every planned entry into `probeResult`; returns how many items were not cached yet
+---@param probeResult table
+---@param plan ProbePlanEntry[]
+---@return integer notCachedCount
+local function collectProbes(probeResult, plan)
+    probeResult.items, probeResult.spells = {}, {}
+    for _, planEntry in ipairs(plan) do
+        if planEntry.itemID then
+            local itemRecord = probeItem(planEntry.itemID)
+            itemRecord.recipeID, itemRecord.recipe, itemRecord.bucket = planEntry.recipeID, planEntry.recipe, planEntry.bucket
+            probeResult.items[#probeResult.items + 1] = itemRecord
         else
-            local r = probeSpell(p.recipeID)
-            r.recipe, r.bucket = p.recipe, p.bucket
-            out.spells[#out.spells + 1] = r
+            local spellRecord = probeSpell(planEntry.recipeID)
+            spellRecord.recipe, spellRecord.bucket = planEntry.recipe, planEntry.bucket
+            probeResult.spells[#probeResult.spells + 1] = spellRecord
         end
     end
-    local missing = 0
-    for _, r in ipairs(out.items) do if not r.cached then missing = missing + 1 end end
-    out.notCached = missing
-    return missing
+    local notCachedCount = 0
+    for _, itemRecord in ipairs(probeResult.items) do if not itemRecord.cached then notCachedCount = notCachedCount + 1 end end
+    probeResult.notCached = notCachedCount
+    return notCachedCount
 end
 
-function Probe.Run(extra)
-    if not ns.IS_DEV then return end
-    if running then ns.Print("item probe already running"); return end
-    running = true
-    local out = { at = date and date("%Y-%m-%d %H:%M:%S"), locale = GetLocale and GetLocale(), version = ns.VERSION,
-        build = call(GetBuildInfo), apis = {}, templates = {}, buckets = {} }
-    for _, p in ipairs(APIS) do out.apis[p] = fnAt(p) ~= nil end
-    for _, t in ipairs(TEMPLATES) do
-        local ok, err = pcall(CreateFrame, t[1], nil, nil, t[2])
-        out.templates[t[1] .. "/" .. t[2]] = ok and true or tostring(err)
+---@param extraItemIDs? integer[] item ids asked for on the command line
+function DevProbe.Run(extraItemIDs)
+    if not addon.IS_DEVELOPMENT_BUILD then return end
+    if probeRunning then addon.Print("item probe already running"); return end
+    probeRunning = true
+    local probeResult = { at = date and date("%Y-%m-%d %H:%M:%S"), locale = GetLocale and GetLocale(), version = addon.VERSION,
+        build = describeCall(GetBuildInfo), apis = {}, templates = {}, buckets = {} }
+    for _, apiPath in ipairs(PROBED_APIS) do probeResult.apis[apiPath] = functionAtPath(apiPath) ~= nil end
+    for _, template in ipairs(PROBED_TEMPLATES) do
+        local ok, errorMessage = pcall(CreateFrame, template[1], nil, nil, template[2])
+        probeResult.templates[template[1] .. "/" .. template[2]] = ok and true or tostring(errorMessage)
     end
     -- profession-window data is kept per profession across runs: click once with each profession window open
-    local prev = type(ns.db.devProbe) == "table" and type(ns.db.devProbe.tradeskill) == "table" and ns.db.devProbe.tradeskill or {}
-    local ts = probeTradeSkill()
-    if ts.openProfession ~= "nil" then prev[ts.openProfession] = ts end
-    out.tradeskill = prev
+    local previousProbe = addon.db.devProbe
+    local tradeSkillByProfession = type(previousProbe) == "table" and type(previousProbe.tradeskill) == "table" and previousProbe.tradeskill or {}
+    local tradeSkillRecord = probeTradeSkill()
+    if tradeSkillRecord.openProfession ~= "nil" then tradeSkillByProfession[tradeSkillRecord.openProfession] = tradeSkillRecord end
+    probeResult.tradeskill = tradeSkillByProfession
 
     -- every catalog recipe into a bucket; a few per bucket get a detailed record
-    local ids = {}
-    for id in pairs(ns.db.catalog or {}) do ids[#ids + 1] = id end
-    table.sort(ids)
-    local plan, perBucket = {}, {}
-    for _, id in ipairs(ids) do
-        local e = ns.db.catalog[id]
-        local b = bucketOf(e.produces)
-        local s = out.buckets[b]
-        if not s then s = { n = 0, examples = {} }; out.buckets[b] = s end
-        s.n = s.n + 1
-        if #s.examples < 5 then s.examples[#s.examples + 1] = tostring(e.name) end
-        perBucket[b] = (perBucket[b] or 0) + 1
-        if perBucket[b] <= PER_BUCKET and #plan < MAX_SAMPLES then
-            plan[#plan + 1] = { itemID = e.produces, recipeID = id, recipe = e.name, bucket = b }
-            request(e.produces, e.produces and nil or id)
+    local recipeIDs = addon.Utility.SortedKeys(addon.db.catalog)
+    local plan, samplesByBucket = {}, {}
+    for _, recipeID in ipairs(recipeIDs) do
+        local catalogEntry = addon.db.catalog[recipeID]
+        local bucket = bucketOf(catalogEntry.produces)
+        local bucketSummary = probeResult.buckets[bucket]
+        if not bucketSummary then bucketSummary = { n = 0, examples = {} }; probeResult.buckets[bucket] = bucketSummary end
+        bucketSummary.n = bucketSummary.n + 1
+        if #bucketSummary.examples < 5 then bucketSummary.examples[#bucketSummary.examples + 1] = tostring(catalogEntry.name) end
+        samplesByBucket[bucket] = (samplesByBucket[bucket] or 0) + 1
+        if samplesByBucket[bucket] <= SAMPLES_PER_BUCKET and #plan < MAXIMUM_SAMPLES then
+            plan[#plan + 1] = { itemID = catalogEntry.produces, recipeID = recipeID, recipe = catalogEntry.name, bucket = bucket }
+            requestData(catalogEntry.produces, catalogEntry.produces and nil or recipeID)
         end
     end
-    for _, id in ipairs(extra or {}) do
-        plan[#plan + 1] = { itemID = id, recipe = "(asked for)", bucket = bucketOf(id) }
-        request(id)
+    for _, itemID in ipairs(extraItemIDs or {}) do
+        plan[#plan + 1] = { itemID = itemID, recipe = "(asked for)", bucket = bucketOf(itemID) }
+        requestData(itemID)
     end
-    out.catalogSize, out.sampled = #ids, #plan
-    ns.db.devProbe = out
-    ns.Print(("item probe: %d recipes in %d buckets, %d sampled; collecting in %ds..."):format(#ids,
-        (function() local n = 0; for _ in pairs(out.buckets) do n = n + 1 end; return n end)(), #plan, WAITS[1]))
+    probeResult.catalogSize, probeResult.sampled = #recipeIDs, #plan
+    addon.db.devProbe = probeResult
+    addon.Log.Information("devProbe.run", "item probe started", { recipes = #recipeIDs, sampled = #plan })
+    addon.Print(("item probe: %d recipes in %d buckets, %d sampled; collecting in %ds..."):format(#recipeIDs,
+        addon.Utility.Count(probeResult.buckets), #plan, WAIT_SECONDS[1]))
 
-    local function pass(i)
-        local missing = collect(out, plan)
-        out.pass = i
-        if i < #WAITS and missing > 0 then
-            ns.Print(("item probe: %d items not cached yet, retrying in %ds"):format(missing, WAITS[i + 1] - WAITS[i]))
-            C_Timer.After(WAITS[i + 1] - WAITS[i], function() pass(i + 1) end)
+    local function runPass(passNumber)
+        local notCachedCount = collectProbes(probeResult, plan)
+        probeResult.pass = passNumber
+        if passNumber < #WAIT_SECONDS and notCachedCount > 0 then
+            local retrySeconds = WAIT_SECONDS[passNumber + 1] - WAIT_SECONDS[passNumber]
+            addon.Print(("item probe: %d items not cached yet, retrying in %ds"):format(notCachedCount, retrySeconds))
+            C_Timer.After(retrySeconds, function() runPass(passNumber + 1) end)
             return
         end
-        running = false
-        ns.Print(("item probe done: %d items, %d without item, %d not cached. /reload to write the file."):format(
-            #out.items, #out.spells, missing))
+        probeRunning = false
+        addon.Print(("item probe done: %d items, %d without item, %d not cached. /reload to write the file."):format(
+            #probeResult.items, #probeResult.spells, notCachedCount))
     end
-    C_Timer.After(WAITS[1], function() pass(1) end)
+    C_Timer.After(WAIT_SECONDS[1], function()
+        local ok = addon.Log.Protected("devProbe.run", "the item probe failed", runPass, 1)
+        if not ok then probeRunning = false end
+    end)
 end
 
-if ns.IS_DEV then
-    ns.Slash.itemprobe = function(arg)
-        local extra = {}
-        for n in tostring(arg or ""):gmatch("%d+") do extra[#extra + 1] = tonumber(n) end
-        Probe.Run(extra)
+if addon.IS_DEVELOPMENT_BUILD then
+    addon.SlashCommands.itemprobe = function(arguments)
+        local extraItemIDs = {}
+        for itemIDText in tostring(arguments or ""):gmatch("%d+") do extraItemIDs[#extraItemIDs + 1] = tonumber(itemIDText) end
+        DevProbe.Run(extraItemIDs)
     end
 end

@@ -1,9 +1,9 @@
-local ADDON, ns = ...
+local addonName, addon = ...
 
 -- English is the source language of every UI string (the key is the text), so only game data lives here.
 -- Profession names by skill line id. Verified on Forever (probe): 165, 185, 393. The remaining classic skill line ids
 -- are from memory and only serve as a fallback after the names the game client itself reports.
-ns.Locale.Register("enUS", {
+addon.Locale.Register("enUS", {
     professions = {
         [171] = "Alchemy", [164] = "Blacksmithing", [333] = "Enchanting", [202] = "Engineering",
         [182] = "Herbalism", [165] = "Leatherworking", [186] = "Mining", [393] = "Skinning",

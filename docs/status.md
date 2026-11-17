@@ -17,7 +17,7 @@ Legend: DONE = written; UNVERIFIED = needs the check in the last column.
 | T1 scaffold, deploy | DONE, UNVERIFIED | `powershell tools/deploy.ps1`, start game, `/ts version` |
 | T2 test harness | DONE, UNVERIFIED | `luajit tests/run.lua` (needs `winget install DEVCOM.LuaJIT`) |
 | T3 API probe | DONE (addon), findings pending | `tools/deploy.ps1 -WithProbe`, `/tsp` with a profession window open, `/reload`, read `TalentShareProbeDB.lua` |
-| T4 libs | LibStub + LibDeflate vendored (copied from the installed Spoken addon, zlib licence). **AceComm / ChatThrottleLib / LibSerialize are NOT used**; replaced by `Core/Codec.lua` (own safe serializer) and `Core/Comm.lua` (own chunking + token-bucket pacing) | tests + in-game `/ts comm` |
+| T4 libs | LibStub + LibDeflate vendored (copied from the installed Spoken addon, zlib licence). **AceComm / ChatThrottleLib / LibSerialize are NOT used**; replaced by `Core/Net/Codec.lua` (own safe serializer) and `Core/Net/Communication.lua` (own chunking + token-bucket pacing) | tests + in-game `/ts comm` |
 | T5 Store | DONE, UNVERIFIED | `tests/test_core.lua` |
 | T6 Api adapter | DONE; supports modern `C_TradeSkillUI` and legacy `GetTradeSkill*`, chosen at runtime | `/ts scan`, `/ts dump` with a profession open |
 | T7 Scanner | DONE, UNVERIFIED | `/ts dump` shows recipe counts per profession |

@@ -17,7 +17,7 @@ Skinning, Cooking.** Source: `TalentShareProbeDB` plus a `/ts scan` / `/ts dump`
 | Guild | `IsInGuild`, `GetNumGuildMembers`, `GetGuildRosterInfo`, `C_GuildInfo.GuildRoster` | `GuildRoster` |
 | Timers | `C_Timer.After`, `C_Timer.NewTicker` | |
 
-Conclusion: Forever is the modern (Mainline-style) API. `Core/Api.lua` chooses the modern `C_TradeSkillUI` path at
+Conclusion: Forever is the modern (Mainline-style) API. `Core/Game/Api.lua` chooses the modern `C_TradeSkillUI` path at
 runtime; the legacy branch is dead code on this client and can stay as a fallback.
 
 ## Facts the data model relies on
@@ -47,7 +47,7 @@ Characters on Forever have a **first name and a surname**. Values from one clien
 | `Ambiguate("Drakk-CAMWOWEU4Realm5PvE", "none")` | `"Drakk"` |
 
 Consequence: a player's identity is `"First Surname"`. Building it as `UnitName() .. "-" .. GetNormalizedRealmName()` (what
-0.4.0 did) gives `"Drakk-<realm>"`, which no other source ever uses. Handled in `Api.MyBaseName` / `Util.Canon` (feature 008).
+0.4.0 did) gives `"Drakk-<realm>"`, which no other source ever uses. Handled in `Api.MyBaseName` / `Utility.CanonicalName` (feature 008).
 Not yet verified: whether a whisper addressed to `"First Surname"` is delivered (the trace shows it as `(to Mira Holt)`;
 pulls fall back to the guild channel if not).
 

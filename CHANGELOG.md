@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+- Internal: duplicated helpers merged into one copy each (`Util.Count/SortedKeys/Wipe/Refill/SanitizeMap/Me/ChatSafe`,
+  `Store.Knows/RecipeCount`); the safer variant won where copies differed (feature 012). No player-visible change.
+- Internal: `Core/` grouped into layer folders `Base`, `Debug`, `Data`, `Net`, `Game`, `View` (see README "Develop").
+  Load order unchanged. Dev setups: re-run `tools/deploy.ps1` and restart the game.
+- Internal (feature 013): every code name written in full words (`docs/coding-conventions.md`), LuaLS type annotations
+  on every module function and shared table shape, files `Util.lua` / `Comm.lua` / `Diag.lua` renamed to `Utility.lua` /
+  `Communication.lua` / `Diagnostics.lua`. Wire fields, SavedVariables keys and slash commands are unchanged.
+- Logging: one helper, `Core/Base/Log.lua` (`Log.Error/Warning/Information/Debug/Exception/Protected`), with one line
+  format `time LEVEL [area] message :: key=value`. Errors that were swallowed before (failed saved-data migration,
+  failing event handlers, refused sends, failed whispers, profession window reads) are now logged with their details;
+  `/ts debug` and the `/ts export` report show the log.
+- Fixed: `Utility.ResetRealmAliases` (used by the tests) assigned globals instead of resetting the first-name index.
+
 ## 0.5.0
 Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.2 and schema 3 unchanged.
 
