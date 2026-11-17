@@ -1,6 +1,7 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
+Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.3, schema 4.
 - **Games tab** (feature 014, protocol 2.3, schema 4): an animated coin flip. Enter a stake in gold, silver and copper (1c to 100 000g), pick heads or tails,
   flip; the coin is tossed and spins before it lands. Every member's wins and losses (gold amounts) appear on a guild
   leaderboard (this week / all time), with the 15 latest flips and last week's winner. For fun only: no gold changes
