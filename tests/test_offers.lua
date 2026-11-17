@@ -221,7 +221,7 @@ return {
         local addon = harness.addon({ now = BIG })
         local sv = { schema = 2, chars = {}, catalog = {}, orders = {}, ui = { minimapAngle = 5 }, me = "Me-R" }
         local out, status = addon.Store.Init(sv)
-        harness.equal(status, "migrated"); harness.equal(out.schema, 3); harness.truthy(out.offers); harness.truthy(out.hidden); harness.equal(out.ui.minimapAngle, 5)
+        harness.equal(status, "migrated"); harness.equal(out.schema, addon.Store.SCHEMA); harness.truthy(out.offers); harness.truthy(out.hidden); harness.equal(out.ui.minimapAngle, 5)
         local sv3 = { schema = 3, chars = {}, catalog = {}, orders = {},
             offers = { ["A-R"] = { name = "A-R", rev = BIG, items = { [6661] = { bag = 1 } }, dibs = {} },
                 ["B-R"] = { name = "B-R", rev = 1 / 0, items = {}, dibs = {} },                 -- hostile

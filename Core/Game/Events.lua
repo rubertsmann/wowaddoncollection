@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- Internal pub/sub + WoW event wiring. Scans are debounced; the guild gets a HELLO when my data changes.
--- Internal events: DATA_CHANGED(kind), LOCAL_CHANGED, OFFERS_CHANGED, WINDOW_OPENED, TRADESKILL(isOpen), ITEM_INFO.
+-- Internal events: DATA_CHANGED(kind), LOCAL_CHANGED, OFFERS_CHANGED, GAMES_CHANGED, WINDOW_OPENED, TRADESKILL(isOpen), ITEM_INFO.
 -- Every handler runs protected: an error in one handler is logged (Log.Exception, with stack) and the others still run.
 ---@class EventsModule
 local Events = {}
@@ -105,6 +105,8 @@ Events.ScanItems = scheduleItemScan
 
 Events.On("LOCAL_CHANGED", function() addon.Communication.RequestHello(false, true) end)
 Events.On("OFFERS_CHANGED", function() addon.Communication.RequestHello(false, true) end)
+-- a coin flip (feature 014): announced coalesced, so flip spam cannot flood the guild channel with HELLOs
+Events.On("GAMES_CHANGED", function() addon.Communication.RequestHelloSoon() end)
 -- a record from a peer arrived: drop MY dibs on items that are gone (the new record may have removed them)
 Events.On("DATA_CHANGED", function(kind)
     if kind ~= "offers" or not addon.db or addon.db.readonly then return end

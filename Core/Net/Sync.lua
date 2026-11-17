@@ -5,18 +5,20 @@ local addonName, addon = ...
 -- current character (SavedVariables are account-wide, so the stored name may still be the previously played character).
 -- OnMessage returns (status, reason): "ok" | "ignored" | "dropped" | "error", for the network trace (Core/Debug/Trace.lua).
 -- Messages (every message carries v = addon.PROTOCOL and a string type t). The field names are the WIRE FORMAT and stay:
---   HELLO {rev, login?, odig, orev?}  broadcast (GUILD) or reply (WHISPER): my record versions + digest of my orders
+--   HELLO {rev, login?, odig, orev?, grev?}  broadcast (GUILD) or reply (WHISPER): my record versions + digest of my orders
 --   WANT  {names, via?}         "send me your record"; only the sender's own name is honoured
 --   SNAP  {char, catalog}       a character record + catalog entries of its recipes
 --   OPUSH {orders}              whisper: orders the receiver lacks (<= 10 per message)
 --   ORDER {order}               broadcast: one order changed (order may carry a recipe name snapshot, 2.2+)
 --   WANTO {names, via?}         "send me your offers record" (2.1+)
 --   OFFERS {offers}             a character's offers/dibs record (2.1+)
+--   WANTG {names, via?}         "send me your games record" (2.3+)
+--   GAMES {games}               a character's game results record (2.3+, Core/Play/Games.lua)
 -- Pulls (2.2): the first WANT/WANTO is a whisper. If the record has not arrived after RETRY_SECONDS[1] seconds the request
 -- is repeated on GUILD with via = "GUILD", and the owner answers on GUILD, so a failing whisper path (wrong target form,
 -- server restrictions) cannot block sync; one GUILD answer also serves every other member that was behind. A 2.1 peer
 -- ignores `via` and answers by whisper as before.
--- A peer can only author its OWN record (SNAP char.name / OFFERS name must equal the sender). Every player name from the
+-- A peer can only author its OWN record (SNAP char.name / OFFERS name / GAMES name must equal the sender). Every player name from the
 -- wire is compared and stored in canonical form (Utility.CanonicalName), so differently spelled realms meet on one key.
 
 ---@class SyncEnvironment
@@ -25,7 +27,7 @@ local addonName, addon = ...
 ---@field random fun(): number in [0, 1)
 ---@field store StoreModule
 ---@field orders OrderBoard
----@field onChange fun(kind: "chars"|"offers"|"orders")
+---@field onChange fun(kind: "chars"|"offers"|"orders"|"games")
 ---@field me string|fun(): string|nil my canonical name, or a function returning it
 
 ---@class PendingSend
@@ -54,6 +56,7 @@ local addonName, addon = ...
 ---@field pending PendingSend[] messages waiting for their send time
 ---@field wanted table<string, RecordPull> character-record pulls by peer
 ---@field wantedOffers table<string, RecordPull> offers-record pulls by peer
+---@field wantedGames table<string, RecordPull> games-record pulls by peer
 ---@field guildSent table<string, { revision: integer, sentAt: integer }> last GUILD answer per record kind
 ---@field peerRealm table<string, string> the realm each peer appends to names (learned from its requests)
 ---@field loginReplyBudget integer login introductions sent in the current minute
@@ -82,7 +85,7 @@ local function canonical(playerName) return addon.Utility.CanonicalName(playerNa
 ---@param environment SyncEnvironment
 ---@return Sync
 function Sync.New(environment)
-    return setmetatable({ environment = environment, pending = {}, wanted = {}, wantedOffers = {}, guildSent = {},
+    return setmetatable({ environment = environment, pending = {}, wanted = {}, wantedOffers = {}, wantedGames = {}, guildSent = {},
         peerRealm = {}, loginReplyBudget = 0, loginReplyBudgetStartedAt = 0,
         statistics = { sent = 0, received = 0, dropped = 0 } }, Sync)
 end
@@ -127,8 +130,10 @@ end
 ---@return table message
 function Sync:_helloMessage(isLogin)
     local offerRecord = addon.Offers.Get(self:_me())
+    local gameRecord = addon.Games.Get(self:_me())
     return { t = "HELLO", rev = self:_myRevision(), login = isLogin or nil, odig = self.environment.orders:Digest(100),
-        orev = (offerRecord and offerRecord.rev > 0) and offerRecord.rev or nil }
+        orev = (offerRecord and offerRecord.rev > 0) and offerRecord.rev or nil,
+        grev = (gameRecord and gameRecord.rev > 0) and gameRecord.rev or nil }
 end
 
 ---@param isLogin? boolean
@@ -182,7 +187,7 @@ end
 ---@field label string
 ---@field heldRevision fun(sync: Sync, playerName: string): integer
 
----@type table<"char"|"offers", RecordKind>
+---@type table<"char"|"offers"|"games", RecordKind>
 local RECORD_KINDS = {
     char = { requestType = "WANT", pullList = "wanted", label = "char",
         heldRevision = function(sync, playerName)
@@ -193,6 +198,11 @@ local RECORD_KINDS = {
         heldRevision = function(_, playerName)
             local offerRecord = addon.Offers.Get(playerName)
             return offerRecord and offerRecord.rev or 0
+        end },
+    games = { requestType = "WANTG", pullList = "wantedGames", label = "games",
+        heldRevision = function(_, playerName)
+            local gameRecord = addon.Games.Get(playerName)
+            return gameRecord and gameRecord.rev or 0
         end },
 }
 Sync.RECORD_KINDS = RECORD_KINDS
@@ -224,7 +234,7 @@ function Sync:_learnRealm(sender, names)
 end
 
 -- A peer announced `revision` for its record of `kind`. Starts a pull when I am behind; returns a note for the trace.
----@param kind "char"|"offers"
+---@param kind "char"|"offers"|"games"
 ---@param sender string
 ---@param revision integer
 ---@param now integer
@@ -272,7 +282,7 @@ function Sync:_retry(now)
 end
 
 -- Answers a WANT/WANTO for my own record. `via = "GUILD"` answers on GUILD (deduplicated per revision), else by whisper.
----@param kind "char"|"offers"
+---@param kind "char"|"offers"|"games"
 ---@param message table the request
 ---@param sender string
 ---@param answer table the message to send
@@ -349,6 +359,12 @@ function Sync:_onHELLO(message, sender)
         notes[#notes + 1] = "offers: invalid orev ignored"
     else
         notes[#notes + 1] = "offers: peer has none"
+    end
+    -- games record (protocol 2.3): same rule; a 2.2 peer simply never sends grev
+    if message.grev ~= nil and addon.Utility.SafeInteger(message.grev, 1, addon.Store.Horizon()) then
+        notes[#notes + 1] = self:_pull("games", sender, message.grev, now)
+    elseif message.grev ~= nil then
+        notes[#notes + 1] = "games: invalid grev ignored"
     end
     if message.login then -- a member just logged in: introduce myself after a random delay (storm control)
         if now - self.loginReplyBudgetStartedAt >= 60 then self.loginReplyBudgetStartedAt, self.loginReplyBudget = now, 0 end
@@ -440,6 +456,34 @@ function Sync:_onOFFERS(message, sender)
     offerRecord.dibs = dibs
     if addon.Offers.Put(offerRecord) then
         self.environment.onChange("offers")
+        self:_note("ok", "stored")
+    else
+        self:_note("ignored", "not newer than what I hold")
+    end
+end
+
+---@param message table
+---@param sender string
+function Sync:_onWANTG(message, sender)
+    local askedName = self:_requestedName(message, sender)
+    if not askedName then return end
+    local myGames = addon.Games.Mine(self:_me())   -- never a simulated record: those live outside the db
+    if not myGames then self:_note("ignored", "asked for my games but I have none") return end
+    self:_answer("games", message, sender, { t = "GAMES", games = recordUnderAskedName(myGames, askedName, message) },
+        myGames.rev or 0)
+end
+
+---@param message table
+---@param sender string
+function Sync:_onGAMES(message, sender)
+    local gameRecord = addon.Games.Sanitize(message.games)
+    if not gameRecord then error("invalid games") end
+    if canonical(gameRecord.name) ~= sender then   -- a peer authors only its own record
+        error(("games/sender mismatch: record %s from %s"):format(gameRecord.name, sender))
+    end
+    gameRecord.name = sender
+    if addon.Games.Put(gameRecord) then
+        self.environment.onChange("games")
         self:_note("ok", "stored")
     else
         self:_note("ignored", "not newer than what I hold")

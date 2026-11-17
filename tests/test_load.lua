@@ -90,6 +90,21 @@ return {
                 addon.Offers.Put({ name = "B-R", rev = 5, items = { [6661] = { bag = 1 } }, dibs = {} })
                 harness.truthy(pcall(addon.UI.SelectTab, "available"), "switching to the available tab failed")
                 harness.truthy(pcall(addon.UI.Refresh), "refreshing the available tab failed")
+                -- feature 014: the Games tab is built by the window and refreshes with records
+                addon.Games.Put({ name = "B-R", rev = 5, total = { won = 10, lost = 0, wins = 1, losses = 0 }, weeks = {},
+                    recent = { { c = 10, r = "W", t = 4 } } })
+                local okG, errG = pcall(addon.UI.SelectTab, "games")
+                harness.truthy(okG, "switching to the games tab failed: " .. tostring(errG))
+                harness.truthy(addon.GamesTab.widgets.flipButton, "the games tab was not built (see Log: window.games)")
+                harness.equal(addon.UI.CurrentTab(), "games")
+                if addon.IS_DEVELOPMENT_BUILD then
+                    harness.truthy(addon.SlashCommands.anim and addon.SlashCommands.game, "dev commands anim/game missing")
+                    harness.truthy(pcall(addon.SlashCommands.game, "sim 3"), "/tsd game sim failed")
+                    harness.equal(addon.Utility.Count(addon.Store.db.games), 1, "simulated players must not be stored")
+                    addon.SlashCommands.game("sim 0")
+                else
+                    harness.equal(addon.SlashCommands.anim, nil, "dev command in the live build")
+                end
                 addon.Trace.Add({ dir = "in", ch = "GUILD", peer = "B-R", mt = "HELLO", st = "ok", why = "char: up to date" })
                 local okD, errD = pcall(addon.UI.SelectTab, "debug")
                 harness.truthy(okD, "switching to the debug tab failed: " .. tostring(errD))

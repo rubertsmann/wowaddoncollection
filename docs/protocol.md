@@ -105,6 +105,25 @@ Additive minor change: a 2.1 peer ignores the new fields and keeps working as be
   first name), so 0.4.0 members answer; their records ("First-Realm") are mapped to the full name by `Utility.CanonicalName`.
   Verified offline against the real 0.4.0 code (git 7c0a09b): records flow in both directions.
 
-## 9. Version source
+## 9. Guild games: coin flip results (protocol 2.3, schema 4; feature 014)
+Additive minor change: a 2.2 peer ignores `grev` and drops `WANTG`/`GAMES` as unknown types, so everything else keeps syncing.
+- **Record** (`Core/Play/Games.lua`), one per character, authored only by that character, replaced as a whole by a newer `rev`:
+  `{ name, rev, total = {won, lost, wins, losses}, weeks = { ["YYYY-Www"] = {won, lost, wins, losses} } (<= 4 keys),
+  recent = { {c = stake, r = "W"|"L", t = time} } (<= 20, newest first) }`. Amounts are in **copper** (1g = 10 000c),
+  bookkeeping only (no real gold is read or moved). Week keys are ISO 8601 weeks in UTC.
+- **`HELLO` field `grev` (optional):** my record's `rev` when I have one. Pulled exactly like `orev`: `WANTG {names, via?}`
+  (whisper first, then GUILD with `via = "GUILD"` after 45/90 s), answered with `GAMES {games}`.
+- **Validation (whole record rejected on one bad entry):** safe name equal to the sender (canonical form); `rev` in
+  `[0, now + 1 day]`; totals integers with `won, lost <= 2e13` copper, `wins, losses <= 1 000 000` and consistent
+  (`wins <= won <= wins * 1e9`, same for losses); week keys `YYYY-Www` with year 2020..2100, week 1..53, not after the week
+  of `now + 1 day`; `recent` a dense array of at most 20 flips with `c` in 1..1e9 (1c to 100 000g), `r` "W"/"L", `t` in `[0, now + 1 day]`.
+  Results are self-reported (trust model): bounds and consistency are checked, truth is not.
+- **Announce:** a flip sends a coalesced HELLO (at once when the last one is 30 s old, else one when the 30 s are over).
+- **Stored data (schema 4):** `games[name]`. Migration 3 -> 4 only creates the table; it is re-validated on every load,
+  emptied by `/ts clean`, pruned with players who left the guild, and peer records are dropped by the version-change reset.
+- **Display:** names are escaped in `Core/View/Model.lua`. Dev-build simulated players (`/tsd game sim`) live outside the
+  database and are never sent.
+
+## 10. Version source
 One source: the TOC `## Version` (`Core/Base/Init.lua` reads it from addon metadata; a literal fallback exists for the offline
 tests and is pinned to the TOC by a test). The release workflow refuses a tag that does not match the TOC version.

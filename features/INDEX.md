@@ -18,3 +18,4 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 011 | Item categories and text search | verifying | 0.5.0 (UI + local cache) | - | [011-item-categories-and-text-search](011-item-categories-and-text-search/spec.md) |
 | 012 | Helper consolidation | verifying | next (internal refactor) | - | [012-helper-consolidation](012-helper-consolidation/spec.md) |
 | 013 | Naming types and logging overhaul | verifying | next (internal refactor) | - | [013-naming-types-and-logging-overhaul](013-naming-types-and-logging-overhaul/spec.md) |
+| 014 | Guild game base (coin flip) | verifying | 0.6.0 (protocol 2.3, schema 4) | - | [014-guild-game-base](014-guild-game-base/spec.md) |

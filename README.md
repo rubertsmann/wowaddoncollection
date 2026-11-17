@@ -45,6 +45,10 @@ profession icons at the top right of the Recipes tab (one click opens that profe
 `/ts clean` then `/ts clean confirm` (deletes everything stored locally). In the dev build use `/tsd`.
 The UI is available in English and German; profession and recipe names always follow your own game client.
 
+**Games tab:** a coin flip for the guild. Enter a stake in gold, pick heads or tails and flip; your wins and losses show
+on the guild leaderboard (this week / all time) next to everyone else's. For fun only: no gold changes hands, the addon
+never reads or moves your gold.
+
 ## Develop
 
 * Offline tests (pure logic): install LuaJIT (`winget install DEVCOM.LuaJIT`), then `luajit tests/run.lua`.
@@ -60,7 +64,8 @@ The UI is available in English and German; profession and recipe names always fo
   | `Core/Net/` | addon-channel communication | Codec, Guard, Sync, Communication |
   | `Core/Game/` | the WoW API boundary | Api, Events |
   | `Core/View/` | view-models for the UI (pure) | Model, Names, ItemText, Notify |
-  | `UI/` | frames | Window, Alerts, DevProbe (dev build only) |
+  | `Core/Play/` | guild games: rules, records, animation math (pure) | Games, CoinFlip |
+  | `UI/` | frames | Window, Animate, GamesTab, Alerts, DevProbe (dev build only) |
 
   Everything in `Core/` except `Core/Game/` is pure Lua and runs in the offline tests.
 * Naming, type annotations and logging rules: `docs/coding-conventions.md`. Every diagnostic goes through
@@ -72,7 +77,8 @@ The UI is available in English and German; profession and recipe names always fo
 ## Trust model
 
 Any guild member running the addon can create/claim/close orders and can only publish **their own** character record
-(and their own offers and dibs: nobody can set or remove another player's dib).
+(and their own offers and dibs: nobody can set or remove another player's dib; and their own coin-flip results, which are
+self-reported: other clients check that the numbers are well-formed and consistent, not that they are true).
 There is no authentication beyond guild membership, but nothing from outside the guild is processed: only guild
 messages and whispers from guild-roster members are accepted, and all received data is validated before it is stored or shown.
 

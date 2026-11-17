@@ -1,7 +1,8 @@
 local addonName, addon = ...
 
 -- Standalone window: "Recipes" tab (filter, search, reagents, crafters, request), "Orders" tab (shared board),
--- "Available" tab (recipe items guild members hold, with dibs) and "Debug" tab (network trace, diagnostic export).
+-- "Available" tab (recipe items guild members hold, with dibs), "Games" tab (UI/GamesTab.lua, feature 014) and "Debug" tab
+-- (network trace, diagnostic export). The tabs are one ordered list (tabDefinitions).
 -- Plain frames only (no secure templates except the profession and Craft buttons), so it never taints and is safe to
 -- open in combat. All text goes through Text (Locales/); game names are resolved for this client by Model/Names.
 -- tests/test_locale_files.lua fails on a hardcoded label.
@@ -584,23 +585,47 @@ local function refreshOffers()
     mainFrame.offersEmptyText:SetShown(#offerRows == 0)
 end
 
-function UI.Refresh()
-    if not mainFrame or not mainFrame:IsShown() then return end
-    refreshRecipes(); refreshDetail(); refreshOrders(); refreshOffers(); refreshDebug(); refreshProfessionBar()
+---@alias TabName "recipes"|"orders"|"available"|"games"|"debug"
+
+---@class TabDefinition
+---@field key TabName
+---@field label string display text
+---@field width number minimum button width
+
+-- The window's tabs, in button order (feature 014: one list instead of hand-placed buttons). A function, so the
+-- labels are read in the language active when the window is built.
+---@return TabDefinition[]
+local function tabDefinitions()
+    return {
+        { key = "recipes", label = Text["Recipes"], width = 90 },
+        { key = "orders", label = Text["Orders"], width = 90 },
+        { key = "available", label = Text["Available"], width = 90 },
+        { key = "games", label = Text["Games"], width = 80 },
+        { key = "debug", label = Text["Debug"], width = 70 },
+    }
+end
+UI.TabDefinitions = tabDefinitions
+
+local function refreshGames()
+    if mainFrame and windowState.tab == "games" and addon.GamesTab then addon.GamesTab.Refresh() end
 end
 
----@param tabName "recipes"|"orders"|"available"|"debug"
+function UI.Refresh()
+    if not mainFrame or not mainFrame:IsShown() then return end
+    refreshRecipes(); refreshDetail(); refreshOrders(); refreshOffers(); refreshGames(); refreshDebug(); refreshProfessionBar()
+end
+
+---@param tabName TabName
 local function selectTab(tabName)
     windowState.tab = tabName
     for key, tabFrame in pairs(mainFrame.tabs) do tabFrame:SetShown(key == tabName) end
-    mainFrame.tabButtons.recipes:SetEnabled(tabName ~= "recipes")
-    mainFrame.tabButtons.orders:SetEnabled(tabName ~= "orders")
-    mainFrame.tabButtons.available:SetEnabled(tabName ~= "available")
-    mainFrame.tabButtons.debug:SetEnabled(tabName ~= "debug")
+    for tabKey, tabButton in pairs(mainFrame.tabButtons) do tabButton:SetEnabled(tabName ~= tabKey) end
     UI.Refresh()
 end
----@param tabName "recipes"|"orders"|"available"|"debug"
+---@param tabName TabName
 UI.SelectTab = function(tabName) if mainFrame then selectTab(tabName) end end
+---@return TabName|nil the shown tab, nil while the window is closed or not built
+function UI.CurrentTab() return (mainFrame and mainFrame:IsShown()) and windowState.tab or nil end
 ---@return boolean
 function UI.OrdersVisible() return (mainFrame and mainFrame:IsShown() and windowState.tab == "orders") and true or false end
 
@@ -1318,6 +1343,10 @@ local function createTabFrame()
     return tabFrame
 end
 
+-- The window's widget helpers, for tabs built in other files (UI/GamesTab.lua).
+UI.Widgets = { ROW_HEIGHT = ROW_HEIGHT, CreateButton = createButton, CreateFontString = createFontString,
+    CreateScrollList = createScrollList, CreateSelectableRow = createSelectableRow, TimeAgo = timeAgo }
+
 local function buildMainFrame()
     local frameName = addon.FRAME_PREFIX .. "Frame"
     mainFrame = createDialogFrame(frameName)
@@ -1334,16 +1363,15 @@ local function buildMainFrame()
 
     local titleText = createFontString(mainFrame, "GameFontNormalLarge"); titleText:SetPoint("TOP", 0, -6); titleText:SetText(addon.TITLE)
 
-    mainFrame.tabButtons = {
-        recipes = createButton(mainFrame, Text["Recipes"], 90, 22, function() selectTab("recipes") end),
-        orders = createButton(mainFrame, Text["Orders"], 90, 22, function() selectTab("orders") end),
-        available = createButton(mainFrame, Text["Available"], 90, 22, function() selectTab("available") end),
-        debug = createButton(mainFrame, Text["Debug"], 70, 22, function() selectTab("debug") end),
-    }
-    mainFrame.tabButtons.recipes:SetPoint("TOPLEFT", 12, -30)
-    mainFrame.tabButtons.orders:SetPoint("LEFT", mainFrame.tabButtons.recipes, "RIGHT", 4, 0)
-    mainFrame.tabButtons.available:SetPoint("LEFT", mainFrame.tabButtons.orders, "RIGHT", 4, 0)
-    mainFrame.tabButtons.debug:SetPoint("LEFT", mainFrame.tabButtons.available, "RIGHT", 4, 0)
+    mainFrame.tabButtons = {}
+    local previousButton
+    for _, tab in ipairs(tabDefinitions()) do
+        local tabKey = tab.key
+        local tabButton = createButton(mainFrame, tab.label, tab.width, 22, function() selectTab(tabKey) end)
+        if previousButton then tabButton:SetPoint("LEFT", previousButton, "RIGHT", 4, 0) else tabButton:SetPoint("TOPLEFT", 12, -30) end
+        mainFrame.tabButtons[tabKey] = tabButton
+        previousButton = tabButton
+    end
     mainFrame.optionsButton = createButton(mainFrame, Text["Options"], 80, 22, function() addon.Alerts.OpenOptions() end)
     mainFrame.optionsButton:SetPoint("TOPRIGHT", -30, -30)
     mainFrame.tabs = {}
@@ -1355,6 +1383,10 @@ local function buildMainFrame()
     buildOrdersTab(mainFrame.tabs.orders)
     mainFrame.tabs.available = createTabFrame()
     buildAvailableTab(mainFrame.tabs.available)
+    mainFrame.tabs.games = createTabFrame()
+    if addon.GamesTab then
+        addon.Log.Protected("window.games", "building the games tab failed", addon.GamesTab.Build, mainFrame.tabs.games)
+    end
     buildDebugTab()
 
     addon.Events.On("DATA_CHANGED", UI.Refresh)

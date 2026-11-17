@@ -460,4 +460,35 @@ return {
         harness.truthy(not top:find("CF_API_TOKEN"), "CF_API_TOKEN must be scoped to the packager step, not the whole workflow")
         harness.truthy(wf:find("CF_API_TOKEN"), "packager step lost its token")
     end,
+    ---------------------------------------------------------------- feature 014: protocol 2.3, schema 4
+    ["014: protocol 2.3 and schema 4 are pinned; migration 3 -> 4 adds games and keeps everything else (RF4)"] = function(harness)
+        local addon = harness.addon({ now = 1.8e9 })
+        harness.equal(addon.PROTOCOL_MAJOR, 2); harness.equal(addon.PROTOCOL_MINOR, 3); harness.equal(addon.Store.SCHEMA, 4)
+        local sv = { schema = 3, chars = {}, catalog = {}, orders = {}, ui = { lastStake = 50 }, me = "Me-R",
+            offers = { ["A-R"] = { name = "A-R", rev = 1.79e9, items = { [6661] = { bag = 1 } }, dibs = {} } }, hidden = {} }
+        local out, status = addon.Store.Init(sv)
+        harness.equal(status, "migrated"); harness.equal(out.schema, 4)
+        harness.equal(type(out.games), "table"); harness.truthy(out.offers["A-R"]); harness.equal(out.ui.lastStake, 50)
+        -- a schema-5 file (a later build) stays untouched and this session does not save
+        local later = harness.addon({ now = 1.8e9 })
+        local saved = { schema = 5, games = { ["X-R"] = { future = true } } }
+        local kept, laterStatus = later.Store.Init(saved)
+        harness.equal(laterStatus, "newer"); harness.truthy(kept == saved); harness.truthy(saved.games["X-R"].future)
+        harness.truthy(later.db.readonly)
+        harness.equal(select(2, later.Games.Flip("Me-R", 10, "H", 1.8e9, function() return 0.1 end)), "readonly")
+    end,
+
+    ["014: clean, peer reset and roster prune treat game records like offers"] = function(harness)
+        local addon = harness.addon({ now = 1.8e9 })
+        local random = function() return 0.1 end
+        addon.Games.Flip("Me-R", 10, "H", 1.8e9, random)
+        addon.Games.Flip("Peer-R", 10, "H", 1.8e9, random)
+        addon.Games.Flip("Gone-R", 10, "H", 1.8e9, random)
+        addon.Store.Prune({ ["Me-R"] = true, ["Peer-R"] = true }, "Me-R")
+        harness.equal(addon.Games.Get("Gone-R"), nil); harness.truthy(addon.Games.Get("Peer-R"))
+        local removed = addon.Store.ResetPeerData("Me-R")
+        harness.equal(removed.games, 1); harness.truthy(addon.Games.Get("Me-R")); harness.equal(addon.Games.Get("Peer-R"), nil)
+        addon.Store.Clean()
+        harness.equal(addon.Games.Get("Me-R"), nil)
+    end,
 }

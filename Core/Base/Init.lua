@@ -41,7 +41,7 @@ addon.VERSION = addon.BASE_VERSION
 ---@type integer
 addon.PROTOCOL_MAJOR = 2
 ---@type integer
-addon.PROTOCOL_MINOR = 2
+addon.PROTOCOL_MINOR = 3
 ---@type integer alias: the major is what the payload "v" field carries
 addon.PROTOCOL = addon.PROTOCOL_MAJOR
 ---@type string

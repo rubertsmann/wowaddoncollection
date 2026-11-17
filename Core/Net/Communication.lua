@@ -51,6 +51,8 @@ Communication.buffers = {}
 Communication.tokens = BUCKET_CAPACITY
 ---@type integer
 Communication.lastHello = 0
+---@type integer|nil server time when a coalesced HELLO is due (Communication.RequestHelloSoon); nil = none due
+Communication.helloDueAt = nil
 ---@type integer
 Communication.messageCounter = 0
 ---@type integer random per session (Communication.Init): ids never repeat across /reload while stale buffers exist
@@ -111,7 +113,7 @@ Communication.InterpretResult = interpretResult
 ------------------------------------------------------------------ outbound
 
 ---@type table<string, boolean> small single-chunk control messages that jump the queue
-local PRIORITY_TYPES = { ORDER = true, WANT = true, WANTO = true, HELLO = true }
+local PRIORITY_TYPES = { ORDER = true, WANT = true, WANTO = true, WANTG = true, HELLO = true }
 
 -- Encodes and queues a message (Sync's environment.send). Failures are traced and logged, never thrown.
 ---@param message table
@@ -351,7 +353,28 @@ function Communication.RequestHello(isLogin, force)
     local now = addon.Utility.Now()
     if not force and not isLogin and now - Communication.lastHello < 30 then return end
     Communication.lastHello = now
+    Communication.helloDueAt = nil   -- this HELLO carries every change so far
     Communication.sync:Hello(isLogin)
+end
+
+-- Announces a change that peers may pull lazily (a coin flip): a HELLO now if the last one is at least 30 s old, else one
+-- HELLO when those 30 s are over (Communication.SendDueHello, from the 1 s pump). Ten flips in a minute = 2-3 HELLOs.
+function Communication.RequestHelloSoon()
+    if not Communication.active then return end
+    local now = addon.Utility.Now()
+    if now - Communication.lastHello >= 30 then
+        Communication.RequestHello(false, true)
+    elseif not Communication.helloDueAt then
+        Communication.helloDueAt = Communication.lastHello + 30
+    end
+end
+
+-- Sends the coalesced HELLO once it is due. Called every second by the pump.
+---@param now integer
+function Communication.SendDueHello(now)
+    if Communication.active and Communication.helloDueAt and now >= Communication.helloDueAt then
+        Communication.RequestHello(false, true)
+    end
 end
 
 ---@param order Order
@@ -501,6 +524,7 @@ function Communication.Init()
             pump(pumpedSeconds)
             if secondsSinceTick >= 1 then
                 Communication.sync:Tick(addon.Utility.Now())
+                Communication.SendDueHello(addon.Utility.Now())
             end
         end
         if secondsSinceTick >= 1 then secondsSinceTick = 0 end

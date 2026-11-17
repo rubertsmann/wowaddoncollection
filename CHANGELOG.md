@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- **Games tab** (feature 014, protocol 2.3, schema 4): an animated coin flip. Enter a stake in gold, silver and copper (1c to 100 000g), pick heads or tails,
+  flip; the coin is tossed and spins before it lands. Every member's wins and losses (gold amounts) appear on a guild
+  leaderboard (this week / all time), with the 15 latest flips and last week's winner. For fun only: no gold changes
+  hands, the addon never reads or moves gold. 2.2 members keep syncing everything else. Dev build: `/tsd anim` (animation
+  probe), `/tsd anim speed <x>`, `/tsd game sim <n>`; offline: `luajit tools/coinflip.lua`.
 - Internal: duplicated helpers merged into one copy each (`Util.Count/SortedKeys/Wipe/Refill/SanitizeMap/Me/ChatSafe`,
   `Store.Knows/RecipeCount`); the safer variant won where copies differed (feature 012). No player-visible change.
 - Internal: `Core/` grouped into layer folders `Base`, `Debug`, `Data`, `Net`, `Game`, `View` (see README "Develop").

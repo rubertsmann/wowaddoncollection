@@ -793,3 +793,21 @@ function Api.OpenWindowHasRecipe(recipeID)
     for _, listedRecipeID in ipairs(recipeIDs) do if listedRecipeID == recipeID then return true end end
     return false
 end
+
+------------------------------------------------------------------ guild games (feature 014)
+
+-- A number in [0, 1) for game outcomes (Games.Flip takes it as its random function, so tests inject their own).
+---@return number
+function Api.Random() return math.random() end
+
+-- The coin sound played on a won flip, or nil when this client has no such sound kit.
+---@return integer|nil
+function Api.CoinSoundKit()
+    return SOUNDKIT and (SOUNDKIT.LOOT_WINDOW_COIN_SOUND or SOUNDKIT.IG_BACKPACK_COIN_SELECT) or nil
+end
+
+-- Plays a sound kit; never raises (a missing sound must not break the flip).
+---@param soundKitID integer|nil
+function Api.PlaySound(soundKitID)
+    if soundKitID and PlaySound then tryCall("PlaySound", PlaySound, soundKitID) end
+end

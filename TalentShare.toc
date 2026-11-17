@@ -26,6 +26,8 @@ Core\Net\Codec.lua
 Core\Net\Guard.lua
 Core\Data\Orders.lua
 Core\Data\Offers.lua
+Core\Play\Games.lua
+Core\Play\CoinFlip.lua
 Core\Net\Sync.lua
 Core\View\Model.lua
 Core\View\ItemText.lua
@@ -35,5 +37,7 @@ Core\Debug\Diagnostics.lua
 Core\Game\Events.lua
 
 UI\Window.lua
+UI\Animate.lua
+UI\GamesTab.lua
 UI\Alerts.lua
 UI\DevProbe.lua
