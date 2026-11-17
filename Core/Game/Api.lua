@@ -806,6 +806,17 @@ function Api.CoinSoundKit()
     return SOUNDKIT and (SOUNDKIT.LOOT_WINDOW_COIN_SOUND or SOUNDKIT.IG_BACKPACK_COIN_SELECT) or nil
 end
 
+-- The first of `soundNames` this client's SOUNDKIT table has, or nil.
+---@param soundNames string[]
+---@return integer|nil
+function Api.SoundKitFor(soundNames)
+    if not SOUNDKIT then return nil end
+    for _, soundName in ipairs(soundNames) do
+        if SOUNDKIT[soundName] then return SOUNDKIT[soundName] end
+    end
+    return nil
+end
+
 -- Plays a sound kit; never raises (a missing sound must not break the flip).
 ---@param soundKitID integer|nil
 function Api.PlaySound(soundKitID)

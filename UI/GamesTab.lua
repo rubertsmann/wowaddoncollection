@@ -30,7 +30,8 @@ local FEED_ROWS = 8
 ---@field flipping boolean the coin is in the air
 ---@field refreshPending boolean a refresh was asked for while flipping
 ---@field face "H"|"T"|nil the face the coin texture shows
-GamesTab.state = { pick = "H", scope = "week", flipping = false, refreshPending = false }
+---@field game GameKey the selected game (its panel and its own leaderboard)
+GamesTab.state = { pick = "H", scope = "week", game = "coin", flipping = false, refreshPending = false }
 
 ---@type table widgets of the built tab (nil fields until Build ran)
 local widgets = {}
@@ -89,6 +90,8 @@ local function maskCircle(owner, texture)
         texture:AddMaskTexture(mask)
     end)
 end
+GamesTab.MaskCircle = maskCircle
+GamesTab.GLOW_TEXTURE = GLOW_TEXTURE
 
 ---@param owner table
 ---@param layer string draw layer
@@ -207,8 +210,7 @@ local function land(result)
     end
     GamesTab.state.flipping = false
     widgets.flipButton:Enable()
-    GamesTab.state.refreshPending = false
-    GamesTab.Refresh()
+    GamesTab.SetBusy(false)   -- unlocks the game selector and runs the refresh that waited
 end
 
 ---@param refusal FlipRefusal|nil
@@ -217,6 +219,25 @@ local function refusalText(refusal)
     if refusal == "readonly" then return Text["Saved data is read-only in this session."] end
     if refusal == "name" then return Text["Your character is not known yet."] end
     return Format(Text["Enter a stake from 1c to {max}"], { max = money(addon.Games.MAXIMUM_STAKE) })
+end
+GamesTab.RefusalText = refusalText
+GamesTab.Money = money
+GamesTab.Settings = settings
+
+-- Whether any game is animating (the board waits, the game selector is locked).
+---@return boolean
+function GamesTab.IsBusy()
+    return GamesTab.state.flipping or (addon.SlotMachine ~= nil and addon.SlotMachine.state.spinning) or false
+end
+
+-- Locks or unlocks the game selector while a game animates; unlocking runs the refresh that waited.
+---@param busy boolean
+function GamesTab.SetBusy(busy)
+    for gameKey, button in pairs(widgets.gameButtons or {}) do button:SetEnabled(not busy and gameKey ~= GamesTab.state.game) end
+    if not busy and not GamesTab.IsBusy() then
+        GamesTab.state.refreshPending = false
+        GamesTab.Refresh()
+    end
 end
 
 -- The Flip button: decide and store the flip, announce it, then animate the reveal. Nothing happens while a coin flies.
@@ -234,6 +255,7 @@ function GamesTab.Flip()
     settings().lastStakeCopper = stake
     addon.Events.Fire("GAMES_CHANGED")                   -- announce (coalesced HELLO)
     state.flipping = true
+    GamesTab.SetBusy(true)
     widgets.flipButton:Disable()
     widgets.resultText:SetText("")
     refreshPortrait()
@@ -254,38 +276,31 @@ local function boxNumber(box)
     return tonumber(text)
 end
 
--- The stake the three boxes hold, in copper, or nil when a box is out of range (Games.Flip then refuses it).
----@return integer|nil
-function GamesTab.ReadStake()
-    if not widgets.goldBox then return nil end
-    return addon.Games.Money(boxNumber(widgets.goldBox), boxNumber(widgets.silverBox), boxNumber(widgets.copperBox))
-end
-
--- Fills the three boxes from a copper amount (empty instead of 0, except copper when everything is 0).
----@param copper integer
-function GamesTab.WriteStake(copper)
-    local gold, silver, rest = addon.Games.SplitMoney(copper)
-    widgets.goldBox:SetText(gold > 0 and tostring(gold) or "")
-    widgets.silverBox:SetText(silver > 0 and tostring(silver) or "")
-    widgets.copperBox:SetText((rest > 0 or (gold == 0 and silver == 0)) and tostring(rest) or "")
-end
+---@class StakeRow
+---@field goldBox table
+---@field silverBox table
+---@field copperBox table
+---@field Read fun(): integer|nil copper, nil when a box is out of range
+---@field Write fun(copper: integer)
+---@field SetEnabled fun(enabled: boolean)
 
 ---@param parent table
 ---@param anchor table
----@param anchorPoint string
 ---@param x number
 ---@param width number
 ---@param maximumLetters integer
 ---@param icon string
+---@param row StakeRow
+---@param onEnter fun()
 ---@return table editBox
-local function moneyBox(parent, anchor, anchorPoint, x, width, maximumLetters, icon)
+local function moneyBox(parent, anchor, x, width, maximumLetters, icon, row, onEnter)
     local box = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
-    box:SetSize(width, 20); box:SetPoint("LEFT", anchor, anchorPoint, x, 0)
+    box:SetSize(width, 20); box:SetPoint("LEFT", anchor, "RIGHT", x, 0)
     box:SetAutoFocus(false); box:SetNumeric(true); box:SetMaxLetters(maximumLetters)
-    box:SetScript("OnEnterPressed", function(self) self:ClearFocus(); GamesTab.Flip() end)
+    box:SetScript("OnEnterPressed", function(self) self:ClearFocus(); onEnter() end)
     box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     box:SetScript("OnTabPressed", function(self)
-        local order = { widgets.goldBox, widgets.silverBox, widgets.copperBox }
+        local order = { row.goldBox, row.silverBox, row.copperBox }
         for index, other in ipairs(order) do
             if other == self then order[index % #order + 1]:SetFocus() return end
         end
@@ -296,7 +311,42 @@ local function moneyBox(parent, anchor, anchorPoint, x, width, maximumLetters, i
     return box
 end
 
------------------------------------------------------------------- leaderboard and feed
+-- "Stake [gold] g [silver] s [copper] c" at TOPLEFT (x, y) of parent. Enter in any box calls onEnter.
+---@param parent table
+---@param x number
+---@param y number
+---@param onEnter fun()
+---@return StakeRow
+function GamesTab.CreateStakeRow(parent, x, y, onEnter)
+    local row = {}
+    local label = addon.UI.Widgets.CreateFontString(parent, "GameFontHighlight")
+    label:SetPoint("TOPLEFT", x, y); label:SetText(Text["Stake"])
+    row.goldBox = moneyBox(parent, label, 10, 62, 6, COIN_ICON.gold, row, onEnter)
+    row.silverBox = moneyBox(parent, row.goldBox.icon, 10, 28, 2, COIN_ICON.silver, row, onEnter)
+    row.copperBox = moneyBox(parent, row.silverBox.icon, 10, 28, 2, COIN_ICON.copper, row, onEnter)
+    function row.Read() return addon.Games.Money(boxNumber(row.goldBox), boxNumber(row.silverBox), boxNumber(row.copperBox)) end
+    function row.Write(copper)
+        local gold, silver, rest = addon.Games.SplitMoney(copper)
+        row.goldBox:SetText(gold > 0 and tostring(gold) or "")
+        row.silverBox:SetText(silver > 0 and tostring(silver) or "")
+        row.copperBox:SetText((rest > 0 or (gold == 0 and silver == 0)) and tostring(rest) or "")
+    end
+    function row.SetEnabled(enabled)
+        for _, box in ipairs({ row.goldBox, row.silverBox, row.copperBox }) do
+            if box.SetEnabled then box:SetEnabled(enabled) end
+        end
+    end
+    return row
+end
+
+-- The coin flip's stake, in copper, or nil when a box is out of range (Games.Flip then refuses it).
+---@return integer|nil
+function GamesTab.ReadStake() return widgets.coinStake and widgets.coinStake.Read() or nil end
+
+---@param copper integer
+function GamesTab.WriteStake(copper) widgets.coinStake.Write(copper) end
+
+------------------------------------------------------------------ game selector, leaderboard and feed
 
 ---@param pick "H"|"T"
 local function selectPick(pick)
@@ -314,18 +364,40 @@ local function selectScope(scope)
     GamesTab.Refresh()
 end
 
--- Redraws the leaderboard, the feed and last week's winner (deferred while the coin flies).
+-- Shows one game's panel and its own leaderboard. Ignored while a game animates.
+---@param gameKey GameKey
+function GamesTab.SelectGame(gameKey)
+    if GamesTab.IsBusy() or not widgets.panels or not widgets.panels[gameKey] then return end
+    GamesTab.state.game = gameKey
+    settings().gameKey = gameKey
+    for key, panel in pairs(widgets.panels) do panel:SetShown(key == gameKey) end
+    for key, button in pairs(widgets.gameButtons) do button:SetEnabled(key ~= gameKey) end
+    GamesTab.Refresh()
+end
+
+-- per game: feed title, empty-board text and the plays column header
+---@param gameKey GameKey
+---@return { feed: string, empty: string, plays: string }
+local function boardLabels(gameKey)
+    if gameKey == "slots" then return { feed = Text["Recent spins"], empty = Text["No spins yet"], plays = Text["Spins"] } end
+    return { feed = Text["Recent flips"], empty = Text["No flips yet"], plays = Text["Flips"] }
+end
+
+-- Redraws the selected game's leaderboard, feed and last week's winner (deferred while a game animates).
 function GamesTab.Refresh()
     if not widgets.leaderboardList then return end
-    if GamesTab.state.flipping then GamesTab.state.refreshPending = true return end
+    if GamesTab.IsBusy() then GamesTab.state.refreshPending = true return end
+    local gameKey = GamesTab.state.game
     local now = addon.Utility.Now()
     local records = addon.Games.AllRecords()
     local myName = addon.Utility.Me()
-    local rows = addon.Model.BuildLeaderboardRows(records, GamesTab.state.scope, addon.Games.PeriodKey(now), myName)
+    local labels = boardLabels(gameKey)
+    local rows = addon.Model.BuildLeaderboardRows(records, GamesTab.state.scope, addon.Games.PeriodKey(now), myName, gameKey)
     widgets.leaderboardList:SetData(rows)
-    widgets.emptyText:SetShown(#rows == 0)
-    widgets.feedList:SetData(addon.Model.BuildFlipFeedRows(records, myName, 15))
-    local winner = addon.Model.PreviousWinner(records, addon.Games.PreviousPeriodKey(now))
+    widgets.emptyText:SetText(labels.empty); widgets.emptyText:SetShown(#rows == 0)
+    widgets.feedTitle:SetText(labels.feed); widgets.playsHeader:SetText(labels.plays)
+    widgets.feedList:SetData(addon.Model.BuildFlipFeedRows(records, myName, 15, gameKey))
+    local winner = addon.Model.PreviousWinner(records, addon.Games.PreviousPeriodKey(now), gameKey)
     widgets.winnerText:SetText(winner and Format(Text["Last week's winner: {name} ({gold})"],
         { name = displayName(winner.nameRaw, winner.name), gold = signedGold(winner.net) }) or "")
 end
@@ -343,7 +415,7 @@ local function column(parent, width, justify, x)
 end
 
 -- column layout (x, width) of the leaderboard, shared by the header and the rows
-local COLUMNS = { rank = { 0, 24 }, name = { 30, 150 }, net = { 182, 72 }, won = { 256, 66 }, lost = { 324, 66 }, flips = { 392, 38 } }
+local COLUMNS = { rank = { 0, 24 }, name = { 30, 120 }, net = { 152, 86 }, won = { 240, 80 }, lost = { 322, 70 }, flips = { 394, 40 } }
 
 ---@param parent table
 ---@return table row
@@ -376,9 +448,9 @@ end
 ---@return table row
 local function createFeedRow(parent)
     local row = CreateFrame("Frame", nil, parent)
-    row.name = column(row, 180, "LEFT", 4)
-    row.net = column(row, 90, "RIGHT", 188)
-    row.when = column(row, 140, "RIGHT", 286)
+    row.name = column(row, 170, "LEFT", 4)
+    row.net = column(row, 130, "RIGHT", 178)
+    row.when = column(row, 116, "RIGHT", 310)
     return row
 end
 
@@ -392,18 +464,11 @@ end
 
 ------------------------------------------------------------------ build
 
----@param tabFrame table the tab's frame (about 756 x 450)
-function GamesTab.Build(tabFrame)
+---@param panel table the coin flip's panel (300 x 400)
+local function buildCoinPanel(panel)
     local Widgets = addon.UI.Widgets
-    local state = GamesTab.state
-    state.scope = (settings().gamesScope == "all") and "all" or "week"
-
-    -- left column: the coin
-    local title = Widgets.CreateFontString(tabFrame, "GameFontNormalLarge", "CENTER")
-    title:SetPoint("TOPLEFT", 0, -4); title:SetWidth(290); title:SetText(Text["Coin flip"])
-
-    local coinHolder = CreateFrame("Frame", nil, tabFrame)
-    coinHolder:SetSize(120, 200); coinHolder:SetPoint("TOPLEFT", 85, -28)
+    local coinHolder = CreateFrame("Frame", nil, panel)
+    coinHolder:SetSize(120, 200); coinHolder:SetPoint("TOPLEFT", 85, -4)
     widgets.coinHolder = coinHolder
     local glow = coinHolder:CreateTexture(nil, "BACKGROUND", nil, 0)
     glow:SetSize(COIN_SIZE * 1.6, COIN_SIZE * 1.6); glow:SetTexture(GLOW_TEXTURE); glow:SetBlendMode("ADD")
@@ -411,31 +476,56 @@ function GamesTab.Build(tabFrame)
     widgets.glow = glow
     local coin = buildCoin(coinHolder)
     glow:SetPoint("CENTER", coin, "CENTER", 0, 0)
-    state.face = nil
+    GamesTab.state.face = nil
     applyPose(addon.CoinFlip.Pose(addon.CoinFlip.DURATION, "H"))
 
-    widgets.headsButton = Widgets.CreateButton(tabFrame, Text["Heads"], 100, 22, function() selectPick("H") end)
-    widgets.headsButton:SetPoint("TOPLEFT", 40, -236)
-    widgets.tailsButton = Widgets.CreateButton(tabFrame, Text["Tails"], 100, 22, function() selectPick("T") end)
+    widgets.headsButton = Widgets.CreateButton(panel, Text["Heads"], 100, 22, function() selectPick("H") end)
+    widgets.headsButton:SetPoint("TOPLEFT", 40, -212)
+    widgets.tailsButton = Widgets.CreateButton(panel, Text["Tails"], 100, 22, function() selectPick("T") end)
     widgets.tailsButton:SetPoint("LEFT", widgets.headsButton, "RIGHT", 10, 0)
 
-    local stakeLabel = Widgets.CreateFontString(tabFrame, "GameFontHighlight")
-    stakeLabel:SetPoint("TOPLEFT", 20, -272); stakeLabel:SetText(Text["Stake"])
-    widgets.goldBox = moneyBox(tabFrame, stakeLabel, "RIGHT", 10, 62, 6, COIN_ICON.gold)
-    widgets.silverBox = moneyBox(tabFrame, widgets.goldBox.icon, "RIGHT", 10, 28, 2, COIN_ICON.silver)
-    widgets.copperBox = moneyBox(tabFrame, widgets.silverBox.icon, "RIGHT", 10, 28, 2, COIN_ICON.copper)
+    widgets.coinStake = GamesTab.CreateStakeRow(panel, 20, -248, function() GamesTab.Flip() end)
+    widgets.goldBox, widgets.silverBox, widgets.copperBox = widgets.coinStake.goldBox, widgets.coinStake.silverBox, widgets.coinStake.copperBox
     GamesTab.WriteStake(settings().lastStakeCopper or DEFAULT_STAKE)
 
-    widgets.flipButton = Widgets.CreateButton(tabFrame, Text["Flip"], 210, 26, function() GamesTab.Flip() end)
-    widgets.flipButton:SetPoint("TOPLEFT", 40, -302)
+    widgets.flipButton = Widgets.CreateButton(panel, Text["Flip"], 210, 26, function() GamesTab.Flip() end)
+    widgets.flipButton:SetPoint("TOPLEFT", 40, -278)
 
-    widgets.resultText = Widgets.CreateFontString(tabFrame, "GameFontNormalLarge", "CENTER")
-    widgets.resultText:SetPoint("TOPLEFT", 0, -340); widgets.resultText:SetWidth(290)
+    widgets.resultText = Widgets.CreateFontString(panel, "GameFontNormalLarge", "CENTER")
+    widgets.resultText:SetPoint("TOPLEFT", 0, -316); widgets.resultText:SetWidth(290)
+    selectPick(GamesTab.state.pick)
+end
+
+---@param tabFrame table the tab's frame (about 756 x 450)
+function GamesTab.Build(tabFrame)
+    local Widgets = addon.UI.Widgets
+    local state = GamesTab.state
+    state.scope = (settings().gamesScope == "all") and "all" or "week"
+    state.game = (settings().gameKey == "slots") and "slots" or "coin"
+
+    -- left column: game selector and one panel per game
+    widgets.gameButtons, widgets.panels = {}, {}
+    local gameLabels = { coin = Text["Coin flip"], slots = Text["Slots"] }
+    local previousButton
+    for _, gameKey in ipairs(addon.Games.ORDER) do
+        local key = gameKey
+        local button = Widgets.CreateButton(tabFrame, gameLabels[key], 100, 22, function() GamesTab.SelectGame(key) end)
+        if previousButton then button:SetPoint("LEFT", previousButton, "RIGHT", 6, 0) else button:SetPoint("TOPLEFT", 40, 0) end
+        widgets.gameButtons[key] = button
+        previousButton = button
+        local panel = CreateFrame("Frame", nil, tabFrame)
+        panel:SetPoint("TOPLEFT", 0, -28); panel:SetSize(300, 400)
+        widgets.panels[key] = panel
+    end
+    buildCoinPanel(widgets.panels.coin)
+    if addon.SlotMachine then
+        addon.Log.Protected("games.slots", "building the slot machine failed", addon.SlotMachine.Build, widgets.panels.slots)
+    end
 
     local note = Widgets.CreateFontString(tabFrame, "GameFontDisableSmall", "CENTER")
     note:SetPoint("BOTTOMLEFT", 0, 4); note:SetWidth(290); note:SetText(Text["For fun only: no gold changes hands."])
 
-    -- right column: leaderboard and feed
+    -- right column: the selected game's leaderboard and feed
     local right = CreateFrame("Frame", nil, tabFrame)
     right:SetPoint("TOPLEFT", 310, 0); right:SetPoint("BOTTOMRIGHT", 0, 0)
     widgets.winnerText = Widgets.CreateFontString(right, "GameFontNormal")
@@ -451,6 +541,7 @@ function GamesTab.Build(tabFrame)
     for columnKey, label in pairs(headerLabels) do
         local headerText = column(header, COLUMNS[columnKey][2], columnKey == "name" and "LEFT" or "RIGHT", COLUMNS[columnKey][1])
         headerText:SetFontObject("GameFontNormalSmall"); headerText:SetText(label)
+        if columnKey == "flips" then widgets.playsHeader = headerText end
     end
 
     widgets.leaderboardList = Widgets.CreateScrollList(right, 446, Widgets.ROW_HEIGHT * 9, createLeaderboardRow, fillLeaderboardRow)
@@ -458,11 +549,11 @@ function GamesTab.Build(tabFrame)
     widgets.emptyText = Widgets.CreateFontString(right, "GameFontDisable", "CENTER")
     widgets.emptyText:SetPoint("TOP", widgets.leaderboardList, "TOP", 0, -60); widgets.emptyText:SetText(Text["No flips yet"])
 
-    local feedTitle = Widgets.CreateFontString(right, "GameFontNormal")
-    feedTitle:SetPoint("TOPLEFT", 0, -258); feedTitle:SetText(Text["Recent flips"])
+    widgets.feedTitle = Widgets.CreateFontString(right, "GameFontNormal")
+    widgets.feedTitle:SetPoint("TOPLEFT", 0, -258); widgets.feedTitle:SetText(Text["Recent flips"])
     widgets.feedList = Widgets.CreateScrollList(right, 446, Widgets.ROW_HEIGHT * FEED_ROWS, createFeedRow, fillFeedRow)
     widgets.feedList:SetPoint("TOPLEFT", 0, -276)
 
-    selectPick(state.pick)
-    selectScope(state.scope)
+    widgets.weekButton:SetEnabled(state.scope ~= "week"); widgets.allButton:SetEnabled(state.scope ~= "all")
+    GamesTab.SelectGame(state.game)
 end

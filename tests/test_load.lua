@@ -96,6 +96,10 @@ return {
                 local okG, errG = pcall(addon.UI.SelectTab, "games")
                 harness.truthy(okG, "switching to the games tab failed: " .. tostring(errG))
                 harness.truthy(addon.GamesTab.widgets.flipButton, "the games tab was not built (see Log: window.games)")
+                harness.truthy(addon.SlotMachine.widgets.spinButton, "the slot machine was not built (see Log: games.slots)")
+                addon.GamesTab.SelectGame("slots")
+                local okS, errS = pcall(addon.SlotMachine.Spin)
+                harness.truthy(okS, "spinning failed: " .. tostring(errS))
                 harness.equal(addon.UI.CurrentTab(), "games")
                 if addon.IS_DEVELOPMENT_BUILD then
                     harness.truthy(addon.SlashCommands.anim and addon.SlashCommands.game, "dev commands anim/game missing")

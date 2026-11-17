@@ -8,8 +8,15 @@ flips against "the house" (50/50, win = +stake, loss = -stake). The coin is toss
 glows and plays a coin sound, a loss shakes. Every guild member's wins and losses show on a leaderboard (this week / all
 time), with the 15 latest flips and last week's winner. For fun only: the addon never reads, checks or moves real gold.
 
+Second game: a **slot machine** (3 reels x 3 rows, 5 paylines: the rows and both diagonals; three equal symbols on a line
+pay 3x to 75x the stake, lines add up, about 94% return). The reels spin and stop left to right, the lever is pulled,
+the cabinet lights chase; a win highlights each winning line in turn, makes the winning symbols glow and pulse, counts the
+payout up and, from 15x or on a coin line (jackpot), rains coins. Each game has its own leaderboard and recent list.
+
 ## How to use
-- UI: `/ts` -> **Games**. Left: coin, Heads/Tails, "Stake (gold)", **Flip**. Right: last week's winner, This week / All time,
+- UI: `/ts` -> **Games**; the buttons at the top left pick the game (locked while a game animates). Slots: stake
+  boxes, **Spin** (or click the lever's knob), hover the machine for the paytable.
+- Coin flip panel: coin, Heads/Tails, "Stake (gold)", **Flip**. Right: last week's winner, This week / All time,
   leaderboard (rank, player, net, won, lost, wins/losses; my row highlighted), Recent flips.
 - Three stake boxes (gold, silver, copper; Tab moves between them, Enter flips). The stake is remembered in copper
   (`db.ui.lastStakeCopper`), the scope too (`db.ui.gamesScope`). Amounts show as "1g 50s 25c" in coin colours.
@@ -25,6 +32,9 @@ time), with the 15 latest flips and last week's winner. For fun only: the addon 
 - Order of a flip: `Games.Flip` decides and **stores** the result -> `GAMES_CHANGED` (announce) -> coin tween
   (`Animate.Tween("coin", ...)` applying `CoinFlip.Pose`) -> landing effects -> leaderboard refresh. The Flip button is
   disabled and the leaderboard refresh deferred while the coin flies; a `/reload` mid-flip keeps the stored result.
+- Slots: `Core/Play/Slots.lua` (strip of 35 symbols, `Spin` draws one stop per reel and stores the play with
+  `Games.RecordPlay` in `record.slots` before the reels move; `ReelPose` = staggered reel motion with overshoot),
+  `UI/SlotMachine.lua` (cabinet, reels cropped per frame, lever, lights, paylines, shower).
 - Modules: `Core/Play/Games.lua` (rules, records, validation, ISO weeks, simulated players), `Core/Play/CoinFlip.lua`
   (pure pose math), `Core/View/Model.lua` (`BuildLeaderboardRows`, `BuildFlipFeedRows`, `PreviousWinner`),
   `UI/Animate.lua` (FadeIn, Pulse, Shake, Glow on AnimationGroups with fallbacks; shared OnUpdate tween driver),

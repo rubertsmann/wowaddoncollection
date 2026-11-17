@@ -19,6 +19,7 @@ Result after work:    `luajit tests/run.lua` -> 242 passed, 0 failed (2026-11-17
 | R9 | "for fun only" note, no gold API used | grep for GetMoney/trade/mail calls in new files; in game | IN-GAME | NOT-VERIFIED | OFFLINE part: grep GetMoney, PickupPlayerMoney, SetTradeMoney, SendMail, SetSendMailMoney in Core/Play, UI/GamesTab.lua, UI/Animate.lua -> no match | offline pass; note in game pending | 2026-11-17 |
 | R10 | 2.2 peers and 0.5.x files unaffected | test_hardening, test_sync; one client on 0.5.x | MULTI-CLIENT | NOT-VERIFIED | OFFLINE part: test_games_sync (HELLO without grev), test_hardening schema-5 readonly | offline pass | 2026-11-17 |
 | R11 | offline tooling + dev commands | suite runs; `luajit tools/coinflip.lua`; `/tsd anim`, `/tsd game sim` | IN-GAME | NOT-VERIFIED | OFFLINE part: suite + tools/coinflip.lua run; test_load calls `game sim 3` in the dev identity | offline pass; /tsd anim pending | 2026-11-17 |
+| R12 | slot machine: paylines, payouts, stored before reels move, own board, selector | test_slots (8), test_games_ui slot tests (3), test_load spin; in game: look of reels/lines/shower | IN-GAME | NOT-VERIFIED | OFFLINE part: 254 passed | offline pass; look pending | 2026-11-17 |
 | RF1 | forged/broken records rejected | test_games Sanitize cases, test_sync wrong author | OFFLINE | OFFLINE | test_games "Sanitize rejects" (17 cases), test_games_sync "forged, broken and older GAMES" | pass | 2026-11-17 |
 | RF2 | week rollover / ISO year edges | test_games PeriodKey vectors | OFFLINE | OFFLINE | test_games "PeriodKey gives ISO 8601 weeks" (6 vectors + Sunday 23:59:59), Sanitize "a peer already in the next week" | pass | 2026-11-17 |
 | RF3 | reload/double click/readonly | test_games, test_games_ui; in-game `/reload` mid-flip | IN-GAME | NOT-VERIFIED | OFFLINE part: test_games "readonly", test_games_ui double click, refused flip, tween replace | offline pass | 2026-11-17 |
@@ -35,6 +36,9 @@ Result after work:    `luajit tests/run.lua` -> 242 passed, 0 failed (2026-11-17
 - [ ] `/tsd game sim 12` -> leaderboard shows 12 fake players + me, sorted by net; switch This week / All time; `/tsd game sim 0` clears.
 - [ ] `/tsd anim speed 0.25` then flip -> slow-motion coin for review; `/tsd anim speed 1`.
 - [ ] Two guild members (L5): both flip; within ~1 min each sees the other on the leaderboard and in Recent flips; `/ts comm` shows no rejects.
+- [ ] Slots: select "Slots", spin 5-10 times at 10s; reels stop left to right, the shown symbols match the result line; on a
+      win the lines cycle, symbols glow, the payout counts up; `/tsd anim speed 0.25` for slow motion; screenshot of a win.
+      Hover the machine: paytable. `anim tex` line lists the slot icons (any `false` = coloured tile fallback).
 - [ ] One member on 0.5.x: orders/offers still sync both ways; no Lua errors.
 
 ## Accepted gaps

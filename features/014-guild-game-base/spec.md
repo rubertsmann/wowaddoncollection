@@ -235,6 +235,9 @@ No flips yet [Noch keine Würfe], "For fun only: no gold changes hands." [Nur zu
   `tests/test_games_ui.lua`. Verify: L3, then L4.
 - [x] T10 (S): `/tsd game sim <n>` and `/tsd anim speed <x>`. Verify: L1 (simulated never sent/stored), L4.
 - [x] T11 (S): docs: `docs/protocol.md` section 9 (2.3 + schema 4), README (Games tab, "for fun only"), CHANGELOG, `docs/status.md`, `doc.md`. Verify: read-through.
+- [x] T13 (L): slot machine: `Core/Play/Slots.lua`, `UI/SlotMachine.lua`, game selector + per-game boards in
+  `UI/GamesTab.lua`, `slots` record section; tests `test_slots.lua` (8), `test_games_ui.lua` (+3), `test_load.lua`.
+  Verify: L1, L3, then L4 (look and feel in game).
 - [ ] T12: in-game checklist in `verify.md` with the user (L4), then two clients (L5); `review-talentshare` on the change
   (it touches network, store and display of peer text) before `done`.
 
@@ -288,6 +291,12 @@ No flips yet [Noch keine Würfe], "For fun only: no gold changes hands." [Nur zu
 - 2026-11-17: Stakes in gold/silver/copper: every amount is copper (1c..100 000g = 1e9c, totals <= 2e13c, exact in doubles
   and in the codec's `%.17g`); flip field `g` renamed to `c`, so dev records from the gold draft fail validation and are
   dropped (2.3 was never released). UI: three boxes with coin icons, `Model.MoneyText` ("1g 50s 25c"). (user)
+- 2026-11-17: Second game: slot machine, 3 reels x 3 rows, 5 paylines (rows + diagonals), animated wins; a sub-section of
+  the Games tab chosen by a game selector; its own leaderboard built by the same Model functions with a game key. (user)
+  Design: the record gets an optional `slots` section (same shape as the coin section, entries `{c, n, t}`), so sync needs
+  no new message; `Games.Section`, `Games.RecordPlay`, `Games.EntryNet`; Model leaderboard/feed/winner take `gameKey`.
+  Paytable 3/5/6/9/15/30/75 on a 35-symbol strip -> 93.8% return, 11% of spins win. Reels are cropped per frame by size
+  and texture coordinates (no clipping API needed); paylines use `CreateLine`, else a rotated texture. (implementer)
 - 2026-11-17: Coin drawn as a two-sided 2.5D coin (layered masked textures, end-over-end flip); heads = my portrait,
   tails = a crown. A 3D model was not used (no known coin model on Forever). (user feedback)
 

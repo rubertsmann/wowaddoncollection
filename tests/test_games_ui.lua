@@ -26,6 +26,7 @@ local function newWidget(world, kind)
     function methods:GetFontString() return nil end
     function methods:CreateTexture() return newWidget(world, "Texture") end
     function methods:CreateFontString() return newWidget(world, "FontString") end
+    function methods:CreateLine() return newWidget(world, "Line") end
     function methods:CreateAnimationGroup()
         local group = newWidget(world, "AnimationGroup")
         group.animations, group.playCount, group.stopCount = {}, 0, 0
@@ -73,7 +74,7 @@ local function setup(harness, options)
         end,
         TimeAgo = function() return "1m" end,
     } }
-    for _, path in ipairs({ "UI/Animate.lua", "UI/GamesTab.lua" }) do assert(loadfile(path))("TalentShare", addon) end
+    for _, path in ipairs({ "UI/Animate.lua", "UI/GamesTab.lua", "UI/SlotMachine.lua" }) do assert(loadfile(path))("TalentShare", addon) end
     world.restore = function() for key, value in pairs(saved) do _G[key] = value end end
     return addon, world
 end
@@ -236,6 +237,86 @@ return {
             widgets.allButton.scripts.OnClick()
             harness.equal(GamesTab.state.scope, "all"); harness.equal(addon.db.ui.gamesScope, "all")
             harness.equal(widgets.allButton.enabled, false); harness.equal(#widgets.leaderboardList.entries, 1)
+        end)
+    end,
+
+    ["games ui: the game selector shows one panel and that game's own board; it is locked while a game runs"] = function(harness)
+        withSetup(harness, nil, function(addon, world)
+            local GamesTab = addon.GamesTab
+            GamesTab.Build(newWidget(world, "Frame"))
+            local widgets = GamesTab.widgets
+            harness.truthy(widgets.panels.coin.shown and not widgets.panels.slots.shown, "the coin flip is the default game")
+            harness.truthy(addon.SlotMachine.widgets.spinButton, "the slot machine was built")
+            addon.Games.Flip("Me-R", 10, "H", NOW, function() return 0.1 end)
+            widgets.gameButtons.slots.scripts.OnClick()
+            harness.equal(GamesTab.state.game, "slots"); harness.equal(addon.db.ui.gameKey, "slots")
+            harness.truthy(widgets.panels.slots.shown and not widgets.panels.coin.shown)
+            harness.equal(widgets.gameButtons.slots.enabled, false); harness.equal(widgets.gameButtons.coin.enabled, true)
+            harness.equal(#widgets.leaderboardList.entries, 0, "the slot board does not list coin flips")
+            harness.equal(widgets.playsHeader.text, "Spins"); harness.equal(widgets.feedTitle.text, "Recent spins")
+            addon.SlotMachine.widgets.stake.Write(500)
+            harness.truthy(addon.SlotMachine.Spin())
+            harness.equal(widgets.gameButtons.coin.enabled, false, "selector locked while the reels turn")
+            GamesTab.SelectGame("coin")
+            harness.equal(GamesTab.state.game, "slots", "no switch mid-spin")
+            runTweens(addon, addon.Slots.SpinDuration() + 0.2)
+            harness.equal(widgets.gameButtons.coin.enabled, true)
+            harness.equal(#widgets.leaderboardList.entries, 1, "my spin is on the slot board after the reels stopped")
+        end)
+    end,
+
+    ["games ui: a spin is stored before the reels move, the reels land on the result and a win lights its lines"] = function(harness)
+        withSetup(harness, nil, function(addon, world)
+            local SlotMachine = addon.SlotMachine
+            -- the same stop on every reel: every row line pays
+            local stop
+            for candidate = 1, #addon.Slots.STRIP do
+                if addon.Slots.SymbolAt(candidate) == "bag" then stop = candidate break end
+            end
+            world.random = (stop - 0.5) / #addon.Slots.STRIP
+            addon.GamesTab.Build(newWidget(world, "Frame"))
+            addon.GamesTab.SelectGame("slots")
+            local widgets = SlotMachine.widgets
+            widgets.stake.Write(250)
+            local result = assert(SlotMachine.Spin())
+            harness.truthy(addon.Games.Get("Me-R").slots, "stored at the click")
+            harness.equal(widgets.spinButton.enabled, false); harness.truthy(SlotMachine.state.spinning)
+            harness.equal(SlotMachine.Spin(), nil, "no second spin while the reels turn")
+            harness.equal(addon.Games.Get("Me-R").slots.total.wins + addon.Games.Get("Me-R").slots.total.losses, 1)
+            -- halfway: reels are moving (motion blur visible on the first reel)
+            for _ = 1, 10 do addon.Animate._onUpdate(nil, 0.05) end
+            harness.truthy(widgets.reels[1].blur.alpha > 0, "motion blur while fast")
+            runTweens(addon, addon.Slots.SpinDuration() + 0.2)
+            harness.equal(widgets.spinButton.enabled, true); harness.equal(SlotMachine.state.spinning, false)
+            for reel = 1, 3 do
+                for row = 1, 3 do
+                    harness.equal(widgets.reels[reel].symbols[row].symbol, result.grid[row][reel], "cell " .. row .. "," .. reel)
+                end
+                harness.equal(widgets.reels[reel].blur.alpha, 0)
+            end
+            harness.truthy(result.multiplier > 0)
+            runTweens(addon, 6)   -- the line cycle ends with every winning line shown
+            for _, lineWin in ipairs(result.lines) do harness.truthy(widgets.paylines[lineWin.line].shown, "line " .. lineWin.line) end
+            harness.truthy(widgets.cellGlows[1].shown == false or widgets.cellGlows[1].alpha >= 0)
+            harness.truthy(widgets.resultText.text:find("50", 1, true), widgets.resultText.text)
+            harness.equal(widgets.multiplierText.text, "x" .. result.multiplier)
+            -- the next spin clears the old effects first
+            world.random = 0.37
+            SlotMachine.Spin()
+            for _, line in ipairs(widgets.paylines) do harness.equal(line.shown, false) end
+            harness.equal(widgets.multiplierText.text, "")
+        end)
+    end,
+
+    ["games ui: a refused spin shows the reason and starts no reels"] = function(harness)
+        withSetup(harness, nil, function(addon, world)
+            addon.GamesTab.Build(newWidget(world, "Frame"))
+            local widgets = addon.SlotMachine.widgets
+            widgets.stake.goldBox.text, widgets.stake.silverBox.text, widgets.stake.copperBox.text = "", "", ""
+            harness.equal(addon.SlotMachine.Spin(), nil)
+            harness.truthy(widgets.resultText.text:find("100000", 1, true), widgets.resultText.text)
+            harness.equal(addon.Animate.IsTweening("slotReels"), false); harness.equal(widgets.spinButton.enabled, true)
+            harness.equal(addon.Games.Get("Me-R"), nil)
         end)
     end,
 }

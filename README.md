@@ -45,8 +45,9 @@ profession icons at the top right of the Recipes tab (one click opens that profe
 `/ts clean` then `/ts clean confirm` (deletes everything stored locally). In the dev build use `/tsd`.
 The UI is available in English and German; profession and recipe names always follow your own game client.
 
-**Games tab:** a coin flip for the guild. Enter a stake in gold, pick heads or tails and flip; your wins and losses show
-on the guild leaderboard (this week / all time) next to everyone else's. For fun only: no gold changes hands, the addon
+**Games tab:** pick a game at the top: a coin flip (heads or tails) or a slot machine (3 reels, 5 paylines). Enter a stake
+in gold, silver and copper and play; your wins and losses show on that game's guild leaderboard (this week / all time)
+next to everyone else's. For fun only: no gold changes hands, the addon
 never reads or moves your gold.
 
 ## Develop
@@ -64,8 +65,8 @@ never reads or moves your gold.
   | `Core/Net/` | addon-channel communication | Codec, Guard, Sync, Communication |
   | `Core/Game/` | the WoW API boundary | Api, Events |
   | `Core/View/` | view-models for the UI (pure) | Model, Names, ItemText, Notify |
-  | `Core/Play/` | guild games: rules, records, animation math (pure) | Games, CoinFlip |
-  | `UI/` | frames | Window, Animate, GamesTab, Alerts, DevProbe (dev build only) |
+  | `Core/Play/` | guild games: rules, records, animation math (pure) | Games, CoinFlip, Slots |
+  | `UI/` | frames | Window, Animate, GamesTab, SlotMachine, Alerts, DevProbe (dev build only) |
 
   Everything in `Core/` except `Core/Game/` is pure Lua and runs in the offline tests.
 * Naming, type annotations and logging rules: `docs/coding-conventions.md`. Every diagnostic goes through

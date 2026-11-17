@@ -16,8 +16,14 @@ local addonName, addon = ...
 
 ---@class GameFlip
 ---@field c integer stake in copper, 1..MAXIMUM_STAKE
----@field r "W"|"L"
----@field t integer server time of the flip
+---@field r? "W"|"L" coin flip entries
+---@field n? integer signed net copper (entries of the other games: -c, or c..factor*c)
+---@field t integer server time of the play
+
+---@class GameSection one game's results (the coin flip's section is the record itself)
+---@field total GameTotals
+---@field weeks table<string, GameTotals>
+---@field recent GameFlip[]
 
 ---@class GameRecord
 ---@field name string owner, canonical "Name-Realm"
@@ -25,6 +31,7 @@ local addonName, addon = ...
 ---@field total GameTotals all time
 ---@field weeks table<string, GameTotals> "YYYY-Www" -> totals; at most MAXIMUM_WEEKS newest keys
 ---@field recent GameFlip[] newest first, at most MAXIMUM_RECENT
+---@field slots? GameSection slot machine results (feature 014)
 
 ---@class FlipResult
 ---@field outcome "H"|"T"
@@ -102,18 +109,59 @@ function Games.PreviousPeriodKey(serverTime)
     return Games.PeriodKey((tonumber(serverTime) or 0) - 7 * SECONDS_PER_DAY)
 end
 
+------------------------------------------------------------------ games and their sections of the record
+-- One record holds every game: the coin flip's section is the record itself (total, weeks, recent: the 0.6 draft shape),
+-- every later game has its own optional sub-table with the same shape (record.slots). Each section feeds its own
+-- leaderboard. A play is binary for the leaderboard: a loss costs exactly the stake, a win nets 1..maximumWinFactor x stake.
+
+---@alias GameKey "coin"|"slots"
+
+---@class GameKind
+---@field maximumWinFactor integer the most a win can net, in stakes
+
+-- Highest total multiplier of one slot spin (every payline paying the top symbol): Slots.MAXIMUM_MULTIPLIER must equal it
+-- (tests/test_slots.lua pins both).
+Games.SLOTS_MAXIMUM_MULTIPLIER = 375
+
+---@type table<GameKey, GameKind>
+Games.KINDS = {
+    coin = { maximumWinFactor = 1 },
+    slots = { maximumWinFactor = Games.SLOTS_MAXIMUM_MULTIPLIER - 1 },
+}
+---@type GameKey[] display order of the games
+Games.ORDER = { "coin", "slots" }
+
+-- The section of `gameRecord` that holds `gameKey`'s results (nil when that game was never played).
+---@param gameRecord GameRecord|nil
+---@param gameKey GameKey|nil default "coin"
+---@return GameSection|nil
+function Games.Section(gameRecord, gameKey)
+    if type(gameRecord) ~= "table" then return nil end
+    if gameKey == nil or gameKey == "coin" then return gameRecord end
+    return gameRecord[gameKey]
+end
+
+-- net copper of one recent entry: coin entries carry r = "W"|"L", other games the signed net n
+---@param entry GameFlip
+---@return integer
+function Games.EntryNet(entry)
+    if entry.n ~= nil then return entry.n end
+    return entry.r == "W" and entry.c or -entry.c
+end
+
 ------------------------------------------------------------------ validation (network and persisted data)
 
 ---@param totals any
+---@param maximumWinFactor integer
 ---@return GameTotals|nil
-local function sanitizeTotals(totals)
+local function sanitizeTotals(totals, maximumWinFactor)
     local SafeInteger = addon.Utility.SafeInteger
     if type(totals) ~= "table" then return nil end
     local won, lost = SafeInteger(totals.won, 0, Games.MAXIMUM_TOTAL), SafeInteger(totals.lost, 0, Games.MAXIMUM_TOTAL)
     local wins, losses = SafeInteger(totals.wins, 0, Games.MAXIMUM_COUNT), SafeInteger(totals.losses, 0, Games.MAXIMUM_COUNT)
     if not (won and lost and wins and losses) then return nil end
-    -- every win is worth 1..MAXIMUM_STAKE gold (clamping at the maxima keeps this true, see applyFlip)
-    if won < wins or won > wins * Games.MAXIMUM_STAKE then return nil end
+    -- every win nets 1..factor x MAXIMUM_STAKE, every loss 1..MAXIMUM_STAKE (clamping at the maxima keeps this true)
+    if won < wins or won > wins * Games.MAXIMUM_STAKE * maximumWinFactor then return nil end
     if lost < losses or lost > losses * Games.MAXIMUM_STAKE then return nil end
     return { won = won, lost = lost, wins = wins, losses = losses }
 end
@@ -127,7 +175,59 @@ function Games.IsPeriodKey(periodKey)
     return year ~= nil and year >= 2020 and year <= 2100 and week >= 1 and week <= 53
 end
 
--- Returns a CLEAN COPY of a game record or nil. A single bad entry rejects the whole record.
+-- A clean copy of one recent entry, or nil. Coin: { c, r, t }; other games: { c, n, t } with n = -c or c..factor*c.
+---@param entry any
+---@param gameKey GameKey
+---@param horizon number
+---@return GameFlip|nil
+local function sanitizeEntry(entry, gameKey, horizon)
+    local SafeInteger = addon.Utility.SafeInteger
+    if type(entry) ~= "table" or not SafeInteger(entry.c, 1, Games.MAXIMUM_STAKE) or not SafeInteger(entry.t, 0, horizon) then
+        return nil
+    end
+    if gameKey == "coin" then
+        if entry.r ~= "W" and entry.r ~= "L" then return nil end
+        return { c = entry.c, r = entry.r, t = entry.t }
+    end
+    local net = SafeInteger(entry.n, -entry.c, entry.c * Games.KINDS[gameKey].maximumWinFactor)
+    if not net or (net < 0 and net ~= -entry.c) or (net >= 0 and net < entry.c) then return nil end
+    return { c = entry.c, n = net, t = entry.t }
+end
+
+-- A clean copy of one game section { total, weeks, recent }, or nil when any part is bad.
+---@param section any
+---@param gameKey GameKey
+---@param horizon number
+---@return GameSection|nil
+local function sanitizeSection(section, gameKey, horizon)
+    local Utility = addon.Utility
+    if type(section) ~= "table" then return nil end
+    local factor = Games.KINDS[gameKey].maximumWinFactor
+    local total = sanitizeTotals(section.total, factor)
+    if not total or type(section.weeks) ~= "table" or type(section.recent) ~= "table" then return nil end
+    local latestKey = horizon ~= math.huge and Games.PeriodKey(horizon) or nil
+    local weeks, weekCount = {}, 0
+    for periodKey, totals in pairs(section.weeks) do
+        weekCount = weekCount + 1
+        if weekCount > Games.MAXIMUM_WEEKS or not Games.IsPeriodKey(periodKey) then return nil end
+        if latestKey and periodKey > latestKey then return nil end   -- "YYYY-Www" compares correctly as text
+        local cleanTotals = sanitizeTotals(totals, factor)
+        if not cleanTotals then return nil end
+        weeks[periodKey] = cleanTotals
+    end
+    local recentCount = Utility.Count(section.recent)
+    if recentCount > Games.MAXIMUM_RECENT then return nil end
+    local recent = {}
+    for index = 1, recentCount do
+        local clean = sanitizeEntry(section.recent[index], gameKey, horizon)   -- a sparse array leaves a hole: nil
+        if not clean then return nil end
+        recent[index] = clean
+    end
+    return { total = total, weeks = weeks, recent = recent }
+end
+
+-- Returns a CLEAN COPY of a game record or nil. A single bad entry rejects the whole record. Unknown fields (a game a
+-- newer 2.x minor added) are dropped, not fatal.
 ---@param gameRecord any
 ---@return GameRecord|nil
 function Games.Sanitize(gameRecord)
@@ -136,32 +236,17 @@ function Games.Sanitize(gameRecord)
     local horizon = addon.Store.Horizon()
     local revision = Utility.SafeInteger(gameRecord.rev, 0, horizon)
     if not revision then return nil end
-    local total = sanitizeTotals(gameRecord.total)
-    if not total then return nil end
-    if type(gameRecord.weeks) ~= "table" then return nil end
-    local latestKey = horizon ~= math.huge and Games.PeriodKey(horizon) or nil
-    local weeks, weekCount = {}, 0
-    for periodKey, totals in pairs(gameRecord.weeks) do
-        weekCount = weekCount + 1
-        if weekCount > Games.MAXIMUM_WEEKS or not Games.IsPeriodKey(periodKey) then return nil end
-        if latestKey and periodKey > latestKey then return nil end   -- "YYYY-Www" compares correctly as text
-        local cleanTotals = sanitizeTotals(totals)
-        if not cleanTotals then return nil end
-        weeks[periodKey] = cleanTotals
-    end
-    if type(gameRecord.recent) ~= "table" then return nil end
-    local recentCount = Utility.Count(gameRecord.recent)
-    if recentCount > Games.MAXIMUM_RECENT then return nil end
-    local recent = {}
-    for index = 1, recentCount do
-        local flip = gameRecord.recent[index]   -- a sparse array leaves a hole here
-        if type(flip) ~= "table" or not Utility.SafeInteger(flip.c, 1, Games.MAXIMUM_STAKE)
-            or (flip.r ~= "W" and flip.r ~= "L") or not Utility.SafeInteger(flip.t, 0, horizon) then
-            return nil
+    local coin = sanitizeSection(gameRecord, "coin", horizon)
+    if not coin then return nil end
+    local clean = { name = gameRecord.name, rev = revision, total = coin.total, weeks = coin.weeks, recent = coin.recent }
+    for _, gameKey in ipairs(Games.ORDER) do
+        if gameKey ~= "coin" and gameRecord[gameKey] ~= nil then
+            local section = sanitizeSection(gameRecord[gameKey], gameKey, horizon)
+            if not section then return nil end
+            clean[gameKey] = section
         end
-        recent[index] = { c = flip.c, r = flip.r, t = flip.t }
     end
-    return { name = gameRecord.name, rev = revision, total = total, weeks = weeks, recent = recent }
+    return clean
 end
 
 ------------------------------------------------------------------ money (gold / silver / copper)
@@ -221,41 +306,69 @@ function Games.SanitizePersisted(savedVariables)
     return droppedCount
 end
 
------------------------------------------------------------------- flipping
+------------------------------------------------------------------ playing
+
+---@return GameSection
+local function emptySection() return { total = { won = 0, lost = 0, wins = 0, losses = 0 }, weeks = {}, recent = {} } end
 
 ---@param myName string
 ---@return GameRecord
 local function emptyRecord(myName)
-    return { name = myName, rev = 0, total = { won = 0, lost = 0, wins = 0, losses = 0 }, weeks = {}, recent = {} }
+    local record = emptySection()
+    record.name, record.rev = myName, 0
+    return record
 end
 
 ---@param totals GameTotals
----@param stake integer
----@param won boolean
-local function addToTotals(totals, stake, won)
-    if won then
-        totals.won = math.min(Games.MAXIMUM_TOTAL, totals.won + stake)
+---@param net integer signed copper
+local function addToTotals(totals, net)
+    if net > 0 then
+        totals.won = math.min(Games.MAXIMUM_TOTAL, totals.won + net)
         totals.wins = math.min(Games.MAXIMUM_COUNT, totals.wins + 1)
     else
-        totals.lost = math.min(Games.MAXIMUM_TOTAL, totals.lost + stake)
+        totals.lost = math.min(Games.MAXIMUM_TOTAL, totals.lost - net)
         totals.losses = math.min(Games.MAXIMUM_COUNT, totals.losses + 1)
     end
 end
 
--- Adds one flip to `gameRecord` (in place): totals, this week's totals, recent list; prunes old weeks and flips.
----@param gameRecord GameRecord
----@param stake integer
----@param won boolean
+-- Adds one play to `section` (in place): totals, this week's totals, recent list; prunes old weeks and entries.
+---@param section GameSection
+---@param entry GameFlip the recent entry ({c, r, t} or {c, n, t})
+local function applyPlay(section, entry)
+    local net = Games.EntryNet(entry)
+    addToTotals(section.total, net)
+    local periodKey = Games.PeriodKey(entry.t)
+    section.weeks[periodKey] = section.weeks[periodKey] or { won = 0, lost = 0, wins = 0, losses = 0 }
+    addToTotals(section.weeks[periodKey], net)
+    local periodKeys = addon.Utility.SortedKeys(section.weeks)
+    for index = 1, #periodKeys - Games.MAXIMUM_WEEKS do section.weeks[periodKeys[index]] = nil end
+    table.insert(section.recent, 1, entry)
+    for index = #section.recent, Games.MAXIMUM_RECENT + 1, -1 do section.recent[index] = nil end
+end
+
+-- Checks the common preconditions of a play. Returns nil when it may go ahead, else the refusal.
+---@param myName any
+---@param stake any
+---@return FlipRefusal|nil
+local function refusal(myName, stake)
+    if not addon.Utility.SafeInteger(stake, 1, Games.MAXIMUM_STAKE) then return "stake" end
+    if database().readonly then return "readonly" end
+    if not addon.Utility.IsSafeName(myName) then return "name" end
+    return nil
+end
+
+-- Stores one play of `gameKey` in my record (a copy, committed with a new rev). The caller has checked `refusal`.
+---@param myName string
+---@param gameKey GameKey
+---@param entry GameFlip
 ---@param now integer
-local function applyFlip(gameRecord, stake, won, now)
-    addToTotals(gameRecord.total, stake, won)
-    local periodKey = Games.PeriodKey(now)
-    gameRecord.weeks[periodKey] = gameRecord.weeks[periodKey] or { won = 0, lost = 0, wins = 0, losses = 0 }
-    addToTotals(gameRecord.weeks[periodKey], stake, won)
-    local periodKeys = addon.Utility.SortedKeys(gameRecord.weeks)
-    for index = 1, #periodKeys - Games.MAXIMUM_WEEKS do gameRecord.weeks[periodKeys[index]] = nil end
-    table.insert(gameRecord.recent, 1, { c = stake, r = won and "W" or "L", t = now })
-    for index = #gameRecord.recent, Games.MAXIMUM_RECENT + 1, -1 do gameRecord.recent[index] = nil end
+local function record(myName, gameKey, entry, now)
+    local previousRecord = database().games[myName]
+    local gameRecord = previousRecord and addon.Utility.DeepCopy(previousRecord) or emptyRecord(myName)
+    if gameKey ~= "coin" then gameRecord[gameKey] = gameRecord[gameKey] or emptySection() end
+    applyPlay(Games.Section(gameRecord, gameKey), entry)
+    gameRecord.rev = math.max(now, (previousRecord and previousRecord.rev or 0) + 1)
+    database().games[myName] = gameRecord
 end
 
 -- One coin flip against the house. The outcome is decided AND stored here, before any animation (a /reload cannot lose
@@ -270,16 +383,29 @@ end
 function Games.Flip(myName, stake, pick, now, randomFunction)
     if not addon.Utility.SafeInteger(stake, 1, Games.MAXIMUM_STAKE) then return nil, "stake" end
     if pick ~= "H" and pick ~= "T" then return nil, "pick" end
-    if database().readonly then return nil, "readonly" end
-    if not addon.Utility.IsSafeName(myName) then return nil, "name" end
+    local refused = refusal(myName, stake)
+    if refused then return nil, refused end
     local outcome = randomFunction() < 0.5 and "H" or "T"
     local won = outcome == pick
-    local previousRecord = database().games[myName]
-    local gameRecord = previousRecord and addon.Utility.DeepCopy(previousRecord) or emptyRecord(myName)
-    applyFlip(gameRecord, stake, won, now)
-    gameRecord.rev = math.max(now, (previousRecord and previousRecord.rev or 0) + 1)
-    database().games[myName] = gameRecord
+    record(myName, "coin", { c = stake, r = won and "W" or "L", t = now }, now)
     return { outcome = outcome, won = won, stake = stake, net = won and stake or -stake }
+end
+
+-- Stores a play of another game whose outcome the caller decided (Slots.Spin). net: -stake, or stake..factor*stake.
+---@param myName string|nil
+---@param gameKey GameKey
+---@param stake any copper
+---@param net integer
+---@param now integer
+---@return boolean stored
+---@return FlipRefusal|nil
+function Games.RecordPlay(myName, gameKey, stake, net, now)
+    local refused = refusal(myName, stake)
+    if refused then return false, refused end
+    local entry = sanitizeEntry({ c = stake, n = net, t = now }, gameKey, math.huge)
+    if gameKey == "coin" or not entry then error("invalid play for " .. tostring(gameKey) .. ": net " .. tostring(net)) end
+    record(myName, gameKey, entry, now)
+    return true
 end
 
 ------------------------------------------------------------------ simulated players (dev only)
@@ -296,14 +422,25 @@ function Games.Simulate(count, now, randomFunction)
     for index = 1, count do
         local playerName = "Sim" .. index .. "-Test"
         local gameRecord = emptyRecord(playerName)
-        local flipCount = 1 + math.floor(randomFunction() * 25)
-        for flipIndex = flipCount, 1, -1 do
-            local stake = 1 + math.floor(randomFunction() ^ 3 * 5000 * Games.COPPER_PER_GOLD)
-            -- spread the flips over the last three weeks, oldest first
-            local flipTime = now - math.floor(flipIndex * 21 * SECONDS_PER_DAY / flipCount * randomFunction())
-            applyFlip(gameRecord, stake, randomFunction() < 0.5, flipTime)
+        gameRecord.slots = emptySection()
+        for _, gameKey in ipairs(Games.ORDER) do
+            local section = Games.Section(gameRecord, gameKey)
+            local playCount = 1 + math.floor(randomFunction() * 25)
+            for playIndex = playCount, 1, -1 do
+                local stake = 1 + math.floor(randomFunction() ^ 3 * 5000 * Games.COPPER_PER_GOLD)
+                -- spread the plays over the last three weeks
+                local playTime = now - math.floor(playIndex * 21 * SECONDS_PER_DAY / playCount * randomFunction())
+                local entry
+                if gameKey == "coin" then
+                    entry = { c = stake, r = randomFunction() < 0.5 and "W" or "L", t = playTime }
+                else
+                    local roll = randomFunction()
+                    entry = { c = stake, n = roll < 0.25 and stake * (2 + math.floor(roll * 40)) or -stake, t = playTime }
+                end
+                applyPlay(section, entry)
+            end
+            table.sort(section.recent, function(left, right) return left.t > right.t end)
         end
-        table.sort(gameRecord.recent, function(left, right) return left.t > right.t end)
         gameRecord.rev = now
         Games.simulated[playerName] = gameRecord
     end

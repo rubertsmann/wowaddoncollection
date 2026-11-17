@@ -6,6 +6,9 @@
   leaderboard (this week / all time), with the 15 latest flips and last week's winner. For fun only: no gold changes
   hands, the addon never reads or moves gold. 2.2 members keep syncing everything else. Dev build: `/tsd anim` (animation
   probe), `/tsd anim speed <x>`, `/tsd game sim <n>`; offline: `luajit tools/coinflip.lua`.
+- **Slot machine** (Games tab -> Slots): 3 reels x 3 rows, 5 paylines (3 rows, 2 diagonals), animated reels with
+  staggered stops, lever, chasing lights, payline highlights, payout count-up and a coin shower on big wins. Its own
+  leaderboard and recent spins; the game selector at the top of the tab switches between the games.
 - Internal: duplicated helpers merged into one copy each (`Util.Count/SortedKeys/Wipe/Refill/SanitizeMap/Me/ChatSafe`,
   `Store.Knows/RecipeCount`); the safer variant won where copies differed (feature 012). No player-visible change.
 - Internal: `Core/` grouped into layer folders `Base`, `Debug`, `Data`, `Net`, `Game`, `View` (see README "Develop").

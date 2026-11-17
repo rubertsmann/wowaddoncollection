@@ -111,6 +111,10 @@ Additive minor change: a 2.2 peer ignores `grev` and drops `WANTG`/`GAMES` as un
   `{ name, rev, total = {won, lost, wins, losses}, weeks = { ["YYYY-Www"] = {won, lost, wins, losses} } (<= 4 keys),
   recent = { {c = stake, r = "W"|"L", t = time} } (<= 20, newest first) }`. Amounts are in **copper** (1g = 10 000c),
   bookkeeping only (no real gold is read or moved). Week keys are ISO 8601 weeks in UTC.
+- **Slot machine section (optional) `slots = { total, weeks, recent }`:** same shape and limits as the coin section, but
+  recent entries are `{c = stake, n = net, t}` with `n = -c` (a loss) or `c <= n <= c * 374` (a win; 5 paylines x 75 is the
+  highest multiplier). Win totals may reach `wins * 1e9 * 374`. Every game has its own section and its own leaderboard;
+  a client that does not know a section drops it (allow-list copy).
 - **`HELLO` field `grev` (optional):** my record's `rev` when I have one. Pulled exactly like `orev`: `WANTG {names, via?}`
   (whisper first, then GUILD with `via = "GUILD"` after 45/90 s), answered with `GAMES {games}`.
 - **Validation (whole record rejected on one bad entry):** safe name equal to the sender (canonical form); `rev` in

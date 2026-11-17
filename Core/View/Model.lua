@@ -660,18 +660,21 @@ local function leaderboardOrder(left, right)
     return left.nameRaw < right.nameRaw
 end
 
--- Leaderboard of one scope: "week" (the totals under `periodKey`) or "all" (all-time totals). Sorted by net, then flips,
--- then name; players without a flip in the scope are left out. Names come from peers and are escaped.
+-- Leaderboard of one game and scope: "week" (the totals under `periodKey`) or "all" (all-time totals). Every game has its
+-- own board (gameKey, default "coin"). Sorted by net, then plays, then name; players without a play in the scope are left
+-- out. Names come from peers and are escaped.
 ---@param records table<string, GameRecord>
 ---@param scope "week"|"all"
 ---@param periodKey string the week shown for scope "week"
 ---@param myName string|nil
+---@param gameKey? GameKey
 ---@return LeaderboardRow[]
-function Model.BuildLeaderboardRows(records, scope, periodKey, myName)
+function Model.BuildLeaderboardRows(records, scope, periodKey, myName, gameKey)
     local rows = {}
     for playerName, gameRecord in pairs(records or {}) do
-        local totals = gameRecord.total
-        if scope == "week" then totals = gameRecord.weeks and gameRecord.weeks[periodKey] end
+        local section = addon.Games.Section(gameRecord, gameKey)
+        local totals = section and section.total
+        if scope == "week" then totals = section and section.weeks and section.weeks[periodKey] end
         local flips = totals and (totals.wins + totals.losses) or 0
         if flips > 0 then
             rows[#rows + 1] = { name = escape(playerName), nameRaw = playerName, net = totals.won - totals.lost, won = totals.won,
@@ -690,17 +693,20 @@ end
 ---@field t integer server time of the flip
 ---@field mine boolean
 
--- The newest flips of every player, merged (newest first; same second: by name). Default limit 15.
+-- The newest plays of one game (default "coin") by every player, merged (newest first; same second: by name).
+-- Default limit 15.
 ---@param records table<string, GameRecord>
 ---@param myName string|nil
 ---@param limit? integer
+---@param gameKey? GameKey
 ---@return FlipFeedRow[]
-function Model.BuildFlipFeedRows(records, myName, limit)
+function Model.BuildFlipFeedRows(records, myName, limit, gameKey)
     local rows = {}
     for playerName, gameRecord in pairs(records or {}) do
-        for _, flip in ipairs(gameRecord.recent or {}) do
-            rows[#rows + 1] = { name = escape(playerName), nameRaw = playerName, net = flip.r == "W" and flip.c or -flip.c,
-                t = flip.t, mine = playerName == myName }
+        local section = addon.Games.Section(gameRecord, gameKey)
+        for _, entry in ipairs(section and section.recent or {}) do
+            rows[#rows + 1] = { name = escape(playerName), nameRaw = playerName, net = addon.Games.EntryNet(entry),
+                t = entry.t, mine = playerName == myName }
         end
     end
     table.sort(rows, function(left, right)
@@ -712,12 +718,14 @@ function Model.BuildFlipFeedRows(records, myName, limit)
     return rows
 end
 
--- The winner of the week `previousPeriodKey`: the top leaderboard row of that week when its net is positive, else nil.
+-- The winner of one game (default "coin") in the week `previousPeriodKey`: the top leaderboard row of that week when its
+-- net is positive, else nil.
 ---@param records table<string, GameRecord>
 ---@param previousPeriodKey string
+---@param gameKey? GameKey
 ---@return LeaderboardRow|nil
-function Model.PreviousWinner(records, previousPeriodKey)
-    local top = Model.BuildLeaderboardRows(records, "week", previousPeriodKey, nil)[1]
+function Model.PreviousWinner(records, previousPeriodKey, gameKey)
+    local top = Model.BuildLeaderboardRows(records, "week", previousPeriodKey, nil, gameKey)[1]
     if top and top.net > 0 then return top end
     return nil
 end

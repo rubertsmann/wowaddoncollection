@@ -74,3 +74,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: tests updated (both faces alternate in flight, the landing face is the outcome, width/edge are cos/sin of one angle); the probe's `tex` line now checks the mask, crown and head paths
 - Evidence: `luajit tests/run.lua` -> 242 passed, 0 failed
 - Next: user `/reload` (no TOC change) and flip: confirm the two faces, rim and shading look right (screenshot); then the remaining checklist in verify.md and `/tsd anim`
+
+## 2026-11-17 15:04 | BUILD | Stakes in gold/silver/copper; commit; slot machine as a second game
+- Did: (user) stakes in g/s/c: all amounts in copper, field `g` -> `c`, three stake boxes with coin icons, `Model.MoneyText`; committed 47acb0f on new branch `feature/014-guild-games` (user asked to commit before the slot machine). Then (user) slot machine as a sub-section of the Games tab with its own leaderboard: game selector + per-game panels and boards (`UI/GamesTab.lua`), `Core/Play/Slots.lua`, `UI/SlotMachine.lua`, optional `slots` section in the game record (`Games.Section/RecordPlay/EntryNet`), Model functions take a game key; TOC + `tests/run.lua` + `tools/deploy.ps1`; docs (protocol section 9, README, CHANGELOG, doc.md, spec decisions, verify R12)
+- Result: slot rules 93.8% return (simulated 93.6%), 11% hit rate; everything passes offline
+- Evidence: `luajit tests/run.lua` -> 254 passed, 0 failed
+- Next: user: restart WoW (TOC changed: Slots.lua, SlotMachine.lua), Games tab -> Slots, spin; check reels, lines, glow, count-up, coin shower (screenshot), `/tsd anim` `tex` line for the slot icons; then the rest of verify.md

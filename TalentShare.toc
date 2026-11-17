@@ -28,6 +28,7 @@ Core\Data\Orders.lua
 Core\Data\Offers.lua
 Core\Play\Games.lua
 Core\Play\CoinFlip.lua
+Core\Play\Slots.lua
 Core\Net\Sync.lua
 Core\View\Model.lua
 Core\View\ItemText.lua
@@ -39,5 +40,6 @@ Core\Game\Events.lua
 UI\Window.lua
 UI\Animate.lua
 UI\GamesTab.lua
+UI\SlotMachine.lua
 UI\Alerts.lua
 UI\DevProbe.lua

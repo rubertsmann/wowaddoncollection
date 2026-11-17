@@ -26,7 +26,7 @@ function Harness.addon(options)
     -- same order as the TOC (pure modules only)
     for _, path in ipairs({ "Core/Base/Utility.lua", "Core/Base/Log.lua", "Core/Debug/Trace.lua", "Core/Base/Locale.lua",
         "Locales/enUS.lua", "Locales/deDE.lua", "Core/Data/Store.lua", "Core/View/Names.lua", "Core/Data/Orders.lua",
-        "Core/Data/Offers.lua", "Core/Play/Games.lua", "Core/Play/CoinFlip.lua", "Core/Net/Codec.lua", "Core/Net/Guard.lua", "Core/Net/Sync.lua", "Core/View/Model.lua",
+        "Core/Data/Offers.lua", "Core/Play/Games.lua", "Core/Play/CoinFlip.lua", "Core/Play/Slots.lua", "Core/Net/Codec.lua", "Core/Net/Guard.lua", "Core/Net/Sync.lua", "Core/View/Model.lua",
         "Core/View/ItemText.lua", "Core/View/Notify.lua", "Core/Net/Communication.lua", "Core/Debug/Diagnostics.lua" }) do
         loadAddonFile(addon, path)
     end

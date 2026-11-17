@@ -502,7 +502,8 @@ function DevProbe.AnimationProbe()
     local textureCheck = {}
     local checkTexture = UIParent:CreateTexture(nil, "BACKGROUND")
     for _, path in ipairs({ "Interface\\CharacterFrame\\TempPortraitAlphaMask", "Interface\\Icons\\INV_Crown_01",
-        "Interface\\Icons\\INV_Misc_Head_Human_01", "Interface\\Buttons\\UI-ActionButton-Border" }) do
+        "Interface\\Icons\\INV_Misc_Head_Human_01", "Interface\\Buttons\\UI-ActionButton-Border",
+        "Interface\\MoneyFrame\\UI-GoldIcon", unpack(addon.Slots.ICONS or {}) }) do
         local result = checkTexture:SetTexture(path)
         textureCheck[#textureCheck + 1] = path:match("[^\\]+$") .. "=" .. tostring(result) .. "/" .. tostring(checkTexture:GetTexture())
     end
