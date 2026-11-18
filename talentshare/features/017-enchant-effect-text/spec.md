@@ -2,7 +2,7 @@
 
 - Status: done
 - Created: 2026-11-18
-- Target version: 0.7.2 (UI only, client data)
+- Target version: 0.7.2, fix 0.7.3 (UI only, client data)
 - Owner: claude
 - Links: [log](log.md) | [verify](verify.md) | [doc](doc.md)
 
@@ -14,9 +14,9 @@ and the free-text search finds them by it.
 - R1: Hovering the icon of a recipe without an item shows its effect text (green) under the name, when the client knows it.
 - R2: Selecting such a recipe shows the effect as one line under the title in the detail panel.
 - R3: The Recipes search matches the effect text of recipes without an item (as feature 011 does for item effects).
-- R4: The text is read on the viewer's own client, in their language, by recipe id as spell id: spell description first,
-  then the `spell:` and `enchant:` tooltips. Nothing new is stored or sent. What each source returned is logged once
-  per recipe (`window.effectProbe`, debug level).
+- R4: The text is read on the viewer's own client, in their language, by recipe id as spell id: the spell description only
+  (empty until the client loaded the spell; SPELL_DATA_LOAD_RESULT redraws). Nothing new is stored or sent. Logged once
+  per recipe when found (`window.effectText`, debug level). The tooltips are not used (0.7.2 bug, see log).
 - R5: Dev build only: Debug tab button / `/tsd fakeenchanter` adds an in-memory "Fake Enchanter" with six enchants, kept
   from the roster prune (`Store.keptNames`, empty in the live build), to test without a real enchanter.
 
