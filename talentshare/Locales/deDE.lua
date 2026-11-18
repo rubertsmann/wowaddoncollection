@@ -54,6 +54,7 @@ addon.Locale.Register("deDE", {
         ["Click the icon: whisper {name} with this item"] = "Klick auf das Symbol: {name} mit diesem Gegenstand anflüstern",
         ["Options"] = "Optionen",
         ["Item probe"] = "Gegenstands-Test",
+        ["Fake enchanter"] = "Test-Verzauberer",
         ["No item (enchantments and others)"] = "Kein Gegenstand (Verzauberungen u. a.)",
         ["Other"] = "Sonstiges",
         ["Category"] = "Kategorie",

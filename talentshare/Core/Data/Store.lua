@@ -431,6 +431,10 @@ function Store.CanonicalizeStoredNames()
     return changedCount
 end
 
+-- names Prune never drops besides `keptName`; empty in the live build (the dev "Fake enchanter" test record adds one)
+---@type table<string, boolean>
+Store.keptNames = {}
+
 -- Drop cached characters (and their offers) that are no longer in the guild roster; never drops `keptName`.
 ---@param rosterNames table<string, boolean>
 ---@param keptName string|nil
@@ -438,7 +442,7 @@ end
 function Store.Prune(rosterNames, keptName)
     local removedCount, removedNames = 0, {}
     for playerName in pairs(Store.db.chars) do
-        if not rosterNames[playerName] and playerName ~= keptName then
+        if not rosterNames[playerName] and playerName ~= keptName and not Store.keptNames[playerName] then
             Store.db.chars[playerName] = nil
             removedCount = removedCount + 1
             removedNames[#removedNames + 1] = playerName

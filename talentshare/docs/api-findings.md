@@ -80,6 +80,13 @@ pulls fall back to the guild channel if not).
 * UI: `MenuUtil.CreateCheckboxContextMenu`, `MenuUtil.CreateRadioContextMenu`, `WowStyle1DropdownTemplate`,
   `WowStyle1FilterDropdownTemplate`, `SearchBoxTemplate`, `UIDropDownMenuTemplate` all exist.
 
+## Enchant recipes (feature 017, 2026-11-18)
+
+* The recipe id of an enchant is its classic spell id (13419 = Enchant Cloak - Minor Agility, 7418, 7426, 7428, 7771,
+  7786 seen in a live guild catalog). Its effect text can be read on any client, without the profession, by that id:
+  confirmed in game (dev fake enchanter, tooltip and detail line showed the text). Which of `C_Spell.GetSpellDescription`,
+  the `spell:` tooltip or the `enchant:` tooltip delivers it is still to be read from a `window.effectProbe` log line.
+
 ## Still unverified
 
 * Whether the scan data survives for professions that were not opened since login (scanner needs the window open once).

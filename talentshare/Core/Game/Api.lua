@@ -388,10 +388,10 @@ function Api.ItemTooltipLines(itemID)
         if C_Item and C_Item.RequestLoadItemDataByID then tryCall("C_Item.RequestLoadItemDataByID", C_Item.RequestLoadItemDataByID, itemID) end
         return nil
     end
-    local tooltipLines = {}
     if C_TooltipInfo and C_TooltipInfo.GetItemByID then
         local tooltipData = tryCall("C_TooltipInfo.GetItemByID", C_TooltipInfo.GetItemByID, itemID)
         if type(tooltipData) == "table" and type(tooltipData.lines) == "table" then
+            local tooltipLines = {}
             for _, tooltipLine in ipairs(tooltipData.lines) do
                 local leftText, rightText = tooltipLine.leftText, tooltipLine.rightText
                 tooltipLines[#tooltipLines + 1] = tostring(leftText or "")
@@ -400,6 +400,14 @@ function Api.ItemTooltipLines(itemID)
             return tooltipLines
         end
     end
+    return Api.HyperlinkTooltipLines("item:" .. itemID)
+end
+
+-- the left text of every line a hidden tooltip shows for `hyperlink` ("item:123", "spell:123", "enchant:123");
+-- nil when the client has no tooltip for it
+---@param hyperlink string
+---@return string[]|nil
+function Api.HyperlinkTooltipLines(hyperlink)
     if not CreateFrame then return nil end
     if not scanningTooltip then
         scanningTooltip = tryCall("CreateFrame(GameTooltip)", CreateFrame, "GameTooltip", addon.FRAME_PREFIX .. "ScanTip", UIParent,
@@ -411,13 +419,29 @@ function Api.ItemTooltipLines(itemID)
     end
     scanningTooltip:SetOwner(UIParent, "ANCHOR_NONE")
     scanningTooltip:ClearLines()
-    if not pcall(scanningTooltip.SetHyperlink, scanningTooltip, "item:" .. itemID) then return nil end
+    if not pcall(scanningTooltip.SetHyperlink, scanningTooltip, hyperlink) then return nil end
+    local tooltipLines = {}
     for lineIndex = 1, scanningTooltip:NumLines() or 0 do
         local leftFontString = _G[addon.FRAME_PREFIX .. "ScanTipTextLeft" .. lineIndex]
         tooltipLines[#tooltipLines + 1] = leftFontString and leftFontString:GetText() or ""
     end
     scanningTooltip:Hide()
+    if #tooltipLines == 0 then return nil end
     return tooltipLines
+end
+
+-- Feature 017: the effect text of a spell, for recipes that make no item (enchants). On Forever the recipe id of
+-- an enchant is its classic spell id (13419 = Enchant Cloak - Minor Agility; confirmed in game 2026-11-18). nil while the
+-- client has not loaded the spell (the load is requested) or when it has no text.
+---@param spellID integer
+---@return string|nil
+function Api.SpellDescription(spellID)
+    if type(spellID) ~= "number" then return nil end
+    local getSpellDescription = (C_Spell and C_Spell.GetSpellDescription) or GetSpellDescription
+    local description = tryCall("GetSpellDescription", getSpellDescription, spellID)
+    if type(description) == "string" and description:find("%S") then return description end
+    if C_Spell and C_Spell.RequestLoadSpellData then tryCall("C_Spell.RequestLoadSpellData", C_Spell.RequestLoadSpellData, spellID) end
+    return nil
 end
 
 -- feature 016: quality, item level and required level of an item (the Recipes table). nil while the item is not cached:

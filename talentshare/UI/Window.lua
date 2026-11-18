@@ -103,6 +103,8 @@ local detailPanel = {}
 local function professionChoices() return addon.Model.Professions(addon.Store) end
 
 -- feature 011: client item data for categories and the free-text search (looked up when called; Api loads before UI)
+---@type fun(recipeID: integer): string|nil feature 017: effect text of a recipe without an item, defined with the recipe tooltip below
+local recipeEffectText
 ---@type RecipeLookups
 local itemLookups = {
     class = function(itemID) return addon.Api.ItemCategoryInformation(itemID) end,
@@ -110,6 +112,7 @@ local itemLookups = {
     groupLabel = function(groupID) return addon.Api.CategoryGroupLabel(groupID) end,
     text = function(itemID) return addon.ItemText.Get(itemID) end,
     itemDetails = function(itemID) return addon.Api.ItemDetails(itemID) end,   -- feature 016: quality, item level, required level
+    effect = function(recipeID) return recipeEffectText(recipeID) end,          -- feature 017: enchant effect text (search)
 }
 ---@type RecipeCell[] the Recipes table's current column positions (feature 016)
 local recipeCells = {}
@@ -317,6 +320,10 @@ local function refreshDetail()
     local recipeDetail = recipeID and addon.Model.RecipeDetail(addon.Store, recipeID, addon.Api.ItemCount, addon.Api.ItemName)
     detailPanel.title:SetText(recipeDetail and recipeDetail.name or Text["Select a recipe"])
     detailPanel.icon:SetTexture(recipeDetail and recipeDetail.icon or nil)
+    -- feature 017: the effect of a recipe without an item (enchant), one line under the title; full text in the tooltip
+    local catalogEntry = recipeID and addon.Store.GetRecipe(recipeID)
+    local effectText = recipeID and not (catalogEntry and catalogEntry.produces) and recipeEffectText(recipeID)
+    detailPanel.effectText:SetText(effectText and addon.Utility.Escape(effectText) or "")
     detailPanel.reagentsLabel:SetShown(recipeDetail ~= nil)
     for lineIndex, reagentLine in ipairs(detailPanel.reagentLines) do
         local reagentRow = recipeDetail and recipeDetail.reagents[lineIndex]
@@ -581,6 +588,47 @@ local function recipeChatText(recipeID, quantity)
         addon.Names.Recipe(recipeID, catalogEntry), quantity)
 end
 
+-- Feature 017: the effect text of a recipe that makes no item (enchants), read on this client by its recipe id as a
+-- spell id. Tries the spell description, then the "spell:" and "enchant:" tooltips; what each returned is logged once
+-- per recipe (/ts debug, /ts export). Found texts are cached for the session (the search asks on every keystroke).
+---@type table<integer, boolean>
+local loggedEffectProbes = {}
+---@type table<integer, string>
+local effectTextCache = {}
+
+---@param recipeID integer
+---@return string|nil
+local function readRecipeEffectText(recipeID)
+    local description = addon.Api.SpellDescription(recipeID)
+    local spellLines = addon.Api.HyperlinkTooltipLines("spell:" .. recipeID)
+    local enchantLines = addon.Api.HyperlinkTooltipLines("enchant:" .. recipeID)
+    if not loggedEffectProbes[recipeID] and (description or spellLines or enchantLines) then
+        loggedEffectProbes[recipeID] = true
+        addon.Log.Debug("window.effectProbe", "effect text sources for a recipe without an item", { recipeID = recipeID,
+            description = description or "nil", spellTooltip = spellLines and table.concat(spellLines, " / ") or "nil",
+            enchantTooltip = enchantLines and table.concat(enchantLines, " / ") or "nil" })
+    end
+    if description then return description end
+    -- tooltip line 1 is the name; the effect follows
+    for _, tooltipLines in ipairs({ spellLines or {}, enchantLines or {} }) do
+        local effectLines = {}
+        for lineIndex = 2, #tooltipLines do
+            if tooltipLines[lineIndex]:find("%S") then effectLines[#effectLines + 1] = tooltipLines[lineIndex] end
+        end
+        if #effectLines > 0 then return table.concat(effectLines, " ") end
+    end
+    return nil
+end
+
+---@param recipeID integer
+---@return string|nil effect text (client text, not peer text)
+recipeEffectText = function(recipeID)
+    if effectTextCache[recipeID] then return effectTextCache[recipeID] end
+    local effectText = readRecipeEffectText(recipeID)
+    if effectText then effectTextCache[recipeID] = effectText end
+    return effectText
+end
+
 -- hover on a recipe icon: the crafted item's own tooltip when known, else the name; then reagents and what a click does
 ---@param owner table
 ---@param recipeID integer
@@ -593,6 +641,8 @@ local function showRecipeTooltip(owner, recipeID, clickHint)
         GameTooltip:AddLine(addon.Model.RecipeName(addon.Store, recipeID), 1, 0.82, 0)
     else
         GameTooltip:SetText(addon.Model.RecipeName(addon.Store, recipeID), 1, 0.82, 0)
+        local effectText = recipeEffectText(recipeID)   -- feature 017: enchants
+        if effectText then GameTooltip:AddLine(addon.Utility.Escape(effectText), 0.2, 1, 0.2, true) end
     end
     local recipeDetail = addon.Model.RecipeDetail(addon.Store, recipeID, addon.Api.ItemCount, addon.Api.ItemName)
     if #recipeDetail.reagents > 0 then
@@ -828,9 +878,15 @@ local function buildDebugTab()
     if addon.IS_DEVELOPMENT_BUILD and addon.DevProbe then   -- dev build only (feature 011): records item/category/tooltip data to SavedVariables
         local probeButton = createButton(debugTab, Text["Item probe"], 100, 22, function() addon.DevProbe.Run() end)
         probeButton:SetPoint("RIGHT", exportButton, "LEFT", -8, 0)
+        -- feature 017 test: an enchanter in the dev data, so enchants appear in the Recipes tab
+        local fakeEnchanterButton = createButton(debugTab, Text["Fake enchanter"], 110, 18, function() addon.DevProbe.AddFakeEnchanter() end)
+        fakeEnchanterButton:SetPoint("TOPRIGHT", debugTab, "TOPRIGHT", 0, -26)   -- second row: the first is full at the minimum width
+        mainFrame.fakeEnchanterButton = fakeEnchanterButton
     end
     mainFrame.debugStatusText = createFontString(debugTab, "GameFontHighlightSmall")
-    mainFrame.debugStatusText:SetPoint("TOPLEFT", 0, -28); mainFrame.debugStatusText:SetPoint("RIGHT", 0, 0)
+    mainFrame.debugStatusText:SetPoint("TOPLEFT", 0, -28)
+    if mainFrame.fakeEnchanterButton then mainFrame.debugStatusText:SetPoint("RIGHT", mainFrame.fakeEnchanterButton, "LEFT", -8, 0)
+    else mainFrame.debugStatusText:SetPoint("RIGHT", 0, 0) end
     -- column headings of the name check (shown only in that view)
     local nameCheckHeader = CreateFrame("Frame", nil, debugTab); nameCheckHeader:SetSize(720, 16); nameCheckHeader:SetPoint("TOPLEFT", 0, -44)
     local headingTexts = createColumns(nameCheckHeader, "GameFontNormalSmall")
@@ -1030,6 +1086,9 @@ local function buildRecipesTab(recipesTab)
     detailPanel.icon = detailFrame:CreateTexture(nil, "ARTWORK"); detailPanel.icon:SetSize(32, 32); detailPanel.icon:SetPoint("TOPLEFT", 0, 0)
     detailPanel.title = createFontString(detailFrame, "GameFontNormalLarge")
     detailPanel.title:SetPoint("LEFT", detailPanel.icon, "RIGHT", 8, 0); detailPanel.title:SetPoint("RIGHT", 0, 0)
+    detailPanel.effectText = createFontString(detailFrame, "GameFontGreenSmall")
+    detailPanel.effectText:SetPoint("TOPLEFT", detailPanel.icon, "BOTTOMLEFT", 0, -2); detailPanel.effectText:SetPoint("RIGHT", 0, 0)
+    detailPanel.effectText:SetWordWrap(false)
     detailPanel.reagentsLabel = createFontString(detailFrame, "GameFontNormal")
     detailPanel.reagentsLabel:SetPoint("TOPLEFT", 0, -44); detailPanel.reagentsLabel:SetText(Text["Reagents"])
     detailPanel.reagentLines = {}

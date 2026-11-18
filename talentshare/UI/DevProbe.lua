@@ -331,7 +331,40 @@ function DevProbe.Run(extraItemIDs)
     end)
 end
 
+------------------------------------------------------------------ fake enchanter (feature 017 test, dev build only)
+
+-- Enchant recipe ids seen in a live guild's data (the recipe id of an enchant looks like its classic spell id).
+local FAKE_ENCHANTS = {
+    [13419] = "Enchant Cloak - Minor Agility", [7418] = "Enchant Bracer - Inferior Stamina",
+    [7426] = "Enchant Chest - Minor Absorption", [7428] = "Enchant Bracer - Minor Deflect",
+    [7771] = "Enchant Cloak - Minor Protection", [7786] = "Enchant Weapon - Minor Beastslayer",
+}
+
+-- Adds "Fake Enchanter-<my realm>" with Enchanting and FAKE_ENCHANTS to the dev data, in memory and kept from the
+-- roster prune, so the Recipes tab shows enchants without a real enchanter. Gone after a version change or /tsd clean.
+function DevProbe.AddFakeEnchanter()
+    local myName = addon.Utility.Me()
+    local realm = myName and myName:match("%-([^%-]+)$")
+    if not realm then addon.Print("fake enchanter: my own name is not known yet") return end
+    local fakeName = "Fake Enchanter-" .. realm
+    local knownRecipes, catalogEntries = {}, {}
+    for recipeID, recipeName in pairs(FAKE_ENCHANTS) do
+        knownRecipes[recipeID] = true
+        catalogEntries[recipeID] = { name = recipeName, loc = "enUS", icon = 135913, reagents = {} }
+    end
+    addon.Store.PutCatalog(catalogEntries)
+    addon.Store.keptNames[fakeName] = true
+    local added = addon.Store.PutCharacter({ name = fakeName, class = "MAGE", level = 60, rev = addon.Utility.Now(),
+        professions = { Enchanting = { id = 333, name = "Enchanting", rank = 150, max = 150, recipes = knownRecipes } } })
+    addon.Log.Information("devProbe.fakeEnchanter", "a fake enchanter was added for the enchant text test",
+        { name = fakeName, recipes = addon.Utility.Count(knownRecipes), added = added })
+    addon.Events.Fire("DATA_CHANGED", "chars")
+    addon.Print(("fake enchanter added: %d enchants. Recipes tab -> Profession: Enchanting, hover the icons (twice), then /reload to write the log.")
+        :format(addon.Utility.Count(knownRecipes)))
+end
+
 if addon.IS_DEVELOPMENT_BUILD then
+    addon.SlashCommands.fakeenchanter = function() DevProbe.AddFakeEnchanter() end
     addon.SlashCommands.itemprobe = function(arguments)
         local extraItemIDs = {}
         for itemIDText in tostring(arguments or ""):gmatch("%d+") do extraItemIDs[#extraItemIDs + 1] = tonumber(itemIDText) end
