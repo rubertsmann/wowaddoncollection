@@ -2,7 +2,7 @@
 ## Title: TalentShare
 ## Notes: Shares guild members' professions, recipes and reagents, plus a crafting order board.
 ## Author: rubertsmann
-## Version: 0.7.0
+## Version: 0.7.1
 ## SavedVariables: TalentShareDB
 ## IconTexture: Interface\Icons\INV_Misc_Note_01
 ## X-Category: Professions
@@ -36,6 +36,7 @@ Core\Net\Communication.lua
 Core\Debug\Diagnostics.lua
 Core\Game\Events.lua
 
+UI\SecureDock.lua
 UI\Table.lua
 UI\Window.lua
 UI\Alerts.lua

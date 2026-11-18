@@ -3,8 +3,9 @@ local addonName, addon = ...
 -- Standalone window: "Recipes" tab (filter, search, reagents, crafters, request), "Orders" tab (shared board),
 -- "Available" tab (recipe items guild members hold, with dibs) and "Debug" tab
 -- (network trace, diagnostic export). The tabs are one ordered list (tabDefinitions).
--- Plain frames only (no secure templates except the profession and Craft buttons), so it never taints and is safe to
--- open in combat. All text goes through Text (Locales/); game names are resolved for this client by Model/Names.
+-- Plain frames only, except the secure profession and Craft buttons. Those live in UI/SecureDock.lua's holder while in
+-- combat (a window with secure children is protected and could not be shown or hidden in combat), so the window can be
+-- opened, closed and switched in a fight. All text goes through Text (Locales/); game names are resolved for this client by Model/Names.
 -- tests/test_locale_files.lua fails on a hardcoded label.
 ---@class UIModule
 local UI = {}
@@ -173,7 +174,8 @@ end
 ---@param buttonIndex integer
 ---@return table|nil
 local function createProfessionButton(parent, buttonIndex)
-    local ok, professionButton = pcall(CreateFrame, "Button", nil, parent, "SecureActionButtonTemplate")
+    -- created in the dock's holder; SecureDock.Register below moves it into the window (out of combat only)
+    local ok, professionButton = pcall(CreateFrame, "Button", nil, addon.SecureDock.Holder(), "SecureActionButtonTemplate")
     if not ok or not professionButton then
         addon.Log.Error("window.professionBar", "a secure profession button could not be created", { error = tostring(professionButton) })
         return nil
@@ -194,9 +196,12 @@ local function createProfessionButton(parent, buttonIndex)
             profession = professionRow and professionRow.name,
             macro = professionRow and (addon.Model.CastMacro(professionRow):gsub("\n", " / ")) })
     end)
-    if buttonIndex == 1 then professionButton:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
-    else professionButton:SetPoint("RIGHT", professionBar.buttons[buttonIndex - 1], "LEFT", -4, 0) end
     professionButton:Hide()
+    local previousButton = professionBar.buttons[buttonIndex - 1]
+    addon.SecureDock.Register(professionButton, parent, function(button)
+        if buttonIndex == 1 or not previousButton then button:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+        else button:SetPoint("RIGHT", previousButton, "LEFT", -4, 0) end
+    end)
     return professionButton
 end
 
@@ -1151,7 +1156,8 @@ local function buildOrdersTab(ordersTab)
     mainFrame.doneButton:SetPoint("LEFT", mainFrame.withdrawButton, "RIGHT", 6, 0)
     mainFrame.cancelButton:SetPoint("LEFT", mainFrame.doneButton, "RIGHT", 6, 0)
     -- secure Craft button (see "Craft button" above); without the template (should not happen) there is no button
-    local craftTemplateOk, craftButton = pcall(CreateFrame, "Button", nil, ordersTab, "SecureActionButtonTemplate,UIPanelButtonTemplate")
+    local craftTemplateOk, craftButton = pcall(CreateFrame, "Button", nil, addon.SecureDock.Holder(),
+        "SecureActionButtonTemplate,UIPanelButtonTemplate")
     if craftTemplateOk and craftButton then
         craftButton:SetSize(110, 24)
         craftButton.minimumWidth, craftButton.SetLabel = 110, setButtonLabel
@@ -1164,8 +1170,10 @@ local function buildOrdersTab(ordersTab)
             GameTooltip:Show()
         end)
         craftButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
-        craftButton:SetPoint("LEFT", mainFrame.cancelButton, "RIGHT", 18, 0)
         craftButton:SetLabel(Text["Craft"]); craftButton:Disable()
+        addon.SecureDock.Register(craftButton, ordersTab, function(button)
+            button:SetPoint("LEFT", mainFrame.cancelButton, "RIGHT", 18, 0)
+        end)
         mainFrame.craftButton = craftButton
     else
         addon.Log.Error("window.craft", "the secure Craft button could not be created; crafting from orders is unavailable",
@@ -1398,8 +1406,15 @@ end
 local loginFrame = CreateFrame("Frame")
 loginFrame:RegisterEvent("PLAYER_LOGIN")
 pcall(loginFrame.RegisterEvent, loginFrame, "PLAYER_REGEN_ENABLED")
+pcall(loginFrame.RegisterEvent, loginFrame, "PLAYER_REGEN_DISABLED")
 loginFrame:SetScript("OnEvent", function(_, gameEvent)
+    if gameEvent == "PLAYER_REGEN_DISABLED" then
+        -- fired before the lockdown: take the secure buttons out of the window so it stays free to show/hide in combat
+        addon.SecureDock.OnCombatStart()
+        return
+    end
     if gameEvent == "PLAYER_REGEN_ENABLED" then
+        addon.SecureDock.OnCombatEnd()   -- the secure buttons back into the window first
         -- secure buttons could not be updated in combat
         if professionBar.needsUpdateAfterCombat and mainFrame and mainFrame:IsShown() then refreshProfessionBar() end
         if craftState.needsUpdateAfterCombat and mainFrame and mainFrame:IsShown() then refreshOrders() end

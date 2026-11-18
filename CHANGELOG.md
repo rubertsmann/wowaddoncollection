@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1
+Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.3, schema 5 (both unchanged). Bug fix only.
+- **Fix: the window can be opened, closed and used in combat.** It holds secure buttons (profession scan buttons,
+  Craft), and a frame with secure children is protected: the game blocked showing or hiding it during combat. The secure
+  buttons now leave the window when combat starts and come back after it (`UI/SecureDock.lua`); they cannot be used in
+  combat anyway. Blocked actions are now logged (`/ts debug`, `/ts export`).
+
 ## 0.7.0
 Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.3 (unchanged), schema 5. Features 015, 016.
 - **Games moved out:** the coin flip and the slot machine are now the separate addon **GuildGames** (`/gg`). The Games
