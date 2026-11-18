@@ -1,0 +1,15 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <!-- LibGuildSync-1.0. Load AFTER LibStub and LibDeflate. Core first; the order of the rest is the dependency order. -->
+    <Script file="Core.lua"/>
+    <Script file="Utility.lua"/>
+    <Script file="Log.lua"/>
+    <Script file="Trace.lua"/>
+    <Script file="Codec.lua"/>
+    <Script file="Guard.lua"/>
+    <Script file="Locale.lua"/>
+    <Script file="Events.lua"/>
+    <Script file="Sync.lua"/>
+    <Script file="Guild.lua"/>
+    <Script file="Channel.lua"/>
+    <Script file="Widgets.lua"/>
+</Ui>
