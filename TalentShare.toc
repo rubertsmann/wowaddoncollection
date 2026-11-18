@@ -36,6 +36,7 @@ Core\Net\Communication.lua
 Core\Debug\Diagnostics.lua
 Core\Game\Events.lua
 
+UI\SecureDock.lua
 UI\Table.lua
 UI\Window.lua
 UI\Alerts.lua

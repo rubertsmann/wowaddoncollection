@@ -213,6 +213,16 @@ function onGameEvent.TRADE_SKILL_DATA_SOURCE_CHANGED() scheduleProfessionScan(1.
 function onGameEvent.SKILL_LINES_CHANGED() scheduleProfessionScan(2.0) end
 function onGameEvent.NEW_RECIPE_LEARNED() scheduleProfessionScan(1.5) end   -- keeps the cache current without reopening the window
 function onGameEvent.GET_ITEM_INFO_RECEIVED() Events.Fire("ITEM_INFO") end
+-- the game blocked one of our calls (protected action in combat, taint): recorded so /ts export shows what and where
+local function logBlockedAction(kind)
+    return function(blockedAddonName, blockedFunction)
+        if blockedAddonName ~= addonName then return end
+        addon.Log.Warning("events.blocked", "the game blocked an action of this addon",
+            { kind = kind, call = tostring(blockedFunction), inCombat = addon.Api.InCombat() })
+    end
+end
+onGameEvent.ADDON_ACTION_BLOCKED = logBlockedAction("blocked")
+onGameEvent.ADDON_ACTION_FORBIDDEN = logBlockedAction("forbidden")
 
 -- recipe item locations (events that do not exist on this client are skipped by registerGameEvent)
 function onGameEvent.BAG_UPDATE_DELAYED() scheduleItemScan(1.5) end
