@@ -231,6 +231,7 @@ end
 ---@field groupLabel? fun(groupID: integer): string
 ---@field text? fun(itemID: integer): string|nil effect/tooltip text
 ---@field itemDetails? fun(itemID: integer): integer|nil, integer|nil, integer|nil quality, item level, required level (feature 016)
+---@field effect? fun(recipeID: integer): string|nil effect text of a recipe without an item, e.g. an enchant (feature 017)
 
 ---@class RecipeRow
 ---@field recipeID integer
@@ -297,6 +298,8 @@ function Model.BuildRecipeRows(store, state, itemNameFunction, lookups)
             end
             if recipeRow.categoryLabel ~= "" then searchableTexts[#searchableTexts + 1] = recipeRow.categoryLabel end
             if lookups.text and catalogEntry and catalogEntry.produces then searchableTexts[#searchableTexts + 1] = lookups.text(catalogEntry.produces) end
+            -- feature 017: a recipe without an item (enchant) is searched by its spell's effect text
+            if lookups.effect and not (catalogEntry and catalogEntry.produces) then searchableTexts[#searchableTexts + 1] = lookups.effect(recipeRow.recipeID) end
             local searchKeys = {}
             for _, searchableText in ipairs(searchableTexts) do
                 if type(searchableText) == "string" then searchKeys[#searchKeys + 1] = sortKey(searchableText) end

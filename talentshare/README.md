@@ -7,7 +7,8 @@ shared crafting-order board.
 * **Recipes tab** – filter by profession, search recipe or reagent names, see reagents (with how many you have), see
   who can craft it (click to whisper), request it. The list is a table: names in item-quality colour, columns Item level,
   Req. level, Profession, Skill and Category (each switchable in `/ts options` -> "Recipe list"), sorted by item level
-  (highest first) until you click another column title.
+  (highest first) until you click another column title. Enchantments (no item) show their effect in the tooltip and
+  the detail panel and are found by it in the search.
 * **Resizable window** – drag the grip at the bottom right; all lists grow with it and the size is remembered.
 * **Orders tab** – guild-wide board: requests, "I'll craft it" claims, done/cancel; everyone sees who claimed what.
   **Craft** opens the order's profession with the recipe selected, a second click crafts the ordered quantity.

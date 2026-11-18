@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.2
+Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.3, schema 5 (both unchanged). Feature 017.
+- **Enchants show what they do** (feature 017): recipes that make no item (enchantments) show their effect in the recipe
+  tooltip and under the title in the detail panel, and the search finds them by it. Each client reads the text itself
+  (recipe id = spell id), in its own language; nothing new is sent or stored.
+- Dev build: Debug tab -> "Fake enchanter" (`/tsd fakeenchanter`) adds a test enchanter for checking this without one.
+
 ## 0.7.1
 Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.3, schema 5 (both unchanged). Bug fix only.
 - **Fix: the window can be opened, closed and used in combat.** It holds secure buttons (profession scan buttons,
