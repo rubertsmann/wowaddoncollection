@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-11-18)
 - Dancer (`/cig dance`): a dancing night elf on a small stage with a chrome pole behind her, in a window that can be
   moved, resized (corner grip) and scaled (mouse wheel, `/cig dance scale`); right-drag turns her; lock makes it
   click-through. Looks: night elf NPC appearances with baked textures (40 outfits per sex, `/cig dance next`), a display

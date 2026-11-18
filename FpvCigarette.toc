@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: FPV Cigarette
 ## Notes: A lit cigarette in first-person view, with a burning ember and drifting smoke. /cig to light, /cig again for a drag.
-## Version: 0.1.0
+## Version: 0.2.0
 ## SavedVariables: FpvCigaretteDB
 ## IconTexture: Interface\Icons\INV_Misc_Bandage_15
 
