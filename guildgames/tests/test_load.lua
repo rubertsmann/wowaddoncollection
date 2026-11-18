@@ -1,0 +1,172 @@
+-- Load-time smoke test: every file in the TOC compiles and runs its top level against stubbed WoW globals, in TOC order,
+-- for the live and the dev identity; the window builds and a flip and a spin run. It does NOT replace testing in the game.
+local function slurp(path)
+    local handle = assert(io.open(path, "rb"), path)
+    local text = handle:read("*a"); handle:close()
+    return text
+end
+
+-- Universal widget stub: every method returns the stub itself, except the few that must return plain values.
+local PLAIN = { GetStringWidth = 40, GetWidth = 100, GetHeight = 20, GetText = "", IsShown = false, GetEffectiveScale = 1,
+    GetCenter = 0, GetNumPoints = 0, GetAlpha = 1, GetFrameLevel = 1 }
+local function stub()
+    local widget = {}
+    local shown = false
+    return setmetatable(widget, {
+        __index = function(_, key)
+            if key == "IsShown" then return function() return shown end end
+            if key == "Show" then return function() shown = true end end
+            if key == "Hide" then return function() shown = false end end
+            if key == "SetShown" then return function(_, value) shown = value and true or false end end
+            if key == "GetFontString" then return function() return nil end end
+            return function()
+                local value = PLAIN[key]
+                if value == nil then return widget end
+                return value
+            end
+        end,
+        __call = function() return widget end,
+    })
+end
+
+local function tocFiles(path)
+    local files = {}
+    for line in slurp(path):gmatch("[^\r\n]+") do
+        if not line:match("^%s*#") and line:match("%.lua%s*$") then files[#files + 1] = (line:gsub("^%s+", ""):gsub("%s+$", ""):gsub("\\", "/")) end
+    end
+    return files
+end
+
+local function withStubs(body)
+    local saved = {}
+    local globals = { CreateFrame = function() return stub() end, UIParent = stub(), Minimap = stub(), GameTooltip = stub(), UISpecialFrames = {},
+        SlashCmdList = {}, print = function() end, C_ChatInfo = { RegisterAddonMessagePrefix = function() return true end,
+            SendAddonMessage = function() return 0 end },
+        C_Timer = { After = function() end, NewTicker = function() return stub() end } }
+    for key, value in pairs(globals) do saved[key] = _G[key]; _G[key] = value end
+    local ok, errorMessage = pcall(body)
+    for key in pairs(globals) do _G[key] = saved[key] end
+    if not ok then error(errorMessage, 0) end
+end
+
+return {
+    ["load: the TOC lists every addon file in Core, UI and Locales"] = function(harness)
+        local listed = {}
+        for _, file in ipairs(tocFiles("GuildGames.toc")) do listed[file] = true; assert(io.open(file, "rb"), "TOC lists missing file " .. file):close() end
+        local listing = io.popen('dir /b /s Core\\*.lua UI\\*.lua Locales\\*.lua 2>nul || find Core UI Locales -name "*.lua"')
+        for line in listing:lines() do
+            local relative = ("/" .. line:gsub("\\", "/")):match(".*/((Core|UI|Locales)/[%w_]+%.lua)$")
+                or ("/" .. line:gsub("\\", "/")):match(".*/(Core/[%w_]+%.lua)$") or ("/" .. line:gsub("\\", "/")):match(".*/(UI/[%w_]+%.lua)$")
+                or ("/" .. line:gsub("\\", "/")):match(".*/(Locales/[%w_]+%.lua)$")
+            if relative then harness.truthy(listed[relative], relative .. " exists but is not in GuildGames.toc") end
+        end
+        listing:close()
+        harness.truthy(slurp("GuildGames.toc"):find("Libs\\LibGuildSync\\LibGuildSync.xml", 1, true), "the TOC must load the library")
+    end,
+
+    ["load: all TOC files run in order for both identities; the window builds, a flip and a spin run"] = function(harness)
+        withStubs(function()
+            for _, folderName in ipairs({ "GuildGames", "GuildGames-Dev" }) do
+                local addon = {}
+                for _, file in ipairs(tocFiles("GuildGames.toc")) do
+                    if not file:match("^Libs/") then assert(loadfile(file), file)(folderName, addon) end
+                end
+                local development = folderName:find("Dev", 1, true) ~= nil
+                harness.equal(addon.IS_DEVELOPMENT_BUILD, development)
+                harness.equal(addon.PREFIX, development and "GGamesDev" or "GGames")
+                harness.equal(addon.SAVED_VARIABLES_NAME, development and "GuildGamesDevDB" or "GuildGamesDB")
+                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 0); harness.equal(addon.Store.SCHEMA, 1)
+                harness.truthy(addon.UI and addon.GamesTab and addon.SlotMachine and addon.Communication and addon.Sync, "namespace incomplete")
+                addon.Store.Init({})
+                addon.Store.db.me = "A-R"
+                harness.truthy(pcall(addon.UI.Toggle), "building the window failed")
+                harness.truthy(addon.GamesTab.widgets.flipButton, "the coin flip was not built (see Log: window.games)")
+                harness.truthy(addon.SlotMachine.widgets.spinButton, "the slot machine was not built (see Log: games.slots)")
+                addon.GamesTab.ReadStake = function() return 100 end   -- the stub boxes hold no text
+                local okFlip, flipError = pcall(addon.GamesTab.Flip)
+                harness.truthy(okFlip, "flipping failed: " .. tostring(flipError))
+                harness.truthy(addon.Games.Get("A-R"), "the flip was stored")
+                addon.GamesTab.state.flipping = false
+                addon.GamesTab.SelectGame("slots")
+                local okSpin, spinError = pcall(addon.SlotMachine.Spin)
+                harness.truthy(okSpin, "spinning failed: " .. tostring(spinError))
+                harness.truthy(addon.SurvivorArena.widgets.startButton, "the survivor arena was not built (see Log: games.survivor)")
+                addon.SlotMachine.state.spinning = false
+                addon.GamesTab.SelectGame("survivor")
+                addon.SurvivorArena.widgets.stake.Read = function() return 100 end
+                local okRun, runError = pcall(function()
+                    assert(addon.SurvivorArena.Start(), "no run")
+                    for _ = 1, 400 do
+                        addon.SurvivorArena.Update(0.1)
+                        if addon.SurvivorArena.state.run and addon.SurvivorArena.state.run.choices then addon.SurvivorArena.Choose(1) end
+                    end
+                    if addon.SurvivorArena.state.run then addon.SurvivorArena.Start() end   -- give up
+                end)
+                harness.truthy(okRun, "the survivor run failed: " .. tostring(runError))
+                harness.truthy(addon.Games.Get("A-R").survivor, "the run was stored")
+                harness.truthy(pcall(addon.UI.Refresh), "refreshing failed")
+                harness.truthy(addon.UI.parts.sidebar and addon.UI.parts.stage, "the overlay window has a stage and a sidebar")
+                harness.truthy(addon.UI.parts.grip and addon.UI.parts.mover, "the scale grip or move handle was not built (see Log: window.grip)")
+                harness.truthy(type(addon.GamesTab.widgets.gameButtons.coin.gameIcon) == "table", "the game switch has icons")
+                -- the corner follows the cursor: twice the window's size away is scale 2, clamped to the maximum
+                harness.equal(addon.UI.ScaleForCorner(100, 800, 100 + 300 * 1.5, 800 - 10), 1.5)
+                harness.equal(addon.UI.ScaleForCorner(100, 800, 100 + 300 * 5, 800), addon.UI.MAXIMUM_SCALE)
+                harness.equal(addon.UI.ScaleForCorner(100, 800, 90, 810), addon.UI.MINIMUM_SCALE)
+                harness.equal(addon.db.ui.sidebarOpen, false, "the leaderboard sidebar starts closed")
+                harness.truthy(pcall(addon.UI.ToggleSidebar), "toggling the sidebar failed")
+                harness.equal(addon.db.ui.sidebarOpen, true)
+                harness.truthy(pcall(addon.UI.ToggleSidebar)); harness.equal(addon.db.ui.sidebarOpen, false)
+                local okMinimap, minimapError = pcall(addon.UI.BuildMinimapButton)
+                harness.truthy(okMinimap and addon.UI.minimapButton, "the minimap button was not built: " .. tostring(minimapError))
+                if development then
+                    harness.truthy(addon.SlashCommands.anim and addon.SlashCommands.game, "dev commands anim/game missing")
+                    harness.truthy(pcall(addon.SlashCommands.game, "sim 3"), "game sim failed")
+                    harness.equal(addon.Utility.Count(addon.Store.db.games), 1, "simulated players must not be stored")
+                else
+                    harness.equal(addon.SlashCommands.anim, nil, "dev command in the live build")
+                end
+                harness.truthy(addon.SlashCommands.version and addon.SlashCommands.comm and addon.SlashCommands.clean, "slash commands missing")
+            end
+        end)
+    end,
+
+    -- the generated GuildGames-Dev.toc (tools/deploy.ps1) goes stale when the live TOC gains a file
+    ["load: the generated GuildGames-Dev.toc (when present) lists the same files as GuildGames.toc"] = function(harness)
+        local handle = io.open("GuildGames-Dev.toc", "rb")
+        if not handle then return end
+        handle:close()
+        harness.equal(table.concat(tocFiles("GuildGames-Dev.toc"), "\n"), table.concat(tocFiles("GuildGames.toc"), "\n"),
+            "GuildGames-Dev.toc is stale: run powershell tools/deploy.ps1, then restart the game")
+    end,
+
+    -- RF5: outside a guild (or before the roster) nothing is sent and nothing fails
+    ["load: not in a guild -> the channel stays inactive and a play is still stored"] = function(harness)
+        local addon = harness.addon({ now = 1794873600 })
+        addon.Store.db.me = "Me-R"
+        addon.Api = { IsGuilded = function() return false end, GetPlayerInformation = function() return { name = "Me-R" } end }
+        addon.Communication.ready = true
+        addon.Communication.Start()
+        harness.equal(addon.Communication.active, false)
+        addon.Communication.RequestHelloSoon()
+        harness.equal(#addon.Communication.queue, 0)
+        harness.truthy(addon.Games.Flip("Me-R", 100, "H", 1794873600, function() return 0.1 end))
+    end,
+
+    ["load: no file reads an unknown lowercase global (a removed local helper)"] = function(harness)
+        local known = {}
+        for name in ([[type pairs ipairs tostring tonumber select pcall xpcall error assert setmetatable getmetatable unpack print
+            next rawget rawset math string table os debug date time tinsert wipe debugstack geterrorhandler loadstring strtrim
+            debugprofilestop hooksecurefunc]]):gmatch("%S+") do known[name] = true end
+        local unknown = {}
+        for _, file in ipairs(tocFiles("GuildGames.toc")) do
+            if not file:match("^Libs/") then
+                local listing = assert(io.popen('luajit -bl "' .. file .. '"'))
+                for name in listing:read("*a"):gmatch('GGET[^\n]-"([a-z][%w_]*)"') do
+                    if not known[name] then unknown[#unknown + 1] = file .. ": " .. name end
+                end
+                listing:close()
+            end
+        end
+        harness.equal(#unknown, 0, "unknown globals (missing local?): " .. table.concat(unknown, ", "))
+    end,
+}
