@@ -141,6 +141,14 @@ tests["sway and turn lag stay small"] = function()
     near(lag, -0.08, "lag clamps")
 end
 
+tests["dancer scale clamps and survives bad input"] = function()
+    assert(Logic.ClampDancerScale(1.5) == 1.5)
+    assert(Logic.ClampDancerScale(0.01) == Logic.DANCER_SCALE_MIN)
+    assert(Logic.ClampDancerScale(99) == Logic.DANCER_SCALE_MAX)
+    assert(Logic.ClampDancerScale("x") == 1)
+    assert(Logic.DANCE_ANIMATION == 69)
+end
+
 local names = {}
 for name in pairs(tests) do names[#names + 1] = name end
 table.sort(names)

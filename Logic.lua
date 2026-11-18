@@ -228,6 +228,15 @@ function Logic.TurnLag(current, turnRate, elapsed)
     return current + (target - current) * blend
 end
 
+------------------------------------------------------------------ dancer
+
+Logic.DANCE_ANIMATION = 69        -- AnimationData: EmoteDance
+Logic.DANCER_SCALE_MIN, Logic.DANCER_SCALE_MAX = 0.3, 3
+
+function Logic.ClampDancerScale(scale)
+    return clamp(tonumber(scale) or 1, Logic.DANCER_SCALE_MIN, Logic.DANCER_SCALE_MAX)
+end
+
 ------------------------------------------------------------------ first person
 
 -- Camera distance estimate for clients without GetCameraZoom: follows CameraZoomIn / CameraZoomOut calls.

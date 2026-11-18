@@ -11,7 +11,7 @@ $zip = Join-Path $dist "FpvCigarette-$version.zip"
 if (Test-Path $zip) { Remove-Item $zip }
 
 # Files that ship: the TOC, the Lua files it lists, the textures and the README.
-$items = "FpvCigarette.toc", "Geometry.lua", "Log.lua", "Logic.lua", "Overlay.lua", "Commands.lua", "Textures", "README.md"
+$items = "FpvCigarette.toc", "Geometry.lua", "Log.lua", "Logic.lua", "Overlay.lua", "Displays.lua", "Dancer.lua", "Commands.lua", "Textures", "README.md"
 $files = foreach ($item in $items) {
     $path = Join-Path $repo $item
     if (-not (Test-Path $path)) { throw "missing: $path" }

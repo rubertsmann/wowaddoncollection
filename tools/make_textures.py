@@ -223,6 +223,51 @@ def make_ember():
     return rgba
 
 
+# ------------------------------------------------------------------ dancer: pole and stage
+
+
+def make_pole():
+    """64x512 chrome pole (vertical cylinder) with a mount at the top; stretched to any height in game."""
+    width, height, factor = 64, 512, 4
+    ys, xs = np.mgrid[0:height * factor, 0:width * factor]
+    x = (xs + 0.5) / (width * factor) * 2 - 1           # -1..1 across
+    y = (ys + 0.5) / (height * factor)                  # 0 top .. 1 bottom
+    half = np.where(y < 0.035, 0.95, 0.42)              # wider mount cap at the top
+    v = x / half
+    inside = np.abs(v) <= 1
+    roundness = np.sqrt(np.clip(1 - v * v, 0, 1))
+    # chrome: dark core, sharp highlight left of centre, coloured rim reflections
+    base = 0.18 + 0.35 * roundness
+    highlight = 0.85 * np.exp(-((v + 0.35) / 0.12) ** 2) + 0.35 * np.exp(-((v - 0.55) / 0.08) ** 2)
+    light = np.clip(base + highlight, 0, 1)
+    color = np.dstack([light * 0.95, light * 0.97, light * 1.0])
+    rim = (1 - roundness)[..., None] * np.array([0.25, 0.1, 0.35])   # purple club light on the edges
+    color = np.clip(color + rim, 0, 1)
+    rgba = downsample(np.dstack([color, inside.astype(np.float64)]), factor)
+    save_tga(rgba, os.path.join(TEXTURES, "pole.tga"))
+    return rgba
+
+
+def make_stage():
+    """256x64 round stage seen from slightly above: a dark disc with a glowing rim."""
+    width, height, factor = 256, 64, 4
+    ys, xs = np.mgrid[0:height * factor, 0:width * factor]
+    x = (xs + 0.5) / (width * factor) * 2 - 1
+    y = (ys + 0.5) / (height * factor) * 2 - 1
+    top = np.hypot(x, (y + 0.25) / 0.62)               # top face ellipse
+    side = (np.abs(x) <= 1) & (y > -0.25) & (np.hypot(x, (y - 0.25) / 0.62) <= 1)
+    face = top <= 1
+    inside = face | side
+    face_light = 0.16 + 0.10 * (1 - top)
+    color = np.where(face[..., None], np.dstack([face_light * 1.1, face_light * 0.9, face_light * 1.4]),
+                     np.array([0.08, 0.05, 0.10]))
+    rim = np.exp(-((top - 0.96) / 0.03) ** 2)[..., None] * np.array([1.0, 0.35, 0.85])
+    color = np.clip(color + rim * face[..., None], 0, 1)
+    rgba = downsample(np.dstack([color, inside.astype(np.float64)]), factor)
+    save_tga(rgba, os.path.join(TEXTURES, "stage.tga"))
+    return rgba
+
+
 # ------------------------------------------------------------------ outputs
 
 
@@ -284,13 +329,27 @@ def write_preview(cigarette, smoke, ember, tips):
     Image.fromarray((canvas * 255).astype(np.uint8), "RGB").save(os.path.join(ROOT, "tools", "preview.png"))
 
 
+def write_dancer_preview(pole, stage):
+    """Pole and stage composed the way Dancer.lua lays them out (tools/preview_dancer.png, not shipped)."""
+    width, height = 300, 420
+    canvas = np.ones((height, width, 3)) * np.array([0.12, 0.13, 0.17])
+    stage_image = Image.fromarray((np.clip(stage, 0, 1) * 255).astype(np.uint8), "RGBA").resize((210, 52), Image.BILINEAR)
+    pole_image = Image.fromarray((np.clip(pole, 0, 1) * 255).astype(np.uint8), "RGBA").resize((14, 380), Image.BILINEAR)
+    over(canvas, np.asarray(pole_image) / 255.0, width // 2 - 7, 8)
+    over(canvas, np.asarray(stage_image) / 255.0, width // 2 - 105, height - 60)
+    Image.fromarray((canvas * 255).astype(np.uint8), "RGB").save(os.path.join(ROOT, "tools", "preview_dancer.png"))
+
+
 def main():
     os.makedirs(TEXTURES, exist_ok=True)
     cigarette, tips = make_cigarette()
     smoke = make_smoke()
     ember = make_ember()
+    pole = make_pole()
+    stage = make_stage()
     write_geometry(tips)
     write_preview(cigarette, smoke, ember, tips)
+    write_dancer_preview(pole, stage)
     print("wrote", TEXTURES, "and Geometry.lua")
 
 

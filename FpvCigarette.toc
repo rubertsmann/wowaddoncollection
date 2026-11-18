@@ -9,4 +9,6 @@ Geometry.lua
 Log.lua
 Logic.lua
 Overlay.lua
+Displays.lua
+Dancer.lua
 Commands.lua

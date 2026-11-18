@@ -14,6 +14,7 @@ local HELP = {
     "/cig move - drag it into place (again to lock) | /cig scale 0.5-2 | /cig reset",
     "/cig time <seconds> - how long one cigarette burns (default " .. Logic.BURN_SECONDS .. ")",
     "/cig calibrate - say 'I am in first person now' (clients without a camera-distance API)",
+    "/cig dance - toggle the dancer | /cig dance lock|unlock|elf|male|next|prev|id <n>|player|custom|scale <n>|reset",
     "/cig status | /cig debug (verbose log) | /cig log [n] | /cig clearlog",
 }
 
@@ -68,6 +69,34 @@ local handlers = {
         for _, line in ipairs(addon.Log.Tail(tonumber(argument) or 20)) do DEFAULT_CHAT_FRAME:AddMessage(line) end
     end,
     clearlog = function() addon.Log.Clear(); addon.Print("log cleared.") end,
+    dance = function(argument)
+        local Dancer = addon.Dancer
+        if not Dancer.widgets.frame then return addon.Print("the dancer failed to load, see /cig log.") end
+        local word, value = (argument or ""):lower():match("^(%S*)%s*(.-)$")
+        if word == "" then
+            Dancer.Toggle()
+        elseif word == "on" or word == "off" then
+            Dancer.SetShown(word == "on")
+        elseif word == "lock" or word == "unlock" then
+            Dancer.SetLocked(word == "lock")
+            addon.Print(word == "lock" and "dancer locked (click-through)."
+                or "dancer unlocked: drag to move, corner grip to resize, wheel to scale, right-drag to turn.")
+        elseif word == "elf" or word == "male" or word == "player" or word == "custom" or word == "file" then
+            Dancer.SetLook(word == "male" and "elfmale" or word)
+        elseif word == "next" or word == "prev" then
+            local index, count, displayId = Dancer.Cycle(word == "next" and 1 or -1)
+            addon.Print(string.format("outfit %d/%d (display %d)", index, count, displayId))
+        elseif word == "id" and tonumber(value) then
+            Dancer.SetDisplayId(tonumber(value))
+            addon.Print("display " .. tonumber(value))
+        elseif word == "scale" and tonumber(value) then
+            Dancer.SetScale(tonumber(value))
+        elseif word == "reset" then
+            Dancer.Reset()
+        else
+            addon.Print("/cig dance [on|off|lock|unlock|elf|male|next|prev|id <n>|player|custom|scale 0.3-3|reset]")
+        end
+    end,
     help = function() for _, line in ipairs(HELP) do addon.Print(line) end end,
 }
 handlers.puff = handlers.drag
