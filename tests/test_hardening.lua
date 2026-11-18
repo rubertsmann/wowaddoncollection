@@ -460,35 +460,49 @@ return {
         harness.truthy(not top:find("CF_API_TOKEN"), "CF_API_TOKEN must be scoped to the packager step, not the whole workflow")
         harness.truthy(wf:find("CF_API_TOKEN"), "packager step lost its token")
     end,
-    ---------------------------------------------------------------- feature 014: protocol 2.3, schema 4
-    ["014: protocol 2.3 and schema 4 are pinned; migration 3 -> 4 adds games and keeps everything else (RF4)"] = function(harness)
+    ---------------------------------------------------------------- feature 015: games moved to GuildGames; schema 5
+    ["015: protocol 2.3 and schema 5 are pinned; migration 4 -> 5 drops games and the games settings, keeps everything else"] = function(harness)
         local addon = harness.addon({ now = 1.8e9 })
-        harness.equal(addon.PROTOCOL_MAJOR, 2); harness.equal(addon.PROTOCOL_MINOR, 3); harness.equal(addon.Store.SCHEMA, 4)
-        local sv = { schema = 3, chars = {}, catalog = {}, orders = {}, ui = { lastStake = 50 }, me = "Me-R",
+        harness.equal(addon.PROTOCOL_MAJOR, 2); harness.equal(addon.PROTOCOL_MINOR, 3); harness.equal(addon.Store.SCHEMA, 5)
+        harness.equal(addon.Games, nil, "the games left TalentShare")
+        local sv = { schema = 4, chars = {}, catalog = {}, orders = {}, me = "Me-R",
+            ui = { lastStake = 50, lastStakeCopper = 100, lastSlotStakeCopper = 10, gamesScope = "all", gameKey = "slots" },
+            games = { ["A-R"] = { name = "A-R", rev = 1, total = {}, weeks = {}, recent = {} } },
             offers = { ["A-R"] = { name = "A-R", rev = 1.79e9, items = { [6661] = { bag = 1 } }, dibs = {} } }, hidden = {} }
         local out, status = addon.Store.Init(sv)
-        harness.equal(status, "migrated"); harness.equal(out.schema, 4)
-        harness.equal(type(out.games), "table"); harness.truthy(out.offers["A-R"]); harness.equal(out.ui.lastStake, 50)
-        -- a schema-5 file (a later build) stays untouched and this session does not save
+        harness.equal(status, "migrated"); harness.equal(out.schema, 5)
+        harness.equal(out.games, nil); harness.truthy(out.offers["A-R"]); harness.equal(out.ui.lastStake, 50)
+        for _, key in ipairs({ "lastStakeCopper", "lastSlotStakeCopper", "gamesScope", "gameKey" }) do harness.equal(out.ui[key], nil, key) end
+        -- a schema-3 file walks 3 -> 4 -> 5 and ends without games too
+        local older = harness.addon({ now = 1.8e9 })
+        local olderOut = older.Store.Init({ schema = 3, chars = {}, catalog = {}, orders = {}, offers = {}, hidden = {}, ui = {} })
+        harness.equal(olderOut.schema, 5); harness.equal(olderOut.games, nil)
+        -- a schema-6 file (a later build) stays untouched and this session does not save
         local later = harness.addon({ now = 1.8e9 })
-        local saved = { schema = 5, games = { ["X-R"] = { future = true } } }
+        local saved = { schema = 6, future = { x = true } }
         local kept, laterStatus = later.Store.Init(saved)
-        harness.equal(laterStatus, "newer"); harness.truthy(kept == saved); harness.truthy(saved.games["X-R"].future)
+        harness.equal(laterStatus, "newer"); harness.truthy(kept == saved); harness.truthy(saved.future.x)
         harness.truthy(later.db.readonly)
-        harness.equal(select(2, later.Games.Flip("Me-R", 10, "H", 1.8e9, function() return 0.1 end)), "readonly")
     end,
 
-    ["014: clean, peer reset and roster prune treat game records like offers"] = function(harness)
+    -- RF3: a 0.6.0 member still announces grev and may send WANTG/GAMES; 0.7 ignores them without errors
+    ["015: a 0.6 peer's games messages are ignored, the rest of its HELLO still works"] = function(harness)
         local addon = harness.addon({ now = 1.8e9 })
-        local random = function() return 0.1 end
-        addon.Games.Flip("Me-R", 10, "H", 1.8e9, random)
-        addon.Games.Flip("Peer-R", 10, "H", 1.8e9, random)
-        addon.Games.Flip("Gone-R", 10, "H", 1.8e9, random)
-        addon.Store.Prune({ ["Me-R"] = true, ["Peer-R"] = true }, "Me-R")
-        harness.equal(addon.Games.Get("Gone-R"), nil); harness.truthy(addon.Games.Get("Peer-R"))
-        local removed = addon.Store.ResetPeerData("Me-R")
-        harness.equal(removed.games, 1); harness.truthy(addon.Games.Get("Me-R")); harness.equal(addon.Games.Get("Peer-R"), nil)
-        addon.Store.Clean()
-        harness.equal(addon.Games.Get("Me-R"), nil)
+        addon.Store.db.me = "Me-R"
+        local sent = {}
+        local orders = addon.Orders.New(function() return harness.clock end, addon.db.orders)
+        local sync = addon.Sync.New({ send = function(m, d, t) sent[#sent + 1] = { msg = m, dist = d, target = t } end,
+            now = function() return harness.clock end, random = function() return 0 end, store = addon.Store, orders = orders,
+            me = "Me-R", onChange = function() end })
+        local status, reason = sync:OnMessage({ v = addon.PROTOCOL, t = "HELLO", rev = 1.79e9, odig = {}, grev = 1.79e9 }, "Old-R")
+        harness.equal(status, "ok"); harness.truthy(reason:find("char: have 0 < ", 1, true), reason)
+        harness.truthy(not reason:find("games", 1, true), "no games pull: " .. reason)
+        harness.equal(#sent, 1); harness.equal(sent[1].msg.t, "WANT")
+        for _, messageType in ipairs({ "WANTG", "GAMES" }) do
+            local dropped, why = sync:OnMessage({ v = addon.PROTOCOL, t = messageType, names = { "Me-R" }, games = {} }, "Old-R")
+            harness.equal(dropped, "dropped"); harness.equal(why, "unknown message type " .. messageType)
+        end
+        sync:Hello()
+        harness.equal(sent[#sent].msg.grev, nil, "0.7 never announces games")
     end,
 }

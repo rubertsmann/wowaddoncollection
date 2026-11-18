@@ -104,17 +104,33 @@ return {
         harness.equal(#bad, 0, "hard-coded identity (use the addon.* field): " .. table.concat(bad, "; "))
     end,
 
+    -- the send and register calls live in LibGuildSync's Channel (tested there with every prefix); TalentShare must hand it
+    -- addon.PREFIX, read at use time, and never call the client itself
     ["build: Communication sends and registers only addon.PREFIX"] = function(harness)
-        local seen = 0
-        for line in slurp("Core/Net/Communication.lua"):gmatch("[^\r\n]+") do
+        local source = slurp("Core/Net/Communication.lua")
+        harness.truthy(source:find("prefix = function() return addon.PREFIX end", 1, true), "the channel must get addon.PREFIX at use time")
+        for line in source:gmatch("[^\r\n]+") do
             local code = line:gsub("%-%-.*$", "")
-            -- the calls themselves (not the `if C_ChatInfo.RegisterAddonMessagePrefix then` existence check)
-            if code:find("SendAddonMessage,", 1, true) or code:find("RegisterAddonMessagePrefix(", 1, true) then
-                seen = seen + 1
-                harness.truthy(code:find("addon.PREFIX", 1, true), "not addon.PREFIX: " .. line)
-            end
+            harness.truthy(not code:find("SendAddonMessage", 1, true) and not code:find("RegisterAddonMessagePrefix", 1, true),
+                "Communication.lua must not talk to the client directly: " .. line)
         end
-        harness.truthy(seen >= 2, "expected the send and register calls in Communication.lua")
+        for _, prefix in ipairs({ "TShare", "TShareDev" }) do
+            local addon = harness.addon()
+            addon.PREFIX = prefix
+            local calls = {}
+            local savedChat = C_ChatInfo
+            C_ChatInfo = { SendAddonMessage = function(p) calls[#calls + 1] = p return 0 end,
+                RegisterAddonMessagePrefix = function(p) calls[#calls + 1] = "register " .. p return true end }
+            local ok, errorMessage = pcall(function()
+                addon.Communication.Init()
+                addon.Communication.active = true
+                addon.Communication.Send({ t = "HELLO" }, "GUILD")
+                addon.Communication._pump(10)
+            end)
+            C_ChatInfo = savedChat
+            if not ok then error(errorMessage, 0) end
+            harness.equal(calls[1], "register " .. prefix); harness.equal(calls[2], prefix)
+        end
     end,
 
     ["build: a message with the other build's prefix is ignored before any parsing"] = function(harness)

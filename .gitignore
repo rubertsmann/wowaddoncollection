@@ -3,3 +3,4 @@ dist/
 *.zip
 TalentShare-Dev.toc
 screens-debug/
+Libs/LibGuildSync/

@@ -5,7 +5,10 @@ and reagents, shares them with online guild members (cached locally, so offline 
 shared crafting-order board.
 
 * **Recipes tab** – filter by profession, search recipe or reagent names, see reagents (with how many you have), see
-  who can craft it (click to whisper), request it.
+  who can craft it (click to whisper), request it. The list is a table: names in item-quality colour, columns Item level,
+  Req. level, Profession, Skill and Category (each switchable in `/ts options` -> "Recipe list"), sorted by item level
+  (highest first) until you click another column title.
+* **Resizable window** – drag the grip at the bottom right; all lists grow with it and the size is remembered.
 * **Orders tab** – guild-wide board: requests, "I'll craft it" claims, done/cancel; everyone sees who claimed what.
   **Craft** opens the order's profession with the recipe selected, a second click crafts the ordered quantity.
 * Hover a recipe icon in any list to see the recipe; click it to whisper the crafter/requester with the link typed in.
@@ -45,14 +48,12 @@ profession icons at the top right of the Recipes tab (one click opens that profe
 `/ts clean` then `/ts clean confirm` (deletes everything stored locally). In the dev build use `/tsd`.
 The UI is available in English and German; profession and recipe names always follow your own game client.
 
-**Games tab:** pick a game at the top: a coin flip (heads or tails) or a slot machine (3 reels, 5 paylines). Enter a stake
-in gold, silver and copper and play; your wins and losses show on that game's guild leaderboard (this week / all time)
-next to everyone else's. For fun only: no gold changes hands, the addon
-never reads or moves your gold.
+**Games:** the coin flip and the slot machine of 0.6.0 moved to their own addon, **GuildGames** (`/gg`), in 0.7.0.
 
 ## Develop
 
-* Offline tests (pure logic): install LuaJIT (`winget install DEVCOM.LuaJIT`), then `luajit tests/run.lua`.
+* Offline tests (pure logic): install LuaJIT (`winget install DEVCOM.LuaJIT`), then `luajit tests/run.lua`. They need
+  `Libs/LibGuildSync` (clone `libguildsync` next to this repo; `tools/deploy.ps1` links it).
 * `dev/TalentShareProbe` (`tools/deploy.ps1 -WithProbe`, `/tsp`, `/reload`) records which APIs exist on the client into
   `WTF\...\SavedVariables\TalentShareProbeDB.lua`.
 * Code layout (load order is the TOC, not the folders):
@@ -62,11 +63,11 @@ never reads or moves your gold.
   | `Core/Base/` | identity, shared helpers, logging, localization | Init, Utility, Log, Locale (+ `Locales/`) |
   | `Core/Debug/` | network trace, diagnostic report | Trace, Diagnostics |
   | `Core/Data/` | SavedVariables schema and records | Store, Orders, Offers, Scanner |
-  | `Core/Net/` | addon-channel communication | Codec, Guard, Sync, Communication |
+  | `Core/Net/` | addon-channel communication on LibGuildSync | Codec, Guard, Sync, Communication |
   | `Core/Game/` | the WoW API boundary | Api, Events |
   | `Core/View/` | view-models for the UI (pure) | Model, Names, ItemText, Notify |
-  | `Core/Play/` | guild games: rules, records, animation math (pure) | Games, CoinFlip, Slots |
-  | `UI/` | frames | Window, Animate, GamesTab, SlotMachine, Alerts, DevProbe (dev build only) |
+  | `UI/` | frames | Window, Alerts, DevProbe (dev build only) |
+  | `Libs/LibGuildSync/` | shared with GuildGames: transport, record-pull engine, names, log, trace, widgets | junction to `../libguildsync` in a working copy (`tools/deploy.ps1`), real files in the zip |
 
   Everything in `Core/` except `Core/Game/` is pure Lua and runs in the offline tests.
 * Naming, type annotations and logging rules: `docs/coding-conventions.md`. Every diagnostic goes through
@@ -78,8 +79,7 @@ never reads or moves your gold.
 ## Trust model
 
 Any guild member running the addon can create/claim/close orders and can only publish **their own** character record
-(and their own offers and dibs: nobody can set or remove another player's dib; and their own coin-flip results, which are
-self-reported: other clients check that the numbers are well-formed and consistent, not that they are true).
+(and their own offers and dibs: nobody can set or remove another player's dib).
 There is no authentication beyond guild membership, but nothing from outside the guild is processed: only guild
 messages and whispers from guild-roster members are accepted, and all received data is validated before it is stored or shown.
 
