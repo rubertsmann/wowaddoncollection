@@ -5,7 +5,7 @@ World of Warcraft **Forever** addons, one folder per addon. Each folder has its 
 
 | Folder | Addon | Latest release (tag) |
 |---|---|---|
-| [`talentshare/`](talentshare/README.md) | TalentShare: guild professions, recipes and crafting order board | `talentshare/v0.7.2` |
+| [`talentshare/`](talentshare/README.md) | TalentShare: guild professions, recipes and crafting order board | `talentshare/v0.7.3` |
 | [`guildgames/`](guildgames/README.md) | GuildGames: coin flip, slot machine and Survivor with guild leaderboards | `guildgames/v0.1.0` |
 | [`libguildsync/`](libguildsync/README.md) | LibGuildSync-1.0: shared guild sync library, embedded by TalentShare and GuildGames | `libguildsync/minor-1` |
 | [`fpvcigarette/`](fpvcigarette/README.md) | FPV Cigarette: first-person cigarette overlay, dancer window | `fpvcigarette/v0.2.0` |
