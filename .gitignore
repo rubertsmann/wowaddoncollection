@@ -1,0 +1,16 @@
+# Safety net for every addon folder (each folder keeps its own .gitignore as well)
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.keystore
+credentials*.json
+.claude/settings.local.json
+**/.claude/settings.local.json
+
+# build output and generated files
+dist/
+*.zip
+__pycache__/
+*-Dev.toc

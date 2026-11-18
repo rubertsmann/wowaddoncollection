@@ -1,0 +1,14 @@
+## Interface: 16001
+## Title: Forever Better UI Plus
+## Notes: Opacity for the whole UI or per element (action bars, unit frames, minimap, ...); full opacity on mouseover. /fbui
+## Version: 0.1.0
+## SavedVariables: ForeverBetterUIPlusDB
+## IconTexture: Interface\Icons\INV_Misc_Spyglass_03
+
+Logic.lua
+Elements.lua
+Log.lua
+Fader.lua
+EditModeProbe.lua
+Options.lua
+Commands.lua
