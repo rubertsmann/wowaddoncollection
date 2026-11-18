@@ -1,3 +1,12 @@
+# TalentShare 0.7.3
+
+**English:** Fix: most enchantments showed their tools and reagents instead of their effect. They now show the real
+effect (for example "permanently enchant a cloak to increase Agility by 3"); it appears a moment after the list opens.
+
+**Deutsch:** Fehlerbehebung: Die meisten Verzauberungen zeigten ihre Werkzeuge und Reagenzien statt ihrer Wirkung. Jetzt
+erscheint die echte Wirkung (zum Beispiel „Einen Umhang dauerhaft so verzaubern, dass er die Beweglichkeit um 3 erhöht.“),
+einen Moment nachdem die Liste geöffnet wurde.
+
 # TalentShare 0.7.2
 
 **English:** Enchantments now show what they do. Hover the icon of an enchant in the Recipes tab, or select it, to see its

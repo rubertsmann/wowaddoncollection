@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- Internal pub/sub + WoW event wiring. Scans are debounced; the guild gets a HELLO when my data changes.
--- Internal events: DATA_CHANGED(kind), LOCAL_CHANGED, OFFERS_CHANGED, WINDOW_OPENED, TRADESKILL(isOpen), ITEM_INFO.
+-- Internal events: DATA_CHANGED(kind), LOCAL_CHANGED, OFFERS_CHANGED, WINDOW_OPENED, TRADESKILL(isOpen), ITEM_INFO, SPELL_INFO.
 -- Every handler runs protected: an error in one handler is logged (Log.Exception, with stack) and the others still run.
 ---@class EventsModule
 local Events = {}
@@ -213,6 +213,8 @@ function onGameEvent.TRADE_SKILL_DATA_SOURCE_CHANGED() scheduleProfessionScan(1.
 function onGameEvent.SKILL_LINES_CHANGED() scheduleProfessionScan(2.0) end
 function onGameEvent.NEW_RECIPE_LEARNED() scheduleProfessionScan(1.5) end   -- keeps the cache current without reopening the window
 function onGameEvent.GET_ITEM_INFO_RECEIVED() Events.Fire("ITEM_INFO") end
+-- feature 017: a spell the client loaded on request (enchant effect texts)
+function onGameEvent.SPELL_DATA_LOAD_RESULT(_, success) if success ~= false then Events.Fire("SPELL_INFO") end end
 -- the game blocked one of our calls (protected action in combat, taint): recorded so /ts export shows what and where
 local function logBlockedAction(kind)
     return function(blockedAddonName, blockedFunction)

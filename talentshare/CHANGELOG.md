@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.3
+Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.3, schema 5 (both unchanged). Bug fix only.
+- **Fix (feature 017):** most enchants showed their tools and reagents ("Werkzeuge: ...") instead of their effect, because
+  the effect text is only available once the game has loaded the spell and the tooltip fallback read the wrong lines.
+  Now only the spell description is used; it appears as soon as the game has loaded it (the detail panel and search
+  update by themselves, a tooltip on the next hover).
+
 ## 0.7.2
 Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.3, schema 5 (both unchanged). Feature 017.
 - **Enchants show what they do** (feature 017): recipes that make no item (enchantments) show their effect in the recipe

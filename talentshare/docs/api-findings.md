@@ -83,9 +83,11 @@ pulls fall back to the guild channel if not).
 ## Enchant recipes (feature 017, 2026-11-18)
 
 * The recipe id of an enchant is its classic spell id (13419 = Enchant Cloak - Minor Agility, 7418, 7426, 7428, 7771,
-  7786 seen in a live guild catalog). Its effect text can be read on any client, without the profession, by that id:
-  confirmed in game (dev fake enchanter, tooltip and detail line showed the text). Which of `C_Spell.GetSpellDescription`,
-  the `spell:` tooltip or the `enchant:` tooltip delivers it is still to be read from a `window.effectProbe` log line.
+  7786 seen in a live guild catalog). Read in game with the dev fake enchanter (deDE, 2026-11-18, `window.effectProbe` log):
+  * `C_Spell.GetSpellDescription(id)` returns nil on the first call (spell not loaded yet) and the effect text once
+    loaded: 7771 -> "Einen Umhang dauerhaft so verzaubern, dass er die Rüstung um 10 erhöht.".
+  * The `spell:<id>` and `enchant:<id>` tooltips (identical) hold only the name, "Werkzeuge: <rod>" and "Reagenzien: ..."
+    (with colour codes) before the load; after it the description is their last line. Not usable as an effect source.
 
 ## Still unverified
 

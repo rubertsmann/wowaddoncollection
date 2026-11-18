@@ -589,44 +589,23 @@ local function recipeChatText(recipeID, quantity)
 end
 
 -- Feature 017: the effect text of a recipe that makes no item (enchants), read on this client by its recipe id as a
--- spell id. Tries the spell description, then the "spell:" and "enchant:" tooltips; what each returned is logged once
--- per recipe (/ts debug, /ts export). Found texts are cached for the session (the search asks on every keystroke).
----@type table<integer, boolean>
-local loggedEffectProbes = {}
+-- spell id: the spell DESCRIPTION only. It is empty until the client has loaded the spell (Api.SpellDescription requests
+-- the load; SPELL_INFO redraws). The "spell:"/"enchant:" tooltips are not used: before the load they hold only the name,
+-- tools and reagents (0.7.2 showed those as the effect). Found texts are cached for the session, misses are not.
+-- One log line per recipe when its text is first found (/ts debug, /ts export).
 ---@type table<integer, string>
 local effectTextCache = {}
-
----@param recipeID integer
----@return string|nil
-local function readRecipeEffectText(recipeID)
-    local description = addon.Api.SpellDescription(recipeID)
-    local spellLines = addon.Api.HyperlinkTooltipLines("spell:" .. recipeID)
-    local enchantLines = addon.Api.HyperlinkTooltipLines("enchant:" .. recipeID)
-    if not loggedEffectProbes[recipeID] and (description or spellLines or enchantLines) then
-        loggedEffectProbes[recipeID] = true
-        addon.Log.Debug("window.effectProbe", "effect text sources for a recipe without an item", { recipeID = recipeID,
-            description = description or "nil", spellTooltip = spellLines and table.concat(spellLines, " / ") or "nil",
-            enchantTooltip = enchantLines and table.concat(enchantLines, " / ") or "nil" })
-    end
-    if description then return description end
-    -- tooltip line 1 is the name; the effect follows
-    for _, tooltipLines in ipairs({ spellLines or {}, enchantLines or {} }) do
-        local effectLines = {}
-        for lineIndex = 2, #tooltipLines do
-            if tooltipLines[lineIndex]:find("%S") then effectLines[#effectLines + 1] = tooltipLines[lineIndex] end
-        end
-        if #effectLines > 0 then return table.concat(effectLines, " ") end
-    end
-    return nil
-end
 
 ---@param recipeID integer
 ---@return string|nil effect text (client text, not peer text)
 recipeEffectText = function(recipeID)
     if effectTextCache[recipeID] then return effectTextCache[recipeID] end
-    local effectText = readRecipeEffectText(recipeID)
-    if effectText then effectTextCache[recipeID] = effectText end
-    return effectText
+    local description = addon.Api.SpellDescription(recipeID)
+    if not description then return nil end
+    effectTextCache[recipeID] = description
+    addon.Log.Debug("window.effectText", "the effect text of a recipe without an item was found", { recipeID = recipeID,
+        description = description })
+    return description
 end
 
 -- hover on a recipe icon: the crafted item's own tooltip when known, else the name; then reagents and what a click does
@@ -1406,6 +1385,10 @@ local function buildMainFrame()
     addon.Events.On("ITEM_INFO", function()
         itemInfoArrived = true   -- the Recipes table redraws debounced (its OnUpdate)
         if mainFrame:IsShown() then refreshDetail(); refreshOffers() end
+    end)
+    addon.Events.On("SPELL_INFO", function()   -- feature 017: an enchant's effect text is readable now
+        itemInfoArrived = true   -- the search sees it on the debounced redraw
+        if mainFrame:IsShown() then refreshDetail() end
     end)
     selectTab("recipes")
     addon.Log.Debug("window.build", "the main window was built")

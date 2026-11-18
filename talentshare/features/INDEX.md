@@ -21,4 +21,4 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 014 | Guild game base (coin flip) | verifying (moved to GuildGames by 015) | 0.6.0 (protocol 2.3, schema 4) | - | [014-guild-game-base](014-guild-game-base/spec.md) |
 | 015 | Games extraction and shared sync library | verifying | 0.7.0 (protocol 2.3, schema 5); GuildGames 0.1.0; LibGuildSync-1.0 minor 1 | d9e0ea0 | [015-games-extraction-and-shared-sync-library](015-games-extraction-and-shared-sync-library/spec.md) |
 | 016 | Recipe table columns and resizable window | done | 0.7.0 (UI + local settings) | d9e0ea0 | [016-recipe-table-columns-and-resizable-window](016-recipe-table-columns-and-resizable-window/spec.md) |
-| 017 | Enchant effect text | done | 0.7.2 (UI only) | 91a9da0 | [017-enchant-effect-text](017-enchant-effect-text/spec.md) |
+| 017 | Enchant effect text | done | 0.7.2, fix 0.7.3 (UI only) | 91a9da0 | [017-enchant-effect-text](017-enchant-effect-text/spec.md) |
