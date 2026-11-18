@@ -1,3 +1,13 @@
+# TalentShare 0.7.1
+
+**English:** Fix: the TalentShare window can now be opened, closed and used during combat (before, `/ts`, the minimap
+button and Escape did nothing in a fight). The profession icons and the Craft button are hidden while you are in combat
+and come back right after it.
+
+**Deutsch:** Fehlerbehebung: Das TalentShare-Fenster lässt sich jetzt auch im Kampf öffnen, schließen und benutzen
+(vorher passierte bei `/ts`, dem Minimap-Knopf und Escape im Kampf nichts). Die Berufssymbole und der Knopf „Herstellen“
+sind im Kampf ausgeblendet und erscheinen direkt danach wieder.
+
 # TalentShare 0.7.0
 
 ## English

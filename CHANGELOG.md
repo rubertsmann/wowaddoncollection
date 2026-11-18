@@ -1,6 +1,7 @@
 # Changelog
 
-## 0.7.1 (unreleased)
+## 0.7.1
+Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.3, schema 5 (both unchanged). Bug fix only.
 - **Fix: the window can be opened, closed and used in combat.** It holds secure buttons (profession scan buttons,
   Craft), and a frame with secure children is protected: the game blocked showing or hiding it during combat. The secure
   buttons now leave the window when combat starts and come back after it (`UI/SecureDock.lua`); they cannot be used in
