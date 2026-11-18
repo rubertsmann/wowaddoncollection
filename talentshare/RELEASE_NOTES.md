@@ -1,3 +1,12 @@
+# TalentShare 0.7.2
+
+**English:** Enchantments now show what they do. Hover the icon of an enchant in the Recipes tab, or select it, to see its
+effect (for example "+1 Agility"); the search also finds enchants by their effect.
+
+**Deutsch:** Verzauberungen zeigen jetzt, was sie bewirken. Fahre im Reiter „Rezepte“ über das Symbol einer
+Verzauberung oder wähle sie aus, um ihre Wirkung zu sehen (zum Beispiel „+1 Beweglichkeit“); auch die Suche findet
+Verzauberungen über ihre Wirkung.
+
 # TalentShare 0.7.1
 
 **English:** Fix: the TalentShare window can now be opened, closed and used during combat (before, `/ts`, the minimap
