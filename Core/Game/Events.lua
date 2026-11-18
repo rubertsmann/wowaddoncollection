@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- Internal pub/sub + WoW event wiring. Scans are debounced; the guild gets a HELLO when my data changes.
--- Internal events: DATA_CHANGED(kind), LOCAL_CHANGED, OFFERS_CHANGED, GAMES_CHANGED, WINDOW_OPENED, TRADESKILL(isOpen), ITEM_INFO.
+-- Internal events: DATA_CHANGED(kind), LOCAL_CHANGED, OFFERS_CHANGED, WINDOW_OPENED, TRADESKILL(isOpen), ITEM_INFO.
 -- Every handler runs protected: an error in one handler is logged (Log.Exception, with stack) and the others still run.
 ---@class EventsModule
 local Events = {}
@@ -21,22 +21,10 @@ do
     end
 end
 
----@type table<string, function[]>
-local handlersByEvent = {}
-
----@param eventName string
----@param handler function
-function Events.On(eventName, handler)
-    handlersByEvent[eventName] = handlersByEvent[eventName] or {}
-    table.insert(handlersByEvent[eventName], handler)
-end
-
----@param eventName string
----@param ... any
-function Events.Fire(eventName, ...)
-    for _, handler in ipairs(handlersByEvent[eventName] or {}) do
-        addon.Log.Protected("events.fire", "an internal event handler failed (" .. tostring(eventName) .. ")", handler, ...)
-    end
+-- the bus itself is a LibGuildSync-1.0 Events instance (LibGuildSync/Events.lua): On(name, handler), Fire(name, ...)
+do
+    local bus = LibStub("LibGuildSync-1.0").Events.New(addon.Log)
+    Events.On, Events.Fire = bus.On, bus.Fire
 end
 
 -- /ts clean: deletes everything cached locally (guild characters, recipes, orders, learned names, log).
@@ -105,8 +93,6 @@ Events.ScanItems = scheduleItemScan
 
 Events.On("LOCAL_CHANGED", function() addon.Communication.RequestHello(false, true) end)
 Events.On("OFFERS_CHANGED", function() addon.Communication.RequestHello(false, true) end)
--- a coin flip (feature 014): announced coalesced, so flip spam cannot flood the guild channel with HELLOs
-Events.On("GAMES_CHANGED", function() addon.Communication.RequestHelloSoon() end)
 -- a record from a peer arrived: drop MY dibs on items that are gone (the new record may have removed them)
 Events.On("DATA_CHANGED", function(kind)
     if kind ~= "offers" or not addon.db or addon.db.readonly then return end

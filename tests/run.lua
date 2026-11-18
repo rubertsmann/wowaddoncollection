@@ -11,6 +11,23 @@ local function loadAddonFile(addon, path)
     chunk("TalentShare", addon)
 end
 
+-- LibGuildSync-1.0 (embedded, Libs/LibGuildSync): its files in LibGuildSync.xml order. Its Utility state (learned realm
+-- spellings, surnames) is shared like in the game, so every Harness.addon() loads a FRESH copy: tests stay independent.
+local LIBRARY_FOLDER, LIBRARY_MAJOR = "Libs/LibGuildSync/", "LibGuildSync-1.0"
+---@return string[]
+local function libraryFiles()
+    local handle = assert(io.open(LIBRARY_FOLDER .. "LibGuildSync.xml", "rb"),
+        "Libs/LibGuildSync is missing: run powershell tools/deploy.ps1 (it links ../libguildsync/LibGuildSync)")
+    local xml = handle:read("*a"); handle:close()
+    local files = {}
+    for fileName in xml:gmatch('<Script%s+file="([^"]+)"') do files[#files + 1] = LIBRARY_FOLDER .. fileName end
+    return files
+end
+local function loadFreshLibrary()
+    LibStub.libs[LIBRARY_MAJOR], LibStub.minors[LIBRARY_MAJOR] = nil, nil
+    for _, path in ipairs(libraryFiles()) do dofile(path) end
+end
+
 ---@class TestHarness
 ---@field clock integer the server time GetServerTime returns (tests move it forward)
 local Harness = {}
@@ -23,11 +40,12 @@ function Harness.addon(options)
         Print = function() end }   -- same values as Core/Base/Init.lua (tests/test_hardening.lua pins them)
     Harness.clock = (options and options.now) or 1000
     GetServerTime = function() return Harness.clock end
+    loadFreshLibrary()
     -- same order as the TOC (pure modules only)
     for _, path in ipairs({ "Core/Base/Utility.lua", "Core/Base/Log.lua", "Core/Debug/Trace.lua", "Core/Base/Locale.lua",
         "Locales/enUS.lua", "Locales/deDE.lua", "Core/Data/Store.lua", "Core/View/Names.lua", "Core/Data/Orders.lua",
-        "Core/Data/Offers.lua", "Core/Play/Games.lua", "Core/Play/CoinFlip.lua", "Core/Play/Slots.lua", "Core/Net/Codec.lua", "Core/Net/Guard.lua", "Core/Net/Sync.lua", "Core/View/Model.lua",
-        "Core/View/ItemText.lua", "Core/View/Notify.lua", "Core/Net/Communication.lua", "Core/Debug/Diagnostics.lua" }) do
+        "Core/Data/Offers.lua", "Core/Net/Codec.lua", "Core/Net/Guard.lua", "Core/Net/Sync.lua", "Core/View/Model.lua",
+        "Core/View/RecipeTable.lua", "Core/View/ItemText.lua", "Core/View/Notify.lua", "Core/Net/Communication.lua", "Core/Debug/Diagnostics.lua" }) do
         loadAddonFile(addon, path)
     end
     addon.Store.Init({})
@@ -64,6 +82,7 @@ end
 -- real libraries for the codec tests
 dofile("Libs/LibStub/LibStub.lua")
 dofile("Libs/LibDeflate/LibDeflate.lua")
+loadFreshLibrary()   -- for test files that load addon files themselves (test_load)
 
 local testFiles = {}
 local listing = io.popen and io.popen('dir /b tests\\test_*.lua 2>nul || ls tests/test_*.lua')

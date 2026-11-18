@@ -21,98 +21,27 @@ local function tryCall(callName, func, ...)
     return nil
 end
 
+------------------------------------------------------------------ guild and identity (LibGuildSync-1.0 Guild)
+-- The roster and "my name" calls are shared with every addon that embeds LibGuildSync (LibGuildSync/Guild.lua): my base
+-- name ("First Surname" on Forever), the canonical roster set (it teaches Utility my realm spelling), the identity facts.
+local Guild = LibStub("LibGuildSync-1.0").Guild
+
 ---@return boolean
-function Api.IsGuilded()
-    return (IsInGuild and IsInGuild()) and true or false
-end
+function Api.IsGuilded() return Guild.IsGuilded() end
 
--- My base name as the server uses it: "First" on normal clients, "First Surname" on Forever, where UnitName("player")
--- returns the surname as its second value (retail returns nil there for the player).
 ---@return string|nil
-function Api.MyBaseName()
-    local firstName, secondValue = UnitName("player")
-    if type(secondValue) == "string" and secondValue ~= "" and not addon.Utility.IsRealmSpelling(secondValue) then
-        local fullCharacterName = firstName .. " " .. secondValue
-        addon.Utility.NoteMyFullName(fullCharacterName)
-        return fullCharacterName
-    end
-    return firstName
-end
-
----@class PlayerInformation
----@field name string|nil canonical "Name-Realm"
----@field class string|nil class file name
----@field level integer|nil
+function Api.MyBaseName() return Guild.MyBaseName() end
 
 ---@return PlayerInformation
-function Api.GetPlayerInformation()
-    local _, className = UnitClass("player")
-    return { name = addon.Utility.CanonicalName(Api.MyBaseName()), class = className, level = UnitLevel("player") }
-end
+function Api.GetPlayerInformation() return Guild.GetPlayerInformation() end
 
-function Api.RequestRoster()
-    if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster()
-    elseif GuildRoster then GuildRoster() end
-end
+function Api.RequestRoster() return Guild.RequestRoster() end
 
--- Set of canonical "Name-Realm" for everyone in the guild (empty if the roster is not loaded yet). The roster's spelling
--- of MY character teaches Utility which realm string the server uses for my realm (Utility.LearnFromRoster), before any
--- name is canonicalized.
 ---@return table<string, boolean>
-function Api.GetGuildRoster()
-    local rosterSet, rosterNames = {}, {}
-    if not Api.IsGuilded() or not GetNumGuildMembers then return rosterSet end
-    for memberIndex = 1, (GetNumGuildMembers()) do
-        local rosterName = GetGuildRosterInfo(memberIndex)
-        if type(rosterName) == "string" and rosterName ~= "" then rosterNames[#rosterNames + 1] = rosterName end
-    end
-    addon.Utility.LearnFromRoster(rosterNames, Api.MyBaseName())
-    addon.Utility.SetRosterNames(rosterNames)
-    for _, rosterName in ipairs(rosterNames) do
-        local canonicalName = addon.Utility.CanonicalName(rosterName)
-        if canonicalName then rosterSet[canonicalName] = true end
-    end
-    return rosterSet
-end
+function Api.GetGuildRoster() return Guild.GetGuildRoster() end
 
--- Raw identity facts for the diagnostic report (feature 008): every source of "my name" and of the roster's names, so a
--- mismatch between them (realm suffix form) can be seen without guessing. Values are what the client returned, untouched.
----@return table identity fields: unitName, unitRealm, unitFullName, realmName, normalizedRealm, guild, base, built, ambiguated, rosterCount, rosterSample, rosterMe, build
-function Api.IdentityInformation()
-    local identity = {}
-    identity.unitName, identity.unitRealm = tryCall("UnitName", UnitName, "player")
-    if UnitFullName then
-        local fullName, fullRealm = tryCall("UnitFullName", UnitFullName, "player")
-        identity.unitFullName = tostring(fullName) .. " / " .. tostring(fullRealm)
-    end
-    identity.realmName = GetRealmName and tryCall("GetRealmName", GetRealmName)
-    identity.normalizedRealm = GetNormalizedRealmName and tryCall("GetNormalizedRealmName", GetNormalizedRealmName)
-    identity.guild = GetGuildInfo and tryCall("GetGuildInfo", GetGuildInfo, "player")
-    local builtName = addon.Utility.CanonicalName(Api.MyBaseName())
-    identity.base = Api.MyBaseName()
-    identity.built = builtName
-    identity.ambiguated = Ambiguate and builtName and tryCall("Ambiguate", Ambiguate, builtName, "none")
-    local rosterSample, myRosterName = {}, nil
-    if Api.IsGuilded() and GetNumGuildMembers then
-        local memberCount = tryCall("GetNumGuildMembers", GetNumGuildMembers) or 0
-        identity.rosterCount = memberCount
-        for memberIndex = 1, memberCount do
-            local rosterName = tryCall("GetGuildRosterInfo", GetGuildRosterInfo, memberIndex)
-            if rosterName then
-                if #rosterSample < 8 then rosterSample[#rosterSample + 1] = rosterName end   -- the raw form the client reports
-                local characterName = rosterName:match("^([^-]+)") or rosterName
-                if identity.base and (characterName == identity.base or characterName == identity.unitName) then myRosterName = rosterName end
-            end
-        end
-    end
-    identity.rosterSample = rosterSample
-    identity.rosterMe = myRosterName   -- how the roster spells MY name
-    if GetBuildInfo then
-        local versionText, buildNumber, _, interfaceVersion = tryCall("GetBuildInfo", GetBuildInfo)
-        identity.build = ("%s (%s) interface %s"):format(tostring(versionText), tostring(buildNumber), tostring(interfaceVersion))
-    end
-    return identity
-end
+---@return table
+function Api.IdentityInformation() return Guild.IdentityInformation() end
 
 ---@return string
 function Api.GetLocale()
@@ -491,6 +420,36 @@ function Api.ItemTooltipLines(itemID)
     return tooltipLines
 end
 
+-- feature 016: quality, item level and required level of an item (the Recipes table). nil while the item is not cached:
+-- the load is requested and GET_ITEM_INFO_RECEIVED (ITEM_INFO) redraws the table. 0 means "none" and gives nil.
+---@param itemID integer
+---@return integer|nil quality
+---@return integer|nil itemLevel
+---@return integer|nil requiredLevel
+function Api.ItemDetails(itemID)
+    local getItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    local itemName, _, quality, itemLevel, requiredLevel = tryCall("GetItemInfo", getItemInfo, itemID)
+    if not itemName then
+        if C_Item and C_Item.RequestLoadItemDataByID then tryCall("RequestLoadItemDataByID", C_Item.RequestLoadItemDataByID, itemID) end
+        return nil
+    end
+    local function positive(value) return type(value) == "number" and value > 0 and value or nil end
+    return type(quality) == "number" and quality or nil, positive(itemLevel), positive(requiredLevel)
+end
+
+-- "rrggbb" of an item quality: the client's colour table when present, else the usual colours (RecipeTable)
+---@param quality integer|nil
+---@return string|nil
+function Api.QualityHex(quality)
+    if quality == nil then return nil end
+    local qualityColor = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+    if type(qualityColor) == "table" and type(qualityColor.r) == "number" and type(qualityColor.g) == "number" and type(qualityColor.b) == "number" then
+        local function byte(channel) return math.max(0, math.min(255, math.floor(channel * 255 + 0.5))) end
+        return ("%02x%02x%02x"):format(byte(qualityColor.r), byte(qualityColor.g), byte(qualityColor.b))
+    end
+    return addon.RecipeTable.QualityHex(quality)
+end
+
 ---@param itemID integer
 ---@return any texture
 function Api.ItemIcon(itemID)
@@ -794,31 +753,3 @@ function Api.OpenWindowHasRecipe(recipeID)
     return false
 end
 
------------------------------------------------------------------- guild games (feature 014)
-
--- A number in [0, 1) for game outcomes (Games.Flip takes it as its random function, so tests inject their own).
----@return number
-function Api.Random() return math.random() end
-
--- The coin sound played on a won flip, or nil when this client has no such sound kit.
----@return integer|nil
-function Api.CoinSoundKit()
-    return SOUNDKIT and (SOUNDKIT.LOOT_WINDOW_COIN_SOUND or SOUNDKIT.IG_BACKPACK_COIN_SELECT) or nil
-end
-
--- The first of `soundNames` this client's SOUNDKIT table has, or nil.
----@param soundNames string[]
----@return integer|nil
-function Api.SoundKitFor(soundNames)
-    if not SOUNDKIT then return nil end
-    for _, soundName in ipairs(soundNames) do
-        if SOUNDKIT[soundName] then return SOUNDKIT[soundName] end
-    end
-    return nil
-end
-
--- Plays a sound kit; never raises (a missing sound must not break the flip).
----@param soundKitID integer|nil
-function Api.PlaySound(soundKitID)
-    if soundKitID and PlaySound then tryCall("PlaySound", PlaySound, soundKitID) end
-end

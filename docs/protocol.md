@@ -1,6 +1,6 @@
 # Wire protocol, compatibility and stored data
 
-Applies from 0.3.0 (protocol 2.0, schema 2); 0.4.0 adds protocol 2.1 and schema 3 (sections 6 and 7); 0.4.1 adds protocol 2.2 (section 8). Source of truth in code: `Core/Base/Init.lua` (versions), `Core/Net/Codec.lua`
+Applies from 0.3.0 (protocol 2.0, schema 2); 0.4.0 adds protocol 2.1 and schema 3 (sections 6 and 7); 0.4.1 adds protocol 2.2 (section 8); 0.6.0 adds 2.3 and schema 4 (section 9); 0.7.0 removes the games again (schema 5, section 9) and runs the transport and the pull engine on the embedded LibGuildSync-1.0 with the wire unchanged (feature 015). Source of truth in code: `Core/Base/Init.lua` (versions), `Core/Net/Codec.lua`
 (format), `Core/Net/Guard.lua` (gate), `Core/Net/Communication.lua` (transport), `Core/Net/Sync.lua` (messages), `Core/Data/Store.lua` (schema).
 Tests: `tests/test_hardening.lua`.
 
@@ -61,6 +61,9 @@ Display: every peer-originated string leaves `Core/View/Model.lua` escaped (`|` 
 |---|---|---|
 | 1 | 0.1.0, 0.2.0 | records stored as received |
 | 2 | 0.3.0 | all persisted peer data re-validated on load; invalid entries dropped |
+| 3 | 0.4.0 | + `offers`, `hidden` (section 7) |
+| 4 | 0.6.0 | + `games` (section 9) |
+| 5 | 0.7.0 | - `games` and the games UI settings (moved to GuildGames, feature 015) |
 
 - Migrations run stepwise in `Store.Migrate` (`MIGRATIONS[n]` = n -> n+1). Peer-derived caches (`chars`, `catalog`) are
   re-fetchable, so a migration may drop them; `orders` and the viewer's own record deserve care.
@@ -105,7 +108,11 @@ Additive minor change: a 2.1 peer ignores the new fields and keeps working as be
   first name), so 0.4.0 members answer; their records ("First-Realm") are mapped to the full name by `Utility.CanonicalName`.
   Verified offline against the real 0.4.0 code (git 7c0a09b): records flow in both directions.
 
-## 9. Guild games: coin flip results (protocol 2.3, schema 4; feature 014)
+## 9. Guild games: coin flip results (protocol 2.3, schema 4; feature 014). Moved to GuildGames in 0.7.0
+From 0.7.0 (feature 015) TalentShare neither sends `grev` nor handles `WANTG`/`GAMES` (a 0.6.0 peer's are dropped as unknown
+types, its `grev` is ignored), and schema 5 deletes `games` plus the games UI settings (fresh start, nothing imported).
+The games live in the GuildGames addon (prefix `GGames`, protocol 1.0, same record shape; its `docs/protocol.md`). The
+rest of this section documents 0.6.0.
 Additive minor change: a 2.2 peer ignores `grev` and drops `WANTG`/`GAMES` as unknown types, so everything else keeps syncing.
 - **Record** (`Core/Play/Games.lua`), one per character, authored only by that character, replaced as a whole by a newer `rev`:
   `{ name, rev, total = {won, lost, wins, losses}, weeks = { ["YYYY-Www"] = {won, lost, wins, losses} } (<= 4 keys),

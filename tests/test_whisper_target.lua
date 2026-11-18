@@ -66,11 +66,19 @@ return {
 
     -- the same "no player named 'Name-Realm' is online" error comes from addon whispers (WANT/SNAP/OPUSH replies)
     ["whisper: addon whispers use the same target rule"] = function(harness)
-        local f = assert(io.open("Core/Net/Communication.lua", "rb"))
-        local src = f:read("*a"); f:close()
-        local line = src:match("[^\r\n]*SendAddonMessage,[^\r\n]*")
-        harness.truthy(line and line:find("resolvedTarget", 1, true) and not line:find("queuedChunk.target", 1, true), "SendAddonMessage must get the resolved target")
-        harness.truthy(src:find('queuedChunk.channel == "WHISPER" and addon.Utility.WhisperTarget(queuedChunk.target)', 1, true), "pump must resolve whisper targets")
+        local addon = harness.addon()
+        local calls = {}
+        local savedChat = C_ChatInfo
+        C_ChatInfo = { SendAddonMessage = function(_, _, channel, target) calls[#calls + 1] = { channel = channel, target = target } return 0 end }
+        withRealm("TestRealm", function()
+            addon.Communication.active = true
+            addon.Communication.Send({ t = "SNAP" }, "WHISPER", "Alice-TestRealm")
+            addon.Communication.Send({ t = "SNAP" }, "WHISPER", "Bob-OtherRealm")
+            addon.Communication._pump(10)
+        end)
+        C_ChatInfo = savedChat
+        harness.equal(calls[1].target, "Alice", "same realm: name only")
+        harness.equal(calls[2].target, "Bob-OtherRealm")
     end,
 
     ["whisper: without a known own realm the full name is kept"] = function(harness)

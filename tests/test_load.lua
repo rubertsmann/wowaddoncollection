@@ -8,7 +8,7 @@ end
 
 -- Universal widget stub: every method returns the stub itself, except the few that must return plain values.
 local PLAIN = { GetStringWidth = 40, GetWidth = 100, GetHeight = 20, GetText = "", IsShown = true, GetEffectiveScale = 1,
-    GetCenter = 0, GetNumPoints = 0, GetFontString = false }
+    GetCenter = 0, GetNumPoints = 0, GetFontString = false, GetFrameLevel = 1 }
 local function stub()
     local s = {}
     return setmetatable(s, {
@@ -90,25 +90,10 @@ return {
                 addon.Offers.Put({ name = "B-R", rev = 5, items = { [6661] = { bag = 1 } }, dibs = {} })
                 harness.truthy(pcall(addon.UI.SelectTab, "available"), "switching to the available tab failed")
                 harness.truthy(pcall(addon.UI.Refresh), "refreshing the available tab failed")
-                -- feature 014: the Games tab is built by the window and refreshes with records
-                addon.Games.Put({ name = "B-R", rev = 5, total = { won = 10, lost = 0, wins = 1, losses = 0 }, weeks = {},
-                    recent = { { c = 10, r = "W", t = 4 } } })
-                local okG, errG = pcall(addon.UI.SelectTab, "games")
-                harness.truthy(okG, "switching to the games tab failed: " .. tostring(errG))
-                harness.truthy(addon.GamesTab.widgets.flipButton, "the games tab was not built (see Log: window.games)")
-                harness.truthy(addon.SlotMachine.widgets.spinButton, "the slot machine was not built (see Log: games.slots)")
-                addon.GamesTab.SelectGame("slots")
-                local okS, errS = pcall(addon.SlotMachine.Spin)
-                harness.truthy(okS, "spinning failed: " .. tostring(errS))
-                harness.equal(addon.UI.CurrentTab(), "games")
-                if addon.IS_DEVELOPMENT_BUILD then
-                    harness.truthy(addon.SlashCommands.anim and addon.SlashCommands.game, "dev commands anim/game missing")
-                    harness.truthy(pcall(addon.SlashCommands.game, "sim 3"), "/tsd game sim failed")
-                    harness.equal(addon.Utility.Count(addon.Store.db.games), 1, "simulated players must not be stored")
-                    addon.SlashCommands.game("sim 0")
-                else
-                    harness.equal(addon.SlashCommands.anim, nil, "dev command in the live build")
-                end
+                -- feature 015: the games moved to the GuildGames addon; no tab, no dev commands, no game module
+                harness.equal(addon.Games, nil); harness.equal(addon.GamesTab, nil)
+                harness.truthy(not slurp("UI/Window.lua"):find('key = "games"', 1, true), "the window still defines a games tab")
+                harness.equal(addon.SlashCommands.anim, nil); harness.equal(addon.SlashCommands.game, nil)
                 addon.Trace.Add({ dir = "in", ch = "GUILD", peer = "B-R", mt = "HELLO", st = "ok", why = "char: up to date" })
                 local okD, errD = pcall(addon.UI.SelectTab, "debug")
                 harness.truthy(okD, "switching to the debug tab failed: " .. tostring(errD))
@@ -162,5 +147,26 @@ return {
         local text = table.concat(said, "\n")
         harness.truthy(text:find("Guard", 1, true), "no message naming the missing module: " .. text)
         harness.truthy(text:find("deploy.ps1", 1, true), "no message naming the fix: " .. text)
+    end,
+
+    -- A helper removed from a file but still called in it compiles fine and only fails in the game ("attempt to call a nil
+    -- value", feature 015: Window.lua's setButtonLabel). The stubbed load test cannot see it (stub widgets answer every
+    -- method), so read the bytecode instead: every lowercase global a file reads must be a known Lua/WoW function.
+    ["load: no file reads an unknown lowercase global (a removed local helper)"] = function(harness)
+        local known = {}
+        for name in ([[type pairs ipairs tostring tonumber select pcall xpcall error assert setmetatable getmetatable unpack print
+            next rawget rawset math string table os debug date time tinsert wipe debugstack geterrorhandler loadstring strtrim
+            debugprofilestop hooksecurefunc]]):gmatch("%S+") do known[name] = true end
+        local unknown = {}
+        for _, file in ipairs(tocFiles("TalentShare.toc")) do
+            if not file:match("^Libs/") then
+                local listing = assert(io.popen('luajit -bl "' .. file .. '"'))
+                for name in listing:read("*a"):gmatch('GGET[^\n]-"([a-z][%w_]*)"') do
+                    if not known[name] then unknown[#unknown + 1] = file .. ": " .. name end
+                end
+                listing:close()
+            end
+        end
+        harness.equal(#unknown, 0, "unknown globals (missing local?): " .. table.concat(unknown, ", "))
     end,
 }

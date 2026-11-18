@@ -270,12 +270,58 @@ local function buildOptionsPanel()
     end)
     testAllButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+    -- feature 016: Recipes table columns (several can be on) and its sort; the window redraws at once
+    local RecipeTable = addon.RecipeTable
+    local recipeTitleText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    recipeTitleText:SetPoint("TOPLEFT", testAllButton, "BOTTOMLEFT", -4, -24); recipeTitleText:SetText(Text["Recipe list"])
+    local recipeHintText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    recipeHintText:SetPoint("TOPLEFT", recipeTitleText, "BOTTOMLEFT", 0, -6); recipeHintText:SetWidth(560); recipeHintText:SetJustifyH("LEFT")
+    recipeHintText:SetText(Text["Columns shown in the Recipes table. Click a column title in the window to sort by it."])
+    local columnButtons = {}
+    for columnIndex, columnKey in ipairs(RecipeTable.OPTIONAL_KEYS) do
+        local columnButton = CreateFrame("CheckButton", nil, optionsPanel, "UICheckButtonTemplate")
+        columnButton:SetSize(26, 26)
+        -- two columns of checkboxes
+        local gridColumn, gridRow = (columnIndex - 1) % 2, math.floor((columnIndex - 1) / 2)
+        columnButton:SetPoint("TOPLEFT", recipeHintText, "BOTTOMLEFT", gridColumn * 200, -8 - gridRow * 28)
+        local labelText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        labelText:SetPoint("LEFT", columnButton, "RIGHT", 4, 0); labelText:SetText(RecipeTable.ColumnLabel(columnKey))
+        columnButton:SetScript("OnClick", function(self)
+            RecipeTable.SetColumn(interfaceSettings(), columnKey, self:GetChecked() and true or false)
+            addon.UI.Refresh()
+        end)
+        columnButtons[columnKey] = columnButton
+    end
+    local sortRowCount = math.ceil(#RecipeTable.OPTIONAL_KEYS / 2)
+    local sortLabelText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    sortLabelText:SetPoint("TOPLEFT", recipeHintText, "BOTTOMLEFT", 4, -16 - sortRowCount * 28)
+    sortLabelText:SetText(Text["Sort by"])
+    local sortKeyButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
+    sortKeyButton:SetSize(160, 22); sortKeyButton:SetPoint("LEFT", sortLabelText, "RIGHT", 10, 0)
+    local sortDirectionButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
+    sortDirectionButton:SetSize(130, 22); sortDirectionButton:SetPoint("LEFT", sortKeyButton, "RIGHT", 6, 0)
+
     local function refreshPanel()
         for settingKey, checkButton in pairs(checkButtons) do checkButton:SetChecked(setting(settingKey)) end
         scopeButton:SetText(scopeLabel(setting("scope")))
         soundButton:SetText(soundLabel(setting("soundName")))
         soundButton:SetEnabled(setting("sound")); soundTestButton:SetEnabled(setting("sound"))
+        for columnKey, columnButton in pairs(columnButtons) do columnButton:SetChecked(RecipeTable.ColumnShown(interfaceSettings(), columnKey)) end
+        local recipeSort = RecipeTable.GetSort(interfaceSettings())
+        sortKeyButton:SetText(RecipeTable.ColumnLabel(recipeSort.key))
+        sortDirectionButton:SetText(recipeSort.descending and Text["Descending"] or Text["Ascending"])
     end
+    sortKeyButton:SetScript("OnClick", function()
+        local recipeSort = RecipeTable.GetSort(interfaceSettings())
+        local nextKey = nextChoice(RecipeTable.SortKeys(), recipeSort.key)
+        RecipeTable.SetSort(interfaceSettings(), nextKey, RecipeTable.Column(nextKey).numeric)   -- numbers highest first, text A-Z
+        refreshPanel(); addon.UI.Refresh()
+    end)
+    sortDirectionButton:SetScript("OnClick", function()
+        local recipeSort = RecipeTable.GetSort(interfaceSettings())
+        RecipeTable.SetSort(interfaceSettings(), recipeSort.key, not recipeSort.descending)
+        refreshPanel(); addon.UI.Refresh()
+    end)
     scopeButton:SetScript("OnClick", function()
         Notify.Set(interfaceSettings(), "scope", nextChoice(Notify.SCOPES, setting("scope"))); refreshPanel(); Alerts.Update()
     end)
@@ -303,7 +349,7 @@ local function buildOptionsPanel()
     optionsPanel.registered = registered
     if not registered then
         addon.Log.Information("alerts.options", "the options panel opens as a plain window (no settings API took it)")
-        optionsPanel:SetParent(UIParent); optionsPanel:SetSize(620, 420); optionsPanel:SetPoint("CENTER"); optionsPanel:SetFrameStrata("DIALOG")
+        optionsPanel:SetParent(UIParent); optionsPanel:SetSize(620, 600); optionsPanel:SetPoint("CENTER"); optionsPanel:SetFrameStrata("DIALOG")
         local background = optionsPanel:CreateTexture(nil, "BACKGROUND"); background:SetAllPoints(); background:SetColorTexture(0, 0, 0, 0.9)
         local closeButton = CreateFrame("Button", nil, optionsPanel, "UIPanelCloseButton"); closeButton:SetPoint("TOPRIGHT", -2, -2)
         optionsPanel:EnableMouse(true); optionsPanel:SetMovable(true); optionsPanel:RegisterForDrag("LeftButton")

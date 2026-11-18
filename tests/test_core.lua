@@ -60,7 +60,7 @@ return {
     ["codec: a different protocol version is rejected"] = function(harness)
         local addon = harness.addon()
         local enc = addon.Codec.Encode({ t = "HELLO" })
-        addon.PROTOCOL = addon.PROTOCOL_MAJOR + 1
+        addon.PROTOCOL_MAJOR = addon.PROTOCOL_MAJOR + 1; addon.PROTOCOL = addon.PROTOCOL_MAJOR   -- aliases (Core/Base/Init.lua)
         harness.equal((addon.Codec.Decode(enc)), nil)
     end,
 

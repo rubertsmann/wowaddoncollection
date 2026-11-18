@@ -62,6 +62,16 @@ if ((Test-Path $old) -and (IsJunction $old) -and ((JunctionTarget $old) -eq $rep
     if (-not (Test-Path (Join-Path $repo "TalentShare.toc"))) { throw "repo files vanished - stop" }
 }
 
+# 2b. the embedded LibGuildSync (feature 015): Libs\LibGuildSync is a junction to the library repo next to this one
+#     (git-ignored here; tools/package.ps1 copies the real files into the zip)
+$libraryLink = Join-Path $repo "Libs\LibGuildSync"
+$librarySource = Join-Path (Split-Path -Parent $repo) "libguildsync\LibGuildSync"
+if (-not (Test-Path $libraryLink)) {
+    if (-not (Test-Path (Join-Path $librarySource "LibGuildSync.xml"))) { throw "LibGuildSync not found at $librarySource (clone libguildsync next to this repo)" }
+    New-Item -ItemType Junction -Path $libraryLink -Target $librarySource | Out-Null
+    Write-Host "linked $libraryLink -> $librarySource"
+}
+
 # 3. link the dev addon (+ probe)
 Link "TalentShare-Dev" $repo
 if ($WithProbe) { Link "TalentShareProbe" (Join-Path $repo "dev\TalentShareProbe") }

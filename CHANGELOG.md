@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.0 (unreleased)
+Protocol 2.3 (unchanged), schema 5. Feature 015.
+- **Games moved out:** the coin flip and the slot machine are now the separate addon **GuildGames** (`/gg`). The Games
+  tab, the `/tsd anim` and `/tsd game` dev commands and the game strings are gone. Schema 5 deletes the stored game
+  results and settings (fresh start: GuildGames does not import them).
+- **LibGuildSync-1.0:** the transport (chunking, pacing, reassembly, guild gate, echo/realm learning), the record-pull
+  engine (HELLO -> WANT -> record, retries on GUILD), names, log, trace, locale, events and window helpers are now an
+  embedded library shared with GuildGames (`Libs/LibGuildSync`). The wire format is unchanged: 0.6.0 members keep
+  syncing recipes, orders and items. Their `grev` is ignored and their `WANTG`/`GAMES` are dropped. When both addons
+  run, they share one send budget, so together they stay inside the server's addon-message rate.
+- Dev setups: re-run `tools/deploy.ps1` (it links `Libs\LibGuildSync` and regenerates the dev TOC) and restart the game.
+  `tools/package.ps1` copies the library into the zip (and takes `-ZipVersion` for test builds).
+- **Recipes table** (feature 016, UI + local settings only): the recipe list has column titles (Item level, Req. level,
+  Profession, Skill, Category), recipe names in the item's quality colour, and sorts by item level (highest first) by
+  default. Click a column title to sort by it, click again to flip. `/ts options` -> "Recipe list" switches each column
+  on/off and sets the sort. The "{n} crafters" text per row is gone (crafters stay in the detail panel).
+- **Resizable window** (feature 016): drag the grip at the bottom right; every tab's list grows with the window and the
+  size is remembered.
+
 ## 0.6.0
 Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.3, schema 4.
 - **Games tab** (feature 014, protocol 2.3, schema 4): an animated coin flip. Enter a stake in gold, silver and copper (1c to 100 000g), pick heads or tails,

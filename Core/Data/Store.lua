@@ -8,7 +8,6 @@ local addonName, addon = ...
 --   orders[orderID]    = Order (see Orders.lua)
 --   offers[playerName] = OfferRecord: recipe items on offer + that character's dibs (see Offers.lua)
 --   hidden[offerKey]   = owner's revision when the viewer hid that offer
---   games[playerName]  = GameRecord: that character's coin-flip results (see Core/Play/Games.lua)
 
 ---@class ProfessionEntry
 ---@field id? integer skill line id
@@ -58,7 +57,8 @@ addon.Store = Store
 --   2  0.3.0           every persisted record is re-validated on load (allow-list copy); hostile or corrupt entries dropped
 --   3  0.4.0           + offers, hidden (recipe items board); additive, schema 2 data is kept
 --   4  0.6.0           + games (guild games, feature 014); additive, schema 3 data is kept
-Store.SCHEMA = 4
+--   5  0.7.0           - games and the games UI settings (moved to the GuildGames addon, feature 015; fresh start)
+Store.SCHEMA = 5
 
 local SECONDS_PER_DAY = 86400
 local MAXIMUM_ID = 2147483647              -- recipe / item / spell ids fit a signed 32-bit integer
@@ -79,7 +79,7 @@ end
 local function withAllTables(savedVariables)
     savedVariables = savedVariables or {}
     savedVariables.schema = Store.SCHEMA
-    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "games", "debug", "ui" }) do
+    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "debug", "ui" }) do
         if type(savedVariables[key]) ~= "table" then savedVariables[key] = {} end
     end
     -- network trace ring (Core/Debug/Trace.lua, feature 008)
@@ -140,7 +140,7 @@ end
 ---@return StoreCounts
 function Store.Clean()
     local removed = Store.Counts()
-    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "games", "profNames", "debug", "trace", "itemText" }) do
+    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "profNames", "debug", "trace", "itemText" }) do
         addon.Utility.Wipe(Store.db[key])
     end
     addon.Log.Reset()
@@ -153,10 +153,10 @@ end
 -- recipes, the orders (the only copy of an order may be mine; CanonicalizeStoredNames has given them the current keys),
 -- UI settings. Everything dropped is fetched again from online members. Tables are emptied IN PLACE.
 ---@param myName string|nil
----@return { chars: integer, offers: integer, catalog: integer, games: integer } removed
+---@return { chars: integer, offers: integer, catalog: integer } removed
 function Store.ResetPeerData(myName)
     local database = Store.db
-    local removed = { chars = 0, offers = 0, catalog = 0, games = 0 }
+    local removed = { chars = 0, offers = 0, catalog = 0 }
     local myRecipeIDs = {}
     local myRecord = myName and database.chars[myName]
     for _, profession in pairs(myRecord and myRecord.professions or {}) do
@@ -167,9 +167,6 @@ function Store.ResetPeerData(myName)
     end
     for playerName in pairs(database.offers) do
         if playerName ~= myName then database.offers[playerName] = nil removed.offers = removed.offers + 1 end
-    end
-    for playerName in pairs(database.games) do
-        if playerName ~= myName then database.games[playerName] = nil removed.games = removed.games + 1 end
     end
     for recipeID in pairs(database.catalog) do
         if not myRecipeIDs[recipeID] then database.catalog[recipeID] = nil removed.catalog = removed.catalog + 1 end
@@ -197,7 +194,6 @@ function Store.SanitizePersisted(savedVariables)
         function(orderID, clean) return clean.id == orderID end)
     droppedCount = droppedCount + droppedHere
     droppedCount = droppedCount + addon.Offers.SanitizePersisted(savedVariables)
-    droppedCount = droppedCount + addon.Games.SanitizePersisted(savedVariables)
     local professionNamesByLanguage = {}
     if type(savedVariables.profNames) == "table" then
         for languageCode, namesBySkillLine in pairs(savedVariables.profNames) do
@@ -232,6 +228,12 @@ local MIGRATIONS = {
     end,
     [3] = function(savedVariables)   -- additive: guild games (feature 014)
         if type(savedVariables.games) ~= "table" then savedVariables.games = {} end
+    end,
+    [4] = function(savedVariables)   -- feature 015: the games moved to the GuildGames addon (fresh start, nothing imported)
+        savedVariables.games = nil
+        if type(savedVariables.ui) == "table" then
+            for _, key in ipairs({ "lastStakeCopper", "lastSlotStakeCopper", "gamesScope", "gameKey" }) do savedVariables.ui[key] = nil end
+        end
     end,
 }
 
@@ -412,14 +414,6 @@ function Store.CanonicalizeStoredNames()
         if not keptRecord or (keptRecord.rev or 0) < (offerRecord.rev or 0) then offerRecords[canonicalName] = offerRecord end
     end
     Refill(database.offers, offerRecords)
-    local gameRecords = {}
-    for playerName, gameRecord in pairs(database.games) do
-        local canonicalName = canonical(playerName)
-        gameRecord.name = canonicalName
-        local keptRecord = gameRecords[canonicalName]
-        if not keptRecord or (keptRecord.rev or 0) < (gameRecord.rev or 0) then gameRecords[canonicalName] = gameRecord end
-    end
-    Refill(database.games, gameRecords)
     local hiddenOffers = {}
     for offerKey, ownerRevision in pairs(database.hidden) do hiddenOffers[canonicalOfferKey(offerKey)] = ownerRevision end
     Refill(database.hidden, hiddenOffers)
@@ -454,12 +448,6 @@ function Store.Prune(rosterNames, keptName)
         if not rosterNames[playerName] and playerName ~= keptName then
             Store.db.offers[playerName] = nil
             removedNames[#removedNames + 1] = playerName .. "(offers)"
-        end
-    end
-    for playerName in pairs(Store.db.games) do   -- and their game results
-        if not rosterNames[playerName] and playerName ~= keptName then
-            Store.db.games[playerName] = nil
-            removedNames[#removedNames + 1] = playerName .. "(games)"
         end
     end
     -- a prune that removes records right after they arrived means the sender's name and the roster's form of it differ

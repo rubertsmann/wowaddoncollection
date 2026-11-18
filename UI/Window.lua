@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- Standalone window: "Recipes" tab (filter, search, reagents, crafters, request), "Orders" tab (shared board),
--- "Available" tab (recipe items guild members hold, with dibs), "Games" tab (UI/GamesTab.lua, feature 014) and "Debug" tab
+-- "Available" tab (recipe items guild members hold, with dibs) and "Debug" tab
 -- (network trace, diagnostic export). The tabs are one ordered list (tabDefinitions).
 -- Plain frames only (no secure templates except the profession and Craft buttons), so it never taints and is safe to
 -- open in combat. All text goes through Text (Locales/); game names are resolved for this client by Model/Names.
@@ -12,11 +12,26 @@ addon.UI = UI
 
 local Text, Format, Plural = addon.Text, addon.Locale.Format, addon.Locale.Plural
 
-local ROW_HEIGHT = 20
+-- widget helpers shared with other addons: LibGuildSync-1.0 Widgets (LibGuildSync/Widgets.lua)
+local Widgets = LibStub("LibGuildSync-1.0").Widgets
+local ROW_HEIGHT = Widgets.ROW_HEIGHT
+local createFontString, createButton, setButtonLabel = Widgets.CreateFontString, Widgets.CreateButton, Widgets.SetButtonLabel
+local createSelectableRow = Widgets.CreateSelectableRow
+-- feature 016: lists that follow the (resizable) window, the Recipes table
+local Table, RecipeTable = addon.Table, addon.RecipeTable
+local createScrollList = Table.CreateResizableList
+---@return table|nil the SavedVariables ui table (column, sort and window size settings)
+local function interfaceSettings() return addon.db and addon.db.ui end
+---@param timestamp integer|nil
+---@return string
+-- the four templates Widgets.TimeAgo reads from Text: Text["just now"], Text["{n}m ago"], Text["{n}h ago"], Text["{n}d ago"]
+local function timeAgo(timestamp) return Widgets.TimeAgo(timestamp, Text) end
+---@param frameName string
+---@return table
+local function createDialogFrame(frameName) return Widgets.CreateDialogFrame(frameName, addon.Log) end
 local QUESTION_MARK_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 ---@type { count: integer, showIcon: boolean, hideNumber: boolean } feature 010: unseen orders (UI.SetNotice)
 local noticeState = { count = 0, showIcon = false, hideNumber = false }
-local arcTangent2 = math.atan2 or math.atan
 
 ---@class WindowState
 local windowState = {
@@ -66,128 +81,11 @@ local function inClassColor(className, label)
     return label
 end
 
----@param timestamp integer|nil
----@return string
-local function timeAgo(timestamp)
-    local secondsAgo = addon.Utility.Now() - (timestamp or 0)
-    if secondsAgo < 90 then return Text["just now"] end
-    if secondsAgo < 5400 then return Format(Text["{n}m ago"], { n = math.floor(secondsAgo / 60) }) end
-    if secondsAgo < 129600 then return Format(Text["{n}h ago"], { n = math.floor(secondsAgo / 3600) }) end
-    return Format(Text["{n}d ago"], { n = math.floor(secondsAgo / 86400) })
-end
 
----@param parent table
----@param fontObject? string
----@param justify? string
----@return table fontString
-local function createFontString(parent, fontObject, justify)
-    local fontString = parent:CreateFontString(nil, "OVERLAY", fontObject or "GameFontNormal")
-    fontString:SetJustifyH(justify or "LEFT")
-    return fontString
-end
 
--- Buttons grow to fit their label (translations are often longer than English); minimumWidth is the smallest width.
----@param buttonFrame table
----@param label string
-local function setButtonLabel(buttonFrame, label)
-    buttonFrame:SetText(label)
-    local labelFontString = buttonFrame.GetFontString and buttonFrame:GetFontString()
-    if labelFontString and buttonFrame.minimumWidth then
-        buttonFrame:SetWidth(math.max(buttonFrame.minimumWidth, math.ceil(labelFontString:GetStringWidth()) + 24))
-    end
-end
 
----@param parent table
----@param label string
----@param minimumWidth number
----@param height? number
----@param onClick? function
----@return table
-local function createButton(parent, label, minimumWidth, height, onClick)
-    local buttonFrame = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    buttonFrame:SetSize(minimumWidth, height or 22)
-    buttonFrame.minimumWidth = minimumWidth
-    buttonFrame.SetLabel = setButtonLabel
-    buttonFrame:SetLabel(label)
-    buttonFrame:SetScript("OnClick", onClick)
-    return buttonFrame
-end
 
--- scrolling list of pooled rows with mouse wheel + slider
----@param parent table
----@param width number
----@param height number
----@param createRow fun(list: table): table
----@param fillRow fun(row: table, entry: any)
----@return table list with :SetData(entries) and :Refresh()
-local function createScrollList(parent, width, height, createRow, fillRow)
-    local list = CreateFrame("Frame", nil, parent)
-    list:SetSize(width, height)
-    local visibleRowCount = math.floor(height / ROW_HEIGHT)
-    list.rows, list.entries, list.offset = {}, {}, 0
-    for rowIndex = 1, visibleRowCount do
-        local row = createRow(list)
-        row:SetPoint("TOPLEFT", list, "TOPLEFT", 0, -(rowIndex - 1) * ROW_HEIGHT)
-        row:SetSize(width - 16, ROW_HEIGHT)
-        list.rows[rowIndex] = row
-    end
-    local slider = CreateFrame("Slider", nil, list)
-    slider:SetOrientation("VERTICAL")
-    slider:SetSize(12, height)
-    slider:SetPoint("TOPRIGHT", list, "TOPRIGHT", 0, 0)
-    local sliderBackground = slider:CreateTexture(nil, "BACKGROUND"); sliderBackground:SetAllPoints(); sliderBackground:SetColorTexture(0, 0, 0, 0.35)
-    local sliderThumb = slider:CreateTexture(nil, "OVERLAY"); sliderThumb:SetSize(10, 28); sliderThumb:SetColorTexture(0.7, 0.7, 0.7, 0.8)
-    slider:SetThumbTexture(sliderThumb)
-    slider:SetMinMaxValues(0, 0); slider:SetValueStep(1); slider:SetValue(0)
-    slider:SetScript("OnValueChanged", function(_, value)
-        value = math.floor(value + 0.5)
-        if value ~= list.offset then list.offset = value; list:Refresh() end
-    end)
-    list.slider = slider
-    list:EnableMouseWheel(true)
-    list:SetScript("OnMouseWheel", function(self, wheelDelta)
-        local maximumOffset = math.max(0, #self.entries - visibleRowCount)
-        self.offset = math.max(0, math.min(maximumOffset, self.offset - wheelDelta * 3))
-        slider:SetValue(self.offset)
-        self:Refresh()
-    end)
-    function list:SetData(entries)
-        self.entries = entries
-        local maximumOffset = math.max(0, #entries - visibleRowCount)
-        if self.offset > maximumOffset then self.offset = maximumOffset end
-        slider:SetMinMaxValues(0, maximumOffset)
-        slider:SetValue(self.offset)
-        self:Refresh()
-    end
-    function list:Refresh()
-        for rowIndex, row in ipairs(self.rows) do
-            local entry = self.entries[self.offset + rowIndex]
-            if entry then row.entry = entry; fillRow(row, entry); row:Show() else row.entry = nil; row:Hide() end
-        end
-    end
-    return list
-end
 
----@param list table
----@return table row
-local function createSelectableRow(list)
-    local row = CreateFrame("Button", nil, list)
-    local hoverHighlight = row:CreateTexture(nil, "HIGHLIGHT"); hoverHighlight:SetAllPoints(); hoverHighlight:SetColorTexture(1, 1, 1, 0.1)
-    row.selectionHighlight = row:CreateTexture(nil, "BACKGROUND"); row.selectionHighlight:SetAllPoints()
-    row.selectionHighlight:SetColorTexture(0.2, 0.5, 1, 0.3); row.selectionHighlight:Hide()
-    row.icon = row:CreateTexture(nil, "ARTWORK"); row.icon:SetSize(ROW_HEIGHT - 2, ROW_HEIGHT - 2); row.icon:SetPoint("LEFT", 2, 0)
-    row.label = createFontString(row, "GameFontHighlightSmall"); row.label:SetPoint("LEFT", row.icon, "RIGHT", 4, 0); row.label:SetPoint("RIGHT", -70, 0)
-    row.rightText = createFontString(row, "GameFontNormalSmall", "RIGHT"); row.rightText:SetPoint("RIGHT", -2, 0)
-    -- the icon is its own button (feature 009): hover shows the recipe/item, click whispers with its link. A list sets
-    -- row.onIconEnter(self) / row.onIconClick() in its fill function; without them the icon behaves like the row.
-    local iconButton = CreateFrame("Button", nil, row)
-    iconButton:SetAllPoints(row.icon)
-    iconButton:SetScript("OnEnter", function(self) if row.onIconEnter then row.onIconEnter(self) end end)
-    iconButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    iconButton:SetScript("OnClick", function() if row.onIconClick then row.onIconClick() else row:Click() end end)
-    row.iconButton = iconButton
-    return row
-end
 
 ------------------------------------------------------------------ frame
 
@@ -210,7 +108,12 @@ local itemLookups = {
     label = function(categoryKey) return addon.Api.CategoryLabel(categoryKey) end,
     groupLabel = function(groupID) return addon.Api.CategoryGroupLabel(groupID) end,
     text = function(itemID) return addon.ItemText.Get(itemID) end,
+    itemDetails = function(itemID) return addon.Api.ItemDetails(itemID) end,   -- feature 016: quality, item level, required level
 }
+---@type RecipeCell[] the Recipes table's current column positions (feature 016)
+local recipeCells = {}
+---@type boolean item data arrived since the last Recipes redraw (redrawn debounced by the tab's OnUpdate)
+local itemInfoArrived = false
 
 -- Modern menu dropdowns (Blizzard_Menu: WowStyle1DropdownTemplate, checkbox menus; present on Forever, see
 -- docs/api-findings.md). nil when the client lacks them; callers then fall back to plain cycle buttons.
@@ -394,6 +297,9 @@ local function refreshRecipes()
     setDropdownText(mainFrame.categoryButton, selectedCategoryCount > 0
         and Format(Text["Category ({n})"], { n = selectedCategoryCount }) or Text["Category"])
     local recipeRows = addon.Model.BuildRecipeRows(addon.Store, filter, addon.Api.ItemName, itemLookups)
+    RecipeTable.Sort(recipeRows, RecipeTable.GetSort(interfaceSettings()))
+    itemInfoArrived = false
+    recipeList.onLayout(recipeList)   -- the column choice may have changed in the options
     recipeList:SetData(recipeRows)
     mainFrame.recipeCountText:SetText(Plural(#recipeRows, Text["{n} recipe"], Text["{n} recipes"]))
     -- nothing cached anywhere yet: say how to fill it (recipes are only readable while a profession window is open)
@@ -585,7 +491,7 @@ local function refreshOffers()
     mainFrame.offersEmptyText:SetShown(#offerRows == 0)
 end
 
----@alias TabName "recipes"|"orders"|"available"|"games"|"debug"
+---@alias TabName "recipes"|"orders"|"available"|"debug"
 
 ---@class TabDefinition
 ---@field key TabName
@@ -600,19 +506,15 @@ local function tabDefinitions()
         { key = "recipes", label = Text["Recipes"], width = 90 },
         { key = "orders", label = Text["Orders"], width = 90 },
         { key = "available", label = Text["Available"], width = 90 },
-        { key = "games", label = Text["Games"], width = 80 },
         { key = "debug", label = Text["Debug"], width = 70 },
     }
 end
 UI.TabDefinitions = tabDefinitions
 
-local function refreshGames()
-    if mainFrame and windowState.tab == "games" and addon.GamesTab then addon.GamesTab.Refresh() end
-end
 
 function UI.Refresh()
     if not mainFrame or not mainFrame:IsShown() then return end
-    refreshRecipes(); refreshDetail(); refreshOrders(); refreshOffers(); refreshGames(); refreshDebug(); refreshProfessionBar()
+    refreshRecipes(); refreshDetail(); refreshOrders(); refreshOffers(); refreshDebug(); refreshProfessionBar()
 end
 
 ---@param tabName TabName
@@ -857,19 +759,6 @@ refreshDebug = function()
     mainFrame.debugEmptyText:SetShown(#traceEntries == 0)
 end
 
--- a movable dialog frame with the inset template, or a backdrop frame on clients without it
----@param frameName string
----@return table
-local function createDialogFrame(frameName)
-    local ok, dialogFrame = pcall(CreateFrame, "Frame", frameName, UIParent, "BasicFrameTemplateWithInset")
-    if ok and dialogFrame then return dialogFrame end
-    addon.Log.Debug("window.frame", "BasicFrameTemplateWithInset is missing; a backdrop frame is used", { frame = frameName })
-    dialogFrame = CreateFrame("Frame", frameName, UIParent, "BackdropTemplate")
-    dialogFrame:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
-    local closeButton = CreateFrame("Button", nil, dialogFrame, "UIPanelCloseButton"); closeButton:SetPoint("TOPRIGHT", -2, -2)
-    return dialogFrame
-end
 
 ---@type table|nil
 local exportFrame
@@ -944,8 +833,8 @@ local function buildDebugTab()
     for columnIndex, headingText in ipairs(headingTexts) do headingText:SetText(headings[columnIndex]) end
     nameCheckHeader:Hide()
     mainFrame.nameCheckHeader = nameCheckHeader
-    debugList = createScrollList(debugTab, 736, 360, createDebugRow, fillDebugRow)
-    debugList:SetPoint("TOPLEFT", 0, -62)
+    debugList = createScrollList(debugTab, createDebugRow, fillDebugRow)
+    debugList:SetPoint("TOPLEFT", 0, -62); debugList:SetPoint("BOTTOMRIGHT", 0, 4)
     mainFrame.debugEmptyText = createFontString(debugTab, "GameFontDisable", "CENTER")
     mainFrame.debugEmptyText:SetPoint("CENTER", debugList, "CENTER", 0, 0)
     mainFrame.debugEmptyText:SetText(Text["No network messages recorded yet."])
@@ -1055,6 +944,11 @@ local function buildRecipesTab(recipesTab)
             secondsSinceRefresh, newTextArrived = 0, false
             if tostring(windowState.text):find("%S") then refreshRecipes() end
         end
+        -- feature 016: item data arrived (quality, levels): one redraw per second at most, however many items load
+        if itemInfoArrived and secondsSinceRefresh >= 1 then
+            secondsSinceRefresh = 0
+            refreshRecipes()
+        end
     end)
     mainFrame.mineOnlyButton = createButton(recipesTab, Text["Mine only"], 80, 22, function()
         windowState.mineOnly = not windowState.mineOnly
@@ -1065,10 +959,27 @@ local function buildRecipesTab(recipesTab)
     mainFrame.recipeCountText = createFontString(recipesTab, "GameFontNormalSmall", "LEFT")
     mainFrame.recipeCountText:SetPoint("LEFT", mainFrame.mineOnlyButton, "RIGHT", 10, 0)
 
-    recipeList = createScrollList(recipesTab, 440, 400, createSelectableRow, function(row, recipeRow)
+    -- feature 016: a table (header + columns from the options, name in item-quality colour); it fills the space left of
+    -- the detail panel, which keeps a fixed width at the right
+    local detailFrame = CreateFrame("Frame", nil, recipesTab)
+    detailFrame:SetPoint("TOPRIGHT", recipesTab, "TOPRIGHT", 0, -34); detailFrame:SetPoint("BOTTOMRIGHT", recipesTab, "BOTTOMRIGHT", 0, 0)
+    detailFrame:SetWidth(304)
+    local recipeHeader = Table.CreateHeader(recipesTab, function(columnKey)
+        RecipeTable.ClickHeader(interfaceSettings(), columnKey)
+        refreshRecipes()
+    end)
+    mainFrame.recipeHeader = recipeHeader
+    local function numberText(value) return value and tostring(value) or "" end
+    recipeList = createScrollList(recipesTab, Table.CreateTableRow, function(row, recipeRow)
+        Table.LayoutRow(row, recipeCells)
         row.icon:SetTexture(recipeRow.icon or QUESTION_MARK_ICON)
-        row.label:SetText(recipeRow.name .. "  |cff888888" .. recipeRow.profession .. "|r")
-        row.rightText:SetText(Plural(recipeRow.crafterCount, Text["{n} crafter"], Text["{n} crafters"]))
+        -- recipeRow.name is escaped (Model): the colour code wraps it, a peer's own codes stay plain text
+        row.label:SetText(RecipeTable.Coloured(recipeRow.name, addon.Api.QualityHex(recipeRow.quality)))
+        Table.SetCell(row, "itemLevel", numberText(recipeRow.itemLevel))
+        Table.SetCell(row, "requiredLevel", numberText(recipeRow.requiredLevel))
+        Table.SetCell(row, "profession", "|cffaaaaaa" .. recipeRow.profession .. "|r")
+        Table.SetCell(row, "skill", numberText(recipeRow.skill))
+        Table.SetCell(row, "category", "|cffaaaaaa" .. addon.Utility.Escape(recipeRow.categoryLabel or "") .. "|r")
         row.selectionHighlight:SetShown(recipeRow.recipeID == windowState.selectedRecipe)
         row:SetScript("OnClick", function()
             windowState.selectedRecipe = recipeRow.recipeID
@@ -1085,7 +996,15 @@ local function buildRecipesTab(recipesTab)
             whisper(contactName(), function() return recipeChatText(recipeRow.recipeID) end)
         end
     end)
-    recipeList:SetPoint("TOPLEFT", 0, -34)
+    recipeList:SetPoint("TOPLEFT", recipesTab, "TOPLEFT", 0, -54)
+    recipeList:SetPoint("BOTTOMRIGHT", detailFrame, "BOTTOMLEFT", -12, 0)
+    recipeHeader:SetPoint("TOPLEFT", recipesTab, "TOPLEFT", 0, -34)
+    recipeHeader:SetPoint("RIGHT", recipeList, "RIGHT", -Table.SLIDER_SPACE, 0)
+    recipeList.onLayout = function(list)
+        local settings = interfaceSettings()
+        recipeCells = RecipeTable.Layout(RecipeTable.VisibleColumns(settings), list:ContentWidth())
+        recipeHeader:SetColumns(recipeCells, RecipeTable.GetSort(settings))
+    end
     mainFrame.recipesEmptyText = createFontString(recipesTab, "GameFontDisable", "CENTER")
     mainFrame.recipesEmptyText:SetPoint("CENTER", recipeList, "CENTER", 0, 0); mainFrame.recipesEmptyText:SetWidth(380)
     mainFrame.recipesEmptyText:SetText(Text["No recipes known yet. Click your profession icons at the top right once."])
@@ -1102,9 +1021,7 @@ local function buildRecipesTab(recipesTab)
     scanHint:Hide()
     mainFrame.scanHint, mainFrame.scanHintText = scanHint, scanHintText
 
-    -- detail panel
-    local detailFrame = CreateFrame("Frame", nil, recipesTab)
-    detailFrame:SetPoint("TOPLEFT", recipeList, "TOPRIGHT", 12, 0); detailFrame:SetPoint("BOTTOMRIGHT", 0, 0)
+    -- detail panel (detailFrame is created above, the table is anchored to it)
     detailPanel.icon = detailFrame:CreateTexture(nil, "ARTWORK"); detailPanel.icon:SetSize(32, 32); detailPanel.icon:SetPoint("TOPLEFT", 0, 0)
     detailPanel.title = createFontString(detailFrame, "GameFontNormalLarge")
     detailPanel.title:SetPoint("LEFT", detailPanel.icon, "RIGHT", 8, 0); detailPanel.title:SetPoint("RIGHT", 0, 0)
@@ -1184,7 +1101,7 @@ local function buildOrdersTab(ordersTab)
     mainFrame.showClosedButton:SetPoint("LEFT", mainFrame.orderFilterButton, "RIGHT", 8, 0)
     local helpText = createFontString(ordersTab, "GameFontDisableSmall"); helpText:SetPoint("TOPRIGHT", 0, -6)
     helpText:SetText(Text["Request recipes on the Recipes tab. Everyone in the guild sees this board."])
-    orderList = createScrollList(ordersTab, 736, 380, createSelectableRow, function(row, orderRow)
+    orderList = createScrollList(ordersTab, createSelectableRow, function(row, orderRow)
         row.icon:SetTexture((addon.Store.GetRecipe(orderRow.recipeID) or {}).icon or QUESTION_MARK_ICON)
         local claimerNames = {}
         for index, crafter in ipairs(orderRow.claimers) do claimerNames[index] = shortName(crafter) end
@@ -1205,7 +1122,7 @@ local function buildOrdersTab(ordersTab)
             whisper(contactName, function() return recipeChatText(orderRow.recipeID, orderRow.qty) end)
         end
     end)
-    orderList:SetPoint("TOPLEFT", 0, -30)
+    orderList:SetPoint("TOPLEFT", 0, -30); orderList:SetPoint("BOTTOMRIGHT", 0, 32)
     mainFrame.ordersEmptyText = createFontString(ordersTab, "GameFontDisable")
     mainFrame.ordersEmptyText:SetPoint("CENTER", 0, 0); mainFrame.ordersEmptyText:SetText(Text["No orders yet."])
     -- a click handler that applies `orderAction` to the selected order and broadcasts the result
@@ -1273,7 +1190,7 @@ local function buildAvailableTab(availableTab)
     mainFrame.myProfessionsOnlyButton:SetPoint("LEFT", offerSearchBox, "RIGHT", 8, 0)
     mainFrame.offerCountText = createFontString(availableTab, "GameFontNormalSmall", "RIGHT")
     mainFrame.offerCountText:SetPoint("TOPRIGHT", availableTab, "TOPRIGHT", -4, -6)
-    offerList = createScrollList(availableTab, 736, 300, createSelectableRow, function(row, offerRow)
+    offerList = createScrollList(availableTab, createSelectableRow, function(row, offerRow)
         row.icon:SetTexture(offerRow.icon or QUESTION_MARK_ICON)
         local professionText = offerRow.profession and ("  |cff888888" .. offerRow.profession .. "|r") or ""
         row.label:SetText(("%s%s  |cffaaaaaa%s|r  |cff999999%s|r"):format(offerRow.name, professionText, shortName(offerRow.ownerName),
@@ -1301,12 +1218,12 @@ local function buildAvailableTab(availableTab)
             end
         end
     end)
-    offerList:SetPoint("TOPLEFT", 0, -38)
+    offerList:SetPoint("TOPLEFT", 0, -38); offerList:SetPoint("BOTTOMRIGHT", 0, 112)
     mainFrame.offersEmptyText = createFontString(availableTab, "GameFontDisable", "CENTER")
     mainFrame.offersEmptyText:SetPoint("CENTER", offerList, "CENTER", 0, 0); mainFrame.offersEmptyText:SetWidth(520)
     mainFrame.offersEmptyText:SetText(Text["No recipe items on offer yet. They are listed automatically from the bags, bank, mail, guild bank and auctions of every guild member."])
     mainFrame.offerDetailText = createFontString(availableTab, "GameFontHighlightSmall")
-    mainFrame.offerDetailText:SetPoint("TOPLEFT", offerList, "BOTTOMLEFT", 4, -8); mainFrame.offerDetailText:SetWidth(724)
+    mainFrame.offerDetailText:SetPoint("TOPLEFT", offerList, "BOTTOMLEFT", 4, -8); mainFrame.offerDetailText:SetPoint("RIGHT", availableTab, "RIGHT", -8, 0)
     mainFrame.offerDetailText:SetHeight(44)
     mainFrame.offerDetailText:SetJustifyV("TOP"); mainFrame.offerDetailText:SetWordWrap(true)
     mainFrame.dibsButton = createButton(availableTab, Text["Dibs"], 140, 24, function()
@@ -1343,9 +1260,39 @@ local function createTabFrame()
     return tabFrame
 end
 
--- The window's widget helpers, for tabs built in other files (UI/GamesTab.lua).
-UI.Widgets = { ROW_HEIGHT = ROW_HEIGHT, CreateButton = createButton, CreateFontString = createFontString,
-    CreateScrollList = createScrollList, CreateSelectableRow = createSelectableRow, TimeAgo = timeAgo }
+-- feature 016: the window is resizable from a grip at its bottom right, between today's size (minimum) and the screen.
+-- The size is saved in the ui settings and restored when the window is built. Every tab's list follows (anchored).
+local function buildResizeGrip()
+    local function screenSize()
+        return (UIParent and UIParent:GetWidth()) or RecipeTable.MINIMUM_WIDTH, (UIParent and UIParent:GetHeight()) or RecipeTable.MINIMUM_HEIGHT
+    end
+    local screenWidth, screenHeight = screenSize()
+    local savedWidth, savedHeight = RecipeTable.WindowSize(interfaceSettings(), screenWidth, screenHeight)
+    if savedWidth then mainFrame:SetSize(savedWidth, savedHeight) end
+    mainFrame:SetResizable(true)
+    if mainFrame.SetResizeBounds then
+        mainFrame:SetResizeBounds(RecipeTable.MINIMUM_WIDTH, RecipeTable.MINIMUM_HEIGHT, math.max(RecipeTable.MINIMUM_WIDTH, screenWidth),
+            math.max(RecipeTable.MINIMUM_HEIGHT, screenHeight))
+    elseif mainFrame.SetMinResize then
+        mainFrame:SetMinResize(RecipeTable.MINIMUM_WIDTH, RecipeTable.MINIMUM_HEIGHT)
+    end
+    local resizeGrip = CreateFrame("Button", nil, mainFrame)
+    resizeGrip:SetSize(16, 16)
+    resizeGrip:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -3, 3)
+    resizeGrip:SetFrameLevel(mainFrame:GetFrameLevel() + 20)
+    resizeGrip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    resizeGrip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    resizeGrip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    resizeGrip:SetScript("OnMouseDown", function(_, mouseButton)
+        if mouseButton == "LeftButton" then mainFrame:StartSizing("BOTTOMRIGHT") end
+    end)
+    resizeGrip:SetScript("OnMouseUp", function()
+        mainFrame:StopMovingOrSizing()
+        RecipeTable.SetWindowSize(interfaceSettings(), mainFrame:GetWidth(), mainFrame:GetHeight())
+        addon.Log.Debug("window.resize", "the window was resized", { width = math.floor(mainFrame:GetWidth()), height = math.floor(mainFrame:GetHeight()) })
+    end)
+    mainFrame.resizeGrip = resizeGrip
+end
 
 local function buildMainFrame()
     local frameName = addon.FRAME_PREFIX .. "Frame"
@@ -1357,8 +1304,10 @@ local function buildMainFrame()
     mainFrame:SetScript("OnDragStart", mainFrame.StartMoving)
     mainFrame:SetScript("OnDragStop", mainFrame.StopMovingOrSizing)
     mainFrame:SetFrameStrata("HIGH")
+    mainFrame:SetClampedToScreen(true)
     mainFrame:Hide()
     table.insert(UISpecialFrames, frameName)
+    buildResizeGrip()
     mainFrame:SetScript("OnShow", function() addon.Events.Fire("WINDOW_OPENED"); UI.Refresh() end)
 
     local titleText = createFontString(mainFrame, "GameFontNormalLarge"); titleText:SetPoint("TOP", 0, -6); titleText:SetText(addon.TITLE)
@@ -1383,15 +1332,14 @@ local function buildMainFrame()
     buildOrdersTab(mainFrame.tabs.orders)
     mainFrame.tabs.available = createTabFrame()
     buildAvailableTab(mainFrame.tabs.available)
-    mainFrame.tabs.games = createTabFrame()
-    if addon.GamesTab then
-        addon.Log.Protected("window.games", "building the games tab failed", addon.GamesTab.Build, mainFrame.tabs.games)
-    end
     buildDebugTab()
 
     addon.Events.On("DATA_CHANGED", UI.Refresh)
     addon.Events.On("TRADESKILL", onTradeSkillWindow)
-    addon.Events.On("ITEM_INFO", function() if mainFrame:IsShown() then refreshDetail(); refreshOffers() end end)
+    addon.Events.On("ITEM_INFO", function()
+        itemInfoArrived = true   -- the Recipes table redraws debounced (its OnUpdate)
+        if mainFrame:IsShown() then refreshDetail(); refreshOffers() end
+    end)
     selectTab("recipes")
     addon.Log.Debug("window.build", "the main window was built")
 end
@@ -1429,49 +1377,21 @@ function UI.SetNotice(unseenCount, showIcon, hideNumber)
     minimapButton.badgeText:SetText(noticeState.count > 99 and "99+" or tostring(noticeState.count))
 end
 
----@param buttonFrame table
-local function placeMinimapButton(buttonFrame)
-    local angleRadians = math.rad(addon.db and addon.db.ui.minimapAngle or (addon.IS_DEVELOPMENT_BUILD and 245 or 215))
-    buttonFrame:ClearAllPoints()
-    buttonFrame:SetPoint("CENTER", Minimap, "CENTER", math.cos(angleRadians) * 80, math.sin(angleRadians) * 80)
-end
-
+-- the round button is LibGuildSync's (Widgets.CreateMinimapButton, shared with GuildGames); its badge shows the count
 local function buildMinimapButton()
-    local buttonFrame = CreateFrame("Button", addon.FRAME_PREFIX .. "MinimapButton", Minimap)
-    buttonFrame:SetSize(31, 31); buttonFrame:SetFrameStrata("MEDIUM"); buttonFrame:SetFrameLevel(8)
-    local icon = buttonFrame:CreateTexture(nil, "BACKGROUND"); icon:SetSize(20, 20); icon:SetPoint("CENTER")
-    icon:SetTexture(DEFAULT_ICON)
-    buttonFrame.icon = icon
-    local border = buttonFrame:CreateTexture(nil, "OVERLAY"); border:SetSize(53, 53); border:SetPoint("TOPLEFT")
-    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-    local badge = CreateFrame("Frame", nil, buttonFrame); badge:SetSize(16, 14); badge:SetPoint("TOPRIGHT", 2, 2)
-    badge:SetFrameLevel(buttonFrame:GetFrameLevel() + 2)
-    local badgeBackground = badge:CreateTexture(nil, "BACKGROUND"); badgeBackground:SetAllPoints(); badgeBackground:SetColorTexture(0.75, 0.05, 0.05, 0.95)
-    buttonFrame.badgeText = badge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); buttonFrame.badgeText:SetPoint("CENTER", 0, 0)
-    buttonFrame.badge = badge
-    badge:Hide()
-    buttonFrame:RegisterForClicks("LeftButtonUp")
-    buttonFrame:RegisterForDrag("RightButton")
-    buttonFrame:SetScript("OnClick", UI.Toggle)
-    buttonFrame:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:SetText(addon.TITLE)
-        if noticeState.count > 0 then GameTooltip:AddLine(Format(Text["{n} new on the order board"], { n = noticeState.count }), 1, 0.82, 0) end
-        GameTooltip:AddLine(Text["Click: open window. Right-drag: move."], 1, 1, 1); GameTooltip:Show()
-    end)
-    buttonFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    buttonFrame:SetScript("OnDragStart", function(self)
-        self:SetScript("OnUpdate", function()
-            local minimapCenterX, minimapCenterY = Minimap:GetCenter()
-            local cursorX, cursorY = GetCursorPosition()
-            local scale = Minimap:GetEffectiveScale()
-            addon.db.ui.minimapAngle = math.deg(arcTangent2(cursorY / scale - minimapCenterY, cursorX / scale - minimapCenterX))
-            placeMinimapButton(self)
-        end)
-    end)
-    buttonFrame:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
-    placeMinimapButton(buttonFrame)
-    minimapButton = buttonFrame
+    minimapButton = Widgets.CreateMinimapButton({
+        name = addon.FRAME_PREFIX .. "MinimapButton",
+        icon = DEFAULT_ICON,
+        defaultAngle = addon.IS_DEVELOPMENT_BUILD and 245 or 215,
+        getAngle = function() return addon.db and addon.db.ui.minimapAngle end,
+        setAngle = function(degrees) if addon.db then addon.db.ui.minimapAngle = degrees end end,
+        onClick = function() UI.Toggle() end,
+        onTooltip = function(tooltip)
+            tooltip:SetText(addon.TITLE)
+            if noticeState.count > 0 then tooltip:AddLine(Format(Text["{n} new on the order board"], { n = noticeState.count }), 1, 0.82, 0) end
+            tooltip:AddLine(Text["Click: open window. Right-drag: move."], 1, 1, 1)
+        end,
+    })
     UI.SetNotice(noticeState.count, noticeState.showIcon, noticeState.hideNumber)
 end
 
