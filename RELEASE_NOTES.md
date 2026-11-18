@@ -1,40 +1,40 @@
-# TalentShare 0.6.0
+# TalentShare 0.7.0
 
 ## English
 
-**New: a Games tab with a coin flip and a slot machine, plus guild leaderboards.**
+**New: the recipe list is a table, and the window can be resized.**
 
-- **Coin flip.** Enter a stake in gold, silver and copper (1 copper to 100 000 gold), pick heads or tails and flip. The
-  coin is tossed into the air and spins before it lands; you either win or lose your stake.
-- **Slot machine.** 3 reels and 5 paylines (the 3 rows and 2 diagonals); three matching symbols on a line pay 3x to
-  75x your stake. Pull the lever or click **Spin**: the lights chase, the reels stop one after another, winning lines
-  light up, and big wins set off a coin shower with "Big win!" or "Jackpot!". Hover the machine to see the paytable.
-- **Guild leaderboards.** Every member's wins and losses are shown on a leaderboard for each game, for this week or
-  for all time. Each game also lists the latest results, and last week's winner is named at the top.
-- Switch between the games with the selector at the top of the tab.
-- **For fun only:** no gold changes hands. The addon never reads, trades or mails gold; the amounts are only points
-  on the leaderboard.
+- **Recipe table.** The Recipes tab now shows columns with titles: Item level, Required level, Profession, Skill and
+  Category. Recipe names appear in the colour of the item they make (green, blue, purple, ...).
+- **Sorting.** The list starts with the highest item level on top. Click any column title to sort by it; click it
+  again to reverse the order.
+- **Choose your columns.** `/ts options` (or the Options button) has a new "Recipe list" section: switch each column on
+  or off and pick the sort order.
+- **Resizable window.** Drag the grip at the bottom right corner to make the window bigger. All lists grow with it,
+  and the size is remembered.
+- **Games moved out.** The coin flip and the slot machine are now their own addon, **GuildGames** (`/gg`). Install it
+  if you want to keep playing; TalentShare no longer has a Games tab. Old game results are not carried over.
 
-**After updating:** restart the game. Members still on 0.5.x keep sharing recipes and orders with you as before; they
-just don't see the Games tab. Don't go back to 0.5.x afterwards: it can no longer save changes to the updated data.
+**After updating:** restart the game. Members still on 0.6.0 keep sharing recipes, orders and items with you as before.
+Don't go back to 0.6.0 afterwards: it can no longer save changes to the updated data.
 
 ## Deutsch
 
-**Neu: ein Reiter „Spiele“ mit Münzwurf und Spielautomat, dazu Bestenlisten für die Gilde.**
+**Neu: die Rezeptliste ist eine Tabelle, und das Fenster lässt sich in der Größe ändern.**
 
-- **Münzwurf.** Gib einen Einsatz in Gold, Silber und Kupfer ein (1 Kupfer bis 100 000 Gold), wähle Kopf oder Zahl und
-  wirf. Die Münze fliegt in die Luft und dreht sich, bevor sie landet; du gewinnst oder verlierst deinen Einsatz.
-- **Spielautomat.** 3 Walzen und 5 Gewinnlinien (die 3 Reihen und 2 Diagonalen); drei gleiche Symbole auf einer Linie
-  bringen das 3- bis 75-Fache des Einsatzes. Zieh am Hebel oder klicke **Drehen**: die Lichter laufen, die Walzen
-  halten nacheinander an, Gewinnlinien leuchten auf, und bei großen Gewinnen regnet es Münzen mit „Großer Gewinn!“ oder
-  „Jackpot!“. Mit der Maus über dem Automaten siehst du die Gewinntabelle.
-- **Bestenlisten der Gilde.** Gewinne und Verluste aller Mitglieder stehen für jedes Spiel in einer Bestenliste, für
-  diese Woche oder insgesamt. Jedes Spiel zeigt außerdem die letzten Ergebnisse, und oben steht der Gewinner der letzten
-  Woche.
-- Oben im Reiter wechselst du zwischen den Spielen.
-- **Nur zum Spaß:** es wird kein Gold bewegt. Das Addon liest, handelt oder verschickt nie Gold; die Beträge sind nur
-  Punkte in der Bestenliste.
+- **Rezepttabelle.** Der Reiter „Rezepte“ zeigt jetzt Spalten mit Überschriften: Gegenstandsstufe, Benötigte Stufe,
+  Beruf, Fertigkeit und Kategorie. Rezeptnamen erscheinen in der Farbe des hergestellten Gegenstands (grün, blau,
+  lila, ...).
+- **Sortieren.** Die Liste beginnt mit der höchsten Gegenstandsstufe. Klicke auf eine Spaltenüberschrift, um danach zu
+  sortieren; ein zweiter Klick dreht die Reihenfolge um.
+- **Spalten auswählen.** In `/ts options` (oder über den Knopf „Optionen“) gibt es den neuen Abschnitt „Rezeptliste“:
+  jede Spalte ein- oder ausschalten und die Sortierung wählen.
+- **Fenstergröße.** Zieh am Griff in der rechten unteren Ecke, um das Fenster zu vergrößern. Alle Listen wachsen mit,
+  und die Größe bleibt gespeichert.
+- **Spiele ausgelagert.** Münzwurf und Spielautomat sind jetzt ein eigenes Addon, **GuildGames** (`/gg`). Installiere
+  es, wenn du weiterspielen möchtest; TalentShare hat keinen Reiter „Spiele“ mehr. Alte Spielergebnisse werden nicht
+  übernommen.
 
-**Nach dem Update:** Spiel neu starten. Mitglieder mit 0.5.x tauschen Rezepte und Bestellungen weiter mit dir aus wie
-bisher; sie sehen nur den Reiter „Spiele“ nicht. Danach nicht mehr auf 0.5.x zurückgehen: diese Version kann die
-aktualisierten Daten nicht mehr speichern.
+**Nach dem Update:** Spiel neu starten. Mitglieder mit 0.6.0 tauschen Rezepte, Bestellungen und Gegenstände weiter mit
+dir aus wie bisher. Danach nicht mehr auf 0.6.0 zurückgehen: diese Version kann die aktualisierten Daten nicht mehr
+speichern.

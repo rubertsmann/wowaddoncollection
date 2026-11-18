@@ -1,7 +1,7 @@
 # Changelog
 
-## 0.7.0 (unreleased)
-Protocol 2.3 (unchanged), schema 5. Feature 015.
+## 0.7.0
+Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.3 (unchanged), schema 5. Features 015, 016.
 - **Games moved out:** the coin flip and the slot machine are now the separate addon **GuildGames** (`/gg`). The Games
   tab, the `/tsd anim` and `/tsd game` dev commands and the game strings are gone. Schema 5 deletes the stored game
   results and settings (fresh start: GuildGames does not import them).

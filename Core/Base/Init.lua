@@ -32,7 +32,7 @@ addon.IS_DEVELOPMENT_BUILD = IS_DEVELOPMENT_BUILD
 -- ONE version source: the TOC "## Version" line (read from addon metadata). The literal fallback only matters for the
 -- offline tests, which have no client; tests/test_hardening.lua checks it against the TOC.
 ---@type string
-addon.BASE_VERSION = tableOfContentsField("Version") or "0.6.0"
+addon.BASE_VERSION = tableOfContentsField("Version") or "0.7.0"
 ---@type string the development TOC already says "-dev"; never append it twice
 addon.VERSION = addon.BASE_VERSION
     .. ((IS_DEVELOPMENT_BUILD and not addon.BASE_VERSION:find("-dev", 1, true)) and "-dev" or "")
