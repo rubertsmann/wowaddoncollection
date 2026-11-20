@@ -143,11 +143,11 @@ end
 
 local journalLog = library.Log.New({
     entries = function()
-        local database = addon.Store and addon.Store.db
+        local database = addon.Store.db
         if type(database) ~= "table" then return nil end
         return AzeCaught.State().journal
     end,
-    title = function() return (addon.TITLE or "GuildGames") .. " AZEcaught" end,
+    title = function() return addon.TITLE .. " AZEcaught" end,
     isDevelopment = function() return addon.IS_DEVELOPMENT_BUILD end,
 })
 journalLog.MAXIMUM_ENTRIES = AzeCaught.JOURNAL_ENTRIES
@@ -165,9 +165,9 @@ function AzeCaught.Journal(level, area, message, details)
     local functionName = LEVEL_FUNCTION[level] or "Debug"
     local fullArea = "caught." .. area
     local body = journalLog[functionName](fullArea, message, details)
-    if (level == "WARNING" or level == "ERROR") and addon.Log then addon.Log[functionName](fullArea, message, details) end
-    local database = addon.Store and addon.Store.db
-    if type(database) == "table" and type(database.caught) == "table" and database.caught.verbose and addon.Print then
+    if level == "WARNING" or level == "ERROR" then addon.Log[functionName](fullArea, message, details) end
+    local database = addon.Store.db
+    if type(database) == "table" and type(database.caught) == "table" and database.caught.verbose then
         addon.Print("|cff88ccff[journal]|r " .. body)
     end
     return body
@@ -672,7 +672,7 @@ function AzeCaught.ProfileOf(companion)
     if type(companion) ~= "table" then return AzeCaught.Profile(nil) end
     local cached = profileCache[companion]
     if cached then return cached end
-    local database = addon.Store and addon.Store.db
+    local database = addon.Store.db
     local collection = type(database) == "table" and type(database.caught) == "table" and database.caught.collection
     local entry = type(collection) == "table" and collection[companion.npc] or { cls = companion.cls }
     local profile = AzeCaught.Profile(entry)

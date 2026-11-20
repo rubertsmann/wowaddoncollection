@@ -110,15 +110,9 @@ function onGameEvent.PLAYER_GUILD_UPDATE() addon.Communication.Start() end
 -- stack and the last AZEcaught steps, so the cause can be found from /gg debug (or the SavedVariables file).
 ---@param details table { kind, function, combat, stack }
 function addon.OnActionBlocked(details)
-    if addon.AzeCaught then
-        local recent = addon.AzeCaught.JournalLines(3)
-        details.lastSteps = table.concat(recent, " || ")
-    end
-    if addon.AzeCaught then   -- the journal mirrors ERROR lines to the main log (/gg debug)
-        addon.AzeCaught.Journal("ERROR", "blocked", "the client blocked a protected function and blamed this addon", details)
-    else
-        addon.Log.Error("events.blocked", "the client blocked a protected function and blamed this addon", details)
-    end
+    details.lastSteps = table.concat(addon.AzeCaught.JournalLines(3), " || ")
+    -- the journal mirrors ERROR lines to the main log (/gg debug)
+    addon.AzeCaught.Journal("ERROR", "blocked", "the client blocked a protected function and blamed this addon", details)
 end
 
 

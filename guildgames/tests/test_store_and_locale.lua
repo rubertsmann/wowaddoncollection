@@ -77,4 +77,30 @@ return {
         harness.equal(#unused, 0, "deDE keys not used by any code: " .. table.concat(unused, " | "))
         harness.equal(#badPlaceholders, 0, "placeholders differ: " .. table.concat(badPlaceholders, " | "))
     end,
+
+    -- docs/coding-conventions.md "Module guards": the TOC guarantees every module, so `addon.X and ...`, `if addon.X then`
+    -- and `addon.X ~= nil` on a module only hide a broken TOC. The allowed exceptions are listed here by file and module.
+    ["conventions: no guard on another addon module outside the allowed exceptions"] = function(harness)
+        local ALLOWED = {
+            ["Core/Base/Utility.lua"] = { Store = true, Api = true },   -- Utility.Me runs before Store.Init and offline without Api
+            ["Core/Base/Init.lua"] = { OnActionBlocked = true },      -- a block while the files load: Events.lua is not loaded yet
+        }
+        local found, scannedCount = {}, 0
+        for _, path in ipairs(sourceFiles()) do
+            scannedCount = scannedCount + 1
+            local lineNumber = 0
+            for line in (slurp(path) .. "\n"):gmatch("([^\n]*)\n") do
+                lineNumber = lineNumber + 1
+                local code = line:gsub("%-%-.*$", "")
+                for _, pattern in ipairs({ "addon%.(%u%l%w*) and ", "if not addon%.(%u%l%w*) then", "if addon%.(%u%l%w*) then",
+                    "addon%.(%u%l%w*) ~= nil" }) do
+                    for moduleName in code:gmatch(pattern) do
+                        if not (ALLOWED[path] or {})[moduleName] then found[#found + 1] = path .. ":" .. lineNumber .. " " .. moduleName end
+                    end
+                end
+            end
+        end
+        harness.truthy(scannedCount > 20, "the file listing found too few files: " .. scannedCount)
+        harness.equal(#found, 0, "module guards: " .. table.concat(found, " | "))
+    end,
 }

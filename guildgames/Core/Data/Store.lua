@@ -79,7 +79,7 @@ end
 function Store.SanitizePersisted(savedVariables)
     local droppedCount = addon.Games.SanitizePersisted(savedVariables)
     addon.Trace.SanitizePersisted(savedVariables)
-    local droppedCaught = addon.AzeCaught and addon.AzeCaught.SanitizePersisted(savedVariables) or 0
+    local droppedCaught = addon.AzeCaught.SanitizePersisted(savedVariables)
     if droppedCaught > 0 then
         addon.AzeCaught.Journal("WARNING", "load", "invalid saved AZEcaught data was dropped", { count = droppedCaught })
     end

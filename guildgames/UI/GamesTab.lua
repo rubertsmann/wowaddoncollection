@@ -74,7 +74,7 @@ GamesTab.SignedGold = signedGold
 ---@param escapedName string
 ---@return string escaped display name (realm hidden on my realm)
 local function displayName(playerName, escapedName)
-    local shortName = addon.Utility.ShortName and addon.Utility.ShortName(playerName)
+    local shortName = addon.Utility.ShortName(playerName)
     return shortName and addon.Utility.Escape(shortName) or escapedName
 end
 
@@ -305,8 +305,7 @@ GamesTab.Settings = settings
 -- Whether any game is animating (the board waits, the game selector is locked).
 ---@return boolean
 function GamesTab.IsBusy()
-    return GamesTab.state.flipping or (addon.SlotMachine ~= nil and addon.SlotMachine.state.spinning)
-        or (addon.SurvivorArena ~= nil and addon.SurvivorArena.state.run ~= nil) or false
+    return GamesTab.state.flipping or addon.SlotMachine.state.spinning or addon.SurvivorArena.state.run ~= nil or false
 end
 
 -- The Flip button: decide and store the flip, announce it, then animate the reveal. Nothing happens while a coin flies.
@@ -506,7 +505,7 @@ function GamesTab.Refresh()
         widgets.feedTitle:SetText(""); widgets.playsHeader:SetText("")
         local winner = addon.Model.CompanionWinner(addon.Store.db.games, addon.Games.PreviousPeriodKey(now), myName)
         widgets.winnerText:SetText(winner and Format(Text["Last week's best: {name} ({level})"], { name = winner.name, level = winner.peak }) or "")
-        if addon.AzeCaughtPanel then addon.AzeCaughtPanel.Refresh() end
+        addon.AzeCaughtPanel.Refresh()
         return
     end
     local labels = boardLabels(gameKey)
@@ -717,15 +716,9 @@ function GamesTab.Build(stage, sidebar, header)
         widgets.panels[key] = panel
     end
     buildCoinPanel(widgets.panels.coin)
-    if addon.SlotMachine then
-        addon.Log.Protected("games.slots", "building the slot machine failed", addon.SlotMachine.Build, widgets.panels.slots)
-    end
-    if addon.SurvivorArena then
-        addon.Log.Protected("games.survivor", "building the survivor arena failed", addon.SurvivorArena.Build, widgets.panels.survivor)
-    end
-    if addon.AzeCaughtPanel then
-        addon.Log.Protected("caught.ui", "building the AZEcaught panel failed", addon.AzeCaughtPanel.Build, widgets.panels.caught)
-    end
+    addon.Log.Protected("games.slots", "building the slot machine failed", addon.SlotMachine.Build, widgets.panels.slots)
+    addon.Log.Protected("games.survivor", "building the survivor arena failed", addon.SurvivorArena.Build, widgets.panels.survivor)
+    addon.Log.Protected("caught.ui", "building the AZEcaught panel failed", addon.AzeCaughtPanel.Build, widgets.panels.caught)
     -- the money pool (feature 018), right of the game switch
     widgets.balanceText = Widgets.CreateFontString(header, "GameFontHighlightSmall", "LEFT")
     widgets.balanceText:SetPoint("LEFT", previousButton, "RIGHT", 8, 0)

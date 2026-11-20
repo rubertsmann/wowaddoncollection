@@ -15,7 +15,7 @@ local widgets = {}
 Options.widgets = widgets
 
 local function apply()
-    if addon.Catcher then addon.Catcher.RefreshIcons() end
+    addon.Catcher.RefreshIcons()
     Options.Refresh()
 end
 
@@ -66,7 +66,7 @@ function Options.Build()
     if widgets.frame then return widgets.frame end
     local Widgets = addon.UI.Widgets
     local frame = CreateFrame("Frame")
-    frame.name = (addon.TITLE or "GuildGames") .. " AZEcaught"
+    frame.name = addon.TITLE .. " AZEcaught"
     widgets.frame, widgets.values = frame, {}
     local title = Widgets.CreateFontString(frame, "GameFontNormalLarge", "LEFT")
     title:SetPoint("TOPLEFT", 16, -16); title:SetText(frame.name)
@@ -83,7 +83,7 @@ function Options.Build()
     -- a preview of the round icon
     local preview = frame:CreateTexture(nil, "ARTWORK")
     preview:SetPoint("TOPLEFT", 400, -120)
-    if preview:SetTexture(addon.Catcher and addon.Catcher.ROPE_ICON or "") == false then preview:SetColorTexture(1, 0.82, 0.2, 1) end
+    if preview:SetTexture(addon.Catcher.ROPE_ICON) == false then preview:SetColorTexture(1, 0.82, 0.2, 1) end
     pcall(function()
         local mask = frame:CreateMaskTexture()
         mask:SetTexture(addon.Catcher.CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")

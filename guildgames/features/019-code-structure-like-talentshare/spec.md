@@ -42,7 +42,7 @@ suffix), and helper logic that was copied between files lives in one place.
 
 ## Tasks
 - [x] T1 (M): move files, split Library.lua, event bus to Events.lua, TOC + harness + tests + tools + path comments. Verify: luajit tests/run.lua; tools/coinflip.lua runs.
-- [ ] T2 (S): remove needless module guards; lint test for them. Verify: new test in tests/test_store_and_locale.lua.
+- [x] T2 (S): remove needless module guards; lint test for them. Verify: new test in tests/test_store_and_locale.lua.
 - [ ] T3 (S): Survivor duplicate might/haste; Utility.Clamp. Verify: test_survivor, test_azecaught.
 - [ ] T4 (M): shared UI helpers (sound by name, frame level, texture fallback, settings), money/me wrappers. Verify: test_load, test_games_ui.
 - [ ] T5 (S): one Model.Duration; one Model.RefusalText. Verify: new Model tests; locale lint.

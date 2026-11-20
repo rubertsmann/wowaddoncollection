@@ -477,7 +477,7 @@ local ZONE_RANK = { ok = 0, needy = 1, critical = 2, empty = 2 }
 ---@return integer count
 ---@return integer worst
 function UI.CompanionAlerts()
-    local companion = addon.AzeCaught and addon.db and addon.AzeCaught.Active()
+    local companion = addon.db and addon.AzeCaught.Active()
     if not companion then return 0, 0 end
     local count, worst = 0, 0
     for _, need in ipairs(addon.AzeCaught.NEEDS) do

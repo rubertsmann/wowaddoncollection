@@ -169,8 +169,8 @@ function DevProbe.AnimationProbe()
     local paths = { "Interface\\CharacterFrame\\TempPortraitAlphaMask", "Interface\\Icons\\INV_Crown_01",
         "Interface\\Icons\\INV_Misc_Head_Human_01", "Interface\\Buttons\\UI-ActionButton-Border",
         "Interface\\MoneyFrame\\UI-GoldIcon", unpack(addon.Slots.ICONS or {}) }
-    for _, path in ipairs(addon.Survivor and addon.Survivor.ICONS or {}) do paths[#paths + 1] = path end
-    for _, path in pairs(addon.GamesTab and addon.GamesTab.GAME_ICONS or {}) do paths[#paths + 1] = path end
+    for _, path in ipairs(addon.Survivor.ICONS) do paths[#paths + 1] = path end
+    for _, path in pairs(addon.GamesTab.GAME_ICONS) do paths[#paths + 1] = path end
     paths[#paths + 1] = "Interface\\Cursor\\UI-Cursor-Move"
     paths[#paths + 1] = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up"
     for _, path in ipairs(paths) do

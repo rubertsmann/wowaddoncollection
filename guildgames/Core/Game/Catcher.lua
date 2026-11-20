@@ -689,7 +689,7 @@ function commands.probe()
     local s1 = Api.UnitSnapshot("target")
     local display = s1 and s1.npc and Catcher.CaptureDisplay("target")
     local result1 = s1 and s1.npc and ("display " .. tostring(display)) or "target an NPC first"
-    local panelModel = addon.AzeCaughtPanel and addon.AzeCaughtPanel.widgets.model
+    local panelModel = addon.AzeCaughtPanel.widgets.model
     local animations = {}
     if panelModel and panelModel.HasAnimation then
         for _, animationId in ipairs({ 0, 4, 5, 26, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 100, 101, 102, 103, 113, 114 }) do

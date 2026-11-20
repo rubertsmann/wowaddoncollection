@@ -20,3 +20,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: same behaviour; GuildGames-Dev.toc regenerated with tools/deploy.ps1 (test_load caught it as stale first).
 - Evidence: luajit tests/run.lua -> "116 passed, 0 failed"; luajit tools/coinflip.lua H 200 -> "200 flips of 2s 50c: heads 53.50% ..."
 - Next: T2 module guards
+
+## 2026-11-20 22:15 | BUILD | T2 no needless module guards
+- Did: removed guards on modules the TOC guarantees: Core/Data/Store.lua (AzeCaught), Core/Game/Catcher.lua (AzeCaughtPanel), Core/Game/Events.lua OnActionBlocked (AzeCaught x2), Core/Minigames/AzeCaught.lua (Store x3, Log, Print, TITLE), Core/Minigames/Survivor.lua (Store), UI/AzeCaughtOptions.lua (Catcher x2, TITLE), UI/DevProbe.lua (Survivor, GamesTab), UI/GamesTab.lua (Utility.ShortName, SlotMachine, SurvivorArena, AzeCaughtPanel x2), UI/Window.lua (AzeCaught). Harness addon gets TITLE (as Init.lua); test_games_ui stubs AzeCaughtPanel (it does not load that file). New lint "conventions: no guard on another addon module outside the allowed exceptions" (tests/test_store_and_locale.lua) with two allowed cases: Utility.Me (Store, Api) and Init.lua's early blocked-action hook (OnActionBlocked, defined later).
+- Result: the lint was red first ("Core/Base/Init.lua:103 OnActionBlocked | UI/Window.lua:480 AzeCaught"), then green.
+- Evidence: luajit tests/run.lua -> "117 passed, 0 failed"
+- Next: T3 Survivor duplicate might/haste, Utility.Clamp

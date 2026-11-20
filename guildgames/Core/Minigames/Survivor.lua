@@ -738,7 +738,7 @@ local function step(run, dt)
         local factor = Survivor.EndlessFactor(run.time)
         if factor > (run.reachedFactor or 0) then
             run.reachedFactor = factor
-            local database = addon.Store and addon.Store.db
+            local database = addon.Store.db
             local pending = database and database.ui and database.ui.survivorPending
             if type(pending) == "table" and pending.name == run.name then pending.factor = factor end
             emit(run, { kind = "milestone", factor = factor })

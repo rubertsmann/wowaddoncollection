@@ -46,7 +46,7 @@ Harness.PURE_FILES = { "Core/Base/Utility.lua", "Core/Base/Log.lua", "Core/Debug
 ---@param options? { now: integer }
 ---@return table addon
 function Harness.addon(options)
-    local addon = { PROTOCOL_MAJOR = 1, PROTOCOL_MINOR = 1, PROTOCOL = 1, PREFIX = "GGames", SlashCommands = {},
+    local addon = { PROTOCOL_MAJOR = 1, PROTOCOL_MINOR = 1, PROTOCOL = 1, PREFIX = "GGames", TITLE = "GuildGames", SlashCommands = {},
         Print = function() end }   -- same values as Core/Base/Init.lua (tests/test_load.lua pins them)
     Harness.clock = (options and options.now) or 1000
     GetServerTime = function() return Harness.clock end
