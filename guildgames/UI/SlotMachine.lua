@@ -265,7 +265,7 @@ local function coinShower(count)
                 coin:SetPoint("CENTER", panel, "TOPLEFT", launch.x + launch.drift * time, -y)
                 coin:SetSize(launch.size, launch.size)
                 pcall(coin.SetRotation, coin, launch.spin * time)
-                coin:SetAlpha(math.max(0, math.min(1, (2.6 - elapsed) / 0.5)))
+                coin:SetAlpha(addon.Utility.Clamp((2.6 - elapsed) / 0.5, 0, 1))
                 coin:Show()
             end
         end

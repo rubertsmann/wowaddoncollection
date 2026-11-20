@@ -454,7 +454,7 @@ end
 ---@return integer count of simulated records
 function Games.Simulate(count, now, randomFunction)
     Games.simulated = {}
-    count = math.max(0, math.min(50, math.floor(tonumber(count) or 0)))
+    count = addon.Utility.Clamp(math.floor(tonumber(count) or 0), 0, 50)
     for index = 1, count do
         local playerName = "Sim" .. index .. "-Test"
         local gameRecord = emptyRecord(playerName)

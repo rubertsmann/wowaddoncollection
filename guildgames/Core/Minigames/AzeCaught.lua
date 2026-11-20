@@ -201,15 +201,7 @@ end
 
 ------------------------------------------------------------------ helpers
 
----@param value number
----@param lowest number
----@param highest number
----@return number
-local function clamp(value, lowest, highest)
-    if value < lowest then return lowest end
-    if value > highest then return highest end
-    return value
-end
+local clamp = addon.Utility.Clamp
 
 ---@param value number
 ---@return number rounded to one decimal (journal values)
@@ -342,8 +334,8 @@ function AzeCaught.ProjectToScreen(view, distance, bearing)
     local x = view.width / 2 + focal * right / depth
     local y = view.height / 2 + focal * up / depth
     local margin = camera.margin
-    x = math.max(margin, math.min(view.width - margin, x))
-    y = math.max(margin, math.min(view.height - margin, y))
+    x = clamp(x, margin, view.width - margin)
+    y = clamp(y, margin, view.height - margin)
     return x, y, referenceDepth / depth
 end
 

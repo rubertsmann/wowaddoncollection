@@ -538,7 +538,7 @@ function GamesTab.RevealBoard()
     end
     addon.Animate.Tween("boardReveal", duration, function(elapsed)
         for order, entry in ipairs(rows) do
-            place(entry, math.max(0, math.min(1, (elapsed - (order - 1) * stagger) / slide)))
+            place(entry, addon.Utility.Clamp((elapsed - (order - 1) * stagger) / slide, 0, 1))
         end
     end, function() for _, entry in ipairs(rows) do place(entry, 1) end end)
 end

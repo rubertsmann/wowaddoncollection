@@ -397,7 +397,7 @@ end
 ---@param stat { key: string, fill: number, over: boolean }
 ---@return string
 function Panel.StatBar(stat)
-    local filled = math.floor(STAT_BAR_WIDTH * math.max(0, math.min(1, stat.fill)) + 0.5)
+    local filled = math.floor(STAT_BAR_WIDTH * addon.Utility.Clamp(stat.fill, 0, 1) + 0.5)
     return barPiece(filled, stat.over and STAT_OVER_COLOR or STAT_COLOR[stat.key] or STAT_COLOR.attack)
         .. barPiece(STAT_BAR_WIDTH - filled, STAT_EMPTY_COLOR)
 end

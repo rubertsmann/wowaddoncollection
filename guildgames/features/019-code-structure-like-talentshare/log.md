@@ -26,3 +26,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: the lint was red first ("Core/Base/Init.lua:103 OnActionBlocked | UI/Window.lua:480 AzeCaught"), then green.
 - Evidence: luajit tests/run.lua -> "117 passed, 0 failed"
 - Next: T3 Survivor duplicate might/haste, Utility.Clamp
+
+## 2026-11-20 22:22 | BUILD | T3 Survivor copy removed, one Clamp
+- Did: Core/Minigames/Survivor.lua: the first might/haste pair (a copy, shadowed by the second pair next to `area`) removed. New Core/Base/Utility.lua `Utility.Clamp(value, lowest, highest)` (NaN -> lowest); AzeCaught's local clamp is now that one; the hand-written math.max(math.min(...)) clamps in Games, Catcher (x2), AzeCaught.ProjectToScreen, CoinFlip.Pose, Survivor steer, AzeCaughtPanel.StatBar, DevProbe, GamesTab, SlotMachine, SurvivorArena use it.
+- Result: same results for finite input; a NaN now becomes the lower bound instead of passing through (AzeCaught) or becoming the upper bound (math.min/max).
+- Evidence: luajit tests/run.lua -> "118 passed, 0 failed" (new: "utility: Clamp limits both ends and turns NaN into the lower bound"); luajit tools/coinflip.lua H 50 runs
+- Next: T4 shared UI helpers

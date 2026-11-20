@@ -202,7 +202,7 @@ end
 
 ---@param run SurvivorRun
 local function drawHud(run)
-    local share = math.max(0, math.min(1, run.hp / run.maxHp))
+    local share = addon.Utility.Clamp(run.hp / run.maxHp, 0, 1)
     widgets.hpFill:SetWidth(math.max(1, 44 * share))
     widgets.hpFill:SetColorTexture(1 - share, 0.35 + 0.6 * share, 0.25, 1)
     if run.target.endless then

@@ -78,6 +78,13 @@ return {
         harness.equal(#badPlaceholders, 0, "placeholders differ: " .. table.concat(badPlaceholders, " | "))
     end,
 
+    ["utility: Clamp limits both ends and turns NaN into the lower bound"] = function(harness)
+        local Clamp = harness.addon().Utility.Clamp
+        harness.equal(Clamp(5, 0, 10), 5); harness.equal(Clamp(-1, 0, 10), 0); harness.equal(Clamp(11, 0, 10), 10)
+        harness.equal(Clamp(0 / 0, 2, 10), 2, "NaN must not pass through")
+        harness.equal(Clamp(math.huge, 0, 1), 1); harness.equal(Clamp(-math.huge, 0, 1), 0)
+    end,
+
     -- docs/coding-conventions.md "Module guards": the TOC guarantees every module, so `addon.X and ...`, `if addon.X then`
     -- and `addon.X ~= nil` on a module only hide a broken TOC. The allowed exceptions are listed here by file and module.
     ["conventions: no guard on another addon module outside the allowed exceptions"] = function(harness)

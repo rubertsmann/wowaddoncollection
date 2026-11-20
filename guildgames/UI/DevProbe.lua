@@ -224,7 +224,7 @@ if addon.IS_DEVELOPMENT_BUILD then
     addon.SlashCommands.anim = function(arguments)
         local word, value = tostring(arguments or ""):match("^%s*(%S*)%s*(%S*)")
         if word == "speed" then
-            addon.Animate.speed = math.max(0.05, math.min(4, tonumber(value) or 1))
+            addon.Animate.speed = addon.Utility.Clamp(tonumber(value) or 1, 0.05, 4)
             addon.Print(("anim speed %.2f"):format(addon.Animate.speed))
             return
         end

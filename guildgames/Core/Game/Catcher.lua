@@ -318,7 +318,7 @@ function Catcher.PlayRopeEffect(unit)
         local view = { width = width, height = height, zoom = geometry.zoom }
         local fromX, fromY = AzeCaught.ProjectToScreen(view, 0, 0)
         local toX, toY, scale = AzeCaught.ProjectToScreen(view, geometry.distance, geometry.bearing)
-        scale = math.max(0.3, math.min(1.5, scale))
+        scale = addon.Utility.Clamp(scale, 0.3, 1.5)
         if not effect then
             local frame = CreateFrame("Frame", nil, UIParent)
             frame:SetAllPoints(UIParent); frame:SetFrameStrata("HIGH"); frame:EnableMouse(false)
@@ -732,7 +732,7 @@ function developmentCommands.need(arguments)
     local need, value = (arguments or ""):match("^%s*(%a+)%s+(%d+)")
     local companion = AzeCaught.Active()
     if not companion or not companion[need or ""] or type(companion[need]) ~= "number" then printLine("need <hunger|thirst|affection|energy> <0-100>") return end
-    companion[need] = math.max(0, math.min(100, tonumber(value)))
+    companion[need] = addon.Utility.Clamp(tonumber(value), 0, 100)
     AzeCaught.Journal("INFORMATION", "dev.need", "a need was set by hand", { need = need, value = companion[need] })
     addon.Events.Fire("CAUGHT_CHANGED"); commands.state()
 end

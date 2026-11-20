@@ -16,3 +16,14 @@ function Utility.Me()
     local playerInformation = addon.Api and addon.Api.GetPlayerInformation()
     return playerInformation and playerInformation.name
 end
+
+-- `value` limited to [lowest, highest]; NaN counts as `lowest` (it compares false with everything and would pass through).
+---@param value number
+---@param lowest number
+---@param highest number
+---@return number
+function Utility.Clamp(value, lowest, highest)
+    if value ~= value or value < lowest then return lowest end
+    if value > highest then return highest end
+    return value
+end

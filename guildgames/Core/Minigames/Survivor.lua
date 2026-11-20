@@ -203,18 +203,6 @@ for _, kind in ipairs(Survivor.ENEMIES) do Survivor.ICONS[#Survivor.ICONS + 1] =
 Survivor.TOWER_ICON = "Interface\\Icons\\Spell_Holy_DivineIntervention"
 Survivor.ICONS[#Survivor.ICONS + 1] = Survivor.TOWER_ICON
 
------------------------------------------------------------------- item stats (one place, also shown in the UI)
-
--- damage multiplier of "might"
----@param run SurvivorRun
----@return number
-local function might(run) return 1 + 0.2 * (run.items.might or 0) end
-
--- cooldown multiplier of "haste"
----@param run SurvivorRun
----@return number
-local function haste(run) return 0.88 ^ (run.items.haste or 0) end
-
 ---@class WeaponStats
 ---@field damage number
 ---@field cooldown number seconds
@@ -626,7 +614,7 @@ local function steer(run, projectile, dt)
     local wanted = math.atan2(target.y - projectile.y, target.x - projectile.x)
     local turn = (wanted - heading + math.pi) % (2 * math.pi) - math.pi
     local maximum = projectile.homing * dt
-    heading = heading + math.max(-maximum, math.min(maximum, turn))
+    heading = heading + addon.Utility.Clamp(turn, -maximum, maximum)
     projectile.vx, projectile.vy = math.cos(heading) * speed, math.sin(heading) * speed
 end
 

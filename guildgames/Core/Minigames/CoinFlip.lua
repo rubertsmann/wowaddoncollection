@@ -29,7 +29,7 @@ CoinFlip.HALF_TURNS = { H = 10, T = 9 }
 ---@param outcome "H"|"T"
 ---@return CoinPose
 function CoinFlip.Pose(elapsed, outcome)
-    local progress = math.max(0, math.min(1, (tonumber(elapsed) or 0) / CoinFlip.DURATION))
+    local progress = addon.Utility.Clamp((tonumber(elapsed) or 0) / CoinFlip.DURATION, 0, 1)
     if progress >= 1 then return { width = 1, edge = 0, y = 0, face = outcome, done = true } end
     local eased = 1 - (1 - progress) ^ 3
     local angle = (CoinFlip.HALF_TURNS[outcome] or 10) * math.pi * eased
