@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased (protocol 1.1, schema 2)
+- Code reorganised like TalentShare (folders by role, shared helpers, naming lints); durations in the companion panel and
+  minimap tooltip now read "2h" instead of "2h 0m" (feature 019).
 - New game **AZEcaught** (feature 018): catch hostile NPCs and raise one as a companion.
   - Every NPC you fight is added to your collection. Below 35% health a rope icon shows on its nameplate; throw it (icon,
     the "AZEcaught: throw rope" key binding or `/gg catch`) and kill the NPC within 3 s for a chance to catch it (the first catch always succeeds). The chance

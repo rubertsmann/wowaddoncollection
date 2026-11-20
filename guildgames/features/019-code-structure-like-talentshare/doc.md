@@ -1,24 +1,33 @@
 # Code structure like TalentShare
 
-Status: draft | Since version: <x.y.z> | Spec: [spec](spec.md) | Verification: [verify](verify.md)
+Status: verifying | Since version: next GuildGames release | Spec: [spec](spec.md) | Verification: [verify](verify.md)
 
 ## What it does
-<player-facing, 2-4 sentences>
+Nothing new for the player: the code is reorganised like TalentShare's so both addons read the same way. The only
+visible change: times in the companion panel and the minimap tooltip are rounded to the nearest minute and whole hours
+show as "2h" (they showed "2h 0m"), the same as the NPC info overlay.
 
 ## How to use
-- UI: <where to click>
-- Commands: `/ts ...`
+- Developers: the folder table, the names and the "one helper per job" table are in `docs/coding-conventions.md`.
+- Commands: unchanged (`/gg locale` moved from Core/Game/Events.lua to Core/Base/Locale.lua, same words).
 
 ## How it works
-- Data (SavedVariables): <shape>
-- Messages: <types and fields, or "no change">
-- Modules: <files and responsibilities>
+- Data (SavedVariables): no change (schema 2).
+- Messages: no change (protocol 1.1).
+- Modules: `Core/Base` (Init, Utility, Log, Locale), `Core/Debug` (Trace), `Core/Net` (Codec, Guard, Sync,
+  Communication), `Core/Data` (Store, Games, Wallet), `Core/Minigames` (CoinFlip, Slots, Survivor, AzeCaught),
+  `Core/View` (Model), `Core/Game` (Api, Catcher, Events with the event bus), `UI/Helpers.lua` (first UI file).
+- New shared helpers: `Utility.Clamp`, `Api.PlaySoundNamed`, `Model.CommonRefusalText`, `UIHelpers.Settings`,
+  `UIHelpers.SetTextureOr`, `UIHelpers.FrameLevel`; `Model.Duration` is the only duration text.
+- Lints (tests/test_store_and_locale.lua): no module guards outside the listed exceptions; ids spelled `ID`.
 
 ## Localization
-<which strings are translated, which come from the game client, what is sent on the wire>
+No new strings. The shared refusal texts keep literal `Text[...]` keys in Core/View/Model.lua, so the locale lint sees them.
 
 ## Limits and known issues
-- <limit>
+- Not yet started in the game client (verify.md IG1).
+- Init.lua and the diagnostic slash commands (`comm`, `hello`, `debug`, `trace`) are still near-copies of TalentShare's;
+  moving them into LibGuildSync is T8 (touches TalentShare).
 
 ## Changelog line
-- <one line for CHANGELOG.md>
+- Code reorganised like TalentShare (folders by role, shared helpers, naming lints); durations now read "2h" instead of "2h 0m" (feature 019).

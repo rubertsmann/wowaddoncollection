@@ -50,3 +50,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: only names changed; the one renamed table key (nextID) is on the in-memory survivor run, never stored or sent.
 - Evidence: luajit tests/run.lua -> "121 passed, 0 failed"
 - Next: T7 docs/coding-conventions.md, CHANGELOG, doc.md, verify.md
+
+## 2026-11-20 23:15 | DOC | T7 conventions, doc, verify
+- Did: new docs/coding-conventions.md (folders, names, one-helper-per-job table, module guard exceptions, logging, adding a file); doc.md; verify.md (R1-R7, RF1-RF5 OFFLINE, R6 READ-ONLY, IG1 in-game NOT-VERIFIED with steps); CHANGELOG line under Unreleased; INDEX + spec status verifying.
+- Result: every name the conventions doc cites exists (grep).
+- Evidence: luajit tests/run.lua -> "121 passed, 0 failed"
+- Next: T8 decide/implement: Init build identity + diagnostic slash commands shared in LibGuildSync (touches TalentShare); user: in-game check IG1 (verify.md)
