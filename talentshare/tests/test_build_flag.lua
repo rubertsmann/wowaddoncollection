@@ -1,4 +1,4 @@
--- Build flag (addon.BUILD / addon.IS_DEVELOPMENT_BUILD, defined only in Core/Base/Init.lua): live and dev builds run side by side in one client
+-- Build flag (addon.BUILD / addon.IS_DEVELOPMENT_BUILD, set only by Core/Base/Init.lua through LibGuildSync Addon.Setup): live and dev builds run side by side in one client
 -- and must share no comms prefix, SavedVariables, frame names or slash commands.
 
 local function slurp(path)
@@ -87,7 +87,7 @@ return {
         harness.truthy(not toc:find("TalentShareDB", 1, true), "dev TOC mentions the live global")
     end,
 
-    -- the identity strings live in Core/Base/Init.lua only; everything else must read addon.PREFIX / addon.SAVED_VARIABLES_NAME / addon.SLASH_COMMANDS / addon.FRAME_PREFIX
+    -- the identity words live in Core/Base/Init.lua only (LibGuildSync Addon.Setup derives the names from them); everything else must read addon.PREFIX / addon.SAVED_VARIABLES_NAME / addon.SLASH_COMMANDS / addon.FRAME_PREFIX
     ["build: no source file outside Init.lua hard-codes a prefix, a SavedVariables name or a slash command"] = function(harness)
         local bad = {}
         for _, path in ipairs(sourceFiles()) do

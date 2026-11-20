@@ -13,7 +13,7 @@ No blocking finding. Two low items and one note.
 
 | ID | Severity | Finding | Fix |
 |---|---|---|---|
-| S1 | Low (docs) | The "identity is defined ONLY in Core/Base/Init.lua" rule (`.claude/skills/review-talentshare/SKILL.md` "Build flag", `tests/test_build_flag.lua:90` comment) is now half true: Init.lua holds the three words (`TalentShare`, `TShare`, `ts`), the derivation lives in `Libs/LibGuildSync/Addon.lua`, which the hard-coded-identity scan excludes (it skips `Libs/`). | Update both texts to "Init.lua passes the words; LibGuildSync Addon.Setup derives the names". The derived names themselves stay pinned exactly by `tests/test_build_flag.lua:46,58,73` and `tests/test_identity.lua`, so a library change that alters them fails here. |
+| S1 | Low (docs), **fixed** 2026-11-21 | The "identity is defined ONLY in Core/Base/Init.lua" rule (`.claude/skills/review-talentshare/SKILL.md` "Build flag", `tests/test_build_flag.lua:90` comment) is now half true: Init.lua holds the three words (`TalentShare`, `TShare`, `ts`), the derivation lives in `Libs/LibGuildSync/Addon.lua`, which the hard-coded-identity scan excludes (it skips `Libs/`). | Update both texts to "Init.lua passes the words; LibGuildSync Addon.Setup derives the names". The derived names themselves stay pinned exactly by `tests/test_build_flag.lua:46,58,73` and `tests/test_identity.lua`, so a library change that alters them fails here. |
 | S2 | Low | `Addon.Setup` does not check that `prefix .. "Dev"` fits the 16-byte addon-message prefix limit. `TShareDev` is 9 bytes, so no effect today. | Optional: `assert(#options.prefix <= 13)` in `LibGuildSync/Addon.lua`. |
 | N1 | Note | First real MINOR upgrade (1 -> 2). | Analysed below; no change needed. |
 
