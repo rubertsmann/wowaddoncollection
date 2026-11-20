@@ -125,16 +125,16 @@ Stats, collection and UI additions (user, 2026-11-20)
   - **One throw per enemy** (`thrown`, kept 10 min).
   - The icon can be turned off, moved and resized: Options > AddOns > GuildGames AZEcaught, or
     `/gg caught icon on|off|x|y|size|reset`. Clamped and journaled; the key binding still works when it is off.
-  - A throw plays a rope effect on an arc from the player's body to the target's body, both PROJECTED with a camera
-    model (`AzeCaught.ProjectToScreen`: camera zoom from `GetCameraZoom`, pitch 20 deg, vertical FOV 50 deg, focus 2 yd
-    up, body 1 yd up). The target's distance and bearing come from `Api.ThrowGeometry`: world positions
-    (`UnitPosition` + `GetPlayerFacing`) when not hidden, else `CheckInteractDistance` (out of combat only: restricted
-    against enemies in combat), else a 6 yd melee guess straight ahead. Farther = higher on the screen and smaller
-    (tip, rope, burst, ring scale with depth).
-    - No nameplate is measured or anchored to: they are restricted regions ("Can't measure restricted regions ...
-      Lua Taint", "Line:SetEndPoint(): Not allowed to depend on NamePlate1", journal 2026-11-20).
-    - Each effect journals `throw.effect` with mode, source, why, distance, bearing, zoom, from, to, scale; the dev
-      build also prints it in chat.
+  - A throw plays in two parts that never need the target's screen position (the client hides it from addons: see
+    below): the rope leaves the player (screen centre, 42% height) on an arc up and away and fades; then the lasso
+    tightens and bursts ON the target, in a 1x1 pin frame anchored to its nameplate (one anchor, like the rope icon),
+    18 px below the plate. The pin lets go of the plate 0.9 s later. No nameplate or a refused anchor: the landing
+    plays where the rope faded ("front").
+    - What the client refuses (journal 2026-11-20): world positions of enemies (`UnitPosition`: hidden), range
+      checks against enemies in combat, measuring a nameplate ("Can't measure restricted regions ... Lua Taint") and a
+      line ending on one ("Line:SetEndPoint(): Not allowed to depend on NamePlate1"). The camera-projection version
+      (ProjectToScreen/ThrowGeometry) therefore always landed in the middle and was removed (user 2026-11-20).
+    - Each effect journals `throw.effect` with mode (nameplate | front) and why; the dev build also prints it in chat.
 - R25: **Care buttons**: icons with the price below. They are greyed out while unusable (`AzeCaught.CareAvailability`,
   the reason in the tooltip; petting a full companion counts as not needed) and locked for 1.5 s after a click (a
   cooldown sweep shows it).

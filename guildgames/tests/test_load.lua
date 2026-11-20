@@ -236,21 +236,30 @@ return {
                 local middleX, middleY = Animate.ArcPoint(0, 0, 200, 0, 50, 0.5)
                 harness.equal(startX, 0); harness.equal(startY, 0); harness.equal(endX, 200); harness.equal(endY, 0)
                 harness.equal(middleX, 100); harness.equal(middleY, 50, "the arc peaks at the lift in the middle")
-                -- The client rules (journal 2026-11-20): nameplates are restricted regions. "GetCenter(): Can't measure
-                -- restricted regions ... Lua Taint", "Line:SetEndPoint(): Not allowed to depend on NamePlate1". The rope
-                -- effect must not touch a plate at all: this stub plate records and refuses every use.
+                -- The client rules (journal 2026-11-20): nameplates are restricted regions. Measuring one ("GetCenter():
+                -- Can't measure restricted regions ... Lua Taint") and drawing a line to one ("Line:SetEndPoint(): Not
+                -- allowed to depend on NamePlate1") are refused; a plain frame with ONE anchor on it works (the rope icon).
+                -- The game also hides where the enemy is (UnitPosition: hidden, journal 2026-11-20 "position hidden"), so
+                -- the rope flies up from the player and the landing plays in a pin frame anchored to the target's plate.
                 local savedNamePlate, savedCreateFrame = C_NamePlate, CreateFrame
-                local plate, refused = stub(), {}
-                for _, method in ipairs({ "GetCenter", "GetLeft", "GetTop", "GetRect", "GetEffectiveScale" }) do
-                    rawset(plate, method, function() refused[#refused + 1] = method; error(method .. "(): Can't measure restricted regions") end)
+                local plate, lockedPlate, refused, anchoredToPlate = stub(), stub(), {}, {}
+                for _, restrictedPlate in ipairs({ plate, lockedPlate }) do
+                    for _, method in ipairs({ "GetCenter", "GetLeft", "GetTop", "GetRect", "GetEffectiveScale", "GetSize", "GetWidth", "GetHeight" }) do
+                        rawset(restrictedPlate, method, function() refused[#refused + 1] = method; error(method .. "(): Can't measure restricted regions") end)
+                    end
                 end
                 local function restricted(region)
-                    for _, method in ipairs({ "SetStartPoint", "SetEndPoint", "SetPoint" }) do
+                    for _, method in ipairs({ "SetStartPoint", "SetEndPoint" }) do
                         rawset(region, method, function(self, _, relative)
-                            if relative == plate then refused[#refused + 1] = method; error(method .. "(): Not allowed to depend on NamePlate1") end
+                            if relative == plate or relative == lockedPlate then refused[#refused + 1] = method; error(method .. "(): Not allowed to depend on NamePlate1") end
                             return self
                         end)
                     end
+                    rawset(region, "SetPoint", function(self, _, relative)
+                        if relative == lockedPlate then error("SetPoint(): Not allowed to depend on NamePlate2") end
+                        if relative == plate then anchoredToPlate[#anchoredToPlate + 1] = self end
+                        return self
+                    end)
                     return region
                 end
                 CreateFrame = function()
@@ -259,41 +268,27 @@ return {
                     rawset(frame, "CreateTexture", function() return restricted(stub()) end)
                     return frame
                 end
-                C_NamePlate = { GetNamePlateForUnit = function() return plate end }
+                local platesByUnit = { target = plate }
+                C_NamePlate = { GetNamePlateForUnit = function(unit) return platesByUnit[unit] end }
                 addon.Catcher.PlayRopeEffect("target")
                 for _ = 1, 60 do addon.Animate._onUpdate(nil, 0.02) end   -- fly, land, burst
-                C_NamePlate, CreateFrame = savedNamePlate, savedCreateFrame
-                harness.equal(table.concat(refused, ","), "", "the rope effect never measures or anchors to a nameplate")
-                -- projected (stub client: no positions, no range checks -> the melee guess; UIParent 100 x 20 -> clamped)
+                harness.equal(table.concat(refused, ","), "", "the rope effect never measures a nameplate or draws a line to it")
                 local played = addon.Catcher.lastEffect
-                harness.equal(played.mode, "projected", tostring(played.error))
-                harness.equal(played.source, "melee guess"); harness.equal(played.distance, "6.0")
-                harness.truthy(played.why:find("position", 1, true) and played.why:find("interact", 1, true), played.why)
-                -- the geometry sources: world positions (UnitPosition returns west, north; facing 0 = north, ccw)
-                local Api, saved = addon.Api, {}
-                local function set(name, value)
-                    if saved[name] == nil then saved[name] = rawget(_G, name) or false end
-                    rawset(_G, name, value)
-                end
-                local target = { 0, 10 }
-                set("UnitPosition", function(unit) if unit == "player" then return 0, 0, 0, 1 end return target[1], target[2], 0, 1 end)
-                set("GetPlayerFacing", function() return 0 end)
-                set("GetCameraZoom", function() return 15 end)
-                local ahead = Api.ThrowGeometry("target")
-                harness.equal(ahead.source, "position"); harness.equal(ahead.distance, 10); harness.truthy(math.abs(ahead.bearing) < 1e-9)
-                harness.equal(ahead.zoom, 15)
-                target = { -10, 0 }   -- 10 yards east = to the right when facing north
-                harness.truthy(math.abs(Api.ThrowGeometry("target").bearing - math.pi / 2) < 1e-9, "east is to the right")
-                -- no positions, in combat: CheckInteractDistance (restricted against enemies in combat) is never called
-                local interactCalls = 0
-                set("UnitPosition", function() return nil end)
-                set("CheckInteractDistance", function(_, index) interactCalls = interactCalls + 1 return index == 4 end)
-                set("InCombatLockdown", function() return true end)
-                harness.equal(Api.ThrowGeometry("target").source, "melee guess"); harness.equal(interactCalls, 0)
-                set("InCombatLockdown", function() return false end)
-                local outside = Api.ThrowGeometry("target")
-                harness.equal(outside.source, "interact4"); harness.equal(outside.distance, 18)
-                for name, value in pairs(saved) do rawset(_G, name, value or nil) end
+                harness.equal(played.mode, "nameplate", tostring(played.error) .. " " .. tostring(played.why))
+                harness.equal(#anchoredToPlate, 1, "exactly one frame (the landing pin) is anchored to the plate")
+                -- no plate (plates off, target out of view): the landing plays in front of the player
+                platesByUnit.target = nil
+                addon.Catcher.PlayRopeEffect("target")
+                for _ = 1, 60 do addon.Animate._onUpdate(nil, 0.02) end
+                harness.equal(addon.Catcher.lastEffect.mode, "front"); harness.equal(addon.Catcher.lastEffect.why, "no nameplate")
+                -- a client that refuses even the anchor: still a throw, in front, with the reason
+                platesByUnit.target = lockedPlate
+                addon.Catcher.PlayRopeEffect("target")
+                for _ = 1, 60 do addon.Animate._onUpdate(nil, 0.02) end
+                harness.equal(addon.Catcher.lastEffect.mode, "front")
+                harness.truthy(addon.Catcher.lastEffect.why:find("Not allowed", 1, true), addon.Catcher.lastEffect.why)
+                harness.equal(table.concat(refused, ","), "", "still nothing measured")
+                C_NamePlate, CreateFrame = savedNamePlate, savedCreateFrame
                 addon.Catcher.PlayRopeEffect("target")
                 harness.truthy(addon.AzeCaught.JournalLines(1, "throw.effect")[1]:find("was played", 1, true),
                     "the throw effect runs: " .. tostring(addon.AzeCaught.JournalLines(1, "throw.effect")[1]))

@@ -19,7 +19,11 @@ Catcher.CIRCLE_MASK = CIRCLE_MASK
 local ICON_SIZE = 26
 local ROPE_COLOR = { 0.78, 0.58, 0.3 }
 local ROPE_SEGMENTS = 16
-local ROPE_FLIGHT = 0.35            -- seconds from the player to the target
+local ROPE_FLIGHT = 0.35            -- seconds from the player until the rope lands on the target
+local PLAYER_SCREEN_HEIGHT = 0.42   -- the player's character stands about here (share of the screen height, centred)
+local ROPE_RISE = 0.2               -- the rope flies this share of the screen height up and away before it fades
+local LANDING_DROP = 18             -- the lasso lands this far below the target's nameplate (on its body)
+local LANDING_LINGER = 0.9          -- seconds the landing pin stays on the plate (then it lets go of it)
 local HOSTILE_FLAG = 0x40          -- COMBATLOG_OBJECT_REACTION_HOSTILE
 local PUBLISH_MINIMUM_GAP = 30     -- seconds between published updates of my companion
 local PUBLISH_EVERY = 300          -- and at least this often while a companion is active
@@ -298,26 +302,27 @@ local function iconFor(unit)
     return button
 end
 
------------------------------------------------------------------- throw effect: a rope flying from the player to the target
+------------------------------------------------------------------ throw effect: the rope leaves the player, the lasso lands on the target
 
-local effect   -- { frame, segments, head, anchor } built on first use
+local effect   -- { frame, segments, head, pin } built on first use
 
--- Addons cannot place effects in the 3D world, and this client hides where nameplates are (restricted regions:
--- measuring one taints the addon, anchoring a line to one is refused - journal 2026-11-20). So the throw is drawn on the
--- screen between two PROJECTED points (user 2026-11-20: "trigonometrically calculated and scale accordingly like its
--- getting distance"): the player's body and the target's body, placed by AzeCaught.ProjectToScreen from the camera zoom
--- and the target's distance and bearing (Api.ThrowGeometry). A farther target lands higher and everything at it is
--- smaller. No nameplate is read or anchored to. Journaled as `throw.effect` with every input.
+-- The client does not let an addon know where an enemy is on the screen (journal 2026-11-20): its world position is
+-- hidden (UnitPosition), range checks are restricted in combat, measuring a nameplate taints the addon ("Can't measure
+-- restricted regions") and a line may not end on one ("Not allowed to depend on NamePlate1"). A plain frame with ONE
+-- anchor on a nameplate is allowed (the rope icon is placed that way). So the throw is two parts that never need the
+-- target's screen position:
+--   1. flight: the rope leaves the player (centre of the screen, PLAYER_SCREEN_HEIGHT) on an arc up and away and fades;
+--   2. landing: the lasso tightens and bursts in a 1x1 "pin" frame anchored to the target's nameplate, so it plays on
+--      the real enemy wherever it is. Nothing measures the pin; it lets go of the plate after LANDING_LINGER.
+-- No nameplate (plates off, target not on screen) or a refused anchor: the landing plays where the rope faded ("front").
+-- Journaled as `throw.effect` with the mode and the reason.
 ---@param unit string the target unit
 ---@return table|nil details what was played (also Catcher.lastEffect)
 function Catcher.PlayRopeEffect(unit)
     local ok, problem = pcall(function()
         local width, height = UIParent:GetWidth(), UIParent:GetHeight()
-        local geometry = Api.ThrowGeometry(unit)
-        local view = { width = width, height = height, zoom = geometry.zoom }
-        local fromX, fromY = AzeCaught.ProjectToScreen(view, 0, 0)
-        local toX, toY, scale = AzeCaught.ProjectToScreen(view, geometry.distance, geometry.bearing)
-        scale = addon.Utility.Clamp(scale, 0.3, 1.5)
+        local fromX, fromY = width / 2, height * PLAYER_SCREEN_HEIGHT
+        local toX, toY = fromX, fromY + height * ROPE_RISE
         if not effect then
             local frame = CreateFrame("Frame", nil, UIParent)
             frame:SetAllPoints(UIParent); frame:SetFrameStrata("HIGH"); frame:EnableMouse(false)
@@ -332,30 +337,43 @@ function Catcher.PlayRopeEffect(unit)
             addon.UIHelpers.SetTextureOr(head, addon.Animate.SPARKLE_TEXTURE, { 1, 0.9, 0.5 })
             pcall(head.SetBlendMode, head, "ADD")
             head:SetSize(22, 22); head:Hide()
-            local anchor = CreateFrame("Frame", nil, frame); anchor:SetSize(1, 1)
-            effect = { frame = frame, segments = segments, head = head, anchor = anchor }
+            -- the landing pin: its own frame (parent UIParent, one anchor), like the rope icon; the landing textures
+            -- live in it, so only this frame depends on the plate
+            local pin = CreateFrame("Frame", nil, UIParent)
+            pin:SetSize(1, 1); pin:SetFrameStrata("HIGH"); pin:EnableMouse(false)
+            effect = { frame = frame, segments = segments, head = head, pin = pin }
         end
         local Animate = addon.Animate
-        local distance = math.sqrt((toX - fromX) ^ 2 + (toY - fromY) ^ 2)
-        local lift = 30 + distance * 0.25
-        -- the size at `arcProgress` (0 player .. 1 target): the player's body is 1, the target's `scale`
-        local function sizeAt(arcProgress) return 1 + (scale - 1) * arcProgress end
+        local mode, why = "front", nil
+        local plate = Api.NamePlateFor(unit)
+        if plate then
+            local anchored, anchorError = pcall(function()
+                effect.pin:ClearAllPoints()
+                effect.pin:SetPoint("TOP", plate, "BOTTOM", 0, -LANDING_DROP)
+            end)
+            if anchored then mode = "nameplate" else why = tostring(anchorError) end
+        else
+            why = "no nameplate"
+        end
+        if mode == "front" then
+            effect.pin:ClearAllPoints(); effect.pin:SetPoint("CENTER", UIParent, "BOTTOMLEFT", toX, toY)
+        end
+        local lift = height * 0.06
         local function place(region, arcProgress)
             local x, y = Animate.ArcPoint(fromX, fromY, toX, toY, lift, arcProgress)
             region:ClearAllPoints(); region:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
         end
-        effect.anchor:ClearAllPoints(); effect.anchor:SetPoint("CENTER", UIParent, "BOTTOMLEFT", toX, toY)
-        Animate.Tween("ropeThrow", ROPE_FLIGHT + 0.15, function(elapsed)
+        Animate.Tween("ropeThrow", ROPE_FLIGHT, function(elapsed)
             local progress = math.min(1, elapsed / ROPE_FLIGHT)
-            local fade = 1 - math.max(0, (elapsed - ROPE_FLIGHT) / 0.15)
+            local fade = progress < 0.6 and 1 or (1 - progress) / 0.4   -- it flies away from the camera: fades out
             place(effect.head, progress)
-            effect.head:SetSize(22 * sizeAt(progress), 22 * sizeAt(progress))
-            effect.head:SetAlpha(fade); effect.head:Show()
+            local headSize = 22 * (1 - 0.4 * progress)
+            effect.head:SetSize(headSize, headSize); effect.head:SetAlpha(fade); effect.head:Show()
             for index, segment in ipairs(effect.segments) do
-                -- the rope trails behind the tip, thins with distance and fades out after it lands
-                local t = progress * (1 - (index - 1) / ROPE_SEGMENTS)
-                place(segment, t)
-                local size = (5 - 2 * (index - 1) / ROPE_SEGMENTS) * sizeAt(t)
+                -- the rope trails behind the tip and thins out
+                local segmentProgress = progress * (1 - (index - 1) / ROPE_SEGMENTS)
+                place(segment, segmentProgress)
+                local size = 5 - 2.5 * segmentProgress
                 segment:SetSize(size, size)
                 segment:SetAlpha(0.9 * fade)
                 segment:Show()
@@ -363,21 +381,23 @@ function Catcher.PlayRopeEffect(unit)
         end, function()
             effect.head:Hide()
             for _, segment in ipairs(effect.segments) do segment:Hide() end
-            Animate.Burst("ropeHit", effect.frame, effect.anchor, 0, 0,
-                { count = 16, color = { 1, 0.8, 0.35 }, speed = 110 * scale, gravity = 220 * scale, size = 14 * scale, duration = 0.7 })
-            Animate.Ring("ropeHit", effect.frame, effect.anchor, 10 * scale, 80 * scale, { 1, 0.85, 0.3 }, 0.45)
+            local pin = effect.pin
+            -- the lasso closes around the target, then the hit bursts
+            Animate.Ring("ropeLasso", pin, pin, 70, 18, ROPE_COLOR, 0.3)
+            Animate.Burst("ropeHit", pin, pin, 0, 0,
+                { count = 16, color = { 1, 0.8, 0.35 }, speed = 100, gravity = 200, size = 12, duration = 0.7 })
+            Animate.Ring("ropeHit", pin, pin, 10, 70, { 1, 0.85, 0.3 }, 0.45)
+            -- let go of the plate once the landing is over (a recycled plate then carries nothing of ours)
+            Animate.Tween("ropeLanding", LANDING_LINGER, function() end, function()
+                pin:ClearAllPoints(); pin:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+            end)
         end)
-        local details = { unit = unit, mode = "projected", source = geometry.source, why = geometry.why,
-            distance = ("%.1f"):format(geometry.distance), bearing = math.floor(math.deg(geometry.bearing) + 0.5),
-            zoom = geometry.zoom and ("%.1f"):format(geometry.zoom) or "default",
-            from = math.floor(fromX) .. "," .. math.floor(fromY), to = math.floor(toX) .. "," .. math.floor(toY),
-            scale = ("%.2f"):format(scale) }
+        local details = { unit = unit, mode = mode, why = why }
         Catcher.lastEffect = details
         AzeCaught.Journal("DEBUG", "throw.effect", "the throw effect was played", details)
-        -- dev build: the inputs are said at once, to tune the camera model without a /reload
+        -- dev build: say at once where it landed (and why not on the target)
         if addon.IS_DEVELOPMENT_BUILD then
-            addon.Print(("rope effect: %s yd (%s), bearing %s, zoom %s -> %s, size x%s"):format(details.distance, details.source,
-                tostring(details.bearing), details.zoom, details.to, details.scale))
+            addon.Print(("rope effect: %s%s"):format(mode, why and (" (" .. why .. ")") or ""))
         end
     end)
     if not ok then

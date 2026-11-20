@@ -787,27 +787,4 @@ return {
         AzeCaught.Reset(true)
         harness.equal(addon.Wallet.Ledger().earned, 0, "reset all clears the wallet")
     end,
-    ["azecaught: the throw target is projected by camera geometry and shrinks with distance"] = function(harness)
-        local AzeCaught = fresh(harness).AzeCaught
-        local view = { width = 2000, height = 1000, zoom = 12 }
-        local playerX, playerY, playerScale = AzeCaught.ProjectToScreen(view, 0, 0)
-        harness.equal(playerX, 1000, "the player is centred")
-        harness.truthy(playerY > 380 and playerY < 460, "the character stands a little below the middle: " .. playerY)
-        harness.equal(playerScale, 1, "the player is the reference size")
-        local nearX, nearY, nearScale = AzeCaught.ProjectToScreen(view, 5, 0)
-        local farX, farY, farScale = AzeCaught.ProjectToScreen(view, 30, 0)
-        harness.equal(nearX, 1000); harness.equal(farX, 1000, "straight ahead stays centred")
-        harness.truthy(playerY < nearY and nearY < farY, "farther away = higher on the screen")
-        harness.truthy(1 > nearScale and nearScale > farScale, "farther away = smaller")
-        harness.truthy(farY < 1000 * 0.95, "even far targets stay below the horizon / on the screen")
-        local rightX = AzeCaught.ProjectToScreen(view, 10, math.rad(30))
-        local leftX = AzeCaught.ProjectToScreen(view, 10, -math.rad(30))
-        harness.truthy(rightX > 1000 and leftX < 1000 and math.abs((rightX - 1000) + (leftX - 1000)) < 0.001, "bearing: + right, - left")
-        local behindX, behindY = AzeCaught.ProjectToScreen(view, 10, math.pi)
-        harness.truthy(behindX >= 0 and behindX <= 2000 and behindY >= 0 and behindY <= 1000, "behind the camera: clamped on screen")
-        local zoomedOutY = select(2, AzeCaught.ProjectToScreen({ width = 2000, height = 1000, zoom = 30 }, 10, 0))
-        harness.truthy(zoomedOutY < nearY + (farY - nearY), "a farther camera shrinks the spread")
-        local defaultX, defaultY = AzeCaught.ProjectToScreen({ width = 2000, height = 1000 }, 10, 0)
-        harness.truthy(defaultX == 1000 and defaultY > playerY, "no zoom known: default camera")
-    end,
 }

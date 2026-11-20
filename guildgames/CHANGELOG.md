@@ -16,8 +16,8 @@
     (creature type, power type, rarity).
   - The rope icon is round and sits above the nameplate; its glow turns from red to green as the chance grows, it can be
     moved, resized or turned off (Options > AddOns, `/gg caught icon`), and each enemy takes one throw. A throw flies a
-    rope on an arc from you to the target, placed by camera geometry and the target's distance (nameplates are
-    restricted on this client), smaller the farther away it lands. The care buttons
+    rope up and away from you and the lasso lands on the target itself (on its nameplate; in front of you when the
+    target has none). The care buttons
     are icons, greyed out while not usable, with a short cooldown.
   - A Guild view ranks every member's companion (NPC level + rarity + hearts); the weekly place pays 500g / 300g / 150g /
     25g into the pool. The minimap button shows a badge when a need is due (`/gg notify off` turns it off).
