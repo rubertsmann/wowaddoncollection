@@ -1,6 +1,6 @@
 # Code structure like TalentShare
 
-Status: verifying | Since version: next GuildGames release | Spec: [spec](spec.md) | Verification: [verify](verify.md)
+Status: done | Since version: next GuildGames release | Spec: [spec](spec.md) | Verification: [verify](verify.md)
 
 ## What it does
 Nothing new for the player: the code is reorganised like TalentShare's so both addons read the same way. The only
@@ -25,7 +25,7 @@ show as "2h" (they showed "2h 0m"), the same as the NPC info overlay.
 No new strings. The shared refusal texts keep literal `Text[...]` keys in Core/View/Model.lua, so the locale lint sees them.
 
 ## Limits and known issues
-- Not yet started in the game client (verify.md IG1).
+- GuildGames checked in game (verify.md IG1); TalentShare's in-game check is deferred to its next release (IG2).
 - The identity (build flag, names, slash dispatcher) and the diagnostic commands come from LibGuildSync MINOR 2
   (`Addon.Setup`, `Addon.AddDiagnosticCommands`), shared with TalentShare. `/gg comm` now also prints
   "incompatible peers=N".

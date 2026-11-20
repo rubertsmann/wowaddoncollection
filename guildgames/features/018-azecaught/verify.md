@@ -34,6 +34,7 @@ Result after work:    `luajit tests/run.lua` -> 95 passed, 0 failed
 | RF4 | hostile peer section | test_azecaught "the record section round-trips..." (11 mutations) | OFFLINE | suite line | pass (found and fixed a nil-skip bug) | 2026-11-20 |
 | RF5 | offline across weeks | test_azecaught "weekly payout..." | OFFLINE | suite line | pass | 2026-11-20 |
 | RF6 | balance edges | test_wallet "a stake above the balance..." | OFFLINE | suite line | pass | 2026-11-20 |
+| R24-effect | throw effect: wind-up on the player, then the lasso on the target's nameplate | user threw the rope in game after /reload | IN-GAME | user, 2026-11-21: "looks fine" | pass | 2026-11-21 |
 
 ## In-game checklist (things only the user can do)
 Setup: `powershell tools/deploy.ps1` (regenerates GuildGames-Dev.toc; new files were added), **restart** the game,

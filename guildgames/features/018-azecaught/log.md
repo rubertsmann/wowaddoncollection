@@ -153,3 +153,7 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Did: user: "the trails can be just removed - create the effect that first is a cool animation on the player and then after a short amount on the enemy". Core/Game/Catcher.lua PlayRopeEffect: no rope trail or flying tip; a player pin (screen centre, 42% height) plays the wind-up (rope ring 110->26, rising sparks, then a gold ring flashing out); ROPE_DELAY 0.35 s later the target pin (anchored to the nameplate, as before) plays the lasso (ring 80->18), burst and gold ring. Fallback "front": the lasso plays above the player. Removed ROPE_SEGMENTS/ROPE_RISE and UI/Animate.lua ArcPoint (no user left) with its test lines. Spec R24, CHANGELOG.
 - Evidence: luajit tests/run.lua -> "120 passed, 0 failed" (test_load: still nothing measured, exactly one frame anchored to the plate, front fallbacks with their reasons)
 - Next: user: /reload, throw -> wind-up on the character, then the lasso on the enemy; chat "rope effect: nameplate". Tune ROPE_DELAY / LANDING_DROP / sizes by feel.
+
+## 2026-11-21 00:45 | VERIFY | throw effect seen in game
+- Did: user threw the rope after /reload: "looks fine" -> verify.md row R24-effect IN-GAME.
+- Next: remaining in-game checks (verify.md R2, R6, R8, R9 bars, R11 effects, R14, R16 needs a second player, R20 output).

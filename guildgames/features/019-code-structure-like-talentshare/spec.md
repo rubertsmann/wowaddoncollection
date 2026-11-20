@@ -1,6 +1,6 @@
 # 019 Code structure like TalentShare: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-20
 - Target version: next GuildGames release (no behaviour change; not a release on its own)
 - Owner: claude

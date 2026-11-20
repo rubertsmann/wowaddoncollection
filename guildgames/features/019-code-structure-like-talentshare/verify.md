@@ -32,4 +32,4 @@ Result after work:    `luajit tests/run.lua` -> 121 passed, 0 failed
 - [ ] TalentShare dev build (`tools/deploy.ps1` there, restart): `/tsd` opens, `/tsd comm` answers, no "not loaded" line.
 
 ## Accepted gaps
-- none yet
+- IG2 (TalentShare dev build with LibGuildSync MINOR 2 not started in game): deferred by the user on 2026-11-21 ("we want only to continue with ggd", then "commit and push everything"). It is checked before the next TalentShare release (talentshare/review/shared-addon-setup.md "Still needed").

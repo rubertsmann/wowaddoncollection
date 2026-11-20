@@ -68,3 +68,8 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: GuildGames verified in game (user's summary); TalentShare with the shared Addon.Setup not yet started in game (IG2).
 - Evidence: talentshare/review/shared-addon-setup.md; suites 231 / 33 / 121 passed
 - Next: user: TalentShare dev build check (IG2): tools/deploy.ps1 in talentshare, restart, /tsd, /tsd comm, /tsd version. Then fix S1 text, status done, merge refactor/guildgames-structure.
+
+## 2026-11-21 00:45 | DONE | feature 019 closed
+- Did: user: "we want only to continue with ggd" and "commit and push everything" -> IG2 (TalentShare in game) recorded as an accepted gap, deferred to TalentShare's next release. Review finding S1 fixed (identity rule text in both review-talentshare SKILL.md copies and talentshare/tests/test_build_flag.lua comments). Status done in spec, doc, INDEX.
+- Evidence: suites: guildgames 120, talentshare 231, libguildsync 33 passed (before the merge)
+- Next: none for 019. Branch refactor/guildgames-structure merged into master and pushed.
