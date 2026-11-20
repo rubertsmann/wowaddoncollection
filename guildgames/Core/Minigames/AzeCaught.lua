@@ -21,11 +21,15 @@ local library = LibStub("LibGuildSync-1.0")
 AzeCaught.THROW_HEALTH = 0.35            -- the rope icon shows at or below this health fraction
 AzeCaught.CATCH_WINDOW = 3               -- seconds from the throw in which the death must happen
 AzeCaught.THROW_COOLDOWN = 3             -- seconds between throws
-AzeCaught.BASE_CHANCE = 0.15
-AzeCaught.MAXIMUM_CHANCE = 0.25
-AzeCaught.CATCH_REWARD = 2 * 10000       -- 2g x 1/difficulty
+-- the catch chance (user 2026-11-20): linear from CHANCE_AT_THROW_HEALTH (icon appears) to CHANCE_AT_BEST at BEST_HEALTH,
+-- flat below; rarer NPCs subtract RARITY_MALUS points; never below MINIMUM_CHANCE. The level does not matter.
+AzeCaught.BEST_HEALTH = 0.10
+AzeCaught.CHANCE_AT_THROW_HEALTH = 0.20
+AzeCaught.CHANCE_AT_BEST = 0.90
+AzeCaught.MINIMUM_CHANCE = 0.05
+AzeCaught.RARITY_MALUS = { normal = 0, elite = 0.05, rare = 0.10, rareelite = 0.15, worldboss = 0.25 }
+AzeCaught.CATCH_REWARD = 2 * 10000       -- paid for a catch at CHANCE_AT_BEST; scaled up by the risk (user 2026-11-20)
 AzeCaught.MAXIMUM_REWARD = 50 * 10000
-AzeCaught.RARITY_FACTOR = { normal = 1.0, elite = 0.6, rare = 0.5, rareelite = 0.35, worldboss = 0.15 }
 AzeCaught.RARITY_BONUS = { normal = 0, elite = 5, rare = 10, rareelite = 15, worldboss = 25 }
 AzeCaught.CLASSIFICATIONS = { "normal", "elite", "rare", "rareelite", "worldboss" }
 
@@ -50,8 +54,7 @@ AzeCaught.FOOD_PRICE = 50 * 100          -- 50s
 AzeCaught.WATER_PRICE = 25 * 100         -- 25s
 AzeCaught.PAYOUTS = { 500 * 10000, 300 * 10000, 150 * 10000 }
 AzeCaught.PAYOUT_OTHER = 25 * 10000
-AzeCaught.MAXIMUM_COLLECTION = 2000     -- bound for saved data (the real limits are the two below)
-AzeCaught.MAXIMUM_CAUGHT = 10           -- caught NPCs, duplicates count (user 2026-11-20)
+AzeCaught.MAXIMUM_COLLECTION = 2000     -- bound against corrupt saved data only; caught NPCs have no limit (user 2026-11-20)
 AzeCaught.MAXIMUM_SEEN = 100            -- seen-only NPCs; the oldest makes room for a new one
 AzeCaught.MAXIMUM_NAME_BYTES = 48
 AzeCaught.MAXIMUM_LEVEL = 200
@@ -211,7 +214,7 @@ local function round1(value) return math.floor(value * 10 + 0.5) / 10 end
 ---@param classification any
 ---@return string
 function AzeCaught.Classification(classification)
-    if AzeCaught.RARITY_FACTOR[classification] then return classification end
+    if AzeCaught.RARITY_MALUS[classification] then return classification end
     return "normal"
 end
 
@@ -227,60 +230,44 @@ end
 
 ------------------------------------------------------------------ catch chance (R4)
 
--- 1 at 0 HP, falling logarithmically (steepest near 0 HP): ~0.48 at 10%, ~0.26 at 30%, ~0.23 at 35%, 0 at full health.
--- f(h) = 1 - ln(1 + 99h) / ln(100)
----@param healthFraction number 0..1
----@return number
-function AzeCaught.HealthFactor(healthFraction)
-    local fraction = clamp(tonumber(healthFraction) or 1, 0, 1)
-    return clamp(1 - math.log(1 + 99 * fraction) / math.log(100), 0, 1)
-end
-
----@param classification string
----@param npcLevel integer
----@param playerLevel integer
----@return number difficulty factor (smaller = harder)
----@return number rarityFactor
----@return number levelFactor
-function AzeCaught.Difficulty(classification, npcLevel, playerLevel)
-    local rarityFactor = AzeCaught.RARITY_FACTOR[AzeCaught.Classification(classification)]
-    local levelFactor = clamp(1 - 0.05 * ((npcLevel or playerLevel or 1) - (playerLevel or npcLevel or 1)), 0.25, 1.25)
-    return rarityFactor * levelFactor, rarityFactor, levelFactor
-end
-
 ---@class ChanceBreakdown
 ---@field chance number
----@field base number
 ---@field health number health fraction at the throw
----@field healthFactor number
----@field difficulty number
----@field rarityFactor number
----@field levelFactor number
----@field capped boolean
+---@field healthChance number the chance from the health alone
+---@field malus number subtracted for the rarity
+---@field classification string
+---@field best boolean at or below BEST_HEALTH: the best moment this NPC can have
 
----@param healthFraction number
----@param classification string
----@param npcLevel integer
----@param playerLevel integer
+-- The catch chance (user 2026-11-20: "at 10% life the catch chance is 90%, with a slight malus to elite and rare"):
+-- CHANCE_AT_THROW_HEALTH at THROW_HEALTH rising linearly to CHANCE_AT_BEST at BEST_HEALTH, flat below, minus the rarity
+-- malus, at least MINIMUM_CHANCE. A hidden health counts as THROW_HEALTH (the worst case).
+---@param healthFraction number|nil
+---@param classification string|nil
 ---@return ChanceBreakdown
-function AzeCaught.Chance(healthFraction, classification, npcLevel, playerLevel)
-    local healthFactor = AzeCaught.HealthFactor(healthFraction)
-    local difficulty, rarityFactor, levelFactor = AzeCaught.Difficulty(classification, npcLevel, playerLevel)
-    local raw = AzeCaught.BASE_CHANCE * healthFactor * difficulty
-    return { chance = math.min(raw, AzeCaught.MAXIMUM_CHANCE), base = AzeCaught.BASE_CHANCE, health = healthFraction,
-        healthFactor = healthFactor, difficulty = difficulty, rarityFactor = rarityFactor, levelFactor = levelFactor,
-        capped = raw > AzeCaught.MAXIMUM_CHANCE }
+function AzeCaught.Chance(healthFraction, classification)
+    local health = tonumber(healthFraction)
+    if not health or health ~= health then health = AzeCaught.THROW_HEALTH end
+    health = clamp(health, 0, 1)
+    local progress = clamp((AzeCaught.THROW_HEALTH - health) / (AzeCaught.THROW_HEALTH - AzeCaught.BEST_HEALTH), 0, 1)
+    local healthChance = AzeCaught.CHANCE_AT_THROW_HEALTH + (AzeCaught.CHANCE_AT_BEST - AzeCaught.CHANCE_AT_THROW_HEALTH) * progress
+    local rarity = AzeCaught.Classification(classification)
+    local malus = AzeCaught.RARITY_MALUS[rarity]
+    return { chance = math.max(AzeCaught.MINIMUM_CHANCE, healthChance - malus), health = health, healthChance = healthChance,
+        malus = malus, classification = rarity, best = health <= AzeCaught.BEST_HEALTH }
 end
 
--- How good a moment to throw is (user 2026-11-20: the icon glow goes from red to green): 0 at THROW_HEALTH (the worst
--- chance the icon is shown for), 1 at 0 HP (the best). It follows the health factor, so it rises like the chance.
--- nil when the client hides the health.
+-- How good a moment to throw is, for the icon ring (user 2026-11-20: "going from red to green outline according to the
+-- catch chance"): 0 at MINIMUM_CHANCE (red), 1 at CHANCE_AT_BEST (green). Second value: the best moment (the ring
+-- pulses). nil when the client hides the health.
 ---@param healthFraction number|nil
----@return number|nil
-function AzeCaught.ThrowQuality(healthFraction)
-    if type(healthFraction) ~= "number" or healthFraction ~= healthFraction then return nil end
-    local worst = AzeCaught.HealthFactor(AzeCaught.THROW_HEALTH)
-    return clamp((AzeCaught.HealthFactor(healthFraction) - worst) / (1 - worst), 0, 1)
+---@param classification string|nil
+---@return number|nil quality
+---@return boolean best
+function AzeCaught.ThrowQuality(healthFraction, classification)
+    if type(healthFraction) ~= "number" or healthFraction ~= healthFraction then return nil, false end
+    local breakdown = AzeCaught.Chance(healthFraction, classification)
+    local quality = (breakdown.chance - AzeCaught.MINIMUM_CHANCE) / (AzeCaught.CHANCE_AT_BEST - AzeCaught.MINIMUM_CHANCE)
+    return clamp(quality, 0, 1), breakdown.best
 end
 
 -- red (0) -> yellow (0.5) -> green (1); nil (unknown) -> yellow
@@ -294,11 +281,13 @@ function AzeCaught.QualityColor(quality)
     return 1 - 0.8 * (quality - 0.5) * 2, 0.85 + 0.15 * (quality - 0.5) * 2, 0.1 + 0.2 * (quality - 0.5) * 2
 end
 
--- Copper paid for a catch: CATCH_REWARD / difficulty, at most MAXIMUM_REWARD.
----@param difficulty number
+-- Copper paid for a catch, by the risk (user 2026-11-20): CATCH_REWARD at CHANCE_AT_BEST, more the lower the chance was
+-- (CATCH_REWARD x CHANCE_AT_BEST / chance), at most MAXIMUM_REWARD.
+---@param chance number
 ---@return integer
-function AzeCaught.Reward(difficulty)
-    return math.min(AzeCaught.MAXIMUM_REWARD, math.floor(AzeCaught.CATCH_REWARD / math.max(difficulty, 0.01)))
+function AzeCaught.Reward(chance)
+    local risk = AzeCaught.CHANCE_AT_BEST / math.max(tonumber(chance) or 1, AzeCaught.MINIMUM_CHANCE)
+    return math.min(AzeCaught.MAXIMUM_REWARD, math.floor(AzeCaught.CATCH_REWARD * risk + 0.5))
 end
 
 ------------------------------------------------------------------ collection (R1, R6)
@@ -379,7 +368,7 @@ function AzeCaught.NoteFound(npcInformation, now)
         if changed then AzeCaught.ForgetProfile(npcID) end
         if level and level > entry.lvl then entry.lvl, changed = level, true end
         if display and entry.disp == 0 then entry.disp, changed = display, true end
-        if npcInformation.classification and AzeCaught.RARITY_FACTOR[npcInformation.classification] and entry.cls == "normal"
+        if npcInformation.classification and AzeCaught.RARITY_MALUS[npcInformation.classification] and entry.cls == "normal"
             and npcInformation.classification ~= "normal" then
             entry.cls, changed = npcInformation.classification, true
         end
@@ -417,7 +406,7 @@ function AzeCaught.NoteFound(npcInformation, now)
     return entry, true
 end
 
--- How many NPCs are caught (duplicates count); at most MAXIMUM_CAUGHT.
+-- How many NPCs are caught (duplicates count). No limit (user 2026-11-20: "remove the limit on caught").
 ---@return integer
 function AzeCaught.CaughtCount()
     local count = 0
@@ -450,9 +439,6 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
     if not npcID then return refuse("unknown") end
     if AzeCaught.rolled[target.guid] then return refuse("rolled", { npc = npcID }) end
     if AzeCaught.thrown[target.guid] then return refuse("thrown", { npc = npcID }) end
-    if AzeCaught.CaughtCount() >= AzeCaught.MAXIMUM_CAUGHT then
-        return refuse("full", { npc = npcID, caught = AzeCaught.CaughtCount(), limit = AzeCaught.MAXIMUM_CAUGHT })
-    end
     -- the client may hide the health (a secret in combat/instances): then the throw is allowed and rolls as if the NPC
     -- were at THROW_HEALTH, the worst case
     local healthKnown = type(target.health) == "number" and target.health == target.health
@@ -467,11 +453,42 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
     AzeCaught.lastThrowAt = clockSeconds
     AzeCaught.thrown[target.guid] = clockSeconds
     AzeCaught.throws[target.guid] = { at = clockSeconds, npc = npcID, health = health, playerLevel = playerLevel,
-        level = target.level, classification = AzeCaught.Classification(target.classification) }
+        level = target.level, classification = AzeCaught.Classification(target.classification), name = target.name }
+    if not addon.Store.db.readonly then AzeCaught.State().throwHintDone = true end
     AzeCaught.Journal("INFORMATION", "throw.armed", "a rope was thrown",
         { npc = npcID, guid = target.guid, hp = healthKnown and round1(health * 100) or "hidden", level = target.level, class = target.classification,
           playerLevel = playerLevel, window = AzeCaught.CATCH_WINDOW })
     return true
+end
+
+-- Armed throws whose CATCH_WINDOW has passed without a death (user 2026-11-20: "killed too slow" ends the throw at the
+-- window's end, the icon disappears with a burst). Each is disarmed, counts as rolled (no second throw at that NPC) and
+-- is journaled. Returns them oldest first: { guid, npc, name }.
+---@param clockSeconds number GetTime()
+---@return { guid: string, npc: integer, name: string|nil }[]
+function AzeCaught.EndLateThrows(clockSeconds)
+    local ended = {}
+    for guid, throw in pairs(AzeCaught.throws) do
+        if clockSeconds - throw.at > AzeCaught.CATCH_WINDOW then
+            ended[#ended + 1] = { guid = guid, npc = throw.npc, name = throw.name, at = throw.at }
+        end
+    end
+    table.sort(ended, function(left, right) return left.at < right.at end)
+    for _, late in ipairs(ended) do
+        AzeCaught.throws[late.guid] = nil
+        AzeCaught.rolled[late.guid] = clockSeconds
+        AzeCaught.Journal("INFORMATION", "roll.late", "the catch window ended before the NPC died",
+            { npc = late.npc, guid = late.guid, elapsed = round1(clockSeconds - late.at), window = AzeCaught.CATCH_WINDOW })
+    end
+    return ended
+end
+
+-- The red arrow at the rope icon (user 2026-11-20): shown until the character throws for the first time. A character
+-- that already caught something before this hint existed does not need it.
+---@return boolean
+function AzeCaught.NeedsThrowHint()
+    local caught = AzeCaught.State()
+    return not caught.throwHintDone and not caught.firstCatchDone
 end
 
 -- Forgets armed throws and rolled GUIDs older than a minute (bounded memory).
@@ -518,15 +535,8 @@ function AzeCaught.OnDeath(guid, myName, clockSeconds, now, randomFunction)
             { npc = throw.npc, guid = guid, elapsed = round1(elapsed), window = AzeCaught.CATCH_WINDOW })
         return nil, "late"
     end
-    if AzeCaught.CaughtCount() >= AzeCaught.MAXIMUM_CAUGHT then
-        AzeCaught.Journal("INFORMATION", "roll.full", "no roll: the caught list filled up before the kill",
-            { npc = throw.npc, guid = guid, limit = AzeCaught.MAXIMUM_CAUGHT })
-        return nil, "full"
-    end
     local entry = AzeCaught.State().collection[throw.npc]
-    -- a level never seen (hidden by the client: stored as 1) counts as the player's own level, never as an easy catch
-    local npcLevel = throw.level or (entry and entry.lvl > 1 and entry.lvl) or throw.playerLevel
-    local breakdown = AzeCaught.Chance(throw.health, throw.classification, npcLevel, throw.playerLevel)
+    local breakdown = AzeCaught.Chance(throw.health, throw.classification)
     local roll = randomFunction()
     local forced = AzeCaught.forceNextCatch
     AzeCaught.forceNextCatch = false
@@ -539,14 +549,13 @@ function AzeCaught.OnDeath(guid, myName, clockSeconds, now, randomFunction)
         first = first }
     AzeCaught.Journal("INFORMATION", "roll", caught and "the catch roll succeeded" or "the catch roll failed",
         { npc = throw.npc, guid = guid, elapsed = round1(elapsed), chance = ("%.4f"):format(breakdown.chance),
-          roll = ("%.4f"):format(roll), base = breakdown.base, hp = round1(breakdown.health * 100),
-          healthFactor = ("%.3f"):format(breakdown.healthFactor), rarity = breakdown.rarityFactor,
-          levelFactor = ("%.2f"):format(breakdown.levelFactor), capped = breakdown.capped, forced = forced or nil,
-          first = first or nil })
+          roll = ("%.4f"):format(roll), hp = round1(breakdown.health * 100),
+          healthChance = ("%.4f"):format(breakdown.healthChance), class = breakdown.classification, malus = breakdown.malus,
+          forced = forced or nil, first = first or nil })
     if not caught then return result end
     if entry then
         entry.caught = math.min(AzeCaught.MAXIMUM_ID, entry.caught + 1)
-        result.reward = AzeCaught.Reward(breakdown.difficulty)
+        result.reward = AzeCaught.Reward(breakdown.chance)
         AzeCaught.Journal("INFORMATION", "catch", "an NPC was caught",
             { npc = throw.npc, name = entry.n, timesCaught = entry.caught, reward = result.reward })
         if result.reward > 0 then addon.Wallet.Earn(myName, result.reward, "catch", now, entry.n) end
@@ -1100,7 +1109,7 @@ function AzeCaught.SanitizeSection(section, horizon)
         for _, field in ipairs({ "npc", "lvl", "disp", "h", "hu", "th", "af", "en", "fs" }) do
             if values[field] == nil then return nil end   -- (pairs would skip the nil a failed check leaves)
         end
-        if not name or not AzeCaught.RARITY_FACTOR[companion.cls] then return nil end
+        if not name or not AzeCaught.RARITY_MALUS[companion.cls] then return nil end
         if companion.sl ~= nil and companion.sl ~= true then return nil end
         values.n, values.cls, values.sl = name, companion.cls, companion.sl
         clean.c = values
@@ -1224,7 +1233,7 @@ function AzeCaught.SanitizePersisted(savedVariables)
     for npcID, entry in pairs(type(caught.collection) == "table" and caught.collection or {}) do
         local id = SafeInteger(npcID, 1, AzeCaught.MAXIMUM_ID)
         if id and type(entry) == "table" and Utility.CleanString(entry.n, AzeCaught.MAXIMUM_NAME_BYTES)
-            and SafeInteger(entry.lvl, 1, AzeCaught.MAXIMUM_LEVEL) and AzeCaught.RARITY_FACTOR[entry.cls]
+            and SafeInteger(entry.lvl, 1, AzeCaught.MAXIMUM_LEVEL) and AzeCaught.RARITY_MALUS[entry.cls]
             and SafeInteger(entry.disp, 0, AzeCaught.MAXIMUM_ID) and SafeInteger(entry.seen, 0)
             and SafeInteger(entry.caught, 0, AzeCaught.MAXIMUM_ID) and Utility.Count(collection) < AzeCaught.MAXIMUM_COLLECTION then
             collection[id] = { n = entry.n, lvl = entry.lvl, cls = entry.cls, disp = entry.disp, seen = entry.seen, caught = entry.caught,
@@ -1260,6 +1269,7 @@ function AzeCaught.SanitizePersisted(savedVariables)
     while #caught.journal > AzeCaught.JOURNAL_ENTRIES do table.remove(caught.journal, 1) end
     caught.notify = caught.notify ~= false
     caught.firstCatchDone = caught.firstCatchDone == true or nil
+    caught.throwHintDone = caught.throwHintDone == true or nil
     if caught.icon ~= nil then caught.icon = AzeCaught.CleanIconSettings(caught.icon) end
     caught.verbose = caught.verbose == true or nil
     if addon.Wallet.SanitizePersisted(caught) then dropped = dropped + 1 end
@@ -1328,7 +1338,7 @@ function AzeCaught.Reset(withWallet)
     local summary = { found = addon.Utility.Count(caught.collection), caught = AzeCaught.CaughtCount(),
         companion = caught.active ~= nil, wallet = withWallet == true }
     caught.collection, caught.active, caught.activeSeconds, caught.peaks = {}, nil, 0, {}
-    caught.paidWeek, caught.firstCatchDone = nil, nil
+    caught.paidWeek, caught.firstCatchDone, caught.throwHintDone = nil, nil, nil
     if withWallet then caught.ledger = nil end
     AzeCaught.throws, AzeCaught.rolled, AzeCaught.thrown = {}, {}, {}
     AzeCaught.lastThrowAt, AzeCaught.forceNextCatch = nil, false

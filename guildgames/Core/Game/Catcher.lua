@@ -23,6 +23,17 @@ local PLAYER_SCREEN_HEIGHT = 0.42   -- the player's character stands about here 
 local FRONT_RISE = 0.2              -- no nameplate: the lasso lands this share of the screen height above the player
 local LANDING_DROP = 18             -- the lasso lands this far below the target's nameplate (on its body)
 local LANDING_LINGER = 0.9          -- seconds the landing pin stays on the plate (then it lets go of it)
+-- the icon while a throw is armed ("catch mode", user 2026-11-20): a net instead of the rope
+local CATCH_ICON = "Interface\\Icons\\Ability_Ensnare"
+Catcher.CATCH_ICON = CATCH_ICON
+local SHAKE_SECONDS = 1.0           -- the armed icon shakes this long before the window ends (user 2026-11-20)
+local SHAKE_MAXIMUM = 5             -- pixels at the very end
+local ARROW_TEXTURE = "Interface\\Buttons\\UI-MicroStream-Red"            -- a red arrow pointing down
+local ARROW_FALLBACK = "Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up"
+local ARROW_SIZE = 30
+local SNAP_SOUNDS = { "IG_QUEST_LOG_ABANDON_QUEST", "IG_MAINMENU_OPTION_CHECKBOX_OFF" }
+local BEST_SOUNDS = { "MAP_PING", "IG_MAINMENU_OPTION_CHECKBOX_ON" }
+local MAXIMUM_PINGED = 200
 local HOSTILE_FLAG = 0x40          -- COMBATLOG_OBJECT_REACTION_HOSTILE
 local PUBLISH_MINIMUM_GAP = 30     -- seconds between published updates of my companion
 local PUBLISH_EVERY = 300          -- and at least this often while a companion is active
@@ -40,6 +51,10 @@ Catcher.anchorFailures = 0
 Catcher.lastZones = {}
 Catcher.started = false
 Catcher.dumps = {}          -- full unit dumps taken at the throw, by GUID (logged on a catch; the dead unit is often gone)
+Catcher.pinged = {}         -- GUIDs whose ring turned "best" (the ping plays once per NPC)
+Catcher.pingedCount = 0
+Catcher.hintPrinted = false -- the chat line that goes with the first red arrow (once per session)
+Catcher.forceHint = false   -- dev: show the arrow regardless (/ggd caught hint)
 
 local me = addon.Utility.Me
 local now = addon.Utility.Now
@@ -127,23 +142,23 @@ end
 
 local pollRunning = false
 -- While a throw is armed, look for its NPC 5 times a second (the health event is not sent everywhere). A throw whose
--- window ended without a seen death is journaled once (in-game evidence for "why was nothing rolled").
+-- window ended without a seen death is journaled, ended (AzeCaught.EndLateThrows) and snaps (Catcher.OnTooSlow).
 function Catcher.PollThrows()
     pollRunning = false
     local clock = Api.Clock()
     local any = false
     for guid, throw in pairs(AzeCaught.throws) do
         local age = clock - throw.at
-        if age <= AzeCaught.CATCH_WINDOW + 1 then
-            any = true
-            local unit = Catcher.UnitFor(guid)
-            if unit then Catcher.CheckDeath(unit) end
-        elseif not throw.reported then
-            throw.reported = true
+        any = true
+        local unit = Catcher.UnitFor(guid)
+        if unit then Catcher.CheckDeath(unit) end
+        if age > AzeCaught.CATCH_WINDOW and AzeCaught.throws[guid] then
             AzeCaught.Journal("INFORMATION", "death.notSeen", "no death was seen inside the catch window",
-                { guid = guid, npc = throw.npc, unitVisible = Catcher.UnitFor(guid) ~= nil })
+                { guid = guid, npc = throw.npc, unitVisible = unit ~= nil })
         end
     end
+    -- user 2026-11-20: killed too slow -> at the window's end the rope snaps (icon gone with a burst)
+    for _, late in ipairs(AzeCaught.EndLateThrows(clock)) do Catcher.OnTooSlow(late.guid, late.name) end
     if any and C_Timer then pollRunning = true; C_Timer.After(0.2, function()
         addon.Log.Protected("caught.poll", "the throw poll failed", Catcher.PollThrows)
     end) end
@@ -163,10 +178,6 @@ local function throwRefusalText(reason)
     if reason == "rolled" then return Text["You already tried to catch this one."] end
     if reason == "dead" then return Text["It is already dead."] end
     if reason == "thrown" then return Text["You already threw the rope at this one."] end
-    if reason == "full" then
-        return Format(Text["Your caught list is full ({max}). A companion that dies or runs away frees a place."],
-            { max = AzeCaught.MAXIMUM_CAUGHT })
-    end
     return Text["Only NPCs can be caught."]
 end
 
@@ -226,9 +237,23 @@ function Catcher.OnDeath(guid, name)
     elseif result then
         addon.Print(Format(Text["{name} slipped out of the rope ({percent}% chance)."],
             { name = npcName, percent = ("%.1f"):format(result.chance * 100) }))
+        Catcher.PlayFailEffect("escape", Catcher.UnitFor(guid))
     elseif reason == "late" then
-        addon.Print(Format(Text["{name} died too late for the rope."], { name = npcName }))
+        Catcher.OnTooSlow(guid, name, true)
+        return
     end
+    Catcher.RefreshIcons()
+end
+
+-- The catch window ended before the NPC died (user 2026-11-20: "the icon disappearing when getting killed too slow with
+-- a small burst particle effect"): the rope snaps where the icon was, the icon goes (the NPC counts as rolled).
+---@param guid string
+---@param name string|nil
+---@param died? boolean it died, just after the window
+function Catcher.OnTooSlow(guid, name, died)
+    addon.Print(Format(Text["Too slow: the rope slipped off {name}."], { name = addon.Utility.ChatSafe(name or "?") }))
+    Catcher.PlayFailEffect("snap", Catcher.UnitFor(guid))
+    AzeCaught.Journal("DEBUG", "throw.snap", "the rope snapped (killed too slow)", { guid = guid, died = died == true })
     Catcher.RefreshIcons()
 end
 
@@ -257,6 +282,33 @@ _G.BINDING_NAME_AZECAUGHT_THROW = Text["AZEcaught: throw rope at target"]
 
 ---@param unit string
 ---@return table button
+-- How hard the armed icon shakes with `remaining` seconds of the catch window left: 0 until SHAKE_SECONDS before the
+-- end, then rising to SHAKE_MAXIMUM pixels (user 2026-11-20: "shake violently shortly before breaking").
+---@param remaining number
+---@return number pixels
+function Catcher.ShakeAmplitude(remaining)
+    remaining = tonumber(remaining) or math.huge
+    if remaining >= SHAKE_SECONDS then return 0 end
+    local progress = addon.Utility.Clamp(1 - remaining / SHAKE_SECONDS, 0, 1)
+    return 1 + (SHAKE_MAXIMUM - 1) * progress * progress
+end
+
+-- Moves the icon's picture, ring and glow by a random offset of up to `amplitude` pixels (0: back in place). Only the
+-- textures move; the button keeps its one anchor on the nameplate.
+---@param button table
+---@param amplitude number
+function Catcher.ShakeIcon(button, amplitude)
+    if amplitude <= 0 and not button.shaken then return end
+    local x = amplitude > 0 and (math.random() * 2 - 1) * amplitude or 0
+    local y = amplitude > 0 and (math.random() * 2 - 1) * amplitude or 0
+    button.shaken = amplitude > 0
+    button.texture:ClearAllPoints()
+    button.texture:SetPoint("TOPLEFT", x, y); button.texture:SetPoint("BOTTOMRIGHT", x, y)
+    button.border:ClearAllPoints()
+    button.border:SetPoint("TOPLEFT", x - 3, y + 3); button.border:SetPoint("BOTTOMRIGHT", x + 3, y - 3)
+    button.glow:ClearAllPoints(); button.glow:SetPoint("CENTER", x, y)
+end
+
 local function iconFor(unit)
     local button = Catcher.icons[unit]
     if button then return button end
@@ -271,16 +323,47 @@ local function iconFor(unit)
             texture:AddMaskTexture(mask)
         end)
     end
-    -- the glow: grows and turns from red to green as the catch chance rises (user 2026-11-20)
+    -- the glow behind the ring: gold and steady while a throw is armed, pulsing at the best moment (user 2026-11-20)
     local glow = button:CreateTexture(nil, "BACKGROUND", nil, -1); glow:SetPoint("CENTER")
     glow:SetColorTexture(1, 1, 1, 1)
     pcall(glow.SetBlendMode, glow, "ADD")
     round(glow)
+    glow:Hide()
     button.glow = glow
+    -- the ring: red -> yellow -> green with the catch chance (user 2026-11-20)
     local border = button:CreateTexture(nil, "BACKGROUND"); border:SetPoint("TOPLEFT", -3, 3); border:SetPoint("BOTTOMRIGHT", 3, -3)
     border:SetColorTexture(0.05, 0.05, 0.05, 0.9)
     round(border)
     button.border = border
+    -- the first-throw hint (user 2026-11-20): a glowing red arrow above the icon, pointing down at it, bobbing
+    local arrowGlow = button:CreateTexture(nil, "OVERLAY", nil, 1)
+    arrowGlow:SetSize(ARROW_SIZE * 1.6, ARROW_SIZE * 1.6)
+    addon.UIHelpers.SetTextureOr(arrowGlow, ARROW_TEXTURE, ARROW_FALLBACK)
+    pcall(arrowGlow.SetBlendMode, arrowGlow, "ADD")
+    arrowGlow:SetVertexColor(1, 0.2, 0.1, 0.6)
+    local arrow = button:CreateTexture(nil, "OVERLAY", nil, 2)
+    arrow:SetSize(ARROW_SIZE, ARROW_SIZE)
+    if not addon.UIHelpers.SetTextureOr(arrow, ARROW_TEXTURE, ARROW_FALLBACK) then arrow:SetVertexColor(1, 0.15, 0.1, 1) end
+    arrowGlow:SetPoint("CENTER", arrow, "CENTER")
+    arrow:Hide(); arrowGlow:Hide()
+    button.arrow, button.arrowGlow = arrow, arrowGlow
+    button.animationTime = 0
+    button:SetScript("OnUpdate", function(self, elapsedSeconds)
+        if self.armedAt then Catcher.ShakeIcon(self, Catcher.ShakeAmplitude(AzeCaught.CATCH_WINDOW - (Api.Clock() - self.armedAt))) end
+        if not self.pulsing and not self.hinting then return end
+        self.animationTime = self.animationTime + (tonumber(elapsedSeconds) or 0)
+        local wave = 0.5 + 0.5 * math.sin(self.animationTime * 6)
+        if self.pulsing then
+            local glowSize = (self.iconSize or ICON_SIZE) + 10 + 10 * wave
+            self.glow:SetSize(glowSize, glowSize)
+            self.glow:SetAlpha(0.35 + 0.55 * wave)
+        end
+        if self.hinting then
+            self.arrow:ClearAllPoints()
+            self.arrow:SetPoint("BOTTOM", self, "TOP", 0, 4 + 6 * wave)
+            self.arrowGlow:SetAlpha(0.3 + 0.6 * wave)
+        end
+    end)
     local texture = button:CreateTexture(nil, "ARTWORK"); texture:SetAllPoints(); texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     addon.UIHelpers.SetTextureOr(texture, ROPE_ICON, ROPE_FALLBACK)
     round(texture)
@@ -293,6 +376,10 @@ local function iconFor(unit)
         if not GameTooltip then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(Text["Throw the rope"])
+        if self.chance then
+            GameTooltip:AddLine(Format(Text["Catch chance now: {percent}%"], { percent = math.floor(self.chance * 100 + 0.5) }),
+                AzeCaught.QualityColor(self.quality))
+        end
         GameTooltip:AddLine(Format(Text["Kill it within {seconds} seconds for a chance to catch it."], { seconds = AzeCaught.CATCH_WINDOW }), 1, 1, 1, true)
         GameTooltip:Show()
     end)
@@ -303,7 +390,57 @@ end
 
 ------------------------------------------------------------------ throw effect: a wind-up on the player, then the lasso on the target
 
-local effect   -- { playerPin, targetPin } built on first use
+local effect   -- { playerPin, targetPin, failPin } built on first use
+
+-- The effect pins: 1x1 frames (parent UIParent, one anchor each) the effect textures live in.
+local function effectPins()
+    if not effect then
+        local function newPin()
+            local pin = CreateFrame("Frame", nil, UIParent)
+            pin:SetSize(1, 1); pin:SetFrameStrata("HIGH"); pin:EnableMouse(false)
+            return pin
+        end
+        effect = { playerPin = newPin(), targetPin = newPin(), failPin = newPin() }
+    end
+    return effect
+end
+
+-- Puts `pin` on the unit's nameplate with ONE SetPoint (the only thing the client allows, see below); no plate or a
+-- refused anchor: above the player ("front"). Returns the mode and why it is not "nameplate".
+---@param pin table
+---@param unit string|nil
+---@param point string
+---@param relativePoint string
+---@param x number
+---@param y number
+---@return "nameplate"|"front" mode
+---@return string|nil why
+local function placeOnPlate(pin, unit, point, relativePoint, x, y)
+    local plate = unit and Api.NamePlateFor(unit)
+    local why
+    if plate then
+        local anchored, anchorError = pcall(function()
+            pin:ClearAllPoints()
+            pin:SetPoint(point, plate, relativePoint, x, y)
+        end)
+        if anchored then return "nameplate", nil end
+        why = tostring(anchorError)
+    else
+        why = "no nameplate"
+    end
+    pin:ClearAllPoints()
+    pin:SetPoint("CENTER", UIParent, "BOTTOMLEFT", UIParent:GetWidth() / 2, UIParent:GetHeight() * (PLAYER_SCREEN_HEIGHT + FRONT_RISE))
+    return "front", why
+end
+
+-- Lets go of the plate once the effect is over (a recycled plate then carries nothing of ours).
+---@param key string
+---@param pin table
+local function releaseLater(key, pin)
+    addon.Animate.Tween(key, LANDING_LINGER, function() end, function()
+        pin:ClearAllPoints(); pin:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    end)
+end
 
 -- The client does not let an addon know where an enemy is on the screen (journal 2026-11-20): its world position is
 -- hidden (UnitPosition), range checks are restricted in combat, measuring a nameplate taints the addon ("Can't measure
@@ -319,34 +456,12 @@ local effect   -- { playerPin, targetPin } built on first use
 ---@return table|nil details what was played (also Catcher.lastEffect)
 function Catcher.PlayRopeEffect(unit)
     local ok, problem = pcall(function()
-        local width, height = UIParent:GetWidth(), UIParent:GetHeight()
-        local playerX, playerY = width / 2, height * PLAYER_SCREEN_HEIGHT
-        if not effect then
-            -- each pin is its own frame (parent UIParent, one anchor); the effect textures live in it
-            local function newPin()
-                local pin = CreateFrame("Frame", nil, UIParent)
-                pin:SetSize(1, 1); pin:SetFrameStrata("HIGH"); pin:EnableMouse(false)
-                return pin
-            end
-            effect = { playerPin = newPin(), targetPin = newPin() }
-        end
+        local pins = effectPins()
         local Animate = addon.Animate
-        local playerPin, targetPin = effect.playerPin, effect.targetPin
-        playerPin:ClearAllPoints(); playerPin:SetPoint("CENTER", UIParent, "BOTTOMLEFT", playerX, playerY)
-        local mode, why = "front", nil
-        local plate = Api.NamePlateFor(unit)
-        if plate then
-            local anchored, anchorError = pcall(function()
-                targetPin:ClearAllPoints()
-                targetPin:SetPoint("TOP", plate, "BOTTOM", 0, -LANDING_DROP)
-            end)
-            if anchored then mode = "nameplate" else why = tostring(anchorError) end
-        else
-            why = "no nameplate"
-        end
-        if mode == "front" then
-            targetPin:ClearAllPoints(); targetPin:SetPoint("CENTER", UIParent, "BOTTOMLEFT", playerX, playerY + height * FRONT_RISE)
-        end
+        local playerPin, targetPin = pins.playerPin, pins.targetPin
+        playerPin:ClearAllPoints()
+        playerPin:SetPoint("CENTER", UIParent, "BOTTOMLEFT", UIParent:GetWidth() / 2, UIParent:GetHeight() * PLAYER_SCREEN_HEIGHT)
+        local mode, why = placeOnPlate(targetPin, unit, "TOP", "BOTTOM", 0, -LANDING_DROP)
         -- 1. wind-up on the player: the rope gathers in, sparks rise, a gold ring flashes out
         Animate.Ring("ropeWind", playerPin, playerPin, 110, 26, ROPE_COLOR, ROPE_DELAY)
         Animate.Burst("ropeCast", playerPin, playerPin, 0, 0,
@@ -358,10 +473,7 @@ function Catcher.PlayRopeEffect(unit)
             Animate.Burst("ropeHit", targetPin, targetPin, 0, 0,
                 { count = 16, color = { 1, 0.8, 0.35 }, speed = 100, gravity = 200, size = 12, duration = 0.7 })
             Animate.Ring("ropeHit", targetPin, targetPin, 10, 70, { 1, 0.85, 0.3 }, 0.45)
-            -- let go of the plate once the landing is over (a recycled plate then carries nothing of ours)
-            Animate.Tween("ropeLanding", LANDING_LINGER, function() end, function()
-                targetPin:ClearAllPoints(); targetPin:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-            end)
+            releaseLater("ropeLanding", targetPin)
         end)
         local details = { unit = unit, mode = mode, why = why }
         Catcher.lastEffect = details
@@ -401,6 +513,7 @@ function Catcher.UpdateIcon(unit)
         -- above the plate (the level and name stay readable), moved by the icon settings
         button:SetPoint("BOTTOM", plate, "TOP", settings.x, settings.y)
         button:SetSize(settings.size, settings.size)
+        button.iconSize = settings.size   -- never measured: the button hangs on a nameplate
     end)
     if not ok then
         Catcher.anchorFailures = Catcher.anchorFailures + 1
@@ -410,20 +523,103 @@ function Catcher.UpdateIcon(unit)
         button:Hide()
         return
     end
-    local armed = AzeCaught.throws[snapshot.guid] ~= nil
-    if armed then button.border:SetColorTexture(1, 0.82, 0.2, 0.95) else button.border:SetColorTexture(0.05, 0.05, 0.05, 0.9) end
-    local quality = AzeCaught.ThrowQuality(snapshot.health)
-    local red, green, blue = AzeCaught.QualityColor(quality)
-    local glowSize = settings.size + 8 + 14 * (quality or 0.4)
-    button.glow:SetSize(glowSize, glowSize)
-    button.glow:SetVertexColor(red, green, blue, 1)
-    button.glow:SetAlpha(0.45 + 0.45 * (quality or 0.4))
+    Catcher.StyleIcon(button, snapshot)
     button:Show()
+end
+
+-- The ring colour (the chance), the glow (armed: gold; best moment: pulsing green with a ping once per NPC) and the
+-- first-throw arrow of one icon.
+---@param button table
+---@param snapshot UnitSnapshot
+function Catcher.StyleIcon(button, snapshot)
+    local throw = AzeCaught.throws[snapshot.guid]
+    local armed = throw ~= nil
+    -- catch mode: the net icon and the shake clock (OnUpdate); back to the rope and still otherwise
+    button.armedAt = throw and throw.at or nil
+    local iconPath = armed and CATCH_ICON or ROPE_ICON
+    if button.iconPath ~= iconPath then
+        button.iconPath = iconPath
+        addon.UIHelpers.SetTextureOr(button.texture, iconPath, armed and ROPE_ICON or ROPE_FALLBACK)
+    end
+    if not armed then Catcher.ShakeIcon(button, 0) end
+    local quality, best = AzeCaught.ThrowQuality(snapshot.health, snapshot.classification)
+    button.quality = quality
+    button.chance = quality and AzeCaught.Chance(snapshot.health, snapshot.classification).chance or nil
+    local red, green, blue = AzeCaught.QualityColor(quality)
+    button.border:SetColorTexture(red, green, blue, 1)
+    button.pulsing = best and not armed
+    if armed then
+        local glowSize = (button.iconSize or ICON_SIZE) + 12
+        button.glow:SetSize(glowSize, glowSize); button.glow:SetVertexColor(1, 0.82, 0.2, 1); button.glow:SetAlpha(0.8)
+        button.glow:Show()
+    elseif best then
+        button.glow:SetVertexColor(red, green, blue, 1); button.glow:Show()
+    else
+        button.glow:Hide()
+    end
+    if best and not Catcher.pinged[snapshot.guid] then
+        if Catcher.pingedCount >= MAXIMUM_PINGED then Catcher.pinged, Catcher.pingedCount = {}, 0 end
+        Catcher.pinged[snapshot.guid], Catcher.pingedCount = true, Catcher.pingedCount + 1
+        Api.PlaySoundNamed(BEST_SOUNDS)
+    end
+    local hinting = (Catcher.forceHint or AzeCaught.NeedsThrowHint()) and not armed
+    button.hinting = hinting
+    button.arrow:SetShown(hinting); button.arrowGlow:SetShown(hinting)
+    if hinting then
+        button.arrow:ClearAllPoints(); button.arrow:SetPoint("BOTTOM", button, "TOP", 0, 4)
+        if not Catcher.hintPrinted then
+            Catcher.hintPrinted = true
+            addon.Print(Format(Text["New: click the rope icon above a weakened enemy, then finish it within {seconds} seconds to catch it."],
+                { seconds = AzeCaught.CATCH_WINDOW }))
+            AzeCaught.Journal("INFORMATION", "hint.arrow", "the first-throw arrow was shown", { forced = Catcher.forceHint or nil })
+        end
+    end
 end
 
 function Catcher.RefreshIcons()
     for unit in pairs(Catcher.icons) do Catcher.UpdateIcon(unit) end
     for _, unit in pairs(Catcher.unitByGuid) do Catcher.UpdateIcon(unit) end
+end
+
+-- The rope failed (user 2026-11-20, two different effects):
+--   "escape": the NPC died and slipped out: red rope fragments fly off the target and a grey puff spreads;
+--   "snap":   killed too slow: the rope icon cracks into brown and grey shards where it was.
+-- Both play in a pin on the unit's nameplate (one anchor, like the throw), else above the player. Journaled as
+-- `fail.effect`; a short snap sound.
+---@param kind "escape"|"snap"
+---@param unit string|nil
+---@return table details (also Catcher.lastFailEffect)
+function Catcher.PlayFailEffect(kind, unit)
+    local ok, problem = pcall(function()
+        local pin = effectPins().failPin
+        local Animate = addon.Animate
+        local mode, why
+        if kind == "snap" then
+            local settings = AzeCaught.IconSettings()
+            mode, why = placeOnPlate(pin, unit, "CENTER", "TOP", settings.x, settings.y + settings.size / 2)
+            Animate.Burst("failShards", pin, pin, 0, 0,
+                { count = 14, color = ROPE_COLOR, speed = 110, gravity = 260, size = 9, duration = 0.7 })
+            Animate.Burst("failDust", pin, pin, 0, 0,
+                { count = 8, color = { 0.6, 0.6, 0.6 }, speed = 60, gravity = 40, size = 12, duration = 0.6 })
+            Animate.Ring("failRing", pin, pin, settings.size + 6, settings.size * 2.4, { 0.55, 0.5, 0.45 }, 0.4)
+        else
+            mode, why = placeOnPlate(pin, unit, "TOP", "BOTTOM", 0, -LANDING_DROP)
+            Animate.Burst("failShards", pin, pin, 0, 0,
+                { count = 18, color = { 0.9, 0.2, 0.12 }, speed = 150, gravity = 160, size = 11, duration = 0.8 })
+            Animate.Burst("failDust", pin, pin, 0, 0,
+                { count = 10, color = { 0.75, 0.72, 0.68 }, speed = 50, gravity = -30, size = 16, duration = 0.9 })
+            Animate.Ring("failRing", pin, pin, 20, 90, { 0.95, 0.25, 0.15 }, 0.45)
+        end
+        releaseLater("failLanding", pin)
+        Api.PlaySoundNamed(SNAP_SOUNDS)
+        Catcher.lastFailEffect = { kind = kind, unit = unit, mode = mode, why = why }
+        AzeCaught.Journal("DEBUG", "fail.effect", "the rope fail effect was played", Catcher.lastFailEffect)
+    end)
+    if not ok then
+        Catcher.lastFailEffect = { kind = kind, mode = "failed", error = tostring(problem), unit = unit }
+        AzeCaught.Journal("WARNING", "fail.effect", "the rope fail effect failed", { error = tostring(problem) })
+    end
+    return Catcher.lastFailEffect
 end
 
 ------------------------------------------------------------------ active time, publishing, reminders, payout
@@ -627,11 +823,12 @@ end
 function commands.chance()
     local snapshot = Api.UnitSnapshot("target")
     if not snapshot or not snapshot.npc then printLine("chance: target an NPC") return end
-    local breakdown = AzeCaught.Chance(snapshot.health, snapshot.classification, snapshot.level or 1, Api.PlayerLevel())
-    printLine(("chance %.2f%% = base %.2f x health %.3f (hp %.1f%%) x rarity %.2f (%s) x level %.2f (npc %s vs %d)%s; icon %s; rolled %s"):format(
-        breakdown.chance * 100, breakdown.base, breakdown.healthFactor, snapshot.health * 100, breakdown.rarityFactor,
-        tostring(snapshot.classification), breakdown.levelFactor, tostring(snapshot.level), Api.PlayerLevel(),
-        breakdown.capped and " (capped)" or "", snapshot.health <= AzeCaught.THROW_HEALTH and "yes" or "no",
+    local breakdown = AzeCaught.Chance(snapshot.health, snapshot.classification)
+    local healthKnown = type(snapshot.health) == "number"
+    printLine(("chance %.1f%% = health %.1f%% (hp %s) - rarity %.1f (%s), at least %.0f%%%s; icon %s; reward %s; rolled %s"):format(
+        breakdown.chance * 100, breakdown.healthChance * 100, healthKnown and ("%.1f%%"):format(snapshot.health * 100) or "hidden",
+        breakdown.malus * 100, breakdown.classification, AzeCaught.MINIMUM_CHANCE * 100, breakdown.best and " (best)" or "",
+        (not healthKnown or snapshot.health <= AzeCaught.THROW_HEALTH) and "yes" or "no", money(AzeCaught.Reward(breakdown.chance)),
         tostring(AzeCaught.rolled[snapshot.guid] ~= nil)))
 end
 
@@ -731,12 +928,28 @@ function developmentCommands.week()
     local amount, reason = Catcher.RunPayout()
     printLine(("payout %d (%s)"):format(amount, tostring(reason or "paid")))
 end
--- plays the throw effect at the target (no throw) and prints which path it took and why (debugging the effect)
+-- /ggd caught effect [throw|escape|snap] [unit]: plays an effect at the target (no throw) and prints which path it took
+-- and why (debugging the effects)
 function developmentCommands.effect(arguments)
-    local unit = ((arguments or ""):match("^%s*(%S+)") or "target"):lower()
-    Catcher.lastEffect = nil
-    local details = Catcher.PlayRopeEffect(unit) or {}
-    printLine("effect: " .. keyValues(details))
+    local first, second = (arguments or ""):lower():match("^%s*(%S*)%s*(%S*)")
+    local kind = (first == "escape" or first == "snap" or first == "throw") and first or "throw"
+    local unit = (kind == first and second or first)
+    unit = (unit and unit ~= "") and unit or "target"
+    local details
+    if kind == "throw" then
+        Catcher.lastEffect = nil
+        details = Catcher.PlayRopeEffect(unit)
+    else
+        details = Catcher.PlayFailEffect(kind, unit)
+    end
+    printLine("effect " .. kind .. ": " .. keyValues(details or {}))
+end
+-- /ggd caught hint: shows (or hides again) the first-throw arrow on every rope icon
+function developmentCommands.hint()
+    Catcher.forceHint = not Catcher.forceHint
+    Catcher.hintPrinted = false
+    printLine("first-throw arrow forced " .. (Catcher.forceHint and "on" or "off"))
+    Catcher.RefreshIcons()
 end
 
 -- /ggd caught reset [all]: starts AZEcaught over (settings and journal stay; "all" also clears the wallet)
@@ -746,9 +959,14 @@ function developmentCommands.reset(arguments)
     if addon.Store.db.readonly then printLine("the saved data is read-only: nothing was reset") return end
     local summary = AzeCaught.Reset(word == "all")
     Catcher.noted, Catcher.notedCount, Catcher.dumps = {}, 0, {}
-    printLine(("AZEcaught reset: %d found (%d caught) cleared%s%s"):format(summary.found, summary.caught,
-        summary.companion and ", companion released" or "", summary.wallet and ", wallet cleared" or ""))
+    Catcher.pinged, Catcher.pingedCount, Catcher.hintPrinted = {}, 0, false
+    printLine(("AZEcaught reset: %d found (%d caught) cleared%s%s; the next catch is guaranteed again, the arrow shows until the next throw"):format(
+        summary.found, summary.caught, summary.companion and ", companion released" or "", summary.wallet and ", wallet cleared" or ""))
     addon.Events.Fire("CAUGHT_CHANGED"); Catcher.RefreshIcons()
+end
+-- user 2026-11-20 typed "/ggd reset" (not a command; the reset is /ggd caught reset): the dev build takes both
+if addon.IS_DEVELOPMENT_BUILD then
+    addon.SlashCommands.reset = function(arguments) addon.SlashCommands.caught("reset " .. (arguments or "")) end
 end
 
 -- adds the current target (or a test NPC) as caught, without a roll
@@ -757,10 +975,6 @@ function developmentCommands.add()
     local npcInformation = snapshot and snapshot.npc and { npc = snapshot.npc, name = snapshot.name, level = snapshot.level,
         classification = snapshot.classification, display = Catcher.CaptureDisplay("target"), stats = Api.UnitStats("target") }
         or { npc = 299, name = "Young Wolf", level = 2, classification = "normal" }
-    if AzeCaught.CaughtCount() >= AzeCaught.MAXIMUM_CAUGHT then
-        printLine(("the caught list is full (%d)"):format(AzeCaught.MAXIMUM_CAUGHT))
-        return
-    end
     local entry = AzeCaught.NoteFound(npcInformation, now())
     if entry then
         entry.caught = entry.caught + 1

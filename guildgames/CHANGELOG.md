@@ -6,15 +6,19 @@
 - New game **AZEcaught** (feature 018): catch hostile NPCs and raise one as a companion.
   - Every NPC you fight is added to your collection. Below 35% health a rope icon shows on its nameplate; throw it (icon,
     the "AZEcaught: throw rope" key binding or `/gg catch`) and kill the NPC within 3 s for a chance to catch it (the first catch always succeeds). The chance
-    rises sharply near 0 HP and falls for elite, rare and boss NPCs and for higher levels; harder catches pay more.
+    rises from 20% at 35% health to 90% at 10% health; elite, rare, rare elite and boss NPCs subtract 5/10/15/25 points.
+    The riskier the catch, the bigger the reward. Kill too slowly and the rope snaps (the icon breaks apart); an escape
+    sends rope fragments flying off the target.
   - One caught NPC is your companion, shown as a 3D model. It gets hungry (every 2 h), thirsty (every 1 h), wants petting
     (every 2 h) and sleep (1 h every 4 h), counted in play time only. Food (50s) and water (25s) are paid from the money
     pool; petting and sleep are free. Caring in time earns hearts and a care streak (at most one step per hour), neglect costs them (down into the negatives); two hours
     without food or water and it dies. Switching away from a companion with negative hearts makes it run away.
-  - The collection: Caught (at most 10) and Seen (every enemy fought, highest level); switching asks first ("stats will be
-    reset"). Hovering the model shows everything known about the NPC; its needs and thresholds come from its stats
+  - The collection: Caught (no limit) and Seen (every enemy fought, highest level); switching asks first ("stats will be
+    reset"). The model always shows the whole body (scroll to zoom). Hovering the model shows everything known about the NPC; its needs and thresholds come from its stats
     (creature type, power type, rarity).
-  - The rope icon is round and sits above the nameplate; its glow turns from red to green as the chance grows, it can be
+  - The rope icon is round and sits above the nameplate; its ring turns from red to green with the chance and pulses
+    at the best moment (with a short ping), turns into a net while the rope is out and shakes just before it
+    snaps, a red arrow points at it until your first throw, and it can be
     moved, resized or turned off (Options > AddOns, `/gg caught icon`), and each enemy takes one throw. A throw winds
     up on your character and a moment later the lasso closes on the target itself (on its nameplate; above you when
     the target has none). The care buttons

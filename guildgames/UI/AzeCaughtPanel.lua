@@ -27,6 +27,13 @@ local CARE_ICONS = { feed = "Interface\\Icons\\INV_Misc_Food_15", water = "Inter
     pet = "Interface\\Icons\\Ability_Hunter_BeastSoothe", sleep = "Interface\\Icons\\Spell_Nature_Sleep",
     wake = "Interface\\Icons\\Ability_Warrior_BattleShout" }
 local EMOTE_SECONDS = 2.5   -- an action's emote plays this long, then the model goes back to idle (user 2026-11-20)
+-- the camera (user 2026-11-20: "the zoom level is sometimes too far in and the complete 3D model is not visible"):
+-- full body (portrait zoom 0), then the camera this much farther away than the client's own fit; the mouse wheel
+-- changes it per NPC for the session
+local MODEL_CAMERA_DISTANCE = 1.35
+local MODEL_ZOOM_LIMITS = { 0.6, 4 }
+local MODEL_ZOOM_STEP = 1.15
+Panel.zoomByNpc = {}       -- camera distance chosen with the mouse wheel, by NPC id (session only)
 -- per model: a counter that voids older "back to idle" timers (kept off the frame itself)
 local emoteTokens = setmetatable({}, { __mode = "k" })
 ---@param model table
@@ -106,9 +113,36 @@ local function showModel(model, companion, area)
         method = "creature"
     end
     pcall(model.SetFacing, model, 0.4)
+    model.npc = companion.npc
+    local camera = ok and Panel.FitCamera(model) or {}
     if ok and model.idleFunction then model.idleFunction(model, "set") end
     AzeCaught.Journal(ok and "DEBUG" or "WARNING", "model." .. area, ok and "a model was loaded" or "a model could not be loaded",
-        { npc = companion.npc, display = companion.disp, method = method or "none", error = problem and tostring(problem) or nil })
+        { npc = companion.npc, display = companion.disp, method = method or "none", error = problem and tostring(problem) or nil,
+          camera = camera.camera, portrait = camera.portrait, distance = camera.distance })
+end
+
+-- Frames the whole model: no portrait zoom, the camera at MODEL_CAMERA_DISTANCE (or the wheel's choice for this NPC),
+-- the model centred. Runs after every load (a load resets the camera). Each call is guarded: clients differ.
+---@param model table
+---@return table applied which calls worked (journal, tests)
+function Panel.FitCamera(model)
+    local distance = (model.npc and Panel.zoomByNpc[model.npc]) or MODEL_CAMERA_DISTANCE
+    local applied = { distance = distance }
+    applied.portrait = model.SetPortraitZoom ~= nil and pcall(model.SetPortraitZoom, model, 0)
+    applied.position = model.SetPosition ~= nil and pcall(model.SetPosition, model, 0, 0, 0)
+    applied.camera = model.SetCamDistanceScale ~= nil and pcall(model.SetCamDistanceScale, model, distance)
+    return applied
+end
+
+-- The mouse wheel zooms (up = closer), limited to MODEL_ZOOM_LIMITS, remembered per NPC for the session.
+---@param model table
+---@param delta number
+function Panel.ZoomModel(model, delta)
+    local current = (model.npc and Panel.zoomByNpc[model.npc]) or MODEL_CAMERA_DISTANCE
+    local distance = addon.Utility.Clamp(delta > 0 and current / MODEL_ZOOM_STEP or current * MODEL_ZOOM_STEP,
+        MODEL_ZOOM_LIMITS[1], MODEL_ZOOM_LIMITS[2])
+    if model.npc then Panel.zoomByNpc[model.npc] = distance end
+    if model.SetCamDistanceScale then pcall(model.SetCamDistanceScale, model, distance) end
 end
 
 -- Plays the first animation of `candidates` the model has (HasAnimation when the client offers it).
@@ -152,6 +186,7 @@ local function previewIdle(model, reason) playEmote(model, EMOTES.idle, "idle:" 
 function Panel.PrepareModel(model, idleFunction)
     model.idleFunction = idleFunction
     pcall(model.SetScript, model, "OnModelLoaded", function(self)
+        Panel.FitCamera(self)
         if self.idleFunction then self.idleFunction(self, "loaded") end
     end)
 end
@@ -179,6 +214,8 @@ local function createModel(parent, width, height, idleFunction)
         if button == "RightButton" then self.turnFrom = GetCursorPosition() end
     end)
     model:SetScript("OnMouseUp", function(self) self.turnFrom = nil end)
+    if model.EnableMouseWheel then model:EnableMouseWheel(true) end
+    model:SetScript("OnMouseWheel", function(self, delta) Panel.ZoomModel(self, delta) end)
     Panel.PrepareModel(model, idleFunction or previewIdle)
     model:SetScript("OnUpdate", function(self)
         if not self.turnFrom then return end
@@ -565,7 +602,7 @@ end
 
 ------------------------------------------------------------------ collection: sections, selection, switching
 
--- "caught" (at most MAXIMUM_CAUGHT) or "seen" (every enemy fought, with its highest level)
+-- "caught" (no limit) or "seen" (every enemy fought, with its highest level)
 ---@param section "caught"|"seen"
 function Panel.SelectSection(section)
     Panel.state.section = section == "seen" and "seen" or "caught"
@@ -761,7 +798,9 @@ function Panel.Build(panel)
         Panel.Refresh()
         Panel.ShowIdle("shown")
         -- clients without OnModelLoaded: once more after the load had time to finish
-        if C_Timer then C_Timer.After(0.3, function() if widgets.panel:IsVisible() then Panel.ShowIdle("shownLate") end end) end
+        if C_Timer then C_Timer.After(0.3, function()
+            if widgets.panel:IsVisible() then Panel.FitCamera(widgets.model); Panel.ShowIdle("shownLate") end
+        end) end
     end)
     Panel.state.section = settings().caughtSection == "seen" and "seen" or "caught"
     local view = settings().caughtView
@@ -824,7 +863,7 @@ function Panel.Refresh()
         local caught = AzeCaught.State()
         local active = caught.active
         local sections = addon.Model.BuildCollectionSections(caught.collection, active and active.npc)
-        widgets.sectionButtons.caught:SetLabel(Format(Text["Caught {n}/{max}"], { n = sections.caughtCount, max = sections.caughtLimit }))
+        widgets.sectionButtons.caught:SetLabel(Format(Text["Caught ({n})"], { n = sections.caughtCount }))
         widgets.sectionButtons.seen:SetLabel(Format(Text["Seen {n}"], { n = #sections.seen }))
         local rows = sections[Panel.state.section] or sections.caught
         widgets.collectionList:SetData(rows)

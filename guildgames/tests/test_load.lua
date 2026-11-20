@@ -118,6 +118,25 @@ return {
                 harness.truthy(pcall(addon.UI.ToggleSidebar)); harness.equal(addon.db.ui.sidebarOpen, false)
                 -- AZEcaught (feature 018): the panel builds, every view, care, the commands and the ticker run without an error
                 harness.truthy(addon.AzeCaughtPanel.widgets.model, "the AZEcaught panel was not built (see Log: caught.ui)")
+                -- the camera (user 2026-11-20: the model was sometimes cut off): full body, zoomed out, wheel per NPC
+                do
+                    local Panel, calls = addon.AzeCaughtPanel, {}
+                    local fake = { npc = 4711,
+                        SetPortraitZoom = function(_, value) calls.portrait = value end,
+                        SetPosition = function(_, x, y, z) calls.position = x + y + z end,
+                        SetCamDistanceScale = function(_, value) calls.distance = value end }
+                    local applied = Panel.FitCamera(fake)
+                    harness.equal(calls.portrait, 0, "full body"); harness.equal(calls.position, 0)
+                    harness.truthy(calls.distance > 1, "farther than the client's own fit: " .. tostring(calls.distance))
+                    harness.truthy(applied.camera and applied.portrait)
+                    local fitted = calls.distance
+                    Panel.ZoomModel(fake, -1); harness.truthy(calls.distance > fitted, "wheel down zooms out")
+                    for _ = 1, 50 do Panel.ZoomModel(fake, -1) end; harness.equal(calls.distance, 4, "limit")
+                    Panel.FitCamera(fake); harness.equal(calls.distance, 4, "remembered for this NPC")
+                    fake.npc = 1; Panel.FitCamera(fake); harness.equal(calls.distance, fitted, "other NPCs keep the default")
+                    harness.truthy(Panel.FitCamera({}).camera == false, "a client without the calls is fine")
+                    Panel.zoomByNpc = {}
+                end
                 addon.GamesTab.SelectGame("caught")
                 harness.equal(addon.GamesTab.state.game, "caught")
                 local entry = addon.AzeCaught.NoteFound({ npc = 4711, name = "Wolf", level = 5 }, 1794873600)
@@ -269,6 +288,17 @@ return {
                 local played = addon.Catcher.lastEffect
                 harness.equal(played.mode, "nameplate", tostring(played.error) .. " " .. tostring(played.why))
                 harness.equal(#anchoredToPlate, 1, "exactly one frame (the landing pin) is anchored to the plate")
+                -- the fail effects (user 2026-11-20): escape on the target, snap where the icon was; same one-anchor rule
+                addon.Catcher.PlayFailEffect("escape", "target")
+                for _ = 1, 60 do addon.Animate._onUpdate(nil, 0.02) end
+                harness.equal(addon.Catcher.lastFailEffect.mode, "nameplate", tostring(addon.Catcher.lastFailEffect.error))
+                addon.Catcher.PlayFailEffect("snap", "target")
+                for _ = 1, 60 do addon.Animate._onUpdate(nil, 0.02) end
+                harness.equal(addon.Catcher.lastFailEffect.kind, "snap"); harness.equal(addon.Catcher.lastFailEffect.mode, "nameplate")
+                harness.equal(#anchoredToPlate, 3, "the throw pin plus one fail pin anchoring twice, nothing else")
+                addon.Catcher.OnTooSlow("Creature-0-1-2-3-77-0000000001", "Wolf")
+                harness.equal(addon.Catcher.lastFailEffect.kind, "snap"); harness.equal(addon.Catcher.lastFailEffect.mode, "front", "unit unknown")
+                harness.equal(table.concat(refused, ","), "", "the fail effects never measure a plate")
                 -- no plate (plates off, target out of view): the landing plays in front of the player
                 platesByUnit.target = nil
                 addon.Catcher.PlayRopeEffect("target")
@@ -286,11 +316,58 @@ return {
                 harness.truthy(addon.AzeCaught.JournalLines(1, "throw.effect")[1]:find("was played", 1, true),
                     "the throw effect runs: " .. tostring(addon.AzeCaught.JournalLines(1, "throw.effect")[1]))
                 harness.truthy(pcall(_G.GuildGamesAzeCaughtThrow), "the key binding")
+                -- the icon style (user 2026-11-20): ring by chance, pulse + one ping at the best moment, arrow until the first throw
+                do
+                    local shownPaths = {}
+                    local picture = stub(); rawset(picture, "SetTexture", function(_, path) shownPaths[#shownPaths + 1] = path return true end)
+                    local button = { border = stub(), glow = stub(), arrow = stub(), arrowGlow = stub(), iconSize = 26, texture = picture }
+                    local pings, savedPlay = 0, addon.Api.PlaySoundNamed
+                    addon.Api.PlaySoundNamed = function() pings = pings + 1 end
+                    local caughtState = addon.AzeCaught.State()
+                    local savedHint, savedFirst = caughtState.throwHintDone, caughtState.firstCatchDone
+                    caughtState.throwHintDone, caughtState.firstCatchDone = nil, nil
+                    local weak = { guid = "Creature-0-1-2-3-77-0000000002", health = 0.05, classification = "elite" }
+                    addon.Catcher.StyleIcon(button, weak); addon.Catcher.StyleIcon(button, weak)
+                    harness.truthy(button.pulsing, "pulses at the best moment"); harness.equal(pings, 1, "one ping per NPC")
+                    harness.truthy(math.abs(button.chance - 0.85) < 1e-9, "elite at 5%: " .. tostring(button.chance))
+                    harness.truthy(button.hinting and button.arrow:IsShown(), "the arrow before the first throw")
+                    caughtState.throwHintDone = true
+                    addon.Catcher.StyleIcon(button, { guid = weak.guid, health = 0.3 })
+                    harness.truthy(not button.hinting and not button.arrow:IsShown(), "no arrow after the first throw")
+                    harness.truthy(not button.pulsing and not button.glow:IsShown(), "no glow away from the best moment")
+                    addon.Catcher.StyleIcon(button, { guid = weak.guid, health = nil })
+                    harness.equal(button.chance, nil, "hidden health: no chance shown")
+                    -- catch mode (user 2026-11-20): the net icon while armed, the rope again after; shaking only near the end
+                    harness.equal(shownPaths[#shownPaths], addon.Catcher.ROPE_ICON)
+                    addon.AzeCaught.throws[weak.guid] = { at = 100, npc = 77 }
+                    addon.Catcher.StyleIcon(button, weak)
+                    harness.equal(shownPaths[#shownPaths], addon.Catcher.CATCH_ICON, "catch mode shows the net"); harness.equal(button.armedAt, 100)
+                    local pathCount = #shownPaths
+                    addon.Catcher.StyleIcon(button, weak); harness.equal(#shownPaths, pathCount, "the texture is set once per change")
+                    addon.AzeCaught.throws[weak.guid] = nil
+                    addon.Catcher.StyleIcon(button, weak)
+                    harness.equal(shownPaths[#shownPaths], addon.Catcher.ROPE_ICON); harness.equal(button.armedAt, nil)
+                    local Shake = addon.Catcher.ShakeAmplitude
+                    harness.equal(Shake(3), 0); harness.equal(Shake(1.0), 0, "still at 1 s left")
+                    harness.truthy(Shake(0.5) > 1 and Shake(0.5) < Shake(0.1), "rising toward the end")
+                    harness.equal(Shake(0), 5); harness.equal(Shake(-1), 5); harness.equal(Shake(nil), 0)
+                    addon.Catcher.ShakeIcon(button, 4); harness.truthy(button.shaken)
+                    addon.Catcher.ShakeIcon(button, 0); harness.truthy(not button.shaken, "back in place")
+                    caughtState.throwHintDone, caughtState.firstCatchDone = savedHint, savedFirst
+                    addon.Api.PlaySoundNamed = savedPlay
+                end
                 if development then
-                    for _, command in ipairs({ "add", "time 30", "give 5", "force", "need hunger 10", "week", "effect" }) do
+                    for _, command in ipairs({ "add", "time 30", "give 5", "force", "need hunger 10", "week", "effect", "effect escape", "effect snap target", "hint", "hint" }) do
                         local okCommand, commandError = pcall(addon.SlashCommands.caught, command)
                         harness.truthy(okCommand, "/ggd caught " .. command .. ": " .. tostring(commandError))
                     end
+                    -- user 2026-11-20: "/ggd reset" did nothing (only /ggd caught reset existed); the dev build takes both
+                    addon.AzeCaught.State().firstCatchDone, addon.AzeCaught.State().throwHintDone = true, true
+                    addon.SlashCommands.reset("")
+                    harness.equal(addon.AzeCaught.State().firstCatchDone, nil, "/ggd reset gives the guaranteed first catch back")
+                    harness.equal(addon.AzeCaught.State().throwHintDone, nil, "and the first-throw arrow")
+                else
+                    harness.equal(addon.SlashCommands.reset, nil, "the live build has no reset")
                 end
                 harness.truthy(pcall(addon.UI.AddCompanionTooltip, GameTooltip), "the minimap tooltip")
                 addon.GamesTab.SelectGame("coin")

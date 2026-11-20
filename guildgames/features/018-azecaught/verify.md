@@ -11,7 +11,12 @@ Result after work:    `luajit tests/run.lua` -> 95 passed, 0 failed
 | R1 | fought NPCs are found | test_azecaught "found NPCs are added once..."; combat-log path only in game | OFFLINE (logic) / NOT-VERIFIED (combat log) | suite line | pass (logic) | 2026-11-20 |
 | R2 | rope icon / key binding / `/gg catch` | test_load drives `/gg catch` and the binding under stubs; icon on nameplates needs the game (S3) | NOT-VERIFIED | in-game checklist 2-3 | open | |
 | R3 | 3 s window, one roll per GUID | test_azecaught "a throw needs low health..." | OFFLINE | suite line | pass | 2026-11-20 |
-| R4 | chance formula | test_azecaught "health factor is logarithmic", "difficulty lowers the chance" | OFFLINE | suite line | pass | 2026-11-20 |
+| R4 | chance formula (reworked: linear 20% -> 90%, rarity malus, no level) | test_azecaught "the chance rises linearly...", "rarity subtracts points..." | OFFLINE | suite line | pass | 2026-11-20 |
+| R3a | too slow ends the throw at the window's end | test_azecaught "a throw whose window passed is ended once..."; test_load OnTooSlow | OFFLINE / NOT-VERIFIED (in game) | suite line | pass offline | 2026-11-20 |
+| R5 | reward by risk | test_azecaught "rarity subtracts points..." (Reward), "a successful roll catches..." | OFFLINE | suite line | pass | 2026-11-20 |
+| R24-ring | ring red -> green by chance, pulse + one ping at the best moment, tooltip chance | test_azecaught "throw quality follows the chance..."; test_load StyleIcon | OFFLINE / NOT-VERIFIED (look in game) | suite line | pass offline | 2026-11-20 |
+| R24a | red arrow until the first throw | test_azecaught "the throw hint shows until the first throw..."; test_load StyleIcon | OFFLINE / NOT-VERIFIED (look in game) | suite line | pass offline | 2026-11-20 |
+| R24b | escape and snap effects on the nameplate, never measured | test_load fail effects (stub plate refuses measuring; mode nameplate/front) | OFFLINE / NOT-VERIFIED (look in game) | suite line | pass offline | 2026-11-20 |
 | R5 | catch marks caught + reward | test_azecaught "a successful roll catches..." | OFFLINE | suite line | pass | 2026-11-20 |
 | R6 | scrollable collection | test_azecaught "model rows..." (order); UI in game | OFFLINE (rows) / NOT-VERIFIED (UI) | | open | |
 | R7 | one companion, fresh on switch, run-away | test_azecaught "selecting starts fresh", "switching away with negative hearts" | OFFLINE | suite line | pass | 2026-11-20 |

@@ -157,3 +157,32 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 ## 2026-11-21 00:45 | VERIFY | throw effect seen in game
 - Did: user threw the rope after /reload: "looks fine" -> verify.md row R24-effect IN-GAME.
 - Next: remaining in-game checks (verify.md R2, R6, R8, R9 bars, R11 effects, R14, R16 needs a second player, R20 output).
+
+## 2026-11-20 22:41 | DECISION | rope rework: lean chance, ring, arrow, fail effects (10 questions)
+- Did: user: "make the catch mechanic more lean e.g. at 10% life the catch chance is 90% - with a slight malus to elite and rare mob. The icon should display the current state - going from red to green outline according to the catch chance. The icon disappearing when getting killed too slow with a small burst particle effect. Also the first catch mechanic show a glowing red arrow for the first time. Display a particle effect when it escaped or was killed too slow - ask me 10 questions". Answers in spec.md Decisions (Q1-Q10).
+- Next: build.
+
+## 2026-11-20 22:41 | BUILD | rope rework built
+- Did: Core/Minigames/AzeCaught.lua: Chance(health, classification) linear 20% -> 90% (35% -> 10% health), flat below, rarity malus in points, MINIMUM_CHANCE 5%, no level; HealthFactor/Difficulty/BASE_CHANCE/MAXIMUM_CHANCE/RARITY_FACTOR removed (RARITY_MALUS is the classification set now); Reward(chance) by risk; ThrowQuality(health, classification) -> quality, best; EndLateThrows (window end = too slow, counts as rolled); NeedsThrowHint + db.caught.throwHintDone (sanitized, reset). Core/Game/Catcher.lua: StyleIcon (ring by chance, gold glow armed, pulsing glow + one MAP_PING at the best moment, tooltip chance, red bobbing arrow + one chat line), PollThrows ends late throws -> OnTooSlow, OnDeath escape -> PlayFailEffect("escape"), late -> OnTooSlow; effect pins shared (effectPins/placeOnPlate/releaseLater, one anchor each); /gg caught chance prints the new breakdown + reward; dev `effect [throw|escape|snap]`, `hint`. Locales/deDE.lua: 3 keys, "died too late" removed. README, CHANGELOG, spec R3a/R4/R5/R24/R24a/R24b, verify rows.
+- Evidence: luajit tests/run.lua -> "122 passed, 0 failed" (new/changed: chance curve, rarity malus + reward, throw quality, EndLateThrows, throw hint; test_load: fail effects never measure the stub plate (nameplate/front), StyleIcon ping once + arrow until first throw; each new load assertion checked by breaking it once)
+- Next: user: /reload (no new file), fight an enemy below 35%: ring colour, pulse + ping at 10%, tooltip chance; `/ggd caught hint` for the arrow; `/ggd caught effect escape|snap` and a real too-slow throw. Arrow texture UI-MicroStream-Red is unverified on this client (fallback: scroll-down arrow tinted red).
+
+## 2026-11-20 22:50 | BUILD | /ggd reset did not reset the first catch
+- Did: user: "ggd reset doesnt seem to reset first catch". SavedVariables GuildGames-Dev.lua (saved 22:42): no `caught.command` and no `dev.reset` journal line, firstCatchDone=true -> the reset never ran: `/ggd reset` is not a command (only `/ggd caught reset`), the dispatcher just listed the words. Core/Game/Catcher.lua: dev build registers `/ggd reset` as `/ggd caught reset`; the reset also clears the session ping/hint flags and says "the next catch is guaranteed again, the arrow shows until the next throw". The journal also showed the old formula (base=0.15): the rework was not loaded yet in that session.
+- Evidence: luajit tests/run.lua -> "122 passed, 0 failed" (test_load: /ggd reset clears firstCatchDone and throwHintDone in the dev build; the live build has no reset)
+- Next: user: /reload, `/ggd reset`, `/gg caught state` -> firstCatchDone false; throw -> arrow, then a guaranteed catch.
+
+## 2026-11-20 22:58 | BUILD | model camera: whole body visible, mouse-wheel zoom
+- Did: user: "the zoom level is sometimes too far in and the complete 3D model is not visible". UI/AzeCaughtPanel.lua set no camera at all (the client's per-model default, close-up for some creatures). New `Panel.FitCamera` after every load (showModel, OnModelLoaded, the 0.3 s late show): SetPortraitZoom(0), SetPosition(0,0,0), SetCamDistanceScale(1.35), each guarded; `Panel.ZoomModel` on the mouse wheel (0.6..4, per NPC, session only). The model load journal line carries camera/portrait/distance.
+- Evidence: luajit tests/run.lua -> "122 passed, 0 failed" (test_load: fit calls, wheel limits, per-NPC memory, client without the calls)
+- Next: user: /reload, open companion + collection previews with a large NPC; if still cut off, scroll the wheel and tell me the comfortable number (then MODEL_CAMERA_DISTANCE becomes that), or paste `/gg caught log 5 model`.
+
+## 2026-11-20 23:05 | BUILD | catch-mode icon and shake before the snap
+- Did: user: "camera works better - for the emblem we need another icon instead of the rope once it is in active catch mode, as well as the icon starting to shake violently shortly before breaking". Core/Game/Catcher.lua: StyleIcon swaps the picture to CATCH_ICON (Interface\Icons\Ability_Ensnare, a net; rope as fallback) while armed and back after (set once per change); the icon's OnUpdate shakes picture, ring and glow by random offsets of `ShakeAmplitude(remaining)` (0 until 1 s left, then 1 -> 5 px, quadratic); the button's nameplate anchor is never touched. Spec R24, CHANGELOG.
+- Evidence: luajit tests/run.lua -> "122 passed, 0 failed" (test_load: net while armed, rope after, texture set once; amplitude 0 at >= 1 s, rising, 5 at the end; shake back in place)
+- Next: user: /reload, throw and wait: net icon, shaking in the last second, then the snap. Say if the net icon does not exist on this client (it falls back to the rope) or the shake is too weak/strong.
+
+## 2026-11-20 23:10 | BUILD | no limit on caught NPCs
+- Did: user: "remove the limit on caught". Removed AzeCaught.MAXIMUM_CAUGHT (10): the "full" throw refusal, the "no roll: the caught list filled up" check, its chat text (enUS/deDE key removed), the dev `add` check; the section header reads "Caught (n)" (new key, deDE "Gefangen ({n})"); Model sections drop caughtLimit. MAXIMUM_COLLECTION 2000 stays as a bound against corrupt saved data only. Spec R23, README, CHANGELOG.
+- Evidence: luajit tests/run.lua -> "122 passed, 0 failed" (test_azecaught: 100 caught, a throw and a forced roll still work, 101 after a reload; the old limit test was replaced)
+- Next: user: /reload, catch more than 10.

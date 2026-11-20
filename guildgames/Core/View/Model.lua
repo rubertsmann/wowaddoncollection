@@ -198,7 +198,7 @@ end
 -- found NPC with its highest level, highest first).
 ---@param collection table<integer, CollectionEntry>
 ---@param activeNpc integer|nil
----@return { caught: CollectionRow[], seen: CollectionRow[], caughtCount: integer, caughtLimit: integer }
+---@return { caught: CollectionRow[], seen: CollectionRow[], caughtCount: integer }
 function Model.BuildCollectionSections(collection, activeNpc)
     local all = Model.BuildCollectionRows(collection, activeNpc)
     local caught, seen, caughtCount = {}, {}, 0
@@ -211,7 +211,7 @@ function Model.BuildCollectionSections(collection, activeNpc)
         if left.nameKey ~= right.nameKey then return left.nameKey < right.nameKey end
         return left.npc < right.npc
     end)
-    return { caught = caught, seen = seen, caughtCount = caughtCount, caughtLimit = addon.AzeCaught.MAXIMUM_CAUGHT }
+    return { caught = caught, seen = seen, caughtCount = caughtCount }
 end
 
 -- Last week's best companion owner (the weekly winner line), or nil.

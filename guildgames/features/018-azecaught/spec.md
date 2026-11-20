@@ -23,17 +23,22 @@ Catching
 - R3: A throw is armed for `CATCH_WINDOW` = 3 s. If that NPC is seen dead inside the window (`UnitIsDead` on whatever
   unit shows its GUID: `UNIT_HEALTH` plus a 0.2 s `UnitTokenFromGUID` poll while a throw is armed), one catch roll is
   made. Health hidden by the client (a secret in combat/instances): the icon follows the target and the roll uses
-  `THROW_HEALTH` (worst case); a hidden level counts as the player's level. Only one roll per GUID, and the throw cooldown is 3 s.
-- R4: Catch chance = `BASE` x `healthFactor(h)` x `difficulty`, capped at `MAXIMUM_CHANCE`.
-  - `healthFactor(h) = 1 - ln(1 + 99h) / ln(100)` (h = health fraction at the throw, 0..1): 1.0 at 0 HP, ~0.48 at 10%,
-    ~0.26 at 30%, ~0.23 at 35%. This is logarithmic and rises sharply near 0 HP.
-  - `difficulty` = rarity factor (normal 1.0, elite 0.6, rare 0.5, rare elite 0.35, world boss 0.15) x level factor
-    (`clamp(1 - 0.05 * (npcLevel - playerLevel), 0.25, 1.25)`).
-  - Starting values: `BASE` 0.15, `MAXIMUM_CHANCE` 0.25. The numbers are tunable constants pinned by tests.
+  `THROW_HEALTH` (worst case). Only one roll per GUID, and the throw cooldown is 3 s.
+  - R3a (user 2026-11-20): when the window ends without a death the rope **snaps** at once ("killed too slow"): the
+    throw ends (`AzeCaught.EndLateThrows`), the NPC counts as rolled (no second throw), the icon disappears with a small
+    burst where it was and chat says "Too slow". A death seen just after the window is the same "too slow".
+- R4 (reworked 2026-11-20, user: "make the catch mechanic more lean, e.g. at 10% life the catch chance is 90%, with a
+  slight malus to elite and rare mob"): chance = max(`MINIMUM_CHANCE`, healthChance(h) - rarity malus), h = health
+  fraction at the throw.
+  - healthChance: `CHANCE_AT_THROW_HEALTH` 20% at `THROW_HEALTH` 35%, rising linearly to `CHANCE_AT_BEST` 90% at
+    `BEST_HEALTH` 10%, flat below (35% -> 20, 30% -> 34, 25% -> 48, 20% -> 62, 15% -> 76, 10% and below -> 90).
+  - Rarity malus in points: elite 5, rare 10, rare elite 15, world boss 25. `MINIMUM_CHANCE` 5%.
+  - The level difference no longer matters. The roll still happens at the death, with the health at the throw.
 - R4a: The **first catch roll** a character ever makes always succeeds (`db.caught.firstCatchDone`, user 2026-11-20).
   `/ggd caught add` does not use it up.
 - R5: A successful catch marks the collection entry **caught** (a caught count when caught more than once) and pays a
-  catch reward into the money pool: `CATCH_REWARD` (2g) x `1 / difficulty` (harder catch, bigger reward).
+  catch reward into the money pool, by the risk (user 2026-11-20): `CATCH_REWARD` (2g) x `CHANCE_AT_BEST / chance`
+  (2g at 90%, 9g at 20%, 36g at the 5% minimum; at most `MAXIMUM_REWARD` 50g).
 - R6: The collection is a scrollable list of every found NPC, caught ones first. Not-caught entries are greyed out. Each
   row shows name, level, rarity, times caught and a small model preview on hover.
 
@@ -113,15 +118,23 @@ Stats, collection and UI additions (user, 2026-11-20)
   - rarity: thresholds +3/+3/+5/+8
   - unknown stats: the base schedule. Bars show the companion's own threshold marks; a need it never has shows "never".
 - R23: **Collection sections**:
-  - **Caught**: at most `MAXIMUM_CAUGHT` = 10, duplicates count. A full list refuses the throw (and a kill after the
-    list filled gets no roll); a companion that dies or runs away frees a place.
+  - **Caught**: no limit (user 2026-11-20 "remove the limit on caught"; it was 10). Duplicates count in the header
+    "Caught (n)". Saved data is bounded only against corruption (`MAXIMUM_COLLECTION` 2000 entries).
   - **Seen**: every fought enemy with its highest level, highest first; at most `MAXIMUM_SEEN` = 100 uncaught, the one
     seen longest ago makes room.
   - A click only selects a row. The **Make companion** button opens a confirm dialog "Stats will be reset" (plus the
     run-away warning for negative hearts).
-- R24: **Rope icon**: round, above the nameplate (not over the level), gold ring while armed.
-  - Its glow grows and turns from red (just below 35% health, the worst chance) to green (near 0 HP); yellow when the
-    health is hidden (`ThrowQuality`/`QualityColor`).
+- R24: **Rope icon**: round, above the nameplate (not over the level). While armed ("catch mode", user 2026-11-20) it
+  shows a net (`Ability_Ensnare`, the rope when the client lacks it) with a steady gold glow, and in the last
+  `SHAKE_SECONDS` 1 s of the window it shakes harder and harder (up to 5 px; only the textures move, the anchor stays).
+  - Its **ring** goes red -> yellow -> green with the catch chance (`ThrowQuality` = (chance - 5%) / (90% - 5%),
+    rarity included; yellow when the health is hidden). At the best moment (10% health or less) the ring's glow
+    pulses and a short ping plays once per NPC. The tooltip shows "Catch chance now: N%".
+  - R24a (user 2026-11-20): until the character's **first throw** (`db.caught.throwHintDone`; not shown to characters
+    that caught before) a glowing red arrow bobs above the icon, pointing at it, with one chat line per session.
+  - R24b (user 2026-11-20): **fail effects**, different per cause, in a pin anchored to the nameplate (front when none),
+    with a short snap sound: escaped = red rope fragments fly off the target and a grey puff rises; too slow = the icon
+    cracks into brown and grey shards where it was (R3a). Dev: `/ggd caught effect [throw|escape|snap]`, `/ggd caught hint`.
   - **One throw per enemy** (`thrown`, kept 10 min).
   - The icon can be turned off, moved and resized: Options > AddOns > GuildGames AZEcaught, or
     `/gg caught icon on|off|x|y|size|reset`. Clamped and journaled; the key binding still works when it is off.
@@ -326,6 +339,13 @@ Debugging (user, 2026-11-20: "anything can be actually debugged with hard manual
 - 2026-11-20 OQ1: AZEcaught is the game tab's name inside GuildGames; the addon keeps its name.
 - 2026-11-20 OQ2: "you cannot input more than you actually have": the balance limits every casino stake (R18).
 - 2026-11-20 OQ3: starting grant 20g.
+
+- 2026-11-20 User (rope rework, 10 questions): Q1 linear 20% at 35% health -> 90% at 10%, flat below; Q2 malus in
+  points elite 5 / rare 10 / rare elite 15 / boss 25; Q3 drop the level difference; Q4 roll at the death with the health
+  at the throw; Q5 ring coloured by chance + pulse at the best moment; Q6 reward by risk; Q7 too slow = at the window's
+  end, icon gone with a burst; Q8 different effects for escape and too slow; Q9 red arrow until the first throw;
+  Q10 short sounds (snap; ping when the best moment is reached). Claude: `MINIMUM_CHANCE` 5% so a boss at 35% can
+  still be caught; old players who caught before never see the arrow.
 
 ## Open questions
 - OQ4: Spikes S1-S3 (display id capture, emote animation ids, nameplate click in combat). (needs: game)

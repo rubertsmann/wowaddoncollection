@@ -37,40 +37,39 @@ local function journalHas(addon, text)
 end
 
 return {
-    ["azecaught: the health factor is logarithmic: 1 at 0 HP, ~0.48 at 10%, ~0.26 at 30%, 0 at full"] = function(harness)
+    -- user 2026-11-20: "at 10% life the catch chance is 90% - with a slight malus to elite and rare mob"
+    ["azecaught: the chance rises linearly from 20% at 35% health to 90% at 10%, flat below; hidden health is the worst case"] = function(harness)
         local AzeCaught = fresh(harness).AzeCaught
-        harness.equal(AzeCaught.HealthFactor(0), 1)
-        harness.truthy(math.abs(AzeCaught.HealthFactor(0.1) - 0.4813) < 0.001, "10%: " .. AzeCaught.HealthFactor(0.1))
-        harness.truthy(math.abs(AzeCaught.HealthFactor(0.3) - 0.2564) < 0.001, "30%: " .. AzeCaught.HealthFactor(0.3))
-        harness.equal(AzeCaught.HealthFactor(1), 0)
-        harness.equal(AzeCaught.HealthFactor(5), 0); harness.equal(AzeCaught.HealthFactor(-1), 1)
-        local previous = 2
-        for step = 0, 100 do
-            local value = AzeCaught.HealthFactor(step / 100)
-            harness.truthy(value <= previous, "falls monotonically"); previous = value
+        local function near(actual, expected, message) harness.truthy(math.abs(actual - expected) < 1e-9, (message or "") .. " " .. actual) end
+        near(AzeCaught.Chance(0.35, "normal").chance, 0.20, "35%")
+        near(AzeCaught.Chance(0.20, "normal").chance, 0.62, "20%")
+        near(AzeCaught.Chance(0.10, "normal").chance, 0.90, "10%")
+        near(AzeCaught.Chance(0.05, "normal").chance, 0.90, "5%: flat")
+        near(AzeCaught.Chance(0, "normal").chance, 0.90, "0%")
+        near(AzeCaught.Chance(0.9, "normal").chance, 0.20, "above the icon threshold: the threshold value")
+        near(AzeCaught.Chance(nil, "normal").chance, 0.20, "hidden health"); near(AzeCaught.Chance(0 / 0, "normal").chance, 0.20, "NaN")
+        harness.equal(AzeCaught.Chance(0.1, "normal").best, true); harness.equal(AzeCaught.Chance(0.11, "normal").best, false)
+        local previous = -1
+        for step = 35, 0, -1 do
+            local chance = AzeCaught.Chance(step / 100, "normal").chance
+            harness.truthy(chance >= previous, "rises as health falls"); previous = chance
         end
-        -- steepest near 0 HP (logarithmic, not linear)
-        harness.truthy(AzeCaught.HealthFactor(0) - AzeCaught.HealthFactor(0.05) > AzeCaught.HealthFactor(0.25) - AzeCaught.HealthFactor(0.30))
     end,
 
-    ["azecaught: difficulty lowers the chance for rarer and higher NPCs; the chance is capped"] = function(harness)
+    ["azecaught: rarity subtracts points (elite 5, rare 10, rare elite 15, boss 25), never below 5%; level does not matter"] = function(harness)
         local AzeCaught = fresh(harness).AzeCaught
-        local normal = AzeCaught.Chance(0, "normal", 10, 10)
-        harness.equal(normal.chance, AzeCaught.BASE_CHANCE)
-        harness.truthy(AzeCaught.Chance(0, "elite", 10, 10).chance < normal.chance)
-        harness.truthy(AzeCaught.Chance(0, "rare", 10, 10).chance < AzeCaught.Chance(0, "elite", 10, 10).chance)
-        harness.truthy(AzeCaught.Chance(0, "worldboss", 10, 10).chance < AzeCaught.Chance(0, "rareelite", 10, 10).chance)
-        harness.truthy(AzeCaught.Chance(0, "normal", 15, 10).chance < normal.chance, "higher level is harder")
-        harness.equal(AzeCaught.Chance(0, "normal", 60, 10).levelFactor, 0.25, "level factor floor")
-        harness.equal(AzeCaught.Chance(0, "normal", 1, 60).levelFactor, 1.25, "level factor ceiling")
-        harness.equal(AzeCaught.Chance(0, "trivial", 10, 10).chance, normal.chance, "unknown classes count as normal")
-        AzeCaught.BASE_CHANCE = 1
-        local capped = AzeCaught.Chance(0, "normal", 1, 60)
-        harness.equal(capped.chance, AzeCaught.MAXIMUM_CHANCE); harness.equal(capped.capped, true)
-        -- reward grows with difficulty
-        harness.truthy(AzeCaught.Reward(AzeCaught.Difficulty("worldboss", 10, 10)) > AzeCaught.Reward(1))
-        harness.equal(AzeCaught.Reward(1), AzeCaught.CATCH_REWARD)
-        harness.equal(AzeCaught.Reward(0.0001), AzeCaught.MAXIMUM_REWARD)
+        local function near(actual, expected, message) harness.truthy(math.abs(actual - expected) < 1e-9, (message or "") .. " " .. actual) end
+        near(AzeCaught.Chance(0.1, "elite").chance, 0.85, "elite"); near(AzeCaught.Chance(0.1, "rare").chance, 0.80, "rare")
+        near(AzeCaught.Chance(0.1, "rareelite").chance, 0.75, "rare elite"); near(AzeCaught.Chance(0.1, "worldboss").chance, 0.65, "boss")
+        near(AzeCaught.Chance(0.35, "worldboss").chance, AzeCaught.MINIMUM_CHANCE, "floor")
+        near(AzeCaught.Chance(0.1, "trivial").chance, 0.90, "unknown classes count as normal")
+        near(AzeCaught.Chance(0.1, "normal", 60, 10).chance, 0.90, "extra level arguments are ignored")
+        -- the reward follows the risk: CATCH_REWARD at the best chance, more for a riskier catch, capped
+        harness.equal(AzeCaught.Reward(0.9), AzeCaught.CATCH_REWARD)
+        harness.equal(AzeCaught.Reward(0.2), math.floor(AzeCaught.CATCH_REWARD * 4.5 + 0.5))
+        harness.truthy(AzeCaught.Reward(AzeCaught.Chance(0.1, "worldboss").chance) > AzeCaught.Reward(0.9))
+        harness.equal(AzeCaught.Reward(0), AzeCaught.Reward(AzeCaught.MINIMUM_CHANCE), "never divides by zero")
+        harness.truthy(AzeCaught.Reward(AzeCaught.MINIMUM_CHANCE) <= AzeCaught.MAXIMUM_REWARD)
     end,
 
     ["azecaught: npc ids come only from creature and vehicle GUIDs"] = function(harness)
@@ -135,7 +134,7 @@ return {
         local result = assert(AzeCaught.OnDeath(GUID, "Me-R", 101, NOW, constant(0.01)))
         harness.equal(result.caught, true)
         harness.equal(AzeCaught.State().collection[4711].caught, 1)
-        harness.equal(result.reward, AzeCaught.Reward(AzeCaught.Difficulty("rare", 10, 10)))
+        harness.equal(result.reward, AzeCaught.Reward(AzeCaught.Chance(0.01, "rare").chance))
         harness.equal(addon.Wallet.Balance("Me-R"), before + result.reward)
         harness.truthy(journalHas(addon, "an NPC was caught")); harness.truthy(journalHas(addon, "money was paid into the pool"))
     end,
@@ -646,25 +645,21 @@ return {
         harness.truthy(odd.attack >= 1 and odd.defense >= 1 and odd.speed >= 1, "bad input still gives sane numbers")
     end,
 
-    -- user 2026-11-20: the collection has a caught section (at most 10) and a seen section (limited, highest level)
-    ["azecaught: at most 10 caught: a full collection refuses the throw and a death after it is filled gets no roll"] = function(harness)
+    -- user 2026-11-20: "remove the limit on caught" (it was 10)
+    ["azecaught: caught NPCs have no limit: a throw and a roll still work with many caught"] = function(harness)
         local addon = fresh(harness)
         local AzeCaught = addon.AzeCaught
-        harness.equal(AzeCaught.MAXIMUM_CAUGHT, 10)
-        for npc = 100, 108 do
-            local entry = AzeCaught.NoteFound({ npc = npc, name = "N" .. npc }, NOW)
-            entry.caught = 1
-        end
-        AzeCaught.State().collection[100].caught = 2   -- duplicates count: 10 now
-        harness.equal(AzeCaught.CaughtCount(), 10)
-        harness.equal(select(2, AzeCaught.Throw({ guid = GUID, health = 0.1, name = "Wolf" }, 10, 100, NOW)), "full")
-        harness.truthy(journalHas(addon, "reason=full"))
-        AzeCaught.State().collection[100].caught = 1   -- 9: a throw is armed ...
+        harness.equal(AzeCaught.MAXIMUM_CAUGHT, nil)
+        for npc = 100, 149 do AzeCaught.NoteFound({ npc = npc, name = "N" .. npc }, NOW).caught = 2 end
+        harness.equal(AzeCaught.CaughtCount(), 100)
         assert(AzeCaught.Throw({ guid = GUID, health = 0.1, name = "Wolf" }, 10, 100, NOW))
-        AzeCaught.State().collection[100].caught = 2   -- ... and the collection fills before the kill
         AzeCaught.forceNextCatch = true
-        harness.equal(select(2, AzeCaught.OnDeath(GUID, "Me-R", 101, NOW, constant(0))), "full")
-        harness.equal(AzeCaught.CaughtCount(), 10)
+        harness.equal(assert(AzeCaught.OnDeath(GUID, "Me-R", 101, NOW, constant(0))).caught, true)
+        harness.equal(AzeCaught.CaughtCount(), 101)
+        local loaded = harness.addon({ now = NOW }).Store.Init({ schema = 2, games = {}, caught = { collection = AzeCaught.State().collection } })
+        local kept = 0
+        for _, entry in pairs(loaded.caught.collection) do kept = kept + entry.caught end
+        harness.equal(kept, 101, "a reload keeps every caught NPC")
     end,
 
     ["azecaught: the seen list is limited; the oldest uncaught NPC makes room, caught ones are kept"] = function(harness)
@@ -695,7 +690,7 @@ return {
         harness.equal(sections.caught[2].npc, 2)
         harness.equal(#sections.seen, 3)
         harness.equal(sections.seen[1].npc, 2); harness.equal(sections.seen[2].npc, 3); harness.equal(sections.seen[2].lvl, 12, "highest level")
-        harness.equal(sections.caughtCount, 3); harness.equal(sections.caughtLimit, 10)
+        harness.equal(sections.caughtCount, 3); harness.equal(sections.caughtLimit, nil)
     end,
 
     -- user 2026-11-20: care buttons are greyed out when they cannot be used; the check must agree with Care
@@ -733,22 +728,60 @@ return {
         harness.equal(next(AzeCaught.thrown), nil, "the memory is bounded")
     end,
 
-    -- user 2026-11-20: the icon glow goes from red to green as the catch chance rises
-    ["azecaught: throw quality: 0 (red) at the threshold, 1 (green) at 0 HP, nil when health is hidden"] = function(harness)
+    -- user 2026-11-20: the icon ring goes from red to green with the catch chance and pulses at the best moment
+    ["azecaught: throw quality follows the chance (rarity included); best at 10% health; nil when health is hidden"] = function(harness)
         local AzeCaught = fresh(harness).AzeCaught
-        harness.equal(AzeCaught.ThrowQuality(AzeCaught.THROW_HEALTH), 0)
-        harness.equal(AzeCaught.ThrowQuality(0), 1)
+        local function near(actual, expected, message) harness.truthy(math.abs(actual - expected) < 1e-9, (message or "") .. " " .. actual) end
+        local quality, best = AzeCaught.ThrowQuality(0.1, "normal")
+        near(quality, 1, "90% is full green"); harness.equal(best, true)
+        quality, best = AzeCaught.ThrowQuality(AzeCaught.THROW_HEALTH, "normal")
+        near(quality, (0.20 - 0.05) / 0.85, "20% at the threshold"); harness.equal(best, false)
+        near(AzeCaught.ThrowQuality(AzeCaught.THROW_HEALTH, "worldboss"), 0, "the minimum chance is red")
+        harness.truthy(AzeCaught.ThrowQuality(0.1, "elite") < 1, "the malus shows in the colour")
         harness.equal(AzeCaught.ThrowQuality(nil), nil)
-        harness.equal(AzeCaught.ThrowQuality(0.9), 0, "above the threshold is clamped")
         local previous = -1
         for step = 35, 0, -1 do
-            local quality = AzeCaught.ThrowQuality(step / 100)
-            harness.truthy(quality >= previous, "rises as health falls"); previous = quality
+            local value = AzeCaught.ThrowQuality(step / 100, "rare")
+            harness.truthy(value >= previous, "rises as health falls"); previous = value
         end
         local r, g = AzeCaught.QualityColor(0); harness.truthy(r > 0.9 and g < 0.3, "red")
         r, g = AzeCaught.QualityColor(1); harness.truthy(g > 0.9 and r < 0.4, "green")
         r, g = AzeCaught.QualityColor(0.5); harness.truthy(r > 0.9 and g > 0.7, "yellow in the middle")
         r, g = AzeCaught.QualityColor(nil); harness.truthy(r > 0.9 and g > 0.7, "unknown: neutral yellow")
+    end,
+
+    -- user 2026-11-20: "killed too slow" ends the throw when the window ends (the icon goes with a burst)
+    ["azecaught: a throw whose window passed is ended once, counts as rolled and a later death rolls nothing"] = function(harness)
+        local addon = fresh(harness)
+        local AzeCaught = addon.AzeCaught
+        AzeCaught.Throw({ guid = GUID, health = 0.2, name = "Wolf", level = 10 }, 10, 100, NOW)
+        harness.equal(#AzeCaught.EndLateThrows(100 + AzeCaught.CATCH_WINDOW), 0, "exactly at the window end it still counts")
+        local ended = AzeCaught.EndLateThrows(100 + AzeCaught.CATCH_WINDOW + 0.2)
+        harness.equal(#ended, 1); harness.equal(ended[1].guid, GUID); harness.equal(ended[1].name, "Wolf"); harness.equal(ended[1].npc, 4711)
+        harness.equal(AzeCaught.throws[GUID], nil); harness.truthy(AzeCaught.rolled[GUID])
+        harness.truthy(journalHas(addon, "the catch window ended before the NPC died"))
+        harness.equal(#AzeCaught.EndLateThrows(200), 0, "only once")
+        harness.equal(select(2, AzeCaught.OnDeath(GUID, "Me-R", 104, NOW, constant(0))), "rolled")
+        harness.equal(select(2, AzeCaught.Throw({ guid = GUID, health = 0.1 }, 10, 110, NOW)), "rolled", "no second throw")
+    end,
+
+    -- user 2026-11-20: a red arrow points at the rope icon until the character's first throw
+    ["azecaught: the throw hint shows until the first throw (not for players who caught before), is saved and reset"] = function(harness)
+        local addon = fresh(harness)
+        local AzeCaught = addon.AzeCaught
+        harness.equal(AzeCaught.NeedsThrowHint(), false, "caught before (fresh sets firstCatchDone)")
+        AzeCaught.State().firstCatchDone = nil
+        harness.equal(AzeCaught.NeedsThrowHint(), true)
+        harness.equal(select(2, AzeCaught.Throw({ guid = GUID, health = 0.9 }, 10, 100, NOW)), "health")
+        harness.equal(AzeCaught.NeedsThrowHint(), true, "a refused throw does not count")
+        AzeCaught.Throw({ guid = GUID, health = 0.2, name = "Wolf" }, 10, 100, NOW)
+        harness.equal(AzeCaught.NeedsThrowHint(), false); harness.equal(AzeCaught.State().throwHintDone, true)
+        local loaded = harness.addon({ now = NOW }).Store.Init({ schema = 2, games = {}, caught = { throwHintDone = true } })
+        harness.equal(loaded.caught.throwHintDone, true)
+        local junk = harness.addon({ now = NOW }).Store.Init({ schema = 2, games = {}, caught = { throwHintDone = 1 } })
+        harness.equal(junk.caught.throwHintDone, nil)
+        AzeCaught.Reset(false)
+        harness.equal(AzeCaught.State().throwHintDone, nil)
     end,
 
     -- user 2026-11-20: an addon option to move the rope icon or turn it off

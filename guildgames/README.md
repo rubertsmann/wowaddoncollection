@@ -31,11 +31,12 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
   - Every hostile NPC you fight lands in your **collection**. When one is below 35% health, a rope icon shows on its
     nameplate. Throw the rope (click the icon, bind "AZEcaught: throw rope" in the key bindings, or `/gg catch` in a
     macro) and kill it within 3 seconds for a chance to catch it. Your very first catch always succeeds. One throw per
-    enemy; the icon's glow turns from red to green as the chance grows. Move, resize or hide the icon in Options >
+    enemy. The icon's ring turns from red to green as the chance grows and pulses at the best moment; until your first
+    throw a red arrow points at it. Kill too slowly and the rope snaps. Move, resize or hide the icon in Options >
     AddOns > GuildGames AZEcaught (or `/gg caught icon on|off|x|y|size|reset`).
-  - The chance is higher the closer to 0 HP you throw (logarithmic) and lower for elite, rare, rare elite and boss NPCs
-    and for NPCs above your level. A catch pays a reward into the money pool (more for harder ones).
-  - The collection has two sections: **Caught** (at most 10; duplicates count) and **Seen** (every enemy you fought with
+  - The chance rises from 20% at 35% health to 90% at 10% health and below; elite, rare, rare elite and boss NPCs
+    subtract 5, 10, 15 and 25 points. A catch pays a reward into the money pool: the riskier the catch, the more.
+  - The collection has two sections: **Caught** (no limit; duplicates count) and **Seen** (every enemy you fought with
     its highest level, the newest 100). Select a caught one and press **Make companion** (it asks first: stats are reset).
   - Hover the model to see everything known about the NPC. Its needs come from its stats: e.g. beasts are hungrier,
     undead and mechanical companions never get thirsty, rage users and rare NPCs get needy sooner.
