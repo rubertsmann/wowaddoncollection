@@ -119,9 +119,9 @@ local function playEmote(model, candidates, reason)
     if not model or not model.SetAnimation then return end
     local chosen = candidates[#candidates]
     if model.HasAnimation then
-        for _, animationId in ipairs(candidates) do
-            local ok, has = pcall(model.HasAnimation, model, animationId)
-            if ok and has then chosen = animationId break end
+        for _, animationID in ipairs(candidates) do
+            local ok, has = pcall(model.HasAnimation, model, animationID)
+            if ok and has then chosen = animationID break end
         end
     else
         chosen = candidates[1]
@@ -341,10 +341,10 @@ function Panel.Care(action)
     addon.Events.Fire("CAUGHT_CHANGED")
 end
 
--- Makes `npcId` the companion (after the confirm dialog, see Panel.RequestSwitch).
----@param npcId integer
-function Panel.SelectCompanion(npcId)
-    local companion, refusal, ranAway = AzeCaught.Select(npcId, addon.Utility.Now())
+-- Makes `npcID` the companion (after the confirm dialog, see Panel.RequestSwitch).
+---@param npcID integer
+function Panel.SelectCompanion(npcID)
+    local companion, refusal, ranAway = AzeCaught.Select(npcID, addon.Utility.Now())
     if not companion then
         widgets.collectionStatus:SetText(refusal == "notcaught" and Text["Only caught NPCs can be your companion."] or "")
         return
@@ -365,9 +365,9 @@ local NEED_ICON = { thirst = CARE_ICONS.water, hunger = CARE_ICONS.feed, affecti
 local TREND_COLOR = { more = { 1, 0.6, 0.25 }, less = { 0.45, 0.8, 1 }, normal = { 1, 1, 1 }, never = { 0.5, 0.5, 0.5 } }
 
 ---@param hex string "rrggbb"
----@return number r
----@return number g
----@return number b
+---@return number red
+---@return number green
+---@return number blue
 local function hexColor(hex)
     return tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255
 end
@@ -395,61 +395,61 @@ end
 -- Fills `tooltip` (GameTooltip) with the NPC's info. Returns the number of lines added (tests).
 ---@param tooltip table
 ---@param owner table
----@param npcId integer
+---@param npcID integer
 ---@param entry CollectionEntry
 ---@return integer lines
-function Panel.ShowNpcInfo(tooltip, owner, npcId, entry)
-    local info = addon.Model.BuildNpcInfo(npcId, entry)
+function Panel.ShowNpcInfo(tooltip, owner, npcID, entry)
+    local npcView = addon.Model.BuildNpcInfo(npcID, entry)
     local count = 0
     local function line(...) tooltip:AddLine(...) count = count + 1 end
     local function double(...) tooltip:AddDoubleLine(...) count = count + 1 end
     tooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    local r, g, b = hexColor(info.rarityColor)
-    tooltip:SetText(info.title, r, g, b)
-    line(info.subtitle, 0.75, 0.75, 0.75)
-    if #info.facts > 0 or info.hiddenCount > 0 then
+    local red, green, blue = hexColor(npcView.rarityColor)
+    tooltip:SetText(npcView.title, red, green, blue)
+    line(npcView.subtitle, 0.75, 0.75, 0.75)
+    if #npcView.facts > 0 or npcView.hiddenCount > 0 then
         line(" ")
-        for _, fact in ipairs(info.facts) do double(fact.label, fact.value, 0.65, 0.65, 0.65, 1, 1, 1) end
-        if info.hiddenCount > 0 then
-            line(addon.Locale.Plural(info.hiddenCount, Text["The game hides 1 more value."], Text["The game hides {n} more values."]),
+        for _, fact in ipairs(npcView.facts) do double(fact.label, fact.value, 0.65, 0.65, 0.65, 1, 1, 1) end
+        if npcView.hiddenCount > 0 then
+            line(addon.Locale.Plural(npcView.hiddenCount, Text["The game hides 1 more value."], Text["The game hides {n} more values."]),
                 0.5, 0.5, 0.5)
         end
     end
     line(" ")
     line(Text["Combat"], 1, 0.82, 0)
-    for _, stat in ipairs(info.combat) do double(stat.label, stat.value .. " " .. Panel.StatBar(stat), 0.65, 0.65, 0.65, 1, 1, 1) end
+    for _, stat in ipairs(npcView.combat) do double(stat.label, stat.value .. " " .. Panel.StatBar(stat), 0.65, 0.65, 0.65, 1, 1, 1) end
     line(" ")
     line(Text["Needs"], 1, 0.82, 0)
-    for _, need in ipairs(info.needs) do
+    for _, need in ipairs(npcView.needs) do
         local color = TREND_COLOR[need.trend]
         local marker = need.trend == "more" and (" " .. Text["(more often)"]) or need.trend == "less" and (" " .. Text["(less often)"]) or ""
         double("|T" .. NEED_ICON[need.need] .. ":14:14:0:0:64:64:5:59:5:59|t " .. need.label, need.text .. marker,
             1, 1, 1, color[1], color[2], color[3])
     end
-    line(info.thresholds, 0.65, 0.65, 0.65)
-    if #info.traits > 0 then
+    line(npcView.thresholds, 0.65, 0.65, 0.65)
+    if #npcView.traits > 0 then
         line(" ")
         line(Text["Traits"], 1, 0.82, 0)
-        for _, trait in ipairs(info.traits) do line(trait, 0.85, 0.85, 0.85, true) end
+        for _, trait in ipairs(npcView.traits) do line(trait, 0.85, 0.85, 0.85, true) end
     end
     tooltip:Show()
     return count
 end
 
--- Shows the info panel while the mouse is over `model`. `getNpc()` returns npcId, collection entry (or nil: nothing).
+-- Shows the info panel while the mouse is over `model`. `getNpc()` returns npcID, collection entry (or nil: nothing).
 ---@param model table
 ---@param getNpc fun(): integer|nil, CollectionEntry|nil
 local function attachInfoPanel(model, getNpc)
     model:HookScript("OnEnter", function(self)
-        local npcId, entry = getNpc()
+        local npcID, entry = getNpc()
         if not entry or not GameTooltip then return end
-        Panel.ShowNpcInfo(GameTooltip, self, npcId, entry)
-        AzeCaught.Journal("DEBUG", "ui.info", "the NPC info panel was shown", { npc = npcId, stats = AzeCaught.StatsText(entry.st) })
+        Panel.ShowNpcInfo(GameTooltip, self, npcID, entry)
+        AzeCaught.Journal("DEBUG", "ui.info", "the NPC npcView panel was shown", { npc = npcID, stats = AzeCaught.StatsText(entry.st) })
     end)
     model:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
 end
 
----@return integer|nil npcId
+---@return integer|nil npcID
 ---@return CollectionEntry|nil
 local function companionNpc()
     local companion = AzeCaught.Active()
@@ -457,11 +457,11 @@ local function companionNpc()
     return companion.npc, AzeCaught.State().collection[companion.npc]
 end
 
----@return integer|nil npcId
+---@return integer|nil npcID
 ---@return CollectionEntry|nil
 local function previewNpc()
-    local npcId = Panel.state.previewNpc
-    return npcId, npcId and AzeCaught.State().collection[npcId] or nil
+    local npcID = Panel.state.previewNpc
+    return npcID, npcID and AzeCaught.State().collection[npcID] or nil
 end
 Panel.CompanionNpc, Panel.PreviewNpc = companionNpc, previewNpc
 
@@ -580,16 +580,16 @@ end
 -- The switch button is usable for a caught NPC that is not the companion already.
 local function refreshSwitchButton()
     if not widgets.switchButton then return end
-    local npcId = Panel.state.selectedNpc
-    local entry = npcId and AzeCaught.State().collection[npcId]
+    local npcID = Panel.state.selectedNpc
+    local entry = npcID and AzeCaught.State().collection[npcID]
     local active = AzeCaught.Active()
-    widgets.switchButton:SetEnabled(entry ~= nil and (entry.caught or 0) > 0 and not (active and active.npc == npcId))
+    widgets.switchButton:SetEnabled(entry ~= nil and (entry.caught or 0) > 0 and not (active and active.npc == npcID))
 end
 
----@param npcId integer
-function Panel.SelectRow(npcId)
-    Panel.state.selectedNpc, Panel.state.previewNpc = npcId, npcId
-    local entry = AzeCaught.State().collection[npcId]
+---@param npcID integer
+function Panel.SelectRow(npcID)
+    Panel.state.selectedNpc, Panel.state.previewNpc = npcID, npcID
+    local entry = AzeCaught.State().collection[npcID]
     widgets.collectionStatus:SetText(entry and (entry.caught or 0) < 1 and Text["Only caught NPCs can be your companion."] or "")
     if widgets.collectionList then widgets.collectionList:Refresh() end
     Panel.RefreshPreview()
@@ -598,8 +598,8 @@ end
 
 -- The switch button: asks first ("Stats will be reset"; a companion with negative hearts runs away).
 function Panel.RequestSwitch()
-    local npcId = Panel.state.selectedNpc
-    local entry = npcId and AzeCaught.State().collection[npcId]
+    local npcID = Panel.state.selectedNpc
+    local entry = npcID and AzeCaught.State().collection[npcID]
     if not entry or (entry.caught or 0) < 1 then return end
     local text = Format(Text["Make {name} your companion? Stats will be reset."], { name = addon.Utility.Escape(entry.n) })
     local current = AzeCaught.Active()
@@ -608,17 +608,17 @@ function Panel.RequestSwitch()
             { name = addon.Utility.Escape(current.n) }) .. "|r"
     end
     widgets.confirmText:SetText(text)
-    Panel.state.confirmNpc = npcId
+    Panel.state.confirmNpc = npcID
     widgets.confirmDialog:Show()
-    AzeCaught.Journal("DEBUG", "ui.switch", "the switch dialog was opened", { npc = npcId })
+    AzeCaught.Journal("DEBUG", "ui.switch", "the switch dialog was opened", { npc = npcID })
 end
 
 function Panel.ConfirmSwitch()
-    local npcId = Panel.state.confirmNpc
+    local npcID = Panel.state.confirmNpc
     widgets.confirmDialog:Hide()
     Panel.state.confirmNpc = nil
-    AzeCaught.Journal("DEBUG", "ui.switch", "the switch was confirmed", { npc = npcId })
-    if npcId then Panel.SelectCompanion(npcId) end
+    AzeCaught.Journal("DEBUG", "ui.switch", "the switch was confirmed", { npc = npcID })
+    if npcID then Panel.SelectCompanion(npcID) end
 end
 
 function Panel.CancelSwitch()

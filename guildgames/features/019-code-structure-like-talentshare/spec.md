@@ -46,7 +46,7 @@ suffix), and helper logic that was copied between files lives in one place.
 - [x] T3 (S): Survivor duplicate might/haste; Utility.Clamp. Verify: test_survivor, test_azecaught.
 - [x] T4 (M): shared UI helpers (sound by name, frame level, texture fallback, settings), money/me wrappers. Verify: test_load, test_games_ui.
 - [x] T5 (S): one Model.Duration; one Model.RefusalText. Verify: new Model tests; locale lint.
-- [ ] T6 (M): renames (`...Id` -> `...ID`, `dt`, `t`, `info`). Verify: full suite.
+- [x] T6 (M): renames (`...Id` -> `...ID`, `dt`, `t`, `info`). Verify: full suite.
 - [ ] T7 (S): docs/coding-conventions.md, CHANGELOG, doc.md. Verify: read.
 - [ ] T8 (M, optional): shared Init/diagnostic slash commands in LibGuildSync for both addons. Decide after T7.
 

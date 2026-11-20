@@ -407,18 +407,18 @@ function Animate.Flash(key, texture, peakAlpha, duration)
 end
 
 -- A point on an arc from (x1, y1) to (x2, y2) that rises `lift` pixels above the straight line at its middle
--- (a quadratic Bezier; t 0..1). Pure: AZEcaught's rope throw flies along it (feature 018).
+-- (a quadratic Bezier; progress 0..1). Pure: AZEcaught's rope throw flies along it (feature 018).
 ---@param x1 number
 ---@param y1 number
 ---@param x2 number
 ---@param y2 number
 ---@param lift number
----@param t number
+---@param progress number
 ---@return number x
 ---@return number y
-function Animate.ArcPoint(x1, y1, x2, y2, lift, t)
+function Animate.ArcPoint(x1, y1, x2, y2, lift, progress)
     local controlX, controlY = (x1 + x2) / 2, (y1 + y2) / 2 + 2 * lift
-    local inverse = 1 - t
-    return inverse * inverse * x1 + 2 * t * inverse * controlX + t * t * x2,
-        inverse * inverse * y1 + 2 * t * inverse * controlY + t * t * y2
+    local inverse = 1 - progress
+    return inverse * inverse * x1 + 2 * progress * inverse * controlX + progress * progress * x2,
+        inverse * inverse * y1 + 2 * progress * inverse * controlY + progress * progress * y2
 end

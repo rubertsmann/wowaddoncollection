@@ -44,3 +44,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: the duplicated "Not enough money in the pool" / "read-only" texts exist once; the locale lint still sees every key (Model is in Core/).
 - Evidence: luajit tests/run.lua -> "120 passed, 0 failed" (new: "model: Duration rounds to minutes, whole hours without minutes, never is a dash", "model: CommonRefusalText words read-only and funds, leaves every other refusal to the caller")
 - Next: T6 renames
+
+## 2026-11-20 23:00 | BUILD | T6 names like TalentShare
+- Did: `...Id` -> `...ID` (npcID, typeID, displayID, animationID, oldestID, otherID, nextID; functions AzeCaught.NpcIDFromGuid, AzeCaught.CreatureTypeID; Api's unit dump key mapID). `dt` -> `elapsedSeconds` (AzeCaught.Tick, Catcher.OnTick) and `stepSeconds` (Survivor's fixed simulation step); `t` -> `progress` (Animate.ArcPoint) / `arcProgress` (Catcher rope); `info` -> `npcInformation` (AzeCaught.NoteFound, Catcher dev add) / `npcView` (Model.BuildNpcInfo, AzeCaughtPanel.ShowNpcInfo); `r, g, b` -> `red, green, blue`; probe `s1` -> `targetSnapshot`. Kept on purpose: saved/wire fields (npc, disp, st, cls, lvl, ...), widget field row.info, journal detail keys (`dt` in tick.clamped, s1-s3 in the probe line: bug reports are replayed from them). New lint "conventions: identifiers spell ids as ID, not Id" (red first: it found otherId x2).
+- Result: only names changed; the one renamed table key (nextID) is on the in-memory survivor run, never stored or sent.
+- Evidence: luajit tests/run.lua -> "121 passed, 0 failed"
+- Next: T7 docs/coding-conventions.md, CHANGELOG, doc.md, verify.md

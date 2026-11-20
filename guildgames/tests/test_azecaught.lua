@@ -75,11 +75,11 @@ return {
 
     ["azecaught: npc ids come only from creature and vehicle GUIDs"] = function(harness)
         local AzeCaught = fresh(harness).AzeCaught
-        harness.equal(AzeCaught.NpcIdFromGuid(GUID), 4711)
-        harness.equal(AzeCaught.NpcIdFromGuid("Vehicle-0-1-2-3-99-AB"), 99)
-        harness.equal(AzeCaught.NpcIdFromGuid("Player-1234-0000ABCD"), nil)
-        harness.equal(AzeCaught.NpcIdFromGuid("Pet-0-1-2-3-4711-AB"), nil)
-        harness.equal(AzeCaught.NpcIdFromGuid(nil), nil); harness.equal(AzeCaught.NpcIdFromGuid("Creature-0-1-2-3-0-AB"), nil)
+        harness.equal(AzeCaught.NpcIDFromGuid(GUID), 4711)
+        harness.equal(AzeCaught.NpcIDFromGuid("Vehicle-0-1-2-3-99-AB"), 99)
+        harness.equal(AzeCaught.NpcIDFromGuid("Player-1234-0000ABCD"), nil)
+        harness.equal(AzeCaught.NpcIDFromGuid("Pet-0-1-2-3-4711-AB"), nil)
+        harness.equal(AzeCaught.NpcIDFromGuid(nil), nil); harness.equal(AzeCaught.NpcIDFromGuid("Creature-0-1-2-3-0-AB"), nil)
     end,
 
     ["azecaught: found NPCs are added once, learn level/display/rarity, and the collection is bounded"] = function(harness)
@@ -518,8 +518,8 @@ return {
         harness.equal(entry.st.power, 1); harness.equal(entry.st.sex, 2)
         harness.truthy(journalHas(addon, "stats"))
         -- a type known only by its localized name
-        harness.equal(AzeCaught.CreatureTypeId(nil, "Untoter"), 6); harness.equal(AzeCaught.CreatureTypeId(nil, "Beast"), 1)
-        harness.equal(AzeCaught.CreatureTypeId(9, "whatever"), 9); harness.equal(AzeCaught.CreatureTypeId(nil, "???"), nil)
+        harness.equal(AzeCaught.CreatureTypeID(nil, "Untoter"), 6); harness.equal(AzeCaught.CreatureTypeID(nil, "Beast"), 1)
+        harness.equal(AzeCaught.CreatureTypeID(9, "whatever"), 9); harness.equal(AzeCaught.CreatureTypeID(nil, "???"), nil)
     end,
 
     ["azecaught: the profile: no stats -> the normal schedule; type, power and rarity change intervals and thresholds"] = function(harness)
@@ -617,19 +617,19 @@ return {
     -- user 2026-11-20: Attack / Defense / Speed from level, rarity, creature type and a hash of the NPC id (display only)
     ["azecaught: combat stats are fixed per NPC and follow level, rarity and creature type"] = function(harness)
         local AzeCaught = fresh(harness).AzeCaught
-        local function stats(npcId, level, cls, typeId)
-            return AzeCaught.CombatStats(npcId, { lvl = level, cls = cls, st = typeId and { type = typeId } or nil })
+        local function stats(npcID, level, cls, typeID)
+            return AzeCaught.CombatStats(npcID, { lvl = level, cls = cls, st = typeID and { type = typeID } or nil })
         end
         local wolf = stats(4711, 20, "normal", 1)
         harness.equal(AzeCaught.StatsText(wolf), AzeCaught.StatsText(stats(4711, 20, "normal", 1)), "same NPC, same numbers")
         local spread, distinct = {}, 0
-        for npcId = 1, 200 do
-            local attack = stats(npcId, 20, "normal").attack
+        for npcID = 1, 200 do
+            local attack = stats(npcID, 20, "normal").attack
             if not spread[attack] then spread[attack], distinct = true, distinct + 1 end
         end
         harness.truthy(distinct > 10, "neighbouring NPC ids differ: " .. distinct .. " distinct attack values")
-        for npcId = 1, 200 do
-            local s = stats(npcId, 20, "normal")
+        for npcID = 1, 200 do
+            local s = stats(npcID, 20, "normal")
             for _, key in ipairs({ "attack", "defense", "speed" }) do
                 harness.truthy(s[key] >= 42 and s[key] <= 58, key .. " within +-15% of 50: " .. s[key])
             end

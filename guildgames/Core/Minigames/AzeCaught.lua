@@ -4,7 +4,7 @@ local addonName, addon = ...
 -- Core/Game/Catcher.lua (combat log, nameplates, model capture) and UI/AzeCaughtPanel.lua. Clocks and random numbers are
 -- PARAMETERS, so any bug report can be replayed offline from `/gg caught export` and the journal.
 --
--- Time: needs change only during ACTIVE time (logged in, R10). The client calls AzeCaught.Tick(dt) once a second with
+-- Time: needs change only during ACTIVE time (logged in, R10). The client calls AzeCaught.Tick(elapsedSeconds) once a second with
 -- the GetTime() delta; each tick is clamped to MAXIMUM_TICK so a hang or loading screen cannot age the companion (RF2).
 --
 -- Debugging (R19): every step writes one structured line to the AZEcaught JOURNAL (db.caught.journal, its own ring so
@@ -215,14 +215,14 @@ function AzeCaught.Classification(classification)
     return "normal"
 end
 
--- The NPC id of a creature/vehicle GUID ("Creature-0-1-2-3-<npcId>-<spawn>"), nil for players, pets and the rest.
+-- The NPC id of a creature/vehicle GUID ("Creature-0-1-2-3-<npcID>-<spawn>"), nil for players, pets and the rest.
 ---@param guid any
 ---@return integer|nil
-function AzeCaught.NpcIdFromGuid(guid)
+function AzeCaught.NpcIDFromGuid(guid)
     if type(guid) ~= "string" then return nil end
-    local unitType, npcId = guid:match("^(%a+)%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
+    local unitType, npcID = guid:match("^(%a+)%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
     if unitType ~= "Creature" and unitType ~= "Vehicle" then return nil end
-    return addon.Utility.SafeInteger(tonumber(npcId), 1, AzeCaught.MAXIMUM_ID)
+    return addon.Utility.SafeInteger(tonumber(npcID), 1, AzeCaught.MAXIMUM_ID)
 end
 
 ------------------------------------------------------------------ catch chance (R4)
@@ -285,9 +285,9 @@ end
 
 -- red (0) -> yellow (0.5) -> green (1); nil (unknown) -> yellow
 ---@param quality number|nil
----@return number r
----@return number g
----@return number b
+---@return number red
+---@return number green
+---@return number blue
 function AzeCaught.QualityColor(quality)
     if not quality then return 1, 0.82, 0.2 end
     if quality < 0.5 then return 1, 0.15 + 0.7 * quality * 2, 0.1 end
@@ -366,11 +366,11 @@ end
 ---@field stats? NpcStats
 
 -- The creature type id from the client's id or its localized name (enUS/deDE), nil when unknown.
----@param typeId any
+---@param typeID any
 ---@param typeName any
 ---@return integer|nil
-function AzeCaught.CreatureTypeId(typeId, typeName)
-    local id = addon.Utility.SafeInteger(typeId, 1, 100)
+function AzeCaught.CreatureTypeID(typeID, typeName)
+    local id = addon.Utility.SafeInteger(typeID, 1, 100)
     if id then return id end
     if type(typeName) ~= "string" then return nil end
     return AzeCaught.TYPE_NAMES[typeName:lower()]
@@ -407,58 +407,58 @@ local function mergeStats(entry, stats)
 end
 
 -- Adds or updates a found NPC. Fast and silent when nothing new is learned (the combat log calls it on every hit).
----@param info NpcInformation
+---@param npcInformation NpcInformation
 ---@param now integer server time
 ---@return CollectionEntry|nil entry
 ---@return boolean isNew
-function AzeCaught.NoteFound(info, now)
+function AzeCaught.NoteFound(npcInformation, now)
     local Utility = addon.Utility
-    local npcId = type(info) == "table" and Utility.SafeInteger(info.npc, 1, AzeCaught.MAXIMUM_ID)
-    if not npcId then return nil, false end
+    local npcID = type(npcInformation) == "table" and Utility.SafeInteger(npcInformation.npc, 1, AzeCaught.MAXIMUM_ID)
+    if not npcID then return nil, false end
     local collection = AzeCaught.State().collection
-    local entry = collection[npcId]
-    local level = Utility.SafeInteger(info.level, 1, AzeCaught.MAXIMUM_LEVEL)
-    local display = Utility.SafeInteger(info.display, 1, AzeCaught.MAXIMUM_ID)
+    local entry = collection[npcID]
+    local level = Utility.SafeInteger(npcInformation.level, 1, AzeCaught.MAXIMUM_LEVEL)
+    local display = Utility.SafeInteger(npcInformation.display, 1, AzeCaught.MAXIMUM_ID)
     if entry then
-        local changed = mergeStats(entry, info.stats)
-        if changed then AzeCaught.ForgetProfile(npcId) end
+        local changed = mergeStats(entry, npcInformation.stats)
+        if changed then AzeCaught.ForgetProfile(npcID) end
         if level and level > entry.lvl then entry.lvl, changed = level, true end
         if display and entry.disp == 0 then entry.disp, changed = display, true end
-        if info.classification and AzeCaught.RARITY_FACTOR[info.classification] and entry.cls == "normal"
-            and info.classification ~= "normal" then
-            entry.cls, changed = info.classification, true
+        if npcInformation.classification and AzeCaught.RARITY_FACTOR[npcInformation.classification] and entry.cls == "normal"
+            and npcInformation.classification ~= "normal" then
+            entry.cls, changed = npcInformation.classification, true
         end
-        if (entry.n == "?" or entry.n == "") and type(info.name) == "string" and info.name ~= "" then
-            entry.n = Utility.TruncateUtf8(Utility.StripControlCharacters(info.name), AzeCaught.MAXIMUM_NAME_BYTES)
+        if (entry.n == "?" or entry.n == "") and type(npcInformation.name) == "string" and npcInformation.name ~= "" then
+            entry.n = Utility.TruncateUtf8(Utility.StripControlCharacters(npcInformation.name), AzeCaught.MAXIMUM_NAME_BYTES)
             changed = true
         end
         if changed then
             AzeCaught.Journal("DEBUG", "found.update", "a found NPC was updated",
-                { npc = npcId, name = entry.n, level = entry.lvl, class = entry.cls, display = entry.disp,
+                { npc = npcID, name = entry.n, level = entry.lvl, class = entry.cls, display = entry.disp,
                   stats = AzeCaught.StatsText(entry.st) })
         end
         return entry, false
     end
     -- the seen list is limited: the NPC seen longest ago that is not caught makes room (caught ones are never dropped)
-    local seenOnly, oldestId, oldestSeen = 0, nil, math.huge
-    for otherId, other in pairs(collection) do
+    local seenOnly, oldestID, oldestSeen = 0, nil, math.huge
+    for otherID, other in pairs(collection) do
         if (other.caught or 0) < 1 then
             seenOnly = seenOnly + 1
-            if other.seen < oldestSeen then oldestId, oldestSeen = otherId, other.seen end
+            if other.seen < oldestSeen then oldestID, oldestSeen = otherID, other.seen end
         end
     end
-    if seenOnly >= AzeCaught.MAXIMUM_SEEN and oldestId then
-        AzeCaught.Journal("DEBUG", "found.evicted", "the oldest seen NPC made room", { npc = oldestId, name = collection[oldestId].n,
+    if seenOnly >= AzeCaught.MAXIMUM_SEEN and oldestID then
+        AzeCaught.Journal("DEBUG", "found.evicted", "the oldest seen NPC made room", { npc = oldestID, name = collection[oldestID].n,
             limit = AzeCaught.MAXIMUM_SEEN })
-        collection[oldestId] = nil
+        collection[oldestID] = nil
     end
-    local name = type(info.name) == "string" and info.name ~= "" and info.name or "?"
+    local name = type(npcInformation.name) == "string" and npcInformation.name ~= "" and npcInformation.name or "?"
     entry = { n = Utility.TruncateUtf8(Utility.StripControlCharacters(name), AzeCaught.MAXIMUM_NAME_BYTES),
-        lvl = level or 1, cls = AzeCaught.Classification(info.classification), disp = display or 0, seen = now, caught = 0 }
-    mergeStats(entry, info.stats)
-    collection[npcId] = entry
+        lvl = level or 1, cls = AzeCaught.Classification(npcInformation.classification), disp = display or 0, seen = now, caught = 0 }
+    mergeStats(entry, npcInformation.stats)
+    collection[npcID] = entry
     AzeCaught.Journal("INFORMATION", "found.new", "a new NPC was found",
-        { npc = npcId, name = entry.n, level = entry.lvl, class = entry.cls, display = entry.disp, stats = AzeCaught.StatsText(entry.st) })
+        { npc = npcID, name = entry.n, level = entry.lvl, class = entry.cls, display = entry.disp, stats = AzeCaught.StatsText(entry.st) })
     return entry, true
 end
 
@@ -485,36 +485,36 @@ end
 ---@return boolean|nil
 ---@return string|nil reason
 function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
-    local npcId = type(target) == "table" and AzeCaught.NpcIdFromGuid(target.guid)
+    local npcID = type(target) == "table" and AzeCaught.NpcIDFromGuid(target.guid)
     local function refuse(reason, extra)
         local details = { reason = reason, guid = type(target) == "table" and tostring(target.guid) or "nil" }
         for key, value in pairs(extra or {}) do details[key] = value end
         AzeCaught.Journal("DEBUG", "throw.refused", "a throw was refused", details)
         return nil, reason
     end
-    if not npcId then return refuse("unknown") end
-    if AzeCaught.rolled[target.guid] then return refuse("rolled", { npc = npcId }) end
-    if AzeCaught.thrown[target.guid] then return refuse("thrown", { npc = npcId }) end
+    if not npcID then return refuse("unknown") end
+    if AzeCaught.rolled[target.guid] then return refuse("rolled", { npc = npcID }) end
+    if AzeCaught.thrown[target.guid] then return refuse("thrown", { npc = npcID }) end
     if AzeCaught.CaughtCount() >= AzeCaught.MAXIMUM_CAUGHT then
-        return refuse("full", { npc = npcId, caught = AzeCaught.CaughtCount(), limit = AzeCaught.MAXIMUM_CAUGHT })
+        return refuse("full", { npc = npcID, caught = AzeCaught.CaughtCount(), limit = AzeCaught.MAXIMUM_CAUGHT })
     end
     -- the client may hide the health (a secret in combat/instances): then the throw is allowed and rolls as if the NPC
     -- were at THROW_HEALTH, the worst case
     local healthKnown = type(target.health) == "number" and target.health == target.health
     local health = healthKnown and target.health or AzeCaught.THROW_HEALTH
-    if healthKnown and health <= 0 then return refuse("dead", { npc = npcId }) end
-    if healthKnown and health > AzeCaught.THROW_HEALTH then return refuse("health", { npc = npcId, hp = round1(health * 100) }) end
+    if healthKnown and health <= 0 then return refuse("dead", { npc = npcID }) end
+    if healthKnown and health > AzeCaught.THROW_HEALTH then return refuse("health", { npc = npcID, hp = round1(health * 100) }) end
     if AzeCaught.lastThrowAt and clockSeconds - AzeCaught.lastThrowAt < AzeCaught.THROW_COOLDOWN then
-        return refuse("cooldown", { npc = npcId, left = round1(AzeCaught.THROW_COOLDOWN - (clockSeconds - AzeCaught.lastThrowAt)) })
+        return refuse("cooldown", { npc = npcID, left = round1(AzeCaught.THROW_COOLDOWN - (clockSeconds - AzeCaught.lastThrowAt)) })
     end
-    AzeCaught.NoteFound({ npc = npcId, name = target.name, level = target.level, classification = target.classification,
+    AzeCaught.NoteFound({ npc = npcID, name = target.name, level = target.level, classification = target.classification,
         display = target.display }, now)
     AzeCaught.lastThrowAt = clockSeconds
     AzeCaught.thrown[target.guid] = clockSeconds
-    AzeCaught.throws[target.guid] = { at = clockSeconds, npc = npcId, health = health, playerLevel = playerLevel,
+    AzeCaught.throws[target.guid] = { at = clockSeconds, npc = npcID, health = health, playerLevel = playerLevel,
         level = target.level, classification = AzeCaught.Classification(target.classification) }
     AzeCaught.Journal("INFORMATION", "throw.armed", "a rope was thrown",
-        { npc = npcId, guid = target.guid, hp = healthKnown and round1(health * 100) or "hidden", level = target.level, class = target.classification,
+        { npc = npcID, guid = target.guid, hp = healthKnown and round1(health * 100) or "hidden", level = target.level, class = target.classification,
           playerLevel = playerLevel, window = AzeCaught.CATCH_WINDOW })
     return true
 end
@@ -672,11 +672,11 @@ function AzeCaught.ProfileOf(companion)
     return profile
 end
 
--- Forgets cached profiles of `npcId` (its stats changed).
----@param npcId integer
-function AzeCaught.ForgetProfile(npcId)
+-- Forgets cached profiles of `npcID` (its stats changed).
+---@param npcID integer
+function AzeCaught.ForgetProfile(npcID)
     for companion in pairs(profileCache) do
-        if companion.npc == npcId then profileCache[companion] = nil end
+        if companion.npc == npcID then profileCache[companion] = nil end
     end
 end
 
@@ -713,10 +713,10 @@ end
 local HASH_MODULUS, HASH_MULTIPLIER = 2147483647, 48271   -- Park-Miller: exact in doubles (no bit library needed)
 
 -- Three fixed rolls in [0, 1) for an NPC id. Warm-up steps spread neighbouring ids apart.
----@param npcId integer
+---@param npcID integer
 ---@return number[]
-local function npcRolls(npcId)
-    local value = (math.floor(math.abs(tonumber(npcId) or 0)) % (HASH_MODULUS - 1)) + 1
+local function npcRolls(npcID)
+    local value = (math.floor(math.abs(tonumber(npcID) or 0)) % (HASH_MODULUS - 1)) + 1
     for _ = 1, 4 do value = (value * HASH_MULTIPLIER) % HASH_MODULUS end
     local rolls = {}
     for index = 1, 3 do
@@ -727,17 +727,17 @@ local function npcRolls(npcId)
 end
 
 -- The Attack / Defense / Speed of a collection entry (any field may be missing or bad: neutral values are used).
----@param npcId integer
+---@param npcID integer
 ---@param entry { lvl?: integer, cls?: string, st?: NpcStats }|nil
 ---@return { attack: integer, defense: integer, speed: integer }
-function AzeCaught.CombatStats(npcId, entry)
+function AzeCaught.CombatStats(npcID, entry)
     entry = type(entry) == "table" and entry or {}
     local level = addon.Utility.SafeInteger(entry.lvl, 1, AzeCaught.MAXIMUM_LEVEL) or 1
     local base = (AzeCaught.COMBAT_BASE + AzeCaught.COMBAT_PER_LEVEL * level)
         * AzeCaught.COMBAT_RARITY[AzeCaught.Classification(entry.cls)]
-    local typeId = type(entry.st) == "table" and entry.st.type or nil
-    local weights = AzeCaught.COMBAT_TYPES[typeId] or { 1, 1, 1 }
-    local rolls, result = npcRolls(npcId), {}
+    local typeID = type(entry.st) == "table" and entry.st.type or nil
+    local weights = AzeCaught.COMBAT_TYPES[typeID] or { 1, 1, 1 }
+    local rolls, result = npcRolls(npcID), {}
     for index, key in ipairs(COMBAT_KEYS) do
         local spread = 1 - AzeCaught.COMBAT_SPREAD + 2 * AzeCaught.COMBAT_SPREAD * rolls[index]
         result[key] = math.max(1, math.floor(base * weights[index] * spread + 0.5))
@@ -834,29 +834,29 @@ function AzeCaught.NotePeak(companion, now)
     end
 end
 
--- Removes one catch of `npcId` (death, running away). The entry stays in the collection as found.
----@param npcId integer
-local function releaseOne(npcId)
-    local entry = AzeCaught.State().collection[npcId]
+-- Removes one catch of `npcID` (death, running away). The entry stays in the collection as found.
+---@param npcID integer
+local function releaseOne(npcID)
+    local entry = AzeCaught.State().collection[npcID]
     if entry then entry.caught = math.max(0, entry.caught - 1) end
 end
 
 ---@alias SelectRefusal "unknown"|"notcaught"|"same"|"readonly"
 
 -- Makes a caught NPC the active companion, fresh (R7). A previous companion with negative hearts runs away.
----@param npcId any
+---@param npcID any
 ---@param now integer server time
 ---@return CompanionState|nil
 ---@return SelectRefusal|nil
 ---@return table|nil ranAway the description of the companion that ran away
-function AzeCaught.Select(npcId, now)
+function AzeCaught.Select(npcID, now)
     local caught = AzeCaught.State()
     if addon.Store.db.readonly then return nil, "readonly" end
-    local entry = caught.collection[npcId]
+    local entry = caught.collection[npcID]
     if not entry then return nil, "unknown" end
     if (entry.caught or 0) < 1 then return nil, "notcaught" end
     local previous = caught.active
-    if previous and previous.npc == npcId then return nil, "same" end
+    if previous and previous.npc == npcID then return nil, "same" end
     local ranAway
     if previous then
         if previous.hearts < 0 then
@@ -868,7 +868,7 @@ function AzeCaught.Select(npcId, now)
                 AzeCaught.Describe(previous))
         end
     end
-    local companion = { npc = npcId, n = entry.n, lvl = entry.lvl, cls = entry.cls, disp = entry.disp,
+    local companion = { npc = npcID, n = entry.n, lvl = entry.lvl, cls = entry.cls, disp = entry.disp,
         since = caught.activeSeconds, hunger = 100, thirst = 100, affection = 100, energy = 100, asleep = nil, hearts = 0,
         fedStreak = 0, careStreak = 0, starve = 0, neglect = 0, snap = 0,
         zones = { hunger = "ok", thirst = "ok", affection = "ok", energy = "ok" } }
@@ -899,32 +899,32 @@ end
 ---@field died boolean
 ---@field changed boolean a zone or the hearts changed (the UI and the published record should refresh)
 
--- Advances active time by `dt` seconds (R10). Clamped to MAXIMUM_TICK (RF2).
----@param dt number
+-- Advances active time by `elapsedSeconds` (R10). Clamped to MAXIMUM_TICK (RF2).
+---@param elapsedSeconds number
 ---@param now? integer server time (for the weekly peak)
 ---@return TickResult
-function AzeCaught.Tick(dt, now)
+function AzeCaught.Tick(elapsedSeconds, now)
     local caught = AzeCaught.State()
     local result = { died = false, changed = false }
-    dt = tonumber(dt) or 0
-    if dt ~= dt or dt <= 0 then return result end
-    if dt > AzeCaught.MAXIMUM_TICK then
-        AzeCaught.Journal("DEBUG", "tick.clamped", "a long tick was clamped", { dt = round1(dt), used = AzeCaught.MAXIMUM_TICK })
-        dt = AzeCaught.MAXIMUM_TICK
+    elapsedSeconds = tonumber(elapsedSeconds) or 0
+    if elapsedSeconds ~= elapsedSeconds or elapsedSeconds <= 0 then return result end
+    if elapsedSeconds > AzeCaught.MAXIMUM_TICK then
+        AzeCaught.Journal("DEBUG", "tick.clamped", "a long tick was clamped", { dt = round1(elapsedSeconds), used = AzeCaught.MAXIMUM_TICK })
+        elapsedSeconds = AzeCaught.MAXIMUM_TICK
     end
-    caught.activeSeconds = caught.activeSeconds + dt
+    caught.activeSeconds = caught.activeSeconds + elapsedSeconds
     local companion = caught.active
     if not companion then return result end
     local heartsBefore = companion.hearts
 
     -- decay / sleep
     local otherFactor = companion.asleep and AzeCaught.ASLEEP_DECAY or 1
-    companion.hunger = clamp(companion.hunger - dt * AzeCaught.DecayPerSecond("hunger", companion) * otherFactor, 0, 100)
-    companion.thirst = clamp(companion.thirst - dt * AzeCaught.DecayPerSecond("thirst", companion) * otherFactor, 0, 100)
-    companion.affection = clamp(companion.affection - dt * AzeCaught.DecayPerSecond("affection", companion) * otherFactor, 0, 100)
+    companion.hunger = clamp(companion.hunger - elapsedSeconds * AzeCaught.DecayPerSecond("hunger", companion) * otherFactor, 0, 100)
+    companion.thirst = clamp(companion.thirst - elapsedSeconds * AzeCaught.DecayPerSecond("thirst", companion) * otherFactor, 0, 100)
+    companion.affection = clamp(companion.affection - elapsedSeconds * AzeCaught.DecayPerSecond("affection", companion) * otherFactor, 0, 100)
     if companion.asleep then
-        companion.energy = clamp(companion.energy + dt * 100 / AzeCaught.SLEEP_DURATION, 0, 100)
-        companion.asleep = companion.asleep - dt
+        companion.energy = clamp(companion.energy + elapsedSeconds * 100 / AzeCaught.SLEEP_DURATION, 0, 100)
+        companion.asleep = companion.asleep - elapsedSeconds
         if companion.asleep <= 0 then
             companion.asleep = nil
             AzeCaught.Journal("INFORMATION", "companion.wake", "the companion woke up after its sleep",
@@ -932,7 +932,7 @@ function AzeCaught.Tick(dt, now)
             result.changed = true
         end
     else
-        companion.energy = clamp(companion.energy - dt * AzeCaught.DecayPerSecond("energy", companion), 0, 100)
+        companion.energy = clamp(companion.energy - elapsedSeconds * AzeCaught.DecayPerSecond("energy", companion), 0, 100)
     end
 
     -- zone crossings (streaks break when a need turns critical)
@@ -961,7 +961,7 @@ function AzeCaught.Tick(dt, now)
 
     -- neglect: -1 heart per NEGLECT_STEP with any need critical
     if anyCritical then
-        companion.neglect = companion.neglect + dt
+        companion.neglect = companion.neglect + elapsedSeconds
         while companion.neglect >= AzeCaught.NEGLECT_STEP do
             companion.neglect = companion.neglect - AzeCaught.NEGLECT_STEP
             changeHearts(companion, -1, "neglect")
@@ -974,7 +974,7 @@ function AzeCaught.Tick(dt, now)
             AzeCaught.Journal("WARNING", "companion.starving", "the companion started starving",
                 { hunger = round1(companion.hunger), thirst = round1(companion.thirst), dieIn = AzeCaught.STARVE_TIME })
         end
-        companion.starve = companion.starve + dt
+        companion.starve = companion.starve + elapsedSeconds
         if companion.starve >= AzeCaught.STARVE_TIME then
             die(companion, companion.hunger <= 0 and "hunger" or "thirst")
             result.died, result.changed = true, true
@@ -986,7 +986,7 @@ function AzeCaught.Tick(dt, now)
     end
 
     -- periodic snapshot (the decay can be reconstructed from these lines)
-    companion.snap = companion.snap + dt
+    companion.snap = companion.snap + elapsedSeconds
     if companion.snap >= AzeCaught.SNAPSHOT_EVERY then
         companion.snap = 0
         AzeCaught.Journal("DEBUG", "snapshot", "companion state", AzeCaught.Describe(companion))
@@ -1231,10 +1231,10 @@ end
 local function sanitizeCompanion(companion, collection)
     local SafeInteger = addon.Utility.SafeInteger
     if type(companion) ~= "table" then return nil end
-    local npcId = SafeInteger(companion.npc, 1, AzeCaught.MAXIMUM_ID)
-    local entry = npcId and collection[npcId]
+    local npcID = SafeInteger(companion.npc, 1, AzeCaught.MAXIMUM_ID)
+    local entry = npcID and collection[npcID]
     if not entry then return nil end
-    local clean = { npc = npcId, n = entry.n, lvl = entry.lvl, cls = entry.cls, disp = entry.disp,
+    local clean = { npc = npcID, n = entry.n, lvl = entry.lvl, cls = entry.cls, disp = entry.disp,
         hearts = SafeInteger(companion.hearts, -AzeCaught.MAXIMUM_HEARTS, AzeCaught.MAXIMUM_HEARTS),
         fedStreak = SafeInteger(companion.fedStreak, 0, AzeCaught.MAXIMUM_HEARTS),
         careStreak = SafeInteger(companion.careStreak, 0, AzeCaught.MAXIMUM_HEARTS), zones = {} }
@@ -1266,8 +1266,8 @@ function AzeCaught.SanitizePersisted(savedVariables)
     local SafeInteger = Utility.SafeInteger
     local dropped = 0
     local collection = {}
-    for npcId, entry in pairs(type(caught.collection) == "table" and caught.collection or {}) do
-        local id = SafeInteger(npcId, 1, AzeCaught.MAXIMUM_ID)
+    for npcID, entry in pairs(type(caught.collection) == "table" and caught.collection or {}) do
+        local id = SafeInteger(npcID, 1, AzeCaught.MAXIMUM_ID)
         if id and type(entry) == "table" and Utility.CleanString(entry.n, AzeCaught.MAXIMUM_NAME_BYTES)
             and SafeInteger(entry.lvl, 1, AzeCaught.MAXIMUM_LEVEL) and AzeCaught.RARITY_FACTOR[entry.cls]
             and SafeInteger(entry.disp, 0, AzeCaught.MAXIMUM_ID) and SafeInteger(entry.seen, 0)

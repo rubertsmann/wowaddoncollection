@@ -84,7 +84,7 @@ local addonName, addon = ...
 ---@field enemies SurvivorEnemy[]
 ---@field projectiles SurvivorProjectile[]
 ---@field spawnTimer number
----@field nextId integer
+---@field nextID integer
 ---@field choices SurvivorChoice[]|nil set while a level-up waits for a pick (the run is paused)
 ---@field pendingLevels integer level-ups still to offer after the current choice
 ---@field finished "won"|"lost"|nil
@@ -342,7 +342,7 @@ local function experienceFor(level) return 3 + 2 * level end
 function Survivor.NewRun(name, stake, target, randomFunction)
     return { name = name, stake = stake, target = target, random = randomFunction, time = 0, hp = Survivor.BASE_HP,
         maxHp = Survivor.BASE_HP, level = 1, xp = 0, xpNext = experienceFor(1), kills = 0, items = { bolt = 1 },
-        cooldowns = { bolt = 0.4 }, spirals = {}, enemies = {}, projectiles = {}, spawnTimer = 0.5, nextId = 0,
+        cooldowns = { bolt = 0.4 }, spirals = {}, enemies = {}, projectiles = {}, spawnTimer = 0.5, nextID = 0,
         choices = nil, pendingLevels = 0, finished = nil, events = {}, accumulator = 0, shield = 0, shieldPause = 0 }
 end
 
@@ -379,9 +379,9 @@ local function spawn(run)
     elseif along < 4 * w + 2 * h then x, y = w - (along - 2 * w - 2 * h), -h
     else x, y = -w, -h + (along - 4 * w - 2 * h) end
     local _, healthFactor = Survivor.Difficulty(run.time)
-    run.nextId = run.nextId + 1
+    run.nextID = run.nextID + 1
     local hp = chosen.hp * healthFactor
-    run.enemies[#run.enemies + 1] = { id = run.nextId, kind = chosen.key, x = x, y = y, hp = hp, maxHp = hp,
+    run.enemies[#run.enemies + 1] = { id = run.nextID, kind = chosen.key, x = x, y = y, hp = hp, maxHp = hp,
         radius = chosen.radius, speed = chosen.speed * (0.9 + 0.2 * random()), damage = chosen.damage * (1 + run.time / 90),
         slow = 0, flash = 0 }
 end
@@ -555,13 +555,13 @@ local function fireRanged(run, key, stats, targets)
 end
 
 ---@param run SurvivorRun
----@param dt number
-local function fire(run, dt)
+---@param stepSeconds number
+local function fire(run, stepSeconds)
     local targets = nil
     for _, key in ipairs(Survivor.WEAPON_KEYS) do
         local stats = Survivor.WeaponStats(run, key)
         if stats then
-            run.cooldowns[key] = (run.cooldowns[key] or 0) - dt
+            run.cooldowns[key] = (run.cooldowns[key] or 0) - stepSeconds
             if run.cooldowns[key] <= 0 then
                 targets = targets or nearest(run)
                 if Survivor.RANGED[key] then
@@ -596,11 +596,11 @@ local function fire(run, dt)
     end
 end
 
--- turns a projectile towards the nearest monster by at most `rate` x dt radians, keeping its speed
+-- turns a projectile towards the nearest monster by at most `rate` x stepSeconds radians, keeping its speed
 ---@param run SurvivorRun
 ---@param projectile SurvivorProjectile
----@param dt number
-local function steer(run, projectile, dt)
+---@param stepSeconds number
+local function steer(run, projectile, stepSeconds)
     local target, best = nil, math.huge
     for _, enemy in ipairs(run.enemies) do
         if enemy.hp > 0 and not projectile.hits[enemy.id] then
@@ -613,27 +613,27 @@ local function steer(run, projectile, dt)
     local heading = math.atan2(projectile.vy, projectile.vx)
     local wanted = math.atan2(target.y - projectile.y, target.x - projectile.x)
     local turn = (wanted - heading + math.pi) % (2 * math.pi) - math.pi
-    local maximum = projectile.homing * dt
+    local maximum = projectile.homing * stepSeconds
     heading = heading + addon.Utility.Clamp(turn, -maximum, maximum)
     projectile.vx, projectile.vy = math.cos(heading) * speed, math.sin(heading) * speed
 end
 
 ---@param run SurvivorRun
----@param dt number
-local function moveProjectiles(run, dt)
+---@param stepSeconds number
+local function moveProjectiles(run, stepSeconds)
     local kept = {}
     for _, projectile in ipairs(run.projectiles) do
-        if projectile.homing then steer(run, projectile, dt) end
+        if projectile.homing then steer(run, projectile, stepSeconds) end
         if projectile.boomerang then   -- pulled back to the tower: flies out, slows, returns; caught at the tower
             local away = length(projectile.x, projectile.y)
             if away > 0 then
-                projectile.vx = projectile.vx - projectile.x / away * projectile.boomerang * dt
-                projectile.vy = projectile.vy - projectile.y / away * projectile.boomerang * dt
+                projectile.vx = projectile.vx - projectile.x / away * projectile.boomerang * stepSeconds
+                projectile.vy = projectile.vy - projectile.y / away * projectile.boomerang * stepSeconds
             end
             if projectile.life < projectile.maxLife * 0.6 and away < Survivor.TOWER_RADIUS then projectile.life = 0 end
         end
-        projectile.x, projectile.y = projectile.x + projectile.vx * dt, projectile.y + projectile.vy * dt
-        projectile.life = projectile.life - dt
+        projectile.x, projectile.y = projectile.x + projectile.vx * stepSeconds, projectile.y + projectile.vy * stepSeconds
+        projectile.life = projectile.life - stepSeconds
         local alive = true
         for _, enemy in ipairs(run.enemies) do
             if enemy.hp > 0 and not projectile.hits[enemy.id] then
@@ -657,27 +657,27 @@ local function moveProjectiles(run, dt)
 end
 
 ---@param run SurvivorRun
----@param dt number
-local function moveEnemies(run, dt)
+---@param stepSeconds number
+local function moveEnemies(run, stepSeconds)
     local defense = Survivor.DefenseStats(run)
     local touching, incoming = false, 0
     local kept = {}
     for _, enemy in ipairs(run.enemies) do
         if enemy.hp > 0 then
-            enemy.flash = math.max(0, enemy.flash - dt)
-            enemy.slow = math.max(0, enemy.slow - dt)
+            enemy.flash = math.max(0, enemy.flash - stepSeconds)
+            enemy.slow = math.max(0, enemy.slow - stepSeconds)
             local length = distance(enemy)
             local contact = Survivor.TOWER_RADIUS + enemy.radius
             if length > contact then
-                local step = enemy.speed * dt * (enemy.slow > 0 and Survivor.NOVA_SLOW_FACTOR or 1)
+                local step = enemy.speed * stepSeconds * (enemy.slow > 0 and Survivor.NOVA_SLOW_FACTOR or 1)
                 step = math.min(step, length - contact)
                 enemy.x, enemy.y = enemy.x - enemy.x / length * step, enemy.y - enemy.y / length * step
             else
                 touching = true
-                local damage = enemy.damage * defense.armor * dt
+                local damage = enemy.damage * defense.armor * stepSeconds
                 local deflected = damage * defense.deflect
                 incoming = incoming + damage - deflected
-                local back = deflected * defense.reflect + defense.thorns * dt
+                local back = deflected * defense.reflect + defense.thorns * stepSeconds
                 if back > 0 then hurtEnemy(run, enemy, back) end
             end
             if enemy.hp > 0 then kept[#kept + 1] = enemy end
@@ -692,27 +692,27 @@ local function moveEnemies(run, dt)
         run.hp = run.hp - (incoming - absorbed)
         run.shieldPause = Survivor.BARRIER_PAUSE
     else
-        run.shieldPause = math.max(0, run.shieldPause - dt)
-        if run.shieldPause == 0 then run.shield = math.min(defense.shield, run.shield + Survivor.BARRIER_REFILL * dt) end
+        run.shieldPause = math.max(0, run.shieldPause - stepSeconds)
+        if run.shieldPause == 0 then run.shield = math.min(defense.shield, run.shield + Survivor.BARRIER_REFILL * stepSeconds) end
     end
     return touching
 end
 
 ---@param run SurvivorRun
----@param dt number
-local function step(run, dt)
-    run.time = run.time + dt
+---@param stepSeconds number
+local function step(run, stepSeconds)
+    run.time = run.time + stepSeconds
     -- spawning
-    run.spawnTimer = run.spawnTimer - dt
+    run.spawnTimer = run.spawnTimer - stepSeconds
     while run.spawnTimer <= 0 do
         spawn(run)
         run.spawnTimer = run.spawnTimer + Survivor.Difficulty(run.time)
     end
-    fire(run, dt)
-    moveProjectiles(run, dt)
+    fire(run, stepSeconds)
+    moveProjectiles(run, stepSeconds)
     local wasHp = run.hp
-    if moveEnemies(run, dt) and math.floor(wasHp / 5) ~= math.floor(run.hp / 5) then emit(run, { kind = "hurt" }) end
-    run.hp = math.min(run.maxHp, run.hp + 0.8 * (run.items.regen or 0) * dt)
+    if moveEnemies(run, stepSeconds) and math.floor(wasHp / 5) ~= math.floor(run.hp / 5) then emit(run, { kind = "hurt" }) end
+    run.hp = math.min(run.maxHp, run.hp + 0.8 * (run.items.regen or 0) * stepSeconds)
     -- levels
     while run.xp >= run.xpNext do
         run.xp = run.xp - run.xpNext

@@ -157,20 +157,20 @@ return {
                     Panel.state.careReadyAt = nil
                 end
                 -- the hover panel shows the NPC's info beside the model (user 2026-11-20)
-                local npcId, infoEntry = addon.AzeCaughtPanel.CompanionNpc()
+                local npcID, infoEntry = addon.AzeCaughtPanel.CompanionNpc()
                 local tooltipLines = {}
                 local fakeTooltip = { SetOwner = function() end, Show = function() end,
                     SetText = function(_, text) tooltipLines[#tooltipLines + 1] = text end,
                     AddLine = function(_, text) tooltipLines[#tooltipLines + 1] = text end,
                     AddDoubleLine = function(_, left, right) tooltipLines[#tooltipLines + 1] = left .. " | " .. right end }
-                local okInfo, lineCount = pcall(addon.AzeCaughtPanel.ShowNpcInfo, fakeTooltip, addon.AzeCaughtPanel.widgets.model, npcId, infoEntry)
+                local okInfo, lineCount = pcall(addon.AzeCaughtPanel.ShowNpcInfo, fakeTooltip, addon.AzeCaughtPanel.widgets.model, npcID, infoEntry)
                 harness.truthy(okInfo and lineCount > 5, "the info panel: " .. tostring(lineCount))
                 -- the model returns to idle after an action and whenever the panel shows (user 2026-11-20)
                 do
                     local Panel = addon.AzeCaughtPanel
                     local played, scripts = {}, {}
                     local fake = setmetatable({ HasAnimation = function() return true end,
-                        SetAnimation = function(_, animationId) played[#played + 1] = animationId end,
+                        SetAnimation = function(_, animationID) played[#played + 1] = animationID end,
                         SetScript = function(_, name, handler) scripts[name] = handler end,
                         GetScript = function(_, name) return scripts[name] end }, { __index = Panel.widgets.model })
                     local realModel, realAfter = Panel.widgets.model, C_Timer.After

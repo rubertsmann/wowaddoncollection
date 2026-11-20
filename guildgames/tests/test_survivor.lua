@@ -236,8 +236,8 @@ return {
             -- (two rings, so a piercing shot has a monster behind the first one)
             for index = 1, 16 do
                 local angle, distance = index * math.pi / 4, index <= 8 and 60 or 95
-                run.nextId = run.nextId + 1
-                run.enemies[index] = { id = run.nextId, kind = "bear", x = math.cos(angle) * distance, y = math.sin(angle) * distance,
+                run.nextID = run.nextID + 1
+                run.enemies[index] = { id = run.nextID, kind = "bear", x = math.cos(angle) * distance, y = math.sin(angle) * distance,
                     hp = 1e6, maxHp = 1e6, radius = 10, speed = 0, damage = 0, slow = 0, flash = 0 }
             end
             run.spawnTimer = 1e9

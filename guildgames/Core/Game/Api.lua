@@ -153,7 +153,7 @@ function Api.UnitSnapshot(unit)
         local canAttack = read(UnitCanAttack, "player", unit)
         local name = read(UnitName, unit)
         local classification = read(UnitClassification, unit)
-        return { guid = guid, npc = addon.AzeCaught.NpcIdFromGuid(guid), name = type(name) == "string" and name or nil,
+        return { guid = guid, npc = addon.AzeCaught.NpcIDFromGuid(guid), name = type(name) == "string" and name or nil,
             level = type(level) == "number" and level or nil,
             classification = type(classification) == "string" and classification or "normal",
             health = (type(health) == "number" and type(healthMaximum) == "number" and healthMaximum > 0) and health / healthMaximum or nil,
@@ -258,7 +258,7 @@ function Api.UnitDump(unit)
     local dump = { unit = unit }
     local guid = Api.UnitGuid(unit)
     dump.guid = guid or dumpValue(G.UnitGUID, unit)
-    dump.npc = tostring(guid and addon.AzeCaught.NpcIdFromGuid(guid) or "nil")
+    dump.npc = tostring(guid and addon.AzeCaught.NpcIDFromGuid(guid) or "nil")
     local reads = {
         exists = { G.UnitExists, unit }, name = { G.UnitName, unit }, level = { G.UnitLevel, unit },
         effectiveLevel = { G.UnitEffectiveLevel, unit }, classification = { G.UnitClassification, unit },
@@ -277,7 +277,7 @@ function Api.UnitDump(unit)
     for key, call in pairs(reads) do dump[key] = dumpValue(call[1], unpack(call, 2)) end
     for index, statName in ipairs(STAT_NAMES) do dump[statName] = dumpValue(G.UnitStat, unit, index) end
     local mapApi = G.C_Map
-    dump.mapId = dumpValue(mapApi and mapApi.GetBestMapForUnit, "player")
+    dump.mapID = dumpValue(mapApi and mapApi.GetBestMapForUnit, "player")
     return dump
 end
 
@@ -293,11 +293,11 @@ function Api.UnitStats(unit)
         if not results[1] then return nil end
         return NotSecret(results[2]), NotSecret(results[3])
     end
-    local typeName, typeId = first(G.UnitCreatureType, unit)
+    local typeName, typeID = first(G.UnitCreatureType, unit)
     local powerType = first(G.UnitPowerType, unit)
     local stats = {
         typeName = type(typeName) == "string" and typeName or nil,
-        type = addon.AzeCaught.CreatureTypeId(typeId, typeName),
+        type = addon.AzeCaught.CreatureTypeID(typeID, typeName),
         family = (function() local family = first(G.UnitCreatureFamily, unit) return type(family) == "string" and family or nil end)(),
         hp = (function() local value = first(G.UnitHealthMax, unit) return type(value) == "number" and value or nil end)(),
         power = type(powerType) == "number" and powerType or nil,

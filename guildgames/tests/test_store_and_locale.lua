@@ -85,6 +85,20 @@ return {
         harness.equal(Clamp(math.huge, 0, 1), 1); harness.equal(Clamp(-math.huge, 0, 1), 0)
     end,
 
+    -- docs/coding-conventions.md "Names": ids end in "ID" (npcID, typeID), as in TalentShare (recipeID, itemID)
+    ["conventions: identifiers spell ids as ID, not Id"] = function(harness)
+        local found = {}
+        for _, path in ipairs(sourceFiles()) do
+            local lineNumber = 0
+            for line in (slurp(path) .. "\n"):gmatch("([^\n]*)\n") do
+                lineNumber = lineNumber + 1
+                local code = line:gsub("%-%-.*$", ""):gsub('"[^"]*"', '""')
+                for identifier in code:gmatch("[%a_][%w_]*Id%f[^%w_]") do found[#found + 1] = path .. ":" .. lineNumber .. " " .. identifier end
+            end
+        end
+        harness.equal(#found, 0, "spell it ID: " .. table.concat(found, " | "))
+    end,
+
     -- docs/coding-conventions.md "Module guards": the TOC guarantees every module, so `addon.X and ...`, `if addon.X then`
     -- and `addon.X ~= nil` on a module only hide a broken TOC. The allowed exceptions are listed here by file and module.
     ["conventions: no guard on another addon module outside the allowed exceptions"] = function(harness)

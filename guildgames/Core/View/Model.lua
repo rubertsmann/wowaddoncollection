@@ -181,9 +181,9 @@ end
 ---@return CollectionRow[]
 function Model.BuildCollectionRows(collection, activeNpc)
     local rows = {}
-    for npcId, entry in pairs(collection or {}) do
-        rows[#rows + 1] = { npc = npcId, name = escape(entry.n), nameKey = (entry.n or ""):lower(), lvl = entry.lvl, cls = entry.cls,
-            disp = entry.disp, caught = entry.caught, active = npcId == activeNpc, seen = entry.seen }
+    for npcID, entry in pairs(collection or {}) do
+        rows[#rows + 1] = { npc = npcID, name = escape(entry.n), nameKey = (entry.n or ""):lower(), lvl = entry.lvl, cls = entry.cls,
+            disp = entry.disp, caught = entry.caught, active = npcID == activeNpc, seen = entry.seen }
     end
     table.sort(rows, function(left, right)
         if left.active ~= right.active then return left.active end
@@ -321,25 +321,25 @@ local NEED_BASE = { hunger = "FOOD_INTERVAL", thirst = "WATER_INTERVAL", affecti
 
 -- Everything known about a found NPC, grouped for the hover panel (user 2026-11-20: clear and short). Unknown values
 -- are not listed one by one, only counted. Peer/client text is escaped.
----@param npcId integer
+---@param npcID integer
 ---@param entry CollectionEntry
 ---@return NpcInfo
-function Model.BuildNpcInfo(npcId, entry)
+function Model.BuildNpcInfo(npcID, entry)
     local Text, Format = addon.Text, addon.Locale.Format
     local AzeCaught = addon.AzeCaught
     local stats = type(entry.st) == "table" and entry.st or {}
-    local info = { title = escape(entry.n), rarityColor = RARITY_COLOR[entry.cls] or "ffffff", facts = {}, hiddenCount = 0,
+    local npcView = { title = escape(entry.n), rarityColor = RARITY_COLOR[entry.cls] or "ffffff", facts = {}, hiddenCount = 0,
         needs = {}, traits = {} }
     local subtitle = { Format(Text["Level {n}"], { n = entry.lvl or 0 }) }
     if entry.cls ~= "normal" then subtitle[#subtitle + 1] = Model.RarityText(entry.cls) end   -- "Normal" says nothing
     if stats.typeName then
         subtitle[#subtitle + 1] = escape(stats.typeName) .. (stats.family and (" (" .. escape(stats.family) .. ")") or "")
     else
-        info.hiddenCount = info.hiddenCount + 1
+        npcView.hiddenCount = npcView.hiddenCount + 1
     end
-    info.subtitle = table.concat(subtitle, " · ")
+    npcView.subtitle = table.concat(subtitle, " · ")
     local function fact(label, value)
-        if value then info.facts[#info.facts + 1] = { label = label, value = value } else info.hiddenCount = info.hiddenCount + 1 end
+        if value then npcView.facts[#npcView.facts + 1] = { label = label, value = value } else npcView.hiddenCount = npcView.hiddenCount + 1 end
     end
     fact(Text["Health"], stats.hp and tostring(stats.hp) or nil)
     fact(Text["Power"], stats.power ~= nil and (powerName(stats.power) .. (stats.powerMax and (" " .. stats.powerMax) or "")) or nil)
@@ -354,17 +354,17 @@ function Model.BuildNpcInfo(npcId, entry)
         elseif need == "energy" then
             text = Format(Text["{sleep} every {awake}"], { sleep = Model.Duration(AzeCaught.SLEEP_DURATION), awake = Model.Duration(interval) })
         else text = Format(Text["every {time}"], { time = Model.Duration(interval) }) end
-        info.needs[#info.needs + 1] = { need = need, label = labels[need], text = text, trend = trend }
+        npcView.needs[#npcView.needs + 1] = { need = need, label = labels[need], text = text, trend = trend }
     end
-    info.thresholds = Format(Text["Needy below {ok}%, critical below {critical}%"], { ok = profile.ok, critical = profile.critical })
-    for _, trait in ipairs(profile.traits) do info.traits[#info.traits + 1] = Model.TraitText(trait) end
+    npcView.thresholds = Format(Text["Needy below {ok}%, critical below {critical}%"], { ok = profile.ok, critical = profile.critical })
+    for _, trait in ipairs(profile.traits) do npcView.traits[#npcView.traits + 1] = Model.TraitText(trait) end
     -- calculated, so always known (user 2026-11-20); fill = share of a full bar (capped), over = stronger than full
-    local combat, scale = AzeCaught.CombatStats(npcId, entry), AzeCaught.CombatScale()
-    info.combat = {}
+    local combat, scale = AzeCaught.CombatStats(npcID, entry), AzeCaught.CombatScale()
+    npcView.combat = {}
     for _, stat in ipairs({ { "attack", Text["Attack"] }, { "defense", Text["Defense"] }, { "speed", Text["Speed"] } }) do
         local value = combat[stat[1]]
-        info.combat[#info.combat + 1] = { key = stat[1], label = stat[2], value = tostring(value),
+        npcView.combat[#npcView.combat + 1] = { key = stat[1], label = stat[2], value = tostring(value),
             fill = math.min(1, value / scale), over = value > scale }
     end
-    return info
+    return npcView
 end

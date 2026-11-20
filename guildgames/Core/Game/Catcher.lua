@@ -49,7 +49,7 @@ local captureModel
 ---@param unit string
 ---@return integer|nil
 function Catcher.CaptureDisplay(unit)
-    local ok, displayId = pcall(function()
+    local ok, displayID = pcall(function()
         if not captureModel then
             captureModel = CreateFrame("PlayerModel", nil, UIParent)
             captureModel:SetSize(1, 1); captureModel:SetPoint("TOPLEFT", UIParent, "BOTTOMRIGHT", 10, -10)
@@ -57,9 +57,9 @@ function Catcher.CaptureDisplay(unit)
         captureModel:SetUnit(unit)
         return captureModel.GetDisplayInfo and captureModel:GetDisplayInfo() or nil
     end)
-    local valid = ok and addon.Utility.SafeInteger(displayId, 1, AzeCaught.MAXIMUM_ID) or nil
+    local valid = ok and addon.Utility.SafeInteger(displayID, 1, AzeCaught.MAXIMUM_ID) or nil
     AzeCaught.Journal("DEBUG", "found.display", valid and "a display id was read" or "no display id could be read",
-        { unit = unit, display = tostring(displayId), ok = ok, api = captureModel and captureModel.GetDisplayInfo ~= nil })
+        { unit = unit, display = tostring(displayID), ok = ok, api = captureModel and captureModel.GetDisplayInfo ~= nil })
     return valid
 end
 
@@ -338,10 +338,10 @@ function Catcher.PlayRopeEffect(unit)
         local Animate = addon.Animate
         local distance = math.sqrt((toX - fromX) ^ 2 + (toY - fromY) ^ 2)
         local lift = 30 + distance * 0.25
-        -- the size at t (0 player .. 1 target): the player's body is 1, the target's `scale`
-        local function sizeAt(t) return 1 + (scale - 1) * t end
-        local function place(region, t)
-            local x, y = Animate.ArcPoint(fromX, fromY, toX, toY, lift, t)
+        -- the size at `arcProgress` (0 player .. 1 target): the player's body is 1, the target's `scale`
+        local function sizeAt(arcProgress) return 1 + (scale - 1) * arcProgress end
+        local function place(region, arcProgress)
+            local x, y = Animate.ArcPoint(fromX, fromY, toX, toY, lift, arcProgress)
             region:ClearAllPoints(); region:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
         end
         effect.anchor:ClearAllPoints(); effect.anchor:SetPoint("CENTER", UIParent, "BOTTOMLEFT", toX, toY)
@@ -422,10 +422,10 @@ function Catcher.UpdateIcon(unit)
     local armed = AzeCaught.throws[snapshot.guid] ~= nil
     if armed then button.border:SetColorTexture(1, 0.82, 0.2, 0.95) else button.border:SetColorTexture(0.05, 0.05, 0.05, 0.9) end
     local quality = AzeCaught.ThrowQuality(snapshot.health)
-    local r, g, b = AzeCaught.QualityColor(quality)
+    local red, green, blue = AzeCaught.QualityColor(quality)
     local glowSize = settings.size + 8 + 14 * (quality or 0.4)
     button.glow:SetSize(glowSize, glowSize)
-    button.glow:SetVertexColor(r, g, b, 1)
+    button.glow:SetVertexColor(red, green, blue, 1)
     button.glow:SetAlpha(0.45 + 0.45 * (quality or 0.4))
     button:Show()
 end
@@ -483,11 +483,11 @@ end
 
 function Catcher.OnTick()
     local clock = Api.Clock()
-    local dt = Catcher.lastClock and (clock - Catcher.lastClock) or 0
+    local elapsedSeconds = Catcher.lastClock and (clock - Catcher.lastClock) or 0
     Catcher.lastClock = clock
     local serverNow = now()
     local before = AzeCaught.Active()
-    local result = AzeCaught.Tick(dt, serverNow)
+    local result = AzeCaught.Tick(elapsedSeconds, serverNow)
     AzeCaught.ExpireThrows(clock)
     for guid, stored in pairs(Catcher.dumps) do
         if clock - stored.at > 60 then Catcher.dumps[guid] = nil end
@@ -646,9 +646,9 @@ end
 
 function commands.collection()
     local caughtCount, newest = 0, {}
-    for npcId, entry in pairs(AzeCaught.State().collection) do
+    for npcID, entry in pairs(AzeCaught.State().collection) do
         if entry.caught > 0 then caughtCount = caughtCount + 1 end
-        newest[#newest + 1] = { npc = npcId, entry = entry }
+        newest[#newest + 1] = { npc = npcID, entry = entry }
     end
     table.sort(newest, function(left, right) return left.entry.seen > right.entry.seen end)
     printLine(("collection: %d found, %d caught"):format(#newest, caughtCount))
@@ -685,15 +685,15 @@ end
 
 -- Spikes S1-S3: what this client can do (results also go to the journal).
 function commands.probe()
-    local s1 = Api.UnitSnapshot("target")
-    local display = s1 and s1.npc and Catcher.CaptureDisplay("target")
-    local result1 = s1 and s1.npc and ("display " .. tostring(display)) or "target an NPC first"
+    local targetSnapshot = Api.UnitSnapshot("target")
+    local display = targetSnapshot and targetSnapshot.npc and Catcher.CaptureDisplay("target")
+    local result1 = targetSnapshot and targetSnapshot.npc and ("display " .. tostring(display)) or "target an NPC first"
     local panelModel = addon.AzeCaughtPanel.widgets.model
     local animations = {}
     if panelModel and panelModel.HasAnimation then
-        for _, animationId in ipairs({ 0, 4, 5, 26, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 100, 101, 102, 103, 113, 114 }) do
-            local ok, has = pcall(panelModel.HasAnimation, panelModel, animationId)
-            if ok and has then animations[#animations + 1] = animationId end
+        for _, animationID in ipairs({ 0, 4, 5, 26, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 100, 101, 102, 103, 113, 114 }) do
+            local ok, has = pcall(panelModel.HasAnimation, panelModel, animationID)
+            if ok and has then animations[#animations + 1] = animationID end
         end
     end
     local result2 = panelModel and ("animations " .. (#animations > 0 and table.concat(animations, ",") or "none or HasAnimation missing"))
@@ -763,21 +763,21 @@ end
 -- adds the current target (or a test NPC) as caught, without a roll
 function developmentCommands.add()
     local snapshot = Api.UnitSnapshot("target")
-    local info = snapshot and snapshot.npc and { npc = snapshot.npc, name = snapshot.name, level = snapshot.level,
+    local npcInformation = snapshot and snapshot.npc and { npc = snapshot.npc, name = snapshot.name, level = snapshot.level,
         classification = snapshot.classification, display = Catcher.CaptureDisplay("target"), stats = Api.UnitStats("target") }
         or { npc = 299, name = "Young Wolf", level = 2, classification = "normal" }
     if AzeCaught.CaughtCount() >= AzeCaught.MAXIMUM_CAUGHT then
         printLine(("the caught list is full (%d)"):format(AzeCaught.MAXIMUM_CAUGHT))
         return
     end
-    local entry = AzeCaught.NoteFound(info, now())
+    local entry = AzeCaught.NoteFound(npcInformation, now())
     if entry then
         entry.caught = entry.caught + 1
-        AzeCaught.Journal("INFORMATION", "dev.add", "an NPC was added as caught by hand", { npc = info.npc, name = entry.n })
+        AzeCaught.Journal("INFORMATION", "dev.add", "an NPC was added as caught by hand", { npc = npcInformation.npc, name = entry.n })
         if snapshot and snapshot.npc then
             AzeCaught.Journal("INFORMATION", "catch.dump", "everything the client told about the caught NPC (dev add)", Api.UnitDump("target"))
         end
-        printLine("added " .. entry.n .. " (" .. info.npc .. ")")
+        printLine("added " .. entry.n .. " (" .. npcInformation.npc .. ")")
     end
     addon.Events.Fire("CAUGHT_CHANGED")
 end
