@@ -39,12 +39,6 @@ SurvivorArena.state = { run = nil, targetIndex = DEFAULT_TARGET, lastRun = nil }
 local widgets = {}
 SurvivorArena.widgets = widgets
 
----@param soundNames string[]
-local function play(soundNames)
-    local soundKit = SOUNDKIT and addon.Api.SoundKitFor and addon.Api.SoundKitFor(soundNames) or nil
-    addon.Api.PlaySound(soundKit)
-end
-
 -- 75 -> "1:15"
 ---@param seconds number
 ---@return string
@@ -53,17 +47,6 @@ local function clock(seconds)
     return ("%d:%02d"):format(math.floor(seconds / 60), seconds % 60)
 end
 SurvivorArena.Clock = clock
-
----@param frame table
----@return integer
-local function frameLevel(frame) return tonumber(frame:GetFrameLevel()) or 1 end
-
----@param texture table
----@param path string
----@param color number[]
-local function iconOr(texture, path, color)
-    if texture:SetTexture(path) == false then texture:SetColorTexture(color[1], color[2], color[3], 1) end
-end
 
 ------------------------------------------------------------------ item names (localized here, rules in Core)
 
@@ -143,7 +126,7 @@ local function drawEnemies(run)
         local kind = addon.Survivor.ENEMY_BY_KEY[enemy.kind]
         if texture.kindKey ~= enemy.kind then
             texture.kindKey = enemy.kind
-            iconOr(texture, kind.icon, kind.color)
+            addon.UIHelpers.SetTextureOr(texture, kind.icon, kind.color)
             texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         end
         place(texture, enemy.x, enemy.y, enemy.radius * 2 + 4)
@@ -164,7 +147,7 @@ local function styleProjectile(texture, weapon)
     texture.weapon = weapon
     local item = addon.Survivor.ITEM_BY_KEY[weapon]
     if ICON_PROJECTILES[weapon] then
-        iconOr(texture, item.icon, item.color)
+        addon.UIHelpers.SetTextureOr(texture, item.icon, item.color)
         texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         pcall(texture.SetBlendMode, texture, "BLEND")
         texture:SetVertexColor(1, 1, 1)
@@ -224,7 +207,7 @@ local function drawHud(run)
         if level > 0 then
             shown[item.kind] = shown[item.kind] + 1
             local slot = widgets.itemSlots[item.kind][shown[item.kind]]
-            if slot.key ~= item.key then slot.key = item.key; iconOr(slot.icon, item.icon, item.color) end
+            if slot.key ~= item.key then slot.key = item.key; addon.UIHelpers.SetTextureOr(slot.icon, item.icon, item.color) end
             slot.levelText:SetText(tostring(level))
             slot:Show()
         end
@@ -358,12 +341,12 @@ local function handleEvent(event)
         puff(event.x, event.y, kind and kind.color or { 1, 0.8, 0.3 })
     elseif event.kind == "cleave" then
         cleaveSwing(event.radius)
-        play({ "IG_MAINMENU_OPTION_CHECKBOX_OFF" })
+        addon.Api.PlaySoundNamed({ "IG_MAINMENU_OPTION_CHECKBOX_OFF" })
     elseif event.kind == "nova" then
         Animate.Ring("survivorNova", widgets.effects, widgets.towerAnchor, 20, event.radius * 2.6, { 0.45, 0.75, 1 }, 0.5)
     elseif event.kind == "shieldbreak" then
         Animate.Ring("survivorShield", widgets.effects, widgets.towerAnchor, TOWER_SIZE * 2, TOWER_SIZE * 4, { 0.4, 0.7, 1 }, 0.35)
-        play({ "IG_MAINMENU_OPTION_CHECKBOX_OFF" })
+        addon.Api.PlaySoundNamed({ "IG_MAINMENU_OPTION_CHECKBOX_OFF" })
     elseif event.kind == "hurt" then
         Animate.Flash("survivorHurt", widgets.hurtFlash, 0.22, 0.3)
         Animate.Pulse(widgets.tower, 0.9, 0.15)
@@ -373,10 +356,10 @@ local function handleEvent(event)
         Animate.Burst("survivor", widgets.effects, widgets.towerAnchor, 0, 0, { count = 18, speed = 170, gravity = 200, size = 13 })
         Animate.FloatText("survivor", widgets.floatText, widgets.towerAnchor, 0, 24, label, { 1, 0.85, 0.3 })
         widgets.startButton:SetText(Text["Cash out"])
-        play({ "LOOT_WINDOW_COIN_SOUND", "UI_EPICLOOT_TOAST" })
+        addon.Api.PlaySoundNamed({ "LOOT_WINDOW_COIN_SOUND", "UI_EPICLOOT_TOAST" })
     elseif event.kind == "levelup" then
         Animate.Ring("survivorLevel", widgets.effects, widgets.towerAnchor, 30, 160, { 1, 0.85, 0.3 }, 0.6)
-        play({ "LEVELUP", "UI_EPICLOOT_TOAST" })
+        addon.Api.PlaySoundNamed({ "LEVELUP", "UI_EPICLOOT_TOAST" })
     end
 end
 
@@ -397,7 +380,7 @@ local function showCards(run)
         if choice then
             local item = addon.Survivor.ITEM_BY_KEY[choice.key]
             local texts = ITEM_TEXT[choice.key]
-            iconOr(card.icon, item.icon, item.color)
+            addon.UIHelpers.SetTextureOr(card.icon, item.icon, item.color)
             card.nameText:SetText(texts.name)
             card.levelText:SetText((run.items[choice.key] or 0) == 0 and Text["New!"] or Format(Text["Lv {n}"], { n = choice.level }))
             card.descriptionText:SetText(texts.description)
@@ -440,7 +423,7 @@ end
 local function selectTarget(index)
     if SurvivorArena.state.run or not addon.Survivor.Target(index) then return end
     SurvivorArena.state.targetIndex = index
-    addon.GamesTab.Settings().survivorTarget = index
+    addon.UIHelpers.Settings().survivorTarget = index
     setControls(false)
     showHint(addon.Survivor.Target(index))
 end
@@ -449,7 +432,7 @@ end
 local function finish(run)
     local state = SurvivorArena.state
     local Animate = addon.Animate
-    local money = addon.GamesTab.Money
+    local money = addon.Model.MoneyText
     local net = addon.Survivor.Settle(run, addon.Utility.Now())
     state.run, state.lastRun = nil, run
     addon.Events.Fire("GAMES_CHANGED")   -- announce (coalesced HELLO)
@@ -466,7 +449,7 @@ local function finish(run)
             Animate.Ring("survivorEnd", widgets.effects, widgets.towerAnchor, 40, 340, nil, 0.8)
             Animate.Burst("survivor", widgets.effects, widgets.towerAnchor, 0, 0, { count = 32, speed = 210, gravity = 230, size = 15 })
             Animate.FloatText("survivor", widgets.floatText, widgets.towerAnchor, 0, 24, "+" .. money(net), { 0.35, 1, 0.55 })
-            play({ "UI_EPICLOOT_TOAST", "LOOT_WINDOW_COIN_SOUND" })
+            addon.Api.PlaySoundNamed({ "UI_EPICLOOT_TOAST", "LOOT_WINDOW_COIN_SOUND" })
         else
             widgets.resultText:SetText(Format(Text["The tower fell after {time}. You lost {gold}"],
                 { time = clock(run.time), gold = money(run.stake) }))
@@ -507,7 +490,7 @@ end
 function SurvivorArena.Choose(index)
     local run = SurvivorArena.state.run
     if not run or not addon.Survivor.Choose(run, index) then return end
-    play({ "IG_MAINMENU_OPTION_CHECKBOX_ON" })
+    addon.Api.PlaySoundNamed({ "IG_MAINMENU_OPTION_CHECKBOX_ON" })
     addon.Animate.Pulse(widgets.tower, 1.25, 0.3)
     if run.choices then showCards(run) else hideCards() end
     drawHud(run)
@@ -530,7 +513,7 @@ function SurvivorArena.Start()
         widgets.resultText:SetAlpha(1); widgets.resultText:Show()
         return nil
     end
-    addon.GamesTab.Settings().lastSurvivorStakeCopper = stake
+    addon.UIHelpers.Settings().lastSurvivorStakeCopper = stake
     state.run = run
     addon.GamesTab.SetBusy(true)
     widgets.resultText:SetText(""); widgets.bannerText:SetText(""); widgets.hintText:SetText("")
@@ -538,7 +521,7 @@ function SurvivorArena.Start()
     setControls(true)
     widgets.towerGlow:SetAlpha(0)
     addon.Animate.Ring("survivorStart", widgets.effects, widgets.towerAnchor, 10, 200, { 1, 0.85, 0.3 }, 0.6)
-    play({ "IG_MAINMENU_OPTION_CHECKBOX_ON" })
+    addon.Api.PlaySoundNamed({ "IG_MAINMENU_OPTION_CHECKBOX_ON" })
     addon.Log.Debug("games.survivor", "a survivor run started", { stake = stake, target = run.target.seconds })
     drawHud(run)
     return run
@@ -645,7 +628,7 @@ function SurvivorArena.Build(panel)
     pcall(widgets.towerGlow.SetBlendMode, widgets.towerGlow, "ADD"); widgets.towerGlow:SetAlpha(0)
     widgets.tower = towerLayer:CreateTexture(nil, "ARTWORK")
     widgets.tower:SetSize(TOWER_SIZE, TOWER_SIZE); widgets.tower:SetPoint("CENTER", arena, "CENTER", 0, 0)
-    iconOr(widgets.tower, addon.Survivor.TOWER_ICON, { 1, 0.85, 0.3 })
+    addon.UIHelpers.SetTextureOr(widgets.tower, addon.Survivor.TOWER_ICON, { 1, 0.85, 0.3 })
     widgets.tower:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     addon.GamesTab.MaskCircle(towerLayer, widgets.tower)
     local hpBack = towerLayer:CreateTexture(nil, "ARTWORK", nil, 1)
@@ -655,7 +638,7 @@ function SurvivorArena.Build(panel)
     widgets.hpFill:SetColorTexture(0.2, 0.95, 0.25, 1)
 
     local actors = CreateFrame("Frame", nil, arena)
-    actors:SetAllPoints(); actors:SetFrameLevel(frameLevel(towerLayer) + 2)
+    actors:SetAllPoints(); actors:SetFrameLevel(addon.UIHelpers.FrameLevel(towerLayer) + 2)
     widgets.actors = actors
     widgets.enemyPool, widgets.boltPool = {}, {}
     widgets.puffs, widgets.puffIndex = {}, 0
@@ -684,7 +667,7 @@ function SurvivorArena.Build(panel)
 
     -- effects above everything: rings, bursts, floating money, banner
     local effects = CreateFrame("Frame", nil, panel)
-    effects:SetAllPoints(panel); effects:SetFrameLevel(frameLevel(actors) + 3)
+    effects:SetAllPoints(panel); effects:SetFrameLevel(addon.UIHelpers.FrameLevel(actors) + 3)
     widgets.effects = effects
     widgets.floatText = Widgets.CreateFontString(effects, "GameFontNormalHuge", "CENTER"); widgets.floatText:Hide()
     widgets.bannerText = Widgets.CreateFontString(effects, "GameFontNormalHuge", "CENTER")
@@ -696,7 +679,7 @@ function SurvivorArena.Build(panel)
 
     -- level-up cards (above the effects so they can be clicked)
     local cardLayer = CreateFrame("Frame", nil, panel)
-    cardLayer:SetAllPoints(arena); cardLayer:SetFrameLevel(frameLevel(effects) + 3)
+    cardLayer:SetAllPoints(arena); cardLayer:SetFrameLevel(addon.UIHelpers.FrameLevel(effects) + 3)
     widgets.cardTitle = Widgets.CreateFontString(cardLayer, "GameFontNormal", "CENTER")
     widgets.cardTitle:SetPoint("BOTTOM", arena, "CENTER", 0, CARD_HEIGHT / 2 - 4)
     widgets.cardTitle:SetText(Text["Level up! Pick an item"]); widgets.cardTitle:Hide()
@@ -716,7 +699,7 @@ function SurvivorArena.Build(panel)
         widgets.targetButtons[index] = button
     end
     widgets.stake = addon.GamesTab.CreateStakeRow(panel, 36, -234, function() SurvivorArena.Start() end)
-    widgets.stake.Write(addon.GamesTab.Settings().lastSurvivorStakeCopper or DEFAULT_STAKE)
+    widgets.stake.Write(addon.UIHelpers.Settings().lastSurvivorStakeCopper or DEFAULT_STAKE)
     widgets.startButton = Widgets.CreateButton(panel, Text["Start"], 180, 28, function() SurvivorArena.Start() end)
     widgets.startButton:SetPoint("TOP", panel, "TOP", 0, -262)
     if Widgets.MakePrimary then Widgets.MakePrimary(widgets.startButton) end
@@ -733,7 +716,7 @@ function SurvivorArena.Build(panel)
         end
     end)
 
-    local savedTarget = addon.GamesTab.Settings().survivorTarget
+    local savedTarget = addon.UIHelpers.Settings().survivorTarget
     state.targetIndex = addon.Survivor.Target(savedTarget) and savedTarget or DEFAULT_TARGET
     selectTarget(state.targetIndex)
 end

@@ -7,8 +7,7 @@ local addonName, addon = ...
 
 local Text = addon.Text
 
----@return string|nil
-local function me() return addon.Utility.Me() end
+local me = addon.Utility.Me
 
 ---@class CommunicationModule
 local Communication = LibStub("LibGuildSync-1.0").Channel.New({

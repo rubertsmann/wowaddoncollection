@@ -56,7 +56,7 @@ local function setup(harness, options)
     addon.Store.db.me = "Me-R"
     addon.Events = { Fire = function(name, ...) world.fired[#world.fired + 1] = name end, On = function() end }
     addon.Api = { Random = function() return world.random or 0.1 end, CoinSoundKit = function() return 120 end,
-        PlaySound = function() world.sounds = world.sounds + 1 end }
+        PlaySound = function() world.sounds = world.sounds + 1 end, PlaySoundNamed = function() end }
     addon.UI = { Widgets = {
         ROW_HEIGHT = 20,
         CreateFontString = function() return newWidget(world, "FontString") end,
@@ -75,7 +75,7 @@ local function setup(harness, options)
         TimeAgo = function() return "1m" end,
     } }
     addon.AzeCaughtPanel = { Build = function() end, Refresh = function() end }   -- not loaded here (tests/test_load.lua builds it)
-    for _, path in ipairs({ "UI/Animate.lua", "UI/GamesTab.lua", "UI/SlotMachine.lua", "UI/SurvivorArena.lua" }) do assert(loadfile(path))("GuildGames", addon) end
+    for _, path in ipairs({ "UI/Helpers.lua", "UI/Animate.lua", "UI/GamesTab.lua", "UI/SlotMachine.lua", "UI/SurvivorArena.lua" }) do assert(loadfile(path))("GuildGames", addon) end
     world.restore = function() for key, value in pairs(saved) do _G[key] = value end end
     return addon, world
 end

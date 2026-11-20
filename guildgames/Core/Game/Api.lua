@@ -46,6 +46,10 @@ function Api.PlaySound(soundKitID)
     end
 end
 
+-- Plays the first of `soundNames` this client knows; nothing when it knows none.
+---@param soundNames string[]
+function Api.PlaySoundNamed(soundNames) Api.PlaySound(Api.SoundKitFor(soundNames)) end
+
 ------------------------------------------------------------------ AZEcaught (feature 018): units
 -- This client (Retail-based Forever, build 70959) FORBIDS addons the combat log (registering it shows the "reserved for
 -- the Blizzard UI" dialog) and hands out SECRET values in combat and instances (health, name, GUID, ...): comparing,

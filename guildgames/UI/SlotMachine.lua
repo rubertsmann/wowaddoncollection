@@ -39,12 +39,6 @@ SlotMachine.state = { spinning = false, stops = { 1, 13, 25 }, lights = "idle", 
 local widgets = {}
 SlotMachine.widgets = widgets
 
----@param soundNames string[]
-local function play(soundNames)
-    local soundKit = SOUNDKIT and addon.Api.SoundKitFor and addon.Api.SoundKitFor(soundNames) or nil
-    addon.Api.PlaySound(soundKit)
-end
-
 ------------------------------------------------------------------ reels
 
 ---@param texture table
@@ -53,9 +47,7 @@ local function setSymbol(texture, symbolKey)
     if texture.symbol == symbolKey then return end
     texture.symbol = symbolKey
     local symbol = addon.Slots.BY_KEY[symbolKey]
-    if texture:SetTexture(symbol.icon) == false then   -- icon missing on this client: a coloured tile
-        texture:SetColorTexture(symbol.color[1], symbol.color[2], symbol.color[3], 1)
-    end
+    addon.UIHelpers.SetTextureOr(texture, symbol.icon, symbol.color)   -- icon missing on this client: a coloured tile
 end
 
 -- x offset of a reel inside the reel area
@@ -200,10 +192,6 @@ local function hideWinEffects()
     widgets.banner:SetText(""); widgets.multiplierText:SetText("")
 end
 
----@param frame table
----@return integer
-local function frameLevel(frame) return tonumber(frame:GetFrameLevel()) or 1 end
-
 ------------------------------------------------------------------ lights, lever, coin shower
 
 -- Bulb brightness per mode; runs from the cabinet's OnUpdate, so only while the panel is visible.
@@ -277,7 +265,7 @@ end
 ---@param result SlotResult
 local function showWin(result)
     local Animate = addon.Animate
-    local money = addon.GamesTab.Money
+    local money = addon.Model.MoneyText
     setLights("win")
     -- winning cells: glow and pulse every cell of every winning line
     local glowing = {}
@@ -328,9 +316,9 @@ local function showWin(result)
         Animate.Ring("slots", widgets.effects, widgets.reelsArea, 60, jackpot and 420 or 300, nil, jackpot and 0.8 or 0.6)
         Animate.Flash("slots", widgets.cabinetFlash, jackpot and 0.6 or 0.4, jackpot and 0.9 or 0.6)
         coinShower(jackpot and SHOWER_COINS or math.floor(SHOWER_COINS * 0.6))
-        play({ "UI_EPICLOOT_TOAST", "LOOT_WINDOW_COIN_SOUND" })
+        addon.Api.PlaySoundNamed({ "UI_EPICLOOT_TOAST", "LOOT_WINDOW_COIN_SOUND" })
     end
-    play({ "LOOT_WINDOW_COIN_SOUND" })
+    addon.Api.PlaySoundNamed({ "LOOT_WINDOW_COIN_SOUND" })
 end
 
 ---@param result SlotResult
@@ -342,12 +330,12 @@ local function reveal(result)
         addon.Log.Protected("games.effects", "the win effects failed", showWin, result)   -- never blocks the unlock below
     else
         setLights("lose")
-        widgets.resultText:SetText(Format(Text["You lost {gold}"], { gold = addon.GamesTab.Money(result.stake) }))
+        widgets.resultText:SetText(Format(Text["You lost {gold}"], { gold = addon.Model.MoneyText(result.stake) }))
         widgets.resultText:SetTextColor(1, 0.33, 0.33)
         addon.Animate.FadeIn(widgets.resultText, 0.3)
         addon.Animate.Shake(widgets.cabinet, 3, 4)
         addon.Animate.FloatText("slots", widgets.floatText, widgets.cabinet, 0, CABINET_HEIGHT / 2 - 14,
-            "-" .. addon.GamesTab.Money(result.stake), { 1, 0.35, 0.3 }, -24, 1.3)
+            "-" .. addon.Model.MoneyText(result.stake), { 1, 0.35, 0.3 }, -24, 1.3)
     end
     state.spinning = false
     widgets.spinButton:Enable()
@@ -367,7 +355,7 @@ function SlotMachine.Spin()
         widgets.resultText:SetAlpha(1); widgets.resultText:Show()
         return nil
     end
-    addon.GamesTab.Settings().lastSlotStakeCopper = stake
+    addon.UIHelpers.Settings().lastSlotStakeCopper = stake
     addon.Events.Fire("GAMES_CHANGED")                    -- announce (coalesced HELLO)
     state.spinning = true
     addon.GamesTab.SetBusy(true)
@@ -377,7 +365,7 @@ function SlotMachine.Spin()
     widgets.resultText:SetText("")
     setLights("spin")
     pullLever()
-    play({ "IG_MAINMENU_OPTION_CHECKBOX_ON" })
+    addon.Api.PlaySoundNamed({ "IG_MAINMENU_OPTION_CHECKBOX_ON" })
     addon.Log.Debug("games.spin", "the slot machine was spun", { stake = stake, multiplier = result.multiplier })
     local fromStops, stopped = state.stops, {}
     addon.Animate.Tween("slotReels", addon.Slots.SpinDuration(), function(elapsed)
@@ -387,7 +375,7 @@ function SlotMachine.Spin()
             if pose.done and not stopped[reel] then
                 stopped[reel] = true
                 addon.Animate.Glow(widgets.reels[reel].stopFlash, 1)
-                play({ "U_CHAT_SCROLL_BUTTON", "IG_MAINMENU_OPTION_CHECKBOX_OFF" })
+                addon.Api.PlaySoundNamed({ "U_CHAT_SCROLL_BUTTON", "IG_MAINMENU_OPTION_CHECKBOX_OFF" })
             end
         end
     end, function() reveal(result) end)
@@ -462,7 +450,7 @@ function SlotMachine.Build(panel)
 
     -- overlay above the reels: cell glows, paylines, multiplier pop, banner
     local overlay = CreateFrame("Frame", nil, reelsArea)
-    overlay:SetAllPoints(); overlay:SetFrameLevel(frameLevel(reelsArea) + 5)
+    overlay:SetAllPoints(); overlay:SetFrameLevel(addon.UIHelpers.FrameLevel(reelsArea) + 5)
     widgets.cellGlows = {}
     for row = 1, addon.Slots.ROWS do
         for reel = 1, addon.Slots.REELS do
@@ -498,7 +486,7 @@ function SlotMachine.Build(panel)
 
     -- coins for the shower (pooled, hidden)
     local showerLayer = CreateFrame("Frame", nil, panel)
-    showerLayer:SetAllPoints(); showerLayer:SetFrameLevel(frameLevel(overlay) + 5)
+    showerLayer:SetAllPoints(); showerLayer:SetFrameLevel(addon.UIHelpers.FrameLevel(overlay) + 5)
     widgets.showerCoins = {}
     for index = 1, SHOWER_COINS do
         local coin = showerLayer:CreateTexture(nil, "OVERLAY")
@@ -521,7 +509,7 @@ function SlotMachine.Build(panel)
     widgets.resultText = Widgets.CreateFontString(panel, "GameFontNormalLarge", "CENTER")
     widgets.resultText:SetPoint("TOP", panel, "TOP", 0, -236); widgets.resultText:SetWidth(290)
     widgets.stake = addon.GamesTab.CreateStakeRow(panel, 36, -262, function() SlotMachine.Spin() end)
-    widgets.stake.Write(addon.GamesTab.Settings().lastSlotStakeCopper or DEFAULT_STAKE)
+    widgets.stake.Write(addon.UIHelpers.Settings().lastSlotStakeCopper or DEFAULT_STAKE)
     widgets.spinButton = Widgets.CreateButton(panel, Text["Spin"], 180, 28, function() SlotMachine.Spin() end)
     widgets.spinButton:SetPoint("TOP", panel, "TOP", 0, -292)
     if Widgets.MakePrimary then Widgets.MakePrimary(widgets.spinButton) end

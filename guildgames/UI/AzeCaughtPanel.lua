@@ -52,9 +52,9 @@ Panel.widgets = widgets
 local careState = {}
 Panel.careState = careState
 
-local function me() return addon.Utility.Me() end
-local function money(copper) return addon.Model.MoneyText(copper) end
-local function settings() return (addon.db and addon.db.ui) or {} end
+local me = addon.Utility.Me
+local money = addon.Model.MoneyText
+local settings = addon.UIHelpers.Settings
 
 ------------------------------------------------------------------ texts
 
@@ -308,10 +308,7 @@ function Panel.RefreshCareButtons()
         local action = (key == "sleep" and companion and companion.asleep) and "wake" or key
         local usable, reason = AzeCaught.CareAvailability(action, me())
         careState[key] = { action = action, unusable = not usable and reason or nil }
-        if button.icon:SetTexture(CARE_ICONS[action]) == false then
-            local color = ACTION_COLOR[action] or { 1, 1, 1 }
-            button.icon:SetColorTexture(color[1], color[2], color[3], 1)
-        end
+        addon.UIHelpers.SetTextureOr(button.icon, CARE_ICONS[action], ACTION_COLOR[action] or { 1, 1, 1 })
         local enabled = usable and not coolingDown
         button:SetEnabled(enabled)
         pcall(button.icon.SetDesaturated, button.icon, not enabled)
@@ -491,7 +488,7 @@ local function buildCompanionView(panel)
 
     local heart = panel:CreateTexture(nil, "ARTWORK")
     heart:SetSize(18, 18); heart:SetPoint("TOPLEFT", 8, -180); heart:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    if heart:SetTexture(HEART_ICON) == false then heart:SetColorTexture(0.9, 0.1, 0.2, 1) end
+    addon.UIHelpers.SetTextureOr(heart, HEART_ICON, { 0.9, 0.1, 0.2 })
     widgets.heartIcon = heart
     widgets.heartText = Widgets.CreateFontString(panel, "GameFontNormalLarge", "LEFT")
     widgets.heartText:SetPoint("LEFT", heart, "RIGHT", 4, 0)

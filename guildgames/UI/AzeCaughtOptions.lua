@@ -83,7 +83,7 @@ function Options.Build()
     -- a preview of the round icon
     local preview = frame:CreateTexture(nil, "ARTWORK")
     preview:SetPoint("TOPLEFT", 400, -120)
-    if preview:SetTexture(addon.Catcher.ROPE_ICON) == false then preview:SetColorTexture(1, 0.82, 0.2, 1) end
+    addon.UIHelpers.SetTextureOr(preview, addon.Catcher.ROPE_ICON, { 1, 0.82, 0.2 })
     pcall(function()
         local mask = frame:CreateMaskTexture()
         mask:SetTexture(addon.Catcher.CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")

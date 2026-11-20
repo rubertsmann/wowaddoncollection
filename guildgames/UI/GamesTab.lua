@@ -58,7 +58,7 @@ GamesTab.widgets = widgets
 -- copper -> "1g 50s 25c" in coin colours
 ---@param copper integer
 ---@return string
-local function money(copper) return addon.Model.MoneyText(copper) end
+local money = addon.Model.MoneyText
 
 -- "+1g 50s" with a green "+", "-25c" with a red "-", "0c" plain
 ---@param net integer copper
@@ -78,8 +78,7 @@ local function displayName(playerName, escapedName)
     return shortName and addon.Utility.Escape(shortName) or escapedName
 end
 
----@return table ui settings (db.ui), or an empty table before Store.Init
-local function settings() return (addon.db and addon.db.ui) or {} end
+local settings = addon.UIHelpers.Settings
 
 ------------------------------------------------------------------ coin (2.5D: layered textures, flipped end over end)
 -- A coin is drawn as a cylinder seen from the front: a dark "back" ellipse offset by the coin's thickness, a band joining
@@ -120,19 +119,12 @@ local function disc(owner, layer, subLevel)
     return texture
 end
 
----@param texture table
----@param path string
----@param fallback string
-local function setTextureOr(texture, path, fallback)
-    if texture:SetTexture(path) == false then texture:SetTexture(fallback) end
-end
-
 -- Puts my portrait on the heads emblem (it may not be loaded at build time, so this runs again before each flip).
 local function refreshPortrait()
     local emblem = widgets.coinParts and widgets.coinParts.emblem.H
     if not emblem then return end
     local ok = SetPortraitTexture and pcall(SetPortraitTexture, emblem, "player")
-    if not ok then setTextureOr(emblem, HEADS_FALLBACK, QUESTION_MARK) end
+    if not ok then addon.UIHelpers.SetTextureOr(emblem, HEADS_FALLBACK, QUESTION_MARK) end
     emblem:SetDesaturated(true)
 end
 
@@ -154,7 +146,7 @@ local function buildCoin(coinHolder)
         maskCircle(coin, emblem)
         parts.emblem[face] = emblem
     end
-    setTextureOr(parts.emblem.T, TAILS_EMBLEM, QUESTION_MARK)
+    addon.UIHelpers.SetTextureOr(parts.emblem.T, TAILS_EMBLEM, QUESTION_MARK)
     parts.emblem.T:SetDesaturated(true)
     parts.shine = disc(coin, "OVERLAY", 1); parts.shine:SetBlendMode("ADD")
     widgets.coinParts = parts
@@ -299,8 +291,6 @@ local function refusalText(refusal)
     return Format(Text["Enter a stake from 1c to {max}"], { max = money(addon.Games.MAXIMUM_STAKE) })
 end
 GamesTab.RefusalText = refusalText
-GamesTab.Money = money
-GamesTab.Settings = settings
 
 -- Whether any game is animating (the board waits, the game selector is locked).
 ---@return boolean
@@ -700,7 +690,7 @@ function GamesTab.Build(stage, sidebar, header)
         if previousButton then button:SetPoint("LEFT", previousButton, "RIGHT", 3, 0) else button:SetPoint("LEFT", header, "LEFT", 4, 0) end
         local icon = button:CreateTexture(nil, "OVERLAY")
         icon:SetSize(16, 16); icon:SetPoint("CENTER", 0, 1); icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        if icon:SetTexture(GAME_ICONS[key]) == false then icon:SetColorTexture(1, 0.82, 0.2, 1) end
+        addon.UIHelpers.SetTextureOr(icon, GAME_ICONS[key], { 1, 0.82, 0.2 })
         button.gameIcon = icon
         button:HookScript("OnEnter", function(self)
             if not GameTooltip then return end

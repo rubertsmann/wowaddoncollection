@@ -124,8 +124,7 @@ local mainFrame
 local parts = {}
 UI.parts = parts
 
----@return table ui settings (db.ui), or an empty table before Store.Init
-local function settings() return (addon.db and addon.db.ui) or {} end
+local settings = addon.UIHelpers.Settings
 
 ---@param current number
 ---@param target number
@@ -216,7 +215,7 @@ local function buildGrip()
     grip:RegisterForClicks("LeftButtonUp")
     local texture = grip:CreateTexture(nil, "OVERLAY")
     texture:SetAllPoints()
-    if texture:SetTexture(GRIP_TEXTURE) == false then texture:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.8) end
+    addon.UIHelpers.SetTextureOr(texture, GRIP_TEXTURE, { ACCENT[1], ACCENT[2], ACCENT[3], 0.8 })
     texture:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3])
     grip.texture = texture
     grip:SetScript("OnMouseDown", function(self, mouseButton)
@@ -256,7 +255,7 @@ local function buildGrip()
     mover:EnableMouse(true); mover:RegisterForDrag("LeftButton")
     local moverTexture = mover:CreateTexture(nil, "OVERLAY")
     moverTexture:SetAllPoints()
-    if moverTexture:SetTexture(MOVE_TEXTURE) == false then moverTexture:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.8) end
+    addon.UIHelpers.SetTextureOr(moverTexture, MOVE_TEXTURE, { ACCENT[1], ACCENT[2], ACCENT[3], 0.8 })
     moverTexture:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3])
     mover:SetScript("OnDragStart", function(self)
         self.dragging = true

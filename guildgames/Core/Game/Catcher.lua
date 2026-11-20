@@ -38,10 +38,9 @@ Catcher.lastZones = {}
 Catcher.started = false
 Catcher.dumps = {}          -- full unit dumps taken at the throw, by GUID (logged on a catch; the dead unit is often gone)
 
-local function me() return addon.Utility.Me() end
-local function now() return addon.Utility.Now() end
-local function money(copper) return addon.Model.MoneyText(copper) end
-local function chat(message) addon.Print(message) end
+local me = addon.Utility.Me
+local now = addon.Utility.Now
+local money = addon.Model.MoneyText
 
 ------------------------------------------------------------------ display capture (spike S1)
 
@@ -175,12 +174,12 @@ function Catcher.Throw(unit)
     unit = unit or "target"
     local snapshot = Api.UnitSnapshot(unit)
     if not snapshot then
-        chat(Text["No target to throw the rope at."])
+        addon.Print(Text["No target to throw the rope at."])
         AzeCaught.Journal("DEBUG", "throw.refused", "a throw was refused", { reason = "nounit", unit = unit })
         return false
     end
     if snapshot.hostile == false then
-        chat(Text["Only hostile NPCs can be caught."])
+        addon.Print(Text["Only hostile NPCs can be caught."])
         AzeCaught.Journal("DEBUG", "throw.refused", "a throw was refused", { reason = "friendly", unit = unit, guid = snapshot.guid })
         return false
     end
@@ -197,13 +196,13 @@ function Catcher.Throw(unit)
         Catcher.PlayRopeEffect(unit)
         Catcher.dumps[snapshot.guid] = { at = Api.Clock(), values = Api.UnitDump(unit) }
         startPoll()
-        chat(Format(Text["Rope thrown at {name}: kill it within {seconds} seconds!"], { name = name, seconds = AzeCaught.CATCH_WINDOW }))
+        addon.Print(Format(Text["Rope thrown at {name}: kill it within {seconds} seconds!"], { name = name, seconds = AzeCaught.CATCH_WINDOW }))
         Api.PlaySound(Api.SoundKitFor({ "IG_ABILITY_ICON_DROP", "IG_MAINMENU_OPTION_CHECKBOX_ON" }))
     elseif reason == "health" then
-        chat(Format(Text["{name} is not weak enough yet (at most {percent}% health)."],
+        addon.Print(Format(Text["{name} is not weak enough yet (at most {percent}% health)."],
             { name = name, percent = math.floor(AzeCaught.THROW_HEALTH * 100) }))
     else
-        chat(throwRefusalText(reason))
+        addon.Print(throwRefusalText(reason))
     end
     Catcher.RefreshIcons()
     return thrown and true or false
@@ -217,15 +216,15 @@ function Catcher.OnDeath(guid, name)
     local npcName = addon.Utility.ChatSafe(name or "?")
     if result and result.caught then
         Catcher.LogCatchDump(guid, result)
-        chat("|cff66ff66" .. Format(Text["You caught {name}! (+{gold})"], { name = npcName, gold = money(result.reward) }) .. "|r"
+        addon.Print("|cff66ff66" .. Format(Text["You caught {name}! (+{gold})"], { name = npcName, gold = money(result.reward) }) .. "|r"
             .. (result.first and (" " .. Text["(Your first catch always succeeds.)"]) or ""))
         Api.PlaySound(Api.SoundKitFor({ "UI_EPICLOOT_TOAST", "LOOTWINDOWCOINSOUND", "IG_QUEST_LIST_COMPLETE" }))
         addon.Events.Fire("CAUGHT_CHANGED")
     elseif result then
-        chat(Format(Text["{name} slipped out of the rope ({percent}% chance)."],
+        addon.Print(Format(Text["{name} slipped out of the rope ({percent}% chance)."],
             { name = npcName, percent = ("%.1f"):format(result.chance * 100) }))
     elseif reason == "late" then
-        chat(Format(Text["{name} died too late for the rope."], { name = npcName }))
+        addon.Print(Format(Text["{name} died too late for the rope."], { name = npcName }))
     end
     Catcher.RefreshIcons()
 end
@@ -280,7 +279,7 @@ local function iconFor(unit)
     round(border)
     button.border = border
     local texture = button:CreateTexture(nil, "ARTWORK"); texture:SetAllPoints(); texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    if texture:SetTexture(ROPE_ICON) == false then texture:SetTexture(ROPE_FALLBACK) end
+    addon.UIHelpers.SetTextureOr(texture, ROPE_ICON, ROPE_FALLBACK)
     round(texture)
     button.texture = texture
     local highlight = button:CreateTexture(nil, "HIGHLIGHT"); highlight:SetAllPoints(); highlight:SetColorTexture(1, 1, 1, 0.25)
@@ -330,7 +329,7 @@ function Catcher.PlayRopeEffect(unit)
                 segments[index] = segment
             end
             local head = frame:CreateTexture(nil, "OVERLAY")
-            if head:SetTexture(addon.Animate.SPARKLE_TEXTURE) == false then head:SetColorTexture(1, 0.9, 0.5, 1) end
+            addon.UIHelpers.SetTextureOr(head, addon.Animate.SPARKLE_TEXTURE, { 1, 0.9, 0.5 })
             pcall(head.SetBlendMode, head, "ADD")
             head:SetSize(22, 22); head:Hide()
             local anchor = CreateFrame("Frame", nil, frame); anchor:SetSize(1, 1)
@@ -377,7 +376,7 @@ function Catcher.PlayRopeEffect(unit)
         AzeCaught.Journal("DEBUG", "throw.effect", "the throw effect was played", details)
         -- dev build: the inputs are said at once, to tune the camera model without a /reload
         if addon.IS_DEVELOPMENT_BUILD then
-            chat(("rope effect: %s yd (%s), bearing %s, zoom %s -> %s, size x%s"):format(details.distance, details.source,
+            addon.Print(("rope effect: %s yd (%s), bearing %s, zoom %s -> %s, size x%s"):format(details.distance, details.source,
                 tostring(details.bearing), details.zoom, details.to, details.scale))
         end
     end)
@@ -454,7 +453,7 @@ local function remind(companion)
         local previous = Catcher.lastZones[need]
         local worse = (zone == "needy" and previous == "ok") or ((zone == "critical" or zone == "empty") and previous ~= "critical" and previous ~= "empty")
         if worse and previous ~= nil and caught.notify then
-            chat(Format(needText(need), { name = addon.Utility.ChatSafe(companion.n) })
+            addon.Print(Format(needText(need), { name = addon.Utility.ChatSafe(companion.n) })
                 .. (zone ~= "needy" and (" |cffff4040" .. Text["(critical)"] .. "|r") or ""))
         end
         Catcher.lastZones[need] = zone
@@ -476,7 +475,7 @@ end
 function Catcher.RunPayout()
     local amount, reason, rank = AzeCaught.WeeklyPayout(me(), addon.Store.db.games, now())
     if amount > 0 then
-        chat(Format(Text["Weekly AZEcaught payout: place {rank}, {gold} added to your pool."], { rank = rank, gold = money(amount) }))
+        addon.Print(Format(Text["Weekly AZEcaught payout: place {rank}, {gold} added to your pool."], { rank = rank, gold = money(amount) }))
         addon.Events.Fire("CAUGHT_CHANGED")
     end
     return amount, reason
@@ -495,7 +494,7 @@ function Catcher.OnTick()
     end
     local companion = AzeCaught.Active()
     if result.died and before then
-        chat("|cffff4040" .. Format(Text["{name} died: it was left hungry or thirsty for too long."],
+        addon.Print("|cffff4040" .. Format(Text["{name} died: it was left hungry or thirsty for too long."],
             { name = addon.Utility.ChatSafe(before.n) }) .. "|r")
         Catcher.lastZones = {}
         Catcher.PublishSoon(true)

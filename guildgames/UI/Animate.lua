@@ -261,7 +261,7 @@ Animate.SPARKLE_TEXTURE = SPARKLE_TEXTURE
 ---@param green number
 ---@param blue number
 local function texturedOrColor(texture, path, red, green, blue)
-    if texture:SetTexture(path) == false then texture:SetColorTexture(red, green, blue, 1) end
+    addon.UIHelpers.SetTextureOr(texture, path, { red, green, blue })
     texture:SetVertexColor(red, green, blue)
     pcall(texture.SetBlendMode, texture, "ADD")
 end

@@ -32,3 +32,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: same results for finite input; a NaN now becomes the lower bound instead of passing through (AzeCaught) or becoming the upper bound (math.min/max).
 - Evidence: luajit tests/run.lua -> "118 passed, 0 failed" (new: "utility: Clamp limits both ends and turns NaN into the lower bound"); luajit tools/coinflip.lua H 50 runs
 - Next: T4 shared UI helpers
+
+## 2026-11-20 22:35 | BUILD | T4 shared UI helpers
+- Did: new UI/Helpers.lua (first UI file in the TOC): `UIHelpers.Settings()`, `UIHelpers.SetTextureOr(texture, path, fallbackPathOrColor)`, `UIHelpers.FrameLevel(frame)`. New `Api.PlaySoundNamed(soundNames)` (Core/Game/Api.lua). Replaced: play() copies in SlotMachine/SurvivorArena (with their needless SOUNDKIT/SoundKitFor guards), frameLevel() copies, texture fallbacks (GamesTab.setTextureOr, SurvivorArena.iconOr, Animate.texturedOrColor's first line, inline in SlotMachine, GamesTab, AzeCaughtPanel x2, AzeCaughtOptions, Window x2, Catcher x2), settings() copies in Window/GamesTab/AzeCaughtPanel, GamesTab.Money/GamesTab.Settings re-exports (SlotMachine, SurvivorArena use Model.MoneyText / UIHelpers.Settings). One-line wrappers money/me/now are aliases now; Catcher's chat() was addon.Print. test_games_ui loads UI/Helpers.lua and stubs Api.PlaySoundNamed.
+- Result: 55 lines fewer in T4's first part; behaviour unchanged. Dev TOC regenerated (tools/deploy.ps1).
+- Evidence: luajit tests/run.lua -> "118 passed, 0 failed"
+- Next: T5 one Model.Duration, one Model.RefusalText

@@ -34,6 +34,7 @@ Core\Net\Communication.lua
 Core\Game\Catcher.lua
 Core\Game\Events.lua
 
+UI\Helpers.lua
 UI\Animate.lua
 UI\Window.lua
 UI\GamesTab.lua
