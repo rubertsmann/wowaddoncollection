@@ -127,3 +127,18 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: the effect no longer touches nameplates; the landing point moves up and shrinks with distance and sideways with the bearing (when positions are known).
 - Evidence: luajit tests/run.lua -> "114 passed, 0 failed" (new: projection test in test_azecaught; test_load: a plate stub that refuses every measure/anchor is never touched, ThrowGeometry position/bearing/combat cases)
 - Next: user: /reload, throw at a near and a far enemy; paste the "rope effect: ..." chat lines and say where it landed vs the enemy -> tune AzeCaught.CAMERA (pitch, FOV, focus) and the guesses.
+
+## 2026-11-20 21:10 | BUILD | dev command: /ggd caught reset [all]
+- Did: user: "dev only ggd caught reset add that". Core/AzeCaught.lua `AzeCaught.Reset(withWallet)` (pure): clears collection, active companion, active time, peaks, paidWeek, firstCatchDone and the runtime throw tables; keeps icon/notify/verbose settings and the journal (a dev.reset line marks the cut); `all` also clears the ledger (casino results are guild game records and stay). Core/Catcher.lua developmentCommands.reset (dev build only; refuses when the saved data is read-only; also clears Catcher.noted/dumps, fires CAUGHT_CHANGED).
+- Evidence: luajit tests/run.lua -> "115 passed, 0 failed" (new: reset test in test_azecaught)
+- Next: user: /reload, /ggd caught reset -> collection empty, companion gone, icon settings unchanged.
+
+## 2026-11-20 21:25 | BUILD | R27 combat stats (Attack / Defense / Speed)
+- Did: user: "Defense / Attack / Speed calculation - according to elite / level / undead, or wild and from a calculated hash"; only for the info panel for now. Design approved ("do it"): hash of the NPC id (not the type id: all beasts share type 1). Core/AzeCaught.lua `CombatStats` + COMBAT_* constants (pure, not stored); Core/Model.lua BuildNpcInfo `info.combat`; UI/AzeCaughtPanel.lua "Combat" group above Needs; deDE: Kampfwerte, Angriff, Verteidigung, Tempo. Spec R27.
+- Evidence: luajit tests/run.lua -> "116 passed, 0 failed" (tests written first and red: stable per NPC, >10 distinct values over ids 1-200, within +-15%, level/elite/world boss order, undead tougher+slower, beast faster, bad input sane; info.combat in the NPC info test)
+- Next: user: /reload, hover a companion / collection preview -> Combat group; tune COMBAT_* if the numbers feel off.
+
+## 2026-11-20 21:35 | BUILD | R27 combat stats as bars
+- Did: user: "show the attack as bars e.g. something with level 60 as the base max - and then e.g. 30% of that in a bar chart". Core/AzeCaught.lua COMBAT_REFERENCE_LEVEL = 60, `CombatScale()` (130 = normal level-60 base); Core/Model.lua info.combat gets fill (capped at 1) and over; UI/AzeCaughtPanel.lua `Panel.StatBar`: number then an 80x8 inline-texture bar (WHITE8X8 with vertex colour; red/blue/green, gold when over), right-aligned so the bars line up.
+- Evidence: luajit tests/run.lua -> "116 passed, 0 failed" (red first: CombatScale missing; level 15 ~30%, world boss capped + over; test_load draws the panel)
+- Next: user: /reload, hover -> check the bars render (inline texture colour) and line up.

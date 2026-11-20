@@ -140,6 +140,14 @@ Stats, collection and UI additions (user, 2026-11-20)
   cooldown sweep shows it).
 - R26: The model returns to its idle pose (sleep pose while asleep) 2.5 s after an action, after every model load and
   whenever the menu shows.
+- R27: **Combat stats** (user 2026-11-20, display only): every found NPC shows Attack, Defense and Speed in the hover
+  info panel ("Combat" group). Calculated, never stored or sent (`AzeCaught.CombatStats(npcId, entry)`):
+  (10 + 2 x level) x rarity (normal 1, elite 1.5, rare 1.4, rare elite 1.8, world boss 3) x creature type weight
+  (attack/defense/speed: beast 1.1/0.9/1.3, demon 1.3/0.9/1.0, undead 1.0/1.3/0.7, mechanical 0.9/1.4/0.8, others 1)
+  x a fixed +-15% spread per stat from a hash of the NPC id (Park-Miller, no bit library). The same NPC shows the same
+  numbers to everyone; a formula change applies to every NPC at once. Not used by any game rule yet.
+  - Each stat shows its number and a bar (red attack, blue defense, green speed). A full bar is the base of a normal
+    level-60 NPC (`COMBAT_REFERENCE_LEVEL`, `CombatScale()` = 130); a stronger NPC shows a full gold bar.
 
 Debugging (user, 2026-11-20: "anything can be actually debugged with hard manual and automatic logs")
 - R19: Automatic logs. Every AZEcaught step writes one structured line (LibGuildSync Log format

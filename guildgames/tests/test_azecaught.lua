@@ -599,6 +599,51 @@ return {
         for _, need in ipairs(undead.needs) do if need.need == "thirst" then harness.equal(need.trend, "never") end end
         local bare = addon.Model.BuildNpcInfo(2, { n = "Y", lvl = 1, cls = "normal", disp = 0, caught = 0 })
         harness.equal(#bare.facts, 0); harness.equal(bare.hiddenCount, 4); harness.equal(#bare.traits, 0)
+        harness.equal(#info.combat, 3, "attack, defense, speed")
+        harness.equal(info.combat[1].label, "Attack"); harness.equal(info.combat[3].label, "Speed")
+        harness.equal(info.combat[2].value, tostring(addon.AzeCaught.CombatStats(4711, entry).defense))
+        harness.equal(#bare.combat, 3, "calculated even when the game hid everything")
+        -- bars: the base of a normal level-60 NPC is a full bar (user 2026-11-20)
+        harness.equal(addon.AzeCaught.CombatScale(), 130)
+        local weak = addon.Model.BuildNpcInfo(5, { n = "Z", lvl = 15, cls = "normal", disp = 0, caught = 0 })
+        for _, stat in ipairs(weak.combat) do
+            harness.truthy(stat.fill > 0.25 and stat.fill < 0.36, "level 15 is about 30%: " .. stat.fill)
+            harness.equal(stat.over, false)
+        end
+        local boss = addon.Model.BuildNpcInfo(6, { n = "B", lvl = 63, cls = "worldboss", disp = 0, caught = 0 })
+        for _, stat in ipairs(boss.combat) do harness.equal(stat.fill, 1, "capped"); harness.equal(stat.over, true) end
+    end,
+
+    -- user 2026-11-20: Attack / Defense / Speed from level, rarity, creature type and a hash of the NPC id (display only)
+    ["azecaught: combat stats are fixed per NPC and follow level, rarity and creature type"] = function(harness)
+        local AzeCaught = fresh(harness).AzeCaught
+        local function stats(npcId, level, cls, typeId)
+            return AzeCaught.CombatStats(npcId, { lvl = level, cls = cls, st = typeId and { type = typeId } or nil })
+        end
+        local wolf = stats(4711, 20, "normal", 1)
+        harness.equal(AzeCaught.StatsText(wolf), AzeCaught.StatsText(stats(4711, 20, "normal", 1)), "same NPC, same numbers")
+        local spread, distinct = {}, 0
+        for npcId = 1, 200 do
+            local attack = stats(npcId, 20, "normal").attack
+            if not spread[attack] then spread[attack], distinct = true, distinct + 1 end
+        end
+        harness.truthy(distinct > 10, "neighbouring NPC ids differ: " .. distinct .. " distinct attack values")
+        for npcId = 1, 200 do
+            local s = stats(npcId, 20, "normal")
+            for _, key in ipairs({ "attack", "defense", "speed" }) do
+                harness.truthy(s[key] >= 42 and s[key] <= 58, key .. " within +-15% of 50: " .. s[key])
+            end
+        end
+        local function total(s) return s.attack + s.defense + s.speed end
+        harness.truthy(total(stats(4711, 30, "normal")) > total(stats(4711, 10, "normal")), "higher level, higher stats")
+        harness.truthy(total(stats(4711, 20, "elite")) > total(stats(4711, 20, "normal")), "elite beats normal")
+        harness.truthy(total(stats(4711, 20, "worldboss")) > total(stats(4711, 20, "rareelite")), "world boss beats rare elite")
+        local undead, plain = stats(4711, 20, "normal", 6), stats(4711, 20, "normal")
+        harness.truthy(undead.defense > plain.defense and undead.speed < plain.speed, "undead: tougher and slower")
+        local beast = stats(4711, 20, "normal", 1)
+        harness.truthy(beast.speed > plain.speed, "beasts are fast")
+        local odd = AzeCaught.CombatStats(0, { lvl = 0 / 0, cls = "nonsense", st = { type = 999 } })
+        harness.truthy(odd.attack >= 1 and odd.defense >= 1 and odd.speed >= 1, "bad input still gives sane numbers")
     end,
 
     -- user 2026-11-20: the collection has a caught section (at most 10) and a seen section (limited, highest level)
@@ -721,6 +766,26 @@ return {
         local loaded = harness.addon({ now = NOW }).Store.Init({ schema = 2, games = {}, caught = { icon = { shown = "x", x = 0 / 0, y = 999, size = 30 } } })
         harness.equal(loaded.caught.icon.shown, true); harness.equal(loaded.caught.icon.x, 0)
         harness.equal(loaded.caught.icon.y, AzeCaught.ICON_LIMITS.y[2]); harness.equal(loaded.caught.icon.size, 30)
+    end,
+    ["azecaught: reset clears the game but keeps settings, journal and (without all) the wallet"] = function(harness)
+        local addon = withCaught(harness)
+        local AzeCaught = addon.AzeCaught
+        assert(AzeCaught.Select(4711, NOW))
+        AzeCaught.Tick(60, NOW)
+        AzeCaught.SetIconSetting("size", 30); AzeCaught.State().notify = false
+        addon.Wallet.Earn("Me-R", 500, "dev", NOW, "give")
+        AzeCaught.thrown["x"], AzeCaught.forceNextCatch = 1, true
+        local summary = AzeCaught.Reset()
+        harness.equal(summary.found, 1); harness.equal(summary.caught, 1); harness.equal(summary.companion, true)
+        local state = AzeCaught.State()
+        harness.equal(next(state.collection), nil); harness.equal(state.active, nil); harness.equal(state.activeSeconds, 0)
+        harness.equal(next(state.peaks), nil); harness.equal(state.firstCatchDone, nil); harness.equal(state.paidWeek, nil)
+        harness.equal(next(AzeCaught.thrown), nil); harness.equal(AzeCaught.forceNextCatch, false)
+        harness.equal(AzeCaught.IconSettings().size, 30, "settings stay"); harness.equal(state.notify, false)
+        harness.truthy(journalHas(addon, "AZEcaught was reset"), "the journal stays and marks the cut")
+        harness.truthy(addon.Wallet.Ledger().earned > 0, "the wallet stays without all")
+        AzeCaught.Reset(true)
+        harness.equal(addon.Wallet.Ledger().earned, 0, "reset all clears the wallet")
     end,
     ["azecaught: the throw target is projected by camera geometry and shrinks with distance"] = function(harness)
         local AzeCaught = fresh(harness).AzeCaught

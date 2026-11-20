@@ -749,6 +749,18 @@ function developmentCommands.effect(arguments)
     printLine("effect: " .. keyValues(details))
 end
 
+-- /ggd caught reset [all]: starts AZEcaught over (settings and journal stay; "all" also clears the wallet)
+function developmentCommands.reset(arguments)
+    local word = ((arguments or ""):match("^%s*(%S*)") or ""):lower()
+    if word ~= "" and word ~= "all" then printLine("reset [all]") return end
+    if addon.Store.db.readonly then printLine("the saved data is read-only: nothing was reset") return end
+    local summary = AzeCaught.Reset(word == "all")
+    Catcher.noted, Catcher.notedCount, Catcher.dumps = {}, 0, {}
+    printLine(("AZEcaught reset: %d found (%d caught) cleared%s%s"):format(summary.found, summary.caught,
+        summary.companion and ", companion released" or "", summary.wallet and ", wallet cleared" or ""))
+    addon.Events.Fire("CAUGHT_CHANGED"); Catcher.RefreshIcons()
+end
+
 -- adds the current target (or a test NPC) as caught, without a roll
 function developmentCommands.add()
     local snapshot = Api.UnitSnapshot("target")

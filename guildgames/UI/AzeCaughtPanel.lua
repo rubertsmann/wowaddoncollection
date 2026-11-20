@@ -382,6 +382,26 @@ local function hexColor(hex)
     return tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255
 end
 
+-- A stat bar as inline textures (right-aligned after the number, so the bars line up): the filled part in the stat's
+-- colour (gold when stronger than a full bar), the rest dark.
+local STAT_BAR_WIDTH, STAT_BAR_HEIGHT = 80, 8
+local STAT_COLOR = { attack = { 220, 70, 60 }, defense = { 70, 140, 230 }, speed = { 90, 200, 90 } }
+local STAT_OVER_COLOR, STAT_EMPTY_COLOR = { 255, 200, 40 }, { 50, 50, 50 }
+---@param width integer
+---@param color integer[] r, g, b 0-255
+---@return string
+local function barPiece(width, color)
+    if width < 1 then return "" end
+    return ("|TInterface\\Buttons\\WHITE8X8:%d:%d:0:0:8:8:0:8:0:8:%d:%d:%d|t"):format(STAT_BAR_HEIGHT, width, color[1], color[2], color[3])
+end
+---@param stat { key: string, fill: number, over: boolean }
+---@return string
+function Panel.StatBar(stat)
+    local filled = math.floor(STAT_BAR_WIDTH * math.max(0, math.min(1, stat.fill)) + 0.5)
+    return barPiece(filled, stat.over and STAT_OVER_COLOR or STAT_COLOR[stat.key] or STAT_COLOR.attack)
+        .. barPiece(STAT_BAR_WIDTH - filled, STAT_EMPTY_COLOR)
+end
+
 -- Fills `tooltip` (GameTooltip) with the NPC's info. Returns the number of lines added (tests).
 ---@param tooltip table
 ---@param owner table
@@ -405,6 +425,9 @@ function Panel.ShowNpcInfo(tooltip, owner, npcId, entry)
                 0.5, 0.5, 0.5)
         end
     end
+    line(" ")
+    line(Text["Combat"], 1, 0.82, 0)
+    for _, stat in ipairs(info.combat) do double(stat.label, stat.value .. " " .. Panel.StatBar(stat), 0.65, 0.65, 0.65, 1, 1, 1) end
     line(" ")
     line(Text["Needs"], 1, 0.82, 0)
     for _, need in ipairs(info.needs) do

@@ -697,6 +697,62 @@ function AzeCaught.ZoneOf(companion, need)
     return AzeCaught.Zone(companion[need], profile.ok, profile.critical)
 end
 
+------------------------------------------------------------------ combat stats (display only, user 2026-11-20)
+-- Attack / Defense / Speed are calculated, never stored or sent: the same NPC shows the same numbers to everyone, and a
+-- formula change applies to every NPC at once. value = (10 + 2 x level) x rarity x type weight x NPC spread (+-15%).
+
+AzeCaught.COMBAT_BASE, AzeCaught.COMBAT_PER_LEVEL, AzeCaught.COMBAT_SPREAD = 10, 2, 0.15
+AzeCaught.COMBAT_RARITY = { normal = 1, elite = 1.5, rare = 1.4, rareelite = 1.8, worldboss = 3 }
+-- creature type id -> { attack, defense, speed }; types not listed (and unknown ones) are 1/1/1
+AzeCaught.COMBAT_TYPES = {
+    [1] = { 1.1, 0.9, 1.3 },   -- beast: quick
+    [3] = { 1.3, 0.9, 1.0 },   -- demon: hits hard
+    [6] = { 1.0, 1.3, 0.7 },   -- undead: tough and slow
+    [9] = { 0.9, 1.4, 0.8 },   -- mechanical: armoured
+}
+AzeCaught.COMBAT_REFERENCE_LEVEL = 60   -- the base of a normal NPC of this level is a full bar (user 2026-11-20)
+local COMBAT_KEYS = { "attack", "defense", "speed" }
+
+-- The value of a full stat bar: the base of a normal NPC at COMBAT_REFERENCE_LEVEL.
+---@return number
+function AzeCaught.CombatScale()
+    return AzeCaught.COMBAT_BASE + AzeCaught.COMBAT_PER_LEVEL * AzeCaught.COMBAT_REFERENCE_LEVEL
+end
+local HASH_MODULUS, HASH_MULTIPLIER = 2147483647, 48271   -- Park-Miller: exact in doubles (no bit library needed)
+
+-- Three fixed rolls in [0, 1) for an NPC id. Warm-up steps spread neighbouring ids apart.
+---@param npcId integer
+---@return number[]
+local function npcRolls(npcId)
+    local value = (math.floor(math.abs(tonumber(npcId) or 0)) % (HASH_MODULUS - 1)) + 1
+    for _ = 1, 4 do value = (value * HASH_MULTIPLIER) % HASH_MODULUS end
+    local rolls = {}
+    for index = 1, 3 do
+        value = (value * HASH_MULTIPLIER) % HASH_MODULUS
+        rolls[index] = (value - 1) / (HASH_MODULUS - 1)
+    end
+    return rolls
+end
+
+-- The Attack / Defense / Speed of a collection entry (any field may be missing or bad: neutral values are used).
+---@param npcId integer
+---@param entry { lvl?: integer, cls?: string, st?: NpcStats }|nil
+---@return { attack: integer, defense: integer, speed: integer }
+function AzeCaught.CombatStats(npcId, entry)
+    entry = type(entry) == "table" and entry or {}
+    local level = addon.Utility.SafeInteger(entry.lvl, 1, AzeCaught.MAXIMUM_LEVEL) or 1
+    local base = (AzeCaught.COMBAT_BASE + AzeCaught.COMBAT_PER_LEVEL * level)
+        * AzeCaught.COMBAT_RARITY[AzeCaught.Classification(entry.cls)]
+    local typeId = type(entry.st) == "table" and entry.st.type or nil
+    local weights = AzeCaught.COMBAT_TYPES[typeId] or { 1, 1, 1 }
+    local rolls, result = npcRolls(npcId), {}
+    for index, key in ipairs(COMBAT_KEYS) do
+        local spread = 1 - AzeCaught.COMBAT_SPREAD + 2 * AzeCaught.COMBAT_SPREAD * rolls[index]
+        result[key] = math.max(1, math.floor(base * weights[index] * spread + 0.5))
+    end
+    return result
+end
+
 -- One line of stats for the journal ("hp:900,power:1,type:1").
 ---@param stats NpcStats|nil
 ---@return string
@@ -1311,6 +1367,26 @@ end
 function AzeCaught.ResetIconSettings()
     AzeCaught.State().icon = cleanIconSettings(nil)
     AzeCaught.Journal("INFORMATION", "icon.setting", "the icon settings were reset")
+end
+
+------------------------------------------------------------------ reset (dev build, user 2026-11-20)
+
+-- Starts AZEcaught over: collection, companion, active time, weekly peaks/payout and the guaranteed first catch are
+-- cleared, and so are the runtime throw tables. Kept: settings (icon, notify, verbose) and the journal (the reset line
+-- marks the cut). `withWallet` also clears the ledger; casino results live in the guild's game records and stay.
+---@param withWallet boolean|nil
+---@return { found: integer, caught: integer, companion: boolean, wallet: boolean }
+function AzeCaught.Reset(withWallet)
+    local caught = AzeCaught.State()
+    local summary = { found = addon.Utility.Count(caught.collection), caught = AzeCaught.CaughtCount(),
+        companion = caught.active ~= nil, wallet = withWallet == true }
+    caught.collection, caught.active, caught.activeSeconds, caught.peaks = {}, nil, 0, {}
+    caught.paidWeek, caught.firstCatchDone = nil, nil
+    if withWallet then caught.ledger = nil end
+    AzeCaught.throws, AzeCaught.rolled, AzeCaught.thrown = {}, {}, {}
+    AzeCaught.lastThrowAt, AzeCaught.forceNextCatch = nil, false
+    AzeCaught.Journal("INFORMATION", "dev.reset", "AZEcaught was reset", summary)
+    return summary
 end
 
 ------------------------------------------------------------------ export (manual debugging, R20)

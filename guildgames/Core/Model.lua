@@ -344,5 +344,13 @@ function Model.BuildNpcInfo(npcId, entry)
     end
     info.thresholds = Format(Text["Needy below {ok}%, critical below {critical}%"], { ok = profile.ok, critical = profile.critical })
     for _, trait in ipairs(profile.traits) do info.traits[#info.traits + 1] = Model.TraitText(trait) end
+    -- calculated, so always known (user 2026-11-20); fill = share of a full bar (capped), over = stronger than full
+    local combat, scale = AzeCaught.CombatStats(npcId, entry), AzeCaught.CombatScale()
+    info.combat = {}
+    for _, stat in ipairs({ { "attack", Text["Attack"] }, { "defense", Text["Defense"] }, { "speed", Text["Speed"] } }) do
+        local value = combat[stat[1]]
+        info.combat[#info.combat + 1] = { key = stat[1], label = stat[2], value = tostring(value),
+            fill = math.min(1, value / scale), over = value > scale }
+    end
     return info
 end
