@@ -74,22 +74,15 @@ end
 ---@param refusal string|nil
 ---@return string
 local function careRefusalText(refusal)
-    if refusal == "funds" then return Format(Text["Not enough money in the pool ({gold})."], { gold = money(addon.Wallet.Balance(me())) }) end
+    local commonText = addon.Model.CommonRefusalText(refusal, me())
+    if commonText then return commonText end
     if refusal == "asleep" then return Text["It is asleep. Wake it first."] end
     if refusal == "full" then return Text["It does not need that right now."] end
     if refusal == "awake" then return Text["It is already awake."] end
-    if refusal == "readonly" then return Text["Saved data is read-only in this session."] end
     return Text["No companion. Catch an NPC and pick it in the collection."]
 end
 
----@param seconds number
----@return string
-local function duration(seconds)
-    if seconds == math.huge then return "-" end
-    local minutes = math.max(0, math.floor(seconds / 60))
-    if minutes >= 60 then return Format(Text["{h}h {m}m"], { h = math.floor(minutes / 60), m = minutes % 60 }) end
-    return Format(Text["{m}m"], { m = minutes })
-end
+local duration = addon.Model.Duration
 
 ------------------------------------------------------------------ 3D model (fpvcigarette's method, feature 018 design)
 

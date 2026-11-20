@@ -250,6 +250,20 @@ function Model.Duration(seconds)
     return Format(Text["{m}m"], { m = minutes })
 end
 
+-- The text for a refusal every game shares (the saved data is read-only, the pool is too small), or nil for any other
+-- refusal: the caller words its own ones. Literal Text[...] keys, so the locale test sees them.
+---@param refusal string|nil
+---@param myName string|nil whose pool balance the "funds" text shows
+---@return string|nil
+function Model.CommonRefusalText(refusal, myName)
+    local Text, Format = addon.Text, addon.Locale.Format
+    if refusal == "readonly" then return Text["Saved data is read-only in this session."] end
+    if refusal == "funds" then
+        return Format(Text["Not enough money in the pool ({gold})."], { gold = Model.MoneyText(addon.Wallet.Balance(myName)) })
+    end
+    return nil
+end
+
 ---@param powerType integer|nil
 ---@return string
 local function powerName(powerType)

@@ -283,11 +283,9 @@ end
 ---@param refusal FlipRefusal|nil
 ---@return string
 local function refusalText(refusal)
-    if refusal == "readonly" then return Text["Saved data is read-only in this session."] end
+    local commonText = addon.Model.CommonRefusalText(refusal, addon.Utility.Me())
+    if commonText then return commonText end
     if refusal == "name" then return Text["Your character is not known yet."] end
-    if refusal == "funds" then
-        return Format(Text["Not enough money in the pool ({gold})."], { gold = money(addon.Wallet.Balance(addon.Utility.Me())) })
-    end
     return Format(Text["Enter a stake from 1c to {max}"], { max = money(addon.Games.MAXIMUM_STAKE) })
 end
 GamesTab.RefusalText = refusalText

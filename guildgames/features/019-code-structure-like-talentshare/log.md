@@ -38,3 +38,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: 55 lines fewer in T4's first part; behaviour unchanged. Dev TOC regenerated (tools/deploy.ps1).
 - Evidence: luajit tests/run.lua -> "118 passed, 0 failed"
 - Next: T5 one Model.Duration, one Model.RefusalText
+
+## 2026-11-20 22:45 | BUILD | T5 one duration text, shared refusal texts
+- Did: AzeCaughtPanel.duration and Window.minutesText removed; both use Core/View/Model.lua `Model.Duration` (Decision 2: rounds to the nearest minute, "2h" for whole hours; the two copies floored and showed "2h 0m"). New `Model.CommonRefusalText(refusal, myName)` for the refusals every game shares (readonly, funds); GamesTab.refusalText and AzeCaughtPanel.careRefusalText use it and keep only their own reasons. Catcher.throwRefusalText shares no reason (its "full" means a full caught list, not a full need), so it stays.
+- Result: the duplicated "Not enough money in the pool" / "read-only" texts exist once; the locale lint still sees every key (Model is in Core/).
+- Evidence: luajit tests/run.lua -> "120 passed, 0 failed" (new: "model: Duration rounds to minutes, whole hours without minutes, never is a dash", "model: CommonRefusalText words read-only and funds, leaves every other refusal to the caller")
+- Next: T6 renames

@@ -74,4 +74,26 @@ return {
         records["C-R"] = nil
         harness.equal(Model.PreviousWinner(records, "2026-W46").nameRaw, "A-R", "then by name")
     end,
+
+    -- feature 019: the one duration text (companion panel, minimap tooltip and NPC info used three copies)
+    ["model: Duration rounds to minutes, whole hours without minutes, never is a dash"] = function(harness)
+        local Model = harness.addon().Model
+        harness.equal(Model.Duration(math.huge), "-"); harness.equal(Model.Duration(nil), "-")
+        harness.equal(Model.Duration(0), "0m"); harness.equal(Model.Duration(-30), "0m")
+        harness.equal(Model.Duration(89), "1m"); harness.equal(Model.Duration(91), "2m")
+        harness.equal(Model.Duration(7200), "2h"); harness.equal(Model.Duration(5400), "1h 30m")
+    end,
+
+    ["model: CommonRefusalText words read-only and funds, leaves every other refusal to the caller"] = function(harness)
+        local addon = harness.addon()
+        local Model = addon.Model
+        harness.equal(Model.CommonRefusalText("readonly", "Me-R"), "Saved data is read-only in this session.")
+        local fundsText = Model.CommonRefusalText("funds", "Me-R")
+        harness.truthy(fundsText:find("Not enough money in the pool", 1, true), fundsText)
+        harness.truthy(fundsText:find(Model.MoneyText(addon.Wallet.Balance("Me-R")), 1, true), "shows the balance: " .. fundsText)
+        for _, refusal in ipairs({ "name", "stake", "full", "asleep", "cooldown" }) do
+            harness.equal(Model.CommonRefusalText(refusal, "Me-R"), nil, refusal)
+        end
+        harness.equal(Model.CommonRefusalText(nil, "Me-R"), nil)
+    end,
 }

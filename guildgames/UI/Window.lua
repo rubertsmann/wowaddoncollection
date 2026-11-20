@@ -503,15 +503,6 @@ function UI.RefreshMinimapBadge()
     end
 end
 
----@param seconds number
----@return string
-local function minutesText(seconds)
-    if seconds == math.huge then return "-" end
-    local minutes = math.max(0, math.floor(seconds / 60))
-    if minutes >= 60 then return addon.Locale.Format(Text["{h}h {m}m"], { h = math.floor(minutes / 60), m = minutes % 60 }) end
-    return addon.Locale.Format(Text["{m}m"], { m = minutes })
-end
-
 -- The companion's needs and schedule in the minimap tooltip.
 ---@param tooltip table
 function UI.AddCompanionTooltip(tooltip)
@@ -533,14 +524,14 @@ function UI.AddCompanionTooltip(tooltip)
         local seconds = AzeCaught.SecondsUntilNeedy(companion, need)
         local color = colors[zone]
         tooltip:AddDoubleLine(("%s %d%%"):format(labels[need], math.floor(companion[need] + 0.5)),
-            seconds == math.huge and Text["never"] or seconds > 0 and Format(Text["care in {time}"], { time = minutesText(seconds) }) or Text["now"],
+            seconds == math.huge and Text["never"] or seconds > 0 and Format(Text["care in {time}"], { time = addon.Model.Duration(seconds) }) or Text["now"],
             color[1], color[2], color[3], 1, 1, 1)
     end
-    if companion.asleep then tooltip:AddLine(Format(Text["Asleep, wakes in {time}"], { time = minutesText(companion.asleep) }), 0.65, 0.5, 1) end
+    if companion.asleep then tooltip:AddLine(Format(Text["Asleep, wakes in {time}"], { time = addon.Model.Duration(companion.asleep) }), 0.65, 0.5, 1) end
     tooltip:AddLine(Format(Text["Water every {water}, food every {food}, petting every {pet}, sleep {sleep} every {awake} (play time)."],
-        { water = minutesText(profile.intervals.thirst or math.huge), food = minutesText(profile.intervals.hunger or math.huge),
-          pet = minutesText(profile.intervals.affection or math.huge), sleep = minutesText(AzeCaught.SLEEP_DURATION),
-          awake = minutesText(profile.intervals.energy or math.huge) }), 0.7, 0.7, 0.7, true)
+        { water = addon.Model.Duration(profile.intervals.thirst or math.huge), food = addon.Model.Duration(profile.intervals.hunger or math.huge),
+          pet = addon.Model.Duration(profile.intervals.affection or math.huge), sleep = addon.Model.Duration(AzeCaught.SLEEP_DURATION),
+          awake = addon.Model.Duration(profile.intervals.energy or math.huge) }), 0.7, 0.7, 0.7, true)
     if not AzeCaught.State().notify then tooltip:AddLine(Text["Reminders are off (/gg notify on)."], 0.7, 0.7, 0.7) end
 end
 
