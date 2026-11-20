@@ -127,7 +127,7 @@ function Slots.ReturnToPlayer()
 end
 
 -- One spin. The stops are drawn and the result STORED here (Games.RecordPlay), before any animation. Returns the result,
--- or nil and the refusal ("stake", "readonly", "name").
+-- or nil and the refusal ("stake", "readonly", "name", "funds": more than the money pool holds, feature 018 R18).
 ---@param myName string|nil
 ---@param stake any copper, 1..Games.MAXIMUM_STAKE
 ---@param now integer
@@ -136,6 +136,8 @@ end
 ---@return FlipRefusal|nil
 function Slots.Spin(myName, stake, now, randomFunction)
     if not addon.Utility.SafeInteger(stake, 1, addon.Games.MAXIMUM_STAKE) then return nil, "stake" end
+    local refused = addon.Games.Refusal(myName, stake, true)
+    if refused then return nil, refused end
     local stops = {}
     for reel = 1, Slots.REELS do stops[reel] = math.min(#Slots.STRIP, 1 + math.floor(randomFunction() * #Slots.STRIP)) end
     local grid = Slots.Grid(stops)

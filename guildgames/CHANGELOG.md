@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased (protocol 1.1, schema 2)
+- New game **AZEcaught** (feature 018): catch hostile NPCs and raise one as a companion.
+  - Every NPC you fight is added to your collection. Below 35% health a rope icon shows on its nameplate; throw it (icon,
+    the "AZEcaught: throw rope" key binding or `/gg catch`) and kill the NPC within 3 s for a chance to catch it (the first catch always succeeds). The chance
+    rises sharply near 0 HP and falls for elite, rare and boss NPCs and for higher levels; harder catches pay more.
+  - One caught NPC is your companion, shown as a 3D model. It gets hungry (every 2 h), thirsty (every 1 h), wants petting
+    (every 2 h) and sleep (1 h every 4 h), counted in play time only. Food (50s) and water (25s) are paid from the money
+    pool; petting and sleep are free. Caring in time earns hearts and a care streak (at most one step per hour), neglect costs them (down into the negatives); two hours
+    without food or water and it dies. Switching away from a companion with negative hearts makes it run away.
+  - The collection: Caught (at most 10) and Seen (every enemy fought, highest level); switching asks first ("stats will be
+    reset"). Hovering the model shows everything known about the NPC; its needs and thresholds come from its stats
+    (creature type, power type, rarity).
+  - The rope icon is round and sits above the nameplate; its glow turns from red to green as the chance grows, it can be
+    moved, resized or turned off (Options > AddOns, `/gg caught icon`), and each enemy takes one throw. A throw flies a
+    rope on an arc from you to the target, placed by camera geometry and the target's distance (nameplates are
+    restricted on this client), smaller the farther away it lands. The care buttons
+    are icons, greyed out while not usable, with a short cooldown.
+  - A Guild view ranks every member's companion (NPC level + rarity + hearts); the weekly place pays 500g / 300g / 150g /
+    25g into the pool. The minimap button shows a badge when a need is due (`/gg notify off` turns it off).
+  - Diagnostics: `/gg caught state|log|wallet|chance|collection|verbose|notify|export|probe`, an AZEcaught journal of its
+    own (400 lines), warnings and errors also in `/gg debug`.
+- **Money pool:** one balance for every game: 20g to start, plus your casino results, catch rewards and weekly payouts,
+  minus food and water. **A stake can no longer be higher than the balance** (all games). The balance is shown next to
+  the game switch.
+
 ## 0.1.0 (2026-11-18)
 - The coin flip and the slot machine from TalentShare 0.6.0 are now their own addon, with the same rules, animations and
   leaderboards. They have their own saved data (`GuildGamesDB`), their own prefix (`GGames`) and protocol 1.0, and use the

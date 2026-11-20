@@ -75,7 +75,7 @@ return {
                 harness.equal(addon.IS_DEVELOPMENT_BUILD, development)
                 harness.equal(addon.PREFIX, development and "GGamesDev" or "GGames")
                 harness.equal(addon.SAVED_VARIABLES_NAME, development and "GuildGamesDevDB" or "GuildGamesDB")
-                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 0); harness.equal(addon.Store.SCHEMA, 1)
+                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 1); harness.equal(addon.Store.SCHEMA, 2)
                 harness.truthy(addon.UI and addon.GamesTab and addon.SlotMachine and addon.Communication and addon.Sync, "namespace incomplete")
                 addon.Store.Init({})
                 addon.Store.db.me = "A-R"
@@ -116,6 +116,196 @@ return {
                 harness.truthy(pcall(addon.UI.ToggleSidebar), "toggling the sidebar failed")
                 harness.equal(addon.db.ui.sidebarOpen, true)
                 harness.truthy(pcall(addon.UI.ToggleSidebar)); harness.equal(addon.db.ui.sidebarOpen, false)
+                -- AZEcaught (feature 018): the panel builds, every view, care, the commands and the ticker run without an error
+                harness.truthy(addon.AzeCaughtPanel.widgets.model, "the AZEcaught panel was not built (see Log: caught.ui)")
+                addon.GamesTab.SelectGame("caught")
+                harness.equal(addon.GamesTab.state.game, "caught")
+                local entry = addon.AzeCaught.NoteFound({ npc = 4711, name = "Wolf", level = 5 }, 1794873600)
+                entry.caught = 1
+                for _, view in ipairs({ "collection", "guild", "companion" }) do addon.AzeCaughtPanel.SelectView(view) end
+                -- switching: select a row, the button asks "Stats will be reset", confirming switches (user 2026-11-20)
+                local Panel = addon.AzeCaughtPanel
+                Panel.SelectView("collection"); Panel.SelectSection("caught")
+                Panel.SelectRow(4711)
+                harness.equal(Panel.state.previewNpc, 4711, "a click selects the row")
+                harness.equal(addon.AzeCaught.Active(), nil, "a click alone does not switch")
+                Panel.RequestSwitch()
+                harness.truthy(Panel.widgets.confirmDialog:IsShown(), "the confirm dialog opens")
+                Panel.CancelSwitch()
+                harness.equal(Panel.widgets.confirmDialog:IsShown(), false); harness.equal(addon.AzeCaught.Active(), nil)
+                Panel.RequestSwitch(); Panel.ConfirmSwitch()
+                harness.truthy(addon.AzeCaught.Active(), "confirming switches")
+                Panel.SelectSection("seen"); Panel.SelectSection("caught")
+                addon.AzeCaught.Active().hunger = 40
+                addon.AzeCaughtPanel.Care("feed"); addon.AzeCaughtPanel.Care("pet"); addon.AzeCaughtPanel.Care("sleep")
+                addon.AzeCaughtPanel.RefreshCompanion()
+                -- care buttons: greyed out when unusable, a click cooldown (user 2026-11-20)
+                do
+                    local Panel = addon.AzeCaughtPanel
+                    local companion = addon.AzeCaught.Active()
+                    companion.asleep = nil; companion.affection = 60; companion.thirst = 100
+                    Panel.state.careReadyAt = nil
+                    Panel.RefreshCareButtons()
+                    harness.equal(Panel.careState.water.unusable, "full", "water greyed out when full")
+                    harness.equal(Panel.careState.pet.unusable, nil, "petting usable")
+                    Panel.ClickCare("pet")
+                    harness.equal(companion.affection, 100, "the click petted")
+                    companion.affection = 60
+                    Panel.ClickCare("pet")
+                    harness.equal(companion.affection, 60, "a second click inside the cooldown is ignored")
+                    harness.truthy(addon.AzeCaught.JournalLines(1, "ui.cooldown")[1], "the ignored click is journaled")
+                    Panel.state.careReadyAt = nil
+                end
+                -- the hover panel shows the NPC's info beside the model (user 2026-11-20)
+                local npcId, infoEntry = addon.AzeCaughtPanel.CompanionNpc()
+                local tooltipLines = {}
+                local fakeTooltip = { SetOwner = function() end, Show = function() end,
+                    SetText = function(_, text) tooltipLines[#tooltipLines + 1] = text end,
+                    AddLine = function(_, text) tooltipLines[#tooltipLines + 1] = text end,
+                    AddDoubleLine = function(_, left, right) tooltipLines[#tooltipLines + 1] = left .. " | " .. right end }
+                local okInfo, lineCount = pcall(addon.AzeCaughtPanel.ShowNpcInfo, fakeTooltip, addon.AzeCaughtPanel.widgets.model, npcId, infoEntry)
+                harness.truthy(okInfo and lineCount > 5, "the info panel: " .. tostring(lineCount))
+                -- the model returns to idle after an action and whenever the panel shows (user 2026-11-20)
+                do
+                    local Panel = addon.AzeCaughtPanel
+                    local played, scripts = {}, {}
+                    local fake = setmetatable({ HasAnimation = function() return true end,
+                        SetAnimation = function(_, animationId) played[#played + 1] = animationId end,
+                        SetScript = function(_, name, handler) scripts[name] = handler end,
+                        GetScript = function(_, name) return scripts[name] end }, { __index = Panel.widgets.model })
+                    local realModel, realAfter = Panel.widgets.model, C_Timer.After
+                    local timers = {}
+                    C_Timer.After = function(_, callback) timers[#timers + 1] = callback end
+                    Panel.widgets.model = fake
+                    Panel.PrepareModel(fake, Panel.IdleOfCompanion)
+                    local companion = addon.AzeCaught.Active()
+                    companion.asleep = nil; companion.affection = 80
+                    Panel.Care("pet")
+                    harness.truthy(played[#played] ~= 0, "the action plays its emote")
+                    for _, callback in ipairs(timers) do callback() end
+                    harness.equal(played[#played], 0, "back to idle after the emote")
+                    played = {}
+                    harness.truthy(scripts.OnModelLoaded, "the model goes idle once it has loaded")
+                    scripts.OnModelLoaded(fake)
+                    harness.equal(played[#played], 0, "idle after loading")
+                    played = {}
+                    Panel.ShowIdle("shown")
+                    harness.equal(played[#played], 0, "idle when the menu shows")
+                    companion.asleep = 100; played = {}
+                    Panel.ShowIdle("shown")
+                    harness.truthy(played[#played] ~= 0, "a sleeping companion shows its sleep animation, not the stand")
+                    companion.asleep = nil
+                    -- an older timer does not override a newer action
+                    timers = {}
+                    companion.affection = 80; Panel.Care("pet")
+                    local stale = timers[1]
+                    companion.affection = 80; Panel.Care("pet")
+                    played = {}
+                    stale()
+                    harness.equal(#played, 0, "a stale timer is ignored")
+                    Panel.widgets.model, C_Timer.After = realModel, realAfter
+                end
+                addon.Catcher.Start(); addon.Catcher.OnTick(); addon.Catcher.PollThrows(); addon.Catcher.CheckDeath("target"); addon.Catcher.RefreshIcons()
+                -- a catch logs the dump taken at the throw (feature 018)
+                addon.Catcher.dumps["Creature-0-1-2-3-4711-AB"] = { at = 0, values = { name = "Wolf", creatureType = "Beast" } }
+                addon.Catcher.LogCatchDump("Creature-0-1-2-3-4711-AB", { npc = 4711, chance = 0.1, roll = 0.05, reward = 20000 })
+                local dumpLine = addon.AzeCaught.JournalLines(1, "catch.dump")[1] or ""
+                harness.truthy(dumpLine:find("creatureType=Beast", 1, true) and dumpLine:find("roll=0.0500", 1, true), "catch dump: " .. dumpLine)
+                harness.equal(addon.Catcher.dumps["Creature-0-1-2-3-4711-AB"], nil, "a logged dump is released")
+                for _, command in ipairs({ "state", "log 5", "log 5 care", "wallet", "chance", "collection", "verbose on", "verbose off",
+                    "notify off", "notify on", "export", "probe", "dump", "", "nonsense" }) do
+                    local okCommand, commandError = pcall(addon.SlashCommands.caught, command)
+                    harness.truthy(okCommand, "/gg caught " .. command .. ": " .. tostring(commandError))
+                end
+                harness.truthy(pcall(addon.SlashCommands.catch, ""), "/gg catch")
+                -- the icon options page (user 2026-11-20): built, toggles and steps the settings, the slash command too
+                local Options = addon.AzeCaughtOptions
+                harness.truthy(Options.widgets.frame, "the options page was built (see Log: caught.options)")
+                Options.Change("shown"); harness.equal(addon.AzeCaught.IconSettings().shown, false)
+                Options.Change("shown"); harness.equal(addon.AzeCaught.IconSettings().shown, true)
+                Options.Change("y", 1); harness.equal(addon.AzeCaught.IconSettings().y, 4)
+                Options.Reset(); harness.equal(addon.AzeCaught.IconSettings().y, 2)
+                for _, command in ipairs({ "icon", "icon off", "icon on", "icon x -10", "icon size 40", "icon reset" }) do
+                    harness.truthy(pcall(addon.SlashCommands.caught, command), "/gg caught " .. command)
+                end
+                harness.equal(addon.AzeCaught.IconSettings().size, 26, "reset at the end")
+                -- the rope flies on an arc from the player to the target (user 2026-11-20)
+                local Animate = addon.Animate
+                local startX, startY = Animate.ArcPoint(0, 0, 200, 0, 50, 0)
+                local endX, endY = Animate.ArcPoint(0, 0, 200, 0, 50, 1)
+                local middleX, middleY = Animate.ArcPoint(0, 0, 200, 0, 50, 0.5)
+                harness.equal(startX, 0); harness.equal(startY, 0); harness.equal(endX, 200); harness.equal(endY, 0)
+                harness.equal(middleX, 100); harness.equal(middleY, 50, "the arc peaks at the lift in the middle")
+                -- The client rules (journal 2026-11-20): nameplates are restricted regions. "GetCenter(): Can't measure
+                -- restricted regions ... Lua Taint", "Line:SetEndPoint(): Not allowed to depend on NamePlate1". The rope
+                -- effect must not touch a plate at all: this stub plate records and refuses every use.
+                local savedNamePlate, savedCreateFrame = C_NamePlate, CreateFrame
+                local plate, refused = stub(), {}
+                for _, method in ipairs({ "GetCenter", "GetLeft", "GetTop", "GetRect", "GetEffectiveScale" }) do
+                    rawset(plate, method, function() refused[#refused + 1] = method; error(method .. "(): Can't measure restricted regions") end)
+                end
+                local function restricted(region)
+                    for _, method in ipairs({ "SetStartPoint", "SetEndPoint", "SetPoint" }) do
+                        rawset(region, method, function(self, _, relative)
+                            if relative == plate then refused[#refused + 1] = method; error(method .. "(): Not allowed to depend on NamePlate1") end
+                            return self
+                        end)
+                    end
+                    return region
+                end
+                CreateFrame = function()
+                    local frame = restricted(stub())
+                    rawset(frame, "CreateLine", function() return restricted(stub()) end)
+                    rawset(frame, "CreateTexture", function() return restricted(stub()) end)
+                    return frame
+                end
+                C_NamePlate = { GetNamePlateForUnit = function() return plate end }
+                addon.Catcher.PlayRopeEffect("target")
+                for _ = 1, 60 do addon.Animate._onUpdate(nil, 0.02) end   -- fly, land, burst
+                C_NamePlate, CreateFrame = savedNamePlate, savedCreateFrame
+                harness.equal(table.concat(refused, ","), "", "the rope effect never measures or anchors to a nameplate")
+                -- projected (stub client: no positions, no range checks -> the melee guess; UIParent 100 x 20 -> clamped)
+                local played = addon.Catcher.lastEffect
+                harness.equal(played.mode, "projected", tostring(played.error))
+                harness.equal(played.source, "melee guess"); harness.equal(played.distance, "6.0")
+                harness.truthy(played.why:find("position", 1, true) and played.why:find("interact", 1, true), played.why)
+                -- the geometry sources: world positions (UnitPosition returns west, north; facing 0 = north, ccw)
+                local Api, saved = addon.Api, {}
+                local function set(name, value)
+                    if saved[name] == nil then saved[name] = rawget(_G, name) or false end
+                    rawset(_G, name, value)
+                end
+                local target = { 0, 10 }
+                set("UnitPosition", function(unit) if unit == "player" then return 0, 0, 0, 1 end return target[1], target[2], 0, 1 end)
+                set("GetPlayerFacing", function() return 0 end)
+                set("GetCameraZoom", function() return 15 end)
+                local ahead = Api.ThrowGeometry("target")
+                harness.equal(ahead.source, "position"); harness.equal(ahead.distance, 10); harness.truthy(math.abs(ahead.bearing) < 1e-9)
+                harness.equal(ahead.zoom, 15)
+                target = { -10, 0 }   -- 10 yards east = to the right when facing north
+                harness.truthy(math.abs(Api.ThrowGeometry("target").bearing - math.pi / 2) < 1e-9, "east is to the right")
+                -- no positions, in combat: CheckInteractDistance (restricted against enemies in combat) is never called
+                local interactCalls = 0
+                set("UnitPosition", function() return nil end)
+                set("CheckInteractDistance", function(_, index) interactCalls = interactCalls + 1 return index == 4 end)
+                set("InCombatLockdown", function() return true end)
+                harness.equal(Api.ThrowGeometry("target").source, "melee guess"); harness.equal(interactCalls, 0)
+                set("InCombatLockdown", function() return false end)
+                local outside = Api.ThrowGeometry("target")
+                harness.equal(outside.source, "interact4"); harness.equal(outside.distance, 18)
+                for name, value in pairs(saved) do rawset(_G, name, value or nil) end
+                addon.Catcher.PlayRopeEffect("target")
+                harness.truthy(addon.AzeCaught.JournalLines(1, "throw.effect")[1]:find("was played", 1, true),
+                    "the throw effect runs: " .. tostring(addon.AzeCaught.JournalLines(1, "throw.effect")[1]))
+                harness.truthy(pcall(_G.GuildGamesAzeCaughtThrow), "the key binding")
+                if development then
+                    for _, command in ipairs({ "add", "time 30", "give 5", "force", "need hunger 10", "week", "effect" }) do
+                        local okCommand, commandError = pcall(addon.SlashCommands.caught, command)
+                        harness.truthy(okCommand, "/ggd caught " .. command .. ": " .. tostring(commandError))
+                    end
+                end
+                harness.truthy(pcall(addon.UI.AddCompanionTooltip, GameTooltip), "the minimap tooltip")
+                addon.GamesTab.SelectGame("coin")
                 local okMinimap, minimapError = pcall(addon.UI.BuildMinimapButton)
                 harness.truthy(okMinimap and addon.UI.minimapButton, "the minimap button was not built: " .. tostring(minimapError))
                 if development then
@@ -126,6 +316,13 @@ return {
                     harness.equal(addon.SlashCommands.anim, nil, "dev command in the live build")
                 end
                 harness.truthy(addon.SlashCommands.version and addon.SlashCommands.comm and addon.SlashCommands.clean, "slash commands missing")
+                local errors = {}
+                for _, line in ipairs(addon.Store.db.debug) do if line:find(" ERROR ", 1, true) then errors[#errors + 1] = line end end
+                harness.equal(#errors, 0, "errors in the log: " .. table.concat(errors, " || "))
+                -- a blocked action (caught in Init.lua) lands in the log with the function name
+                harness.truthy(type(addon.blockedEarly) == "table", "Init.lua keeps early blocks")
+                addon.OnActionBlocked({ kind = "forbidden", ["function"] = "TestFunction()", combat = "false" })
+                harness.truthy(addon.Store.db.debug[#addon.Store.db.debug]:find("function=TestFunction()", 1, true), "blocked action logged")
             end
         end)
     end,
@@ -168,5 +365,71 @@ return {
             end
         end
         harness.equal(#unknown, 0, "unknown globals (missing local?): " .. table.concat(unknown, ", "))
+    end,
+
+    -- Retail-based Forever client (build 70959): registering the combat log is FORBIDDEN for addons (the "reserved for
+    -- the Blizzard UI" dialog at load, feature 018). No file may register it or read it.
+    ["load: no file registers or reads the combat log (forbidden on this client)"] = function(harness)
+        local offenders = {}
+        for _, file in ipairs(tocFiles("GuildGames.toc")) do
+            if not file:match("^Libs/") then
+                local text = slurp(file)
+                for _, forbidden in ipairs({ "COMBAT_LOG_EVENT", "CombatLogGetCurrentEventInfo" }) do
+                    if text:find(forbidden, 1, true) then offenders[#offenders + 1] = file .. ": " .. forbidden end
+                end
+            end
+        end
+        harness.equal(#offenders, 0, "forbidden combat log use: " .. table.concat(offenders, ", "))
+    end,
+
+    -- secret values (in combat, in instances): reading a unit never raises, a secret reads as unknown
+    ["load: unit reads survive secret values"] = function(harness)
+        local addon = harness.addon({ now = 1794873600 })
+        local secret = setmetatable({}, { __index = function() error("indexed a secret") end,
+            __lt = function() error("compared a secret") end, __le = function() error("compared a secret") end,
+            __div = function() error("arithmetic on a secret") end, __eq = function() error("compared a secret") end })
+        local saved = {}
+        local globals = { issecretvalue = function(value) return value == secret end, UnitExists = function() return true end,
+            UnitGUID = function() return "Creature-0-1-2-3-4711-AB" end, UnitHealth = function() return secret end,
+            UnitHealthMax = function() return secret end, UnitLevel = function() return secret end, UnitName = function() return secret end,
+            UnitClassification = function() return secret end, UnitCanAttack = function() return secret end,
+            UnitIsDead = function() return secret end }
+        for key, value in pairs(globals) do saved[key] = _G[key]; _G[key] = value end
+        local ok, snapshot = pcall(function()
+            assert(loadfile("Core/Api.lua"))("GuildGames", addon)
+            return addon.Api.UnitSnapshot("target")
+        end)
+        for key in pairs(globals) do _G[key] = saved[key] end
+        harness.truthy(ok, "UnitSnapshot raised: " .. tostring(snapshot))
+        harness.truthy(snapshot, "a unit with secret details is still a unit")
+        harness.equal(snapshot.npc, 4711)
+        harness.equal(snapshot.health, nil, "a secret health is unknown, not a number")
+        harness.equal(snapshot.dead, nil); harness.equal(snapshot.name, nil); harness.equal(snapshot.level, nil)
+        harness.equal(snapshot.classification, "normal")
+    end,
+
+    -- the catch dump (feature 018): every readable unit value; secrets, missing functions and errors are named
+    ["load: the unit dump names every value, a secret, a missing function and an error"] = function(harness)
+        local addon = harness.addon({ now = 1794873600 })
+        local secret = {}
+        local saved = {}
+        local globals = { issecretvalue = function(value) return value == secret end, UnitExists = function() return true end,
+            UnitGUID = function() return "Creature-0-1-2-3-4711-AB" end, UnitName = function() return "Wolf" end,
+            UnitLevel = function() return 12 end, UnitHealth = function() return secret end, UnitHealthMax = function() return 300 end,
+            UnitCreatureType = function() return "Beast" end, UnitCreatureFamily = function() return "Wolf" end,
+            UnitPowerType = function() return 0, "MANA" end, UnitSex = function() error("boom") end, UnitRace = nil,
+            UnitStat = function() return 5, 5, 0, 0 end }
+        for key, value in pairs(globals) do saved[key] = _G[key]; _G[key] = value end
+        local ok, dump = pcall(function()
+            assert(loadfile("Core/Api.lua"))("GuildGames", addon)
+            return addon.Api.UnitDump("target")
+        end)
+        for key in pairs(globals) do _G[key] = saved[key] end
+        harness.truthy(ok, "UnitDump raised: " .. tostring(dump))
+        harness.equal(dump.name, "Wolf"); harness.equal(dump.level, "12"); harness.equal(dump.npc, "4711")
+        harness.equal(dump.health, "secret"); harness.equal(dump.healthMax, "300")
+        harness.equal(dump.creatureType, "Beast"); harness.equal(dump.family, "Wolf"); harness.equal(dump.powerType, "0/MANA")
+        harness.equal(dump.sex, "error"); harness.equal(dump.race, "missing")
+        harness.equal(dump.strength, "5/5/0/0", "base/effective/buff/debuff"); harness.truthy(dump.unit == "target")
     end,
 }

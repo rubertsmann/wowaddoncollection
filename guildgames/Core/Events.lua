@@ -9,7 +9,7 @@ local Events = addon.Events
 do
     local missingModules = {}
     for _, moduleName in ipairs({ "Utility", "Log", "Trace", "Locale", "Codec", "Store", "Api", "Games", "CoinFlip", "Slots",
-        "Survivor", "Model", "Sync", "Communication" }) do
+        "Survivor", "Wallet", "AzeCaught", "Model", "Sync", "Communication", "Catcher" }) do
         if not addon[moduleName] then missingModules[#missingModules + 1] = moduleName end
     end
     if #missingModules > 0 then
@@ -60,6 +60,9 @@ function onGameEvent.ADDON_LOADED(loadedAddonName)
     addon.Locale.SetInterfaceLanguage(addon.db.ui.locale)
     addon.Communication.Init()
     addon.Log.Information("events.load", "addon loaded", { version = addon.VERSION, build = addon.BUILD, store = status })
+    -- blocks that happened while the files loaded (before the log could store anything)
+    for _, entry in ipairs(addon.blockedEarly or {}) do addon.OnActionBlocked(entry) end
+    addon.blockedEarly = {}
 end
 
 function onGameEvent.PLAYER_LOGIN()
@@ -71,6 +74,7 @@ function onGameEvent.PLAYER_LOGIN()
         addon.Log.Information("games.survivor", "an unfinished survivor run was booked as lost")
         addon.Events.Fire("GAMES_CHANGED")
     end
+    addon.Log.Protected("caught.start", "starting AZEcaught failed", addon.Catcher.Start)
     addon.Communication.canonicalNameVersion = addon.Utility.realmAliasVersion
     addon.Communication.ready = true   -- the current character is known now; Start refuses to run before this
     addon.Communication.Start()
@@ -103,6 +107,23 @@ function onGameEvent.GUILD_ROSTER_UPDATE()
 end
 
 function onGameEvent.PLAYER_GUILD_UPDATE() addon.Communication.Start() end
+
+-- The client blocked a function only Blizzard code may call ("reserved for the Blizzard UI" dialog) and blamed this
+-- addon (the event is caught in Core/Init.lua, the first file). Logged with the function name, the combat state, the
+-- stack and the last AZEcaught steps, so the cause can be found from /gg debug (or the SavedVariables file).
+---@param details table { kind, function, combat, stack }
+function addon.OnActionBlocked(details)
+    if addon.AzeCaught then
+        local recent = addon.AzeCaught.JournalLines(3)
+        details.lastSteps = table.concat(recent, " || ")
+    end
+    if addon.AzeCaught then   -- the journal mirrors ERROR lines to the main log (/gg debug)
+        addon.AzeCaught.Journal("ERROR", "blocked", "the client blocked a protected function and blamed this addon", details)
+    else
+        addon.Log.Error("events.blocked", "the client blocked a protected function and blamed this addon", details)
+    end
+end
+
 
 for gameEvent in pairs(onGameEvent) do
     local ok = pcall(eventFrame.RegisterEvent, eventFrame, gameEvent)

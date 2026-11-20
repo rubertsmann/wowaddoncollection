@@ -1,6 +1,6 @@
 # GuildGames wire protocol and stored data
 
-Protocol **1.0**, schema **1** (0.1.0). Source of truth in code: `Core/Init.lua` (versions, prefix), `Core/Sync.lua`
+Protocol **1.1**, schema **2** (next release; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Init.lua` (versions, prefix), `Core/Sync.lua`
 (messages), `Core/Games.lua` (record, validation), `Core/Store.lua` (schema). The transport, chunk header, compatibility
 rules, guild gate and record-pull engine are LibGuildSync-1.0's (`Libs/LibGuildSync`, documented in the libguildsync repo).
 Tests: `tests/test_games_sync.lua`, `tests/test_games.lua`, `tests/test_store_and_locale.lua`.
@@ -37,12 +37,26 @@ protocol, so TalentShare and GuildGames never read each other's messages.
   picks, so it cannot be decided up front: the stake is kept as `ui.survivorPending = { name, c, t }` while a run is open
   and booked at the next login if the run never ended: a loss, or for an endless run the factor it had reached
   (`factor`, 2..64; local only, never sent).
+- **AZEcaught section (optional, protocol 1.1, feature 018) `caught = { c?, weeks }`:** my current companion and my
+  weekly peaks. `c = { npc, n, lvl, cls, disp, h, hu, th, af, en, sl?, fs }`: NPC id (1..2^31-1), NPC name (client text,
+  at most 48 bytes, UTF-8, no control characters), level 1..200, classification `normal|elite|rare|rareelite|worldboss`,
+  display id (0 = unknown), hearts (-1e6..1e6), the four needs 0..100, asleep `true` or absent, fed streak.
+  `weeks = { ["YYYY-Www"] = peak companion level }` (<= 4 keys, same key rules as above). Unlike the casino sections a bad
+  `caught` section is **dropped alone** (the record stays). Protocol 1.0 peers drop the unknown key (allow-list copy), so
+  the change is additive (minor 1.1). It is written by `Games.SetSection` with a new `rev` (at most every 30 s while the
+  companion changes, at least every 5 min, at once after select/care/death) and announced like a play.
+- **Money pool (local only, never sent):** `balance = 20g + casino net (coin + slots + survivor) - pending survivor stake
+  + ledger.earned - ledger.spent`. Every casino play START (flip, spin, survivor run) is refused with `funds` when the stake
+  is above the balance; settling a run never is.
 - **Validation (whole record rejected on one bad entry):** safe name equal to the sender (canonical form); `rev` in
   `[0, now + 1 day]`; totals integers with `won, lost <= 2e13` copper, `wins, losses <= 1 000 000` and consistent
   (`wins <= won <= wins * 1e9`, same for losses); week keys `YYYY-Www` with year 2020..2100, week 1..53, not after the week
   of `now + 1 day`; `recent` a dense array of at most 20 flips with `c` in 1..1e9 (1c to 100 000g), `r` "W"/"L", `t` in `[0, now + 1 day]`.
   Results are self-reported (trust model): bounds and consistency are checked, truth is not.
-- **Stored data (schema 1, `GuildGamesDB`):** `games[name]`, re-validated on every load,
+- **Stored data (schema 2, `GuildGamesDB`):** `caught` (AZEcaught: `collection[npcId] = {n, lvl, cls, disp, seen, caught}`
+  (<= 2000), `active` companion state, `activeSeconds`, `peaks`, `paidWeek`, `ledger = {earned, spent, entries}` (<= 60),
+  `journal` (<= 400 log lines), `notify`, `verbose`); migration 1 -> 2 adds it empty; re-validated on every load and kept
+  by `/gg clean`. `games[name]`, re-validated on every load,
   emptied by `/gg clean`, pruned with players who left the guild. A newer schema on disk is left untouched (read-only session).
 - **Display:** names are escaped in `Core/Model.lua`. Dev-build simulated players (`/ggd game sim`) live outside the
   database and are never sent.

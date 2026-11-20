@@ -21,9 +21,12 @@ Core\Games.lua
 Core\CoinFlip.lua
 Core\Slots.lua
 Core\Survivor.lua
+Core\Wallet.lua
+Core\AzeCaught.lua
 Core\Model.lua
 Core\Sync.lua
 Core\Communication.lua
+Core\Catcher.lua
 Core\Events.lua
 
 UI\Animate.lua
@@ -31,4 +34,6 @@ UI\Window.lua
 UI\GamesTab.lua
 UI\SlotMachine.lua
 UI\SurvivorArena.lua
+UI\AzeCaughtPanel.lua
+UI\AzeCaughtOptions.lua
 UI\DevProbe.lua

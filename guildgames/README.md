@@ -1,6 +1,6 @@
 # GuildGames
 
-A coin flip, a slot machine and a survivor game for your guild, each with its own guild leaderboard (this week and all time), the
+A coin flip, a slot machine, a survivor game and AZEcaught (catch and raise a companion) for your guild, each with its own guild leaderboard (this week and all time), the
 latest plays and last week's winner. **For fun only:** the addon never reads, checks or moves real gold. Stakes are
 bookkeeping.
 
@@ -27,10 +27,33 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
   Closing the window pauses the run.
   **Endless** mode has no end time: every full minute doubles the payout (1:00 x2, 2:00 x4, 3:00 x8, up to x64), and
   **Cash out** takes it at any time. If the tower falls, the last minute reached is still paid; before 1:00 the stake is lost.
+- **AZEcaught:** catch NPCs and raise one as a companion.
+  - Every hostile NPC you fight lands in your **collection**. When one is below 35% health, a rope icon shows on its
+    nameplate. Throw the rope (click the icon, bind "AZEcaught: throw rope" in the key bindings, or `/gg catch` in a
+    macro) and kill it within 3 seconds for a chance to catch it. Your very first catch always succeeds. One throw per
+    enemy; the icon's glow turns from red to green as the chance grows. Move, resize or hide the icon in Options >
+    AddOns > GuildGames AZEcaught (or `/gg caught icon on|off|x|y|size|reset`).
+  - The chance is higher the closer to 0 HP you throw (logarithmic) and lower for elite, rare, rare elite and boss NPCs
+    and for NPCs above your level. A catch pays a reward into the money pool (more for harder ones).
+  - The collection has two sections: **Caught** (at most 10; duplicates count) and **Seen** (every enemy you fought with
+    its highest level, the newest 100). Select a caught one and press **Make companion** (it asks first: stats are reset).
+  - Hover the model to see everything known about the NPC. Its needs come from its stats: e.g. beasts are hungrier,
+    undead and mechanical companions never get thirsty, rage users and rare NPCs get needy sooner.
+  - Pick a caught NPC as your **companion** (3D model). In play time only, it needs water every hour, food every 2 hours,
+    petting every 2 hours and 1 hour of sleep every 4 hours; the bars show the thresholds.
+  - Food costs 50s and water 25s from the pool; petting and sleep are free. Care in time earns hearts (red heart counter) and a care streak (at most +1 per hour);
+    a critical need costs a heart every 10 minutes, into the negatives. Two hours without food or water and it dies.
+    Switching away from a companion with negative hearts makes it run away.
+  - **Guild** view: everyone's companion, ranked by NPC level + rarity + hearts. Last week's place pays 500g, 300g, 150g,
+    or 25g into your pool. The minimap button shows a badge when a need is due; `/gg notify off` turns reminders off.
+- **Money pool:** one balance for all games: 20g to start, plus your casino results, catch rewards and weekly payouts,
+  minus food and water. You cannot stake more than the balance. It is shown next to the game switch.
 - **Window:** the icons at the top left switch the game (hover for the name). Drag the handle in the bottom-left
   corner (or the header) to move the window; drag the grip in the bottom-right corner to scale it, double-click it to
   reset the size. Position and size are saved.
 - `/gg version | comm | hello | debug [n] | trace [n] [problems] | clean [confirm] | locale [code|auto]`
+- AZEcaught diagnostics: `/gg caught state | log [n] [filter] | wallet | chance | collection | dump [unit] | verbose on|off |
+  notify on|off | export | probe`. Every catch logs everything the client tells about the NPC (`/gg caught log 1 catch.dump`). The journal keeps the last 400 AZEcaught steps (throws, rolls with every factor, care, hearts, money).
 
 ## How it syncs
 Every guild member running GuildGames shares one record of results (copper amounts, the last 4 weeks and the 20 latest
@@ -49,5 +72,7 @@ send budget for every addon that embeds it, the guild-only gate, record pulls wi
   `..\libguildsync\LibGuildSync`, and generates `GuildGames-Dev.toc`. The dev build uses `/ggd`, `GuildGamesDevDB` and
   prefix `GGamesDev`.
 - Package: `powershell tools/package.ps1` builds `dist/GuildGames-<version>.zip` with the library as real files.
+- Dev only, AZEcaught: `/ggd caught add` (target or a test NPC as caught), `time <minutes>` (fast-forward play time),
+  `give <gold>`, `force` (next roll catches), `need <name> <0-100>`, `week` (run the weekly payout again).
 - Dev only: `/ggd anim` (animation probe), `/ggd anim speed 0.25`, `/ggd game sim <n>` (fake leaderboard players that are
   never stored or sent). Offline: `luajit tools/coinflip.lua [H|T] [flips]`.

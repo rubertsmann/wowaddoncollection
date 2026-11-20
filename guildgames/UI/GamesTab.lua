@@ -26,8 +26,19 @@ local FEED_ROWS = 8
 -- header icon per game (the dev probe checks they exist)
 local GAME_ICONS = { coin = "Interface\\Icons\\INV_Misc_Coin_01",
     slots = "Interface\\Icons\\INV_Misc_Head_Dragon_01",
-    survivor = "Interface\\Icons\\Spell_Holy_DivineIntervention" }
+    survivor = "Interface\\Icons\\Spell_Holy_DivineIntervention",
+    caught = "Interface\\Icons\\Ability_Hunter_BeastTaming" }
 GamesTab.GAME_ICONS = GAME_ICONS
+-- the game switch: the casino games (Games.ORDER, each with a casino leaderboard) and AZEcaught (feature 018, its own
+-- panel with its own guild view; not a casino game, so not in Games.ORDER)
+---@return string[]
+local function switchOrder()
+    local order = {}
+    for index, gameKey in ipairs(addon.Games.ORDER) do order[index] = gameKey end
+    order[#order + 1] = "caught"
+    return order
+end
+GamesTab.SwitchOrder = switchOrder
 
 ---@class GamesTabState
 ---@field pick "H"|"T"
@@ -282,6 +293,9 @@ end
 local function refusalText(refusal)
     if refusal == "readonly" then return Text["Saved data is read-only in this session."] end
     if refusal == "name" then return Text["Your character is not known yet."] end
+    if refusal == "funds" then
+        return Format(Text["Not enough money in the pool ({gold})."], { gold = money(addon.Wallet.Balance(addon.Utility.Me())) })
+    end
     return Format(Text["Enter a stake from 1c to {max}"], { max = money(addon.Games.MAXIMUM_STAKE) })
 end
 GamesTab.RefusalText = refusalText
@@ -469,14 +483,32 @@ local function boardLabels(gameKey)
     return { feed = Text["Recent flips"], empty = Text["No flips yet"], plays = Text["Flips"] }
 end
 
+-- The money pool (feature 018) in the header, next to the game switch.
+function GamesTab.RefreshBalance()
+    if not widgets.balanceText then return end
+    local balance = addon.Wallet.Balance(addon.Utility.Me())
+    widgets.balanceText:SetText((balance < 0 and "|cffff5555-|r" or "") .. money(balance))
+end
+
 -- Redraws the selected game's leaderboard, feed and last week's winner (deferred while a game animates).
 function GamesTab.Refresh()
     if not widgets.leaderboardList then return end
+    GamesTab.RefreshBalance()
     if GamesTab.IsBusy() then GamesTab.state.refreshPending = true return end
     local gameKey = GamesTab.state.game
     local now = addon.Utility.Now()
     local records = addon.Games.AllRecords()
     local myName = addon.Utility.Me()
+    if gameKey == "caught" then
+        -- AZEcaught has its own guild view in its panel; the sidebar shows last week's best and a pointer to it
+        widgets.leaderboardList:SetData({}); widgets.feedList:SetData({})
+        widgets.emptyText:SetText(Text["The guild's companions are in the Guild view of AZEcaught."]); widgets.emptyText:SetShown(true)
+        widgets.feedTitle:SetText(""); widgets.playsHeader:SetText("")
+        local winner = addon.Model.CompanionWinner(addon.Store.db.games, addon.Games.PreviousPeriodKey(now), myName)
+        widgets.winnerText:SetText(winner and Format(Text["Last week's best: {name} ({level})"], { name = winner.name, level = winner.peak }) or "")
+        if addon.AzeCaughtPanel then addon.AzeCaughtPanel.Refresh() end
+        return
+    end
     local labels = boardLabels(gameKey)
     local rows = addon.Model.BuildLeaderboardRows(records, GamesTab.state.scope, addon.Games.PeriodKey(now), myName, gameKey)
     widgets.leaderboardList:SetData(rows)
@@ -656,14 +688,14 @@ function GamesTab.Build(stage, sidebar, header)
     local state = GamesTab.state
     sidebar, header = sidebar or stage, header or stage
     state.scope = (settings().gamesScope == "all") and "all" or "week"
-    state.game = addon.Games.KINDS[settings().gameKey or ""] and settings().gameKey or "coin"
+    state.game = (addon.Games.KINDS[settings().gameKey or ""] or settings().gameKey == "caught") and settings().gameKey or "coin"
 
     -- game switch (header) and one panel per game (stage)
     widgets.gameButtons, widgets.panels = {}, {}
     -- the switch shows one icon per game; the name is its tooltip
-    local gameLabels = { coin = Text["Coin flip"], slots = Text["Slots"], survivor = Text["Survivor"] }
+    local gameLabels = { coin = Text["Coin flip"], slots = Text["Slots"], survivor = Text["Survivor"], caught = Text["AZEcaught"] }
     local previousButton
-    for _, gameKey in ipairs(addon.Games.ORDER) do
+    for _, gameKey in ipairs(switchOrder()) do
         local key = gameKey
         local button = Widgets.CreateButton(header, "", 26, 20, function() GamesTab.SelectGame(key) end)
         if previousButton then button:SetPoint("LEFT", previousButton, "RIGHT", 3, 0) else button:SetPoint("LEFT", header, "LEFT", 4, 0) end
@@ -691,6 +723,13 @@ function GamesTab.Build(stage, sidebar, header)
     if addon.SurvivorArena then
         addon.Log.Protected("games.survivor", "building the survivor arena failed", addon.SurvivorArena.Build, widgets.panels.survivor)
     end
+    if addon.AzeCaughtPanel then
+        addon.Log.Protected("caught.ui", "building the AZEcaught panel failed", addon.AzeCaughtPanel.Build, widgets.panels.caught)
+    end
+    -- the money pool (feature 018), right of the game switch
+    widgets.balanceText = Widgets.CreateFontString(header, "GameFontHighlightSmall", "LEFT")
+    widgets.balanceText:SetPoint("LEFT", previousButton, "RIGHT", 8, 0)
+    widgets.balanceText:SetWidth(110)
 
     -- sidebar: last week's winner, scope, the selected game's leaderboard and feed
     widgets.winnerText = Widgets.CreateFontString(sidebar, "GameFontNormalSmall")
@@ -727,3 +766,6 @@ function GamesTab.Build(stage, sidebar, header)
     for key, button in pairs(widgets.gameButtons) do markSelected(button, key == state.game) end
     GamesTab.Refresh()
 end
+
+-- the money pool changes with catches, care and payouts (feature 018)
+addon.Events.On("CAUGHT_CHANGED", function() GamesTab.RefreshBalance() end)

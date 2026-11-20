@@ -12,7 +12,7 @@ addon.Store = Store
 
 -- Schema history:
 --   1  0.1.0   games (moved from TalentShare 0.6.0, feature 015 there; nothing imported)
-Store.SCHEMA = 1
+Store.SCHEMA = 2   -- 2: db.caught (AZEcaught, feature 018)
 
 local SECONDS_PER_DAY = 86400
 Store.TIME_SLACK = SECONDS_PER_DAY        -- timestamps further than this into the future are rejected (clock skew is seconds)
@@ -32,7 +32,7 @@ end
 local function withAllTables(savedVariables)
     savedVariables = savedVariables or {}
     savedVariables.schema = Store.SCHEMA
-    for _, key in ipairs({ "games", "ui", "debug", "trace" }) do
+    for _, key in ipairs({ "games", "ui", "debug", "trace", "caught" }) do
         if type(savedVariables[key]) ~= "table" then savedVariables[key] = {} end
     end
     return savedVariables
@@ -40,9 +40,12 @@ end
 
 ---@alias MigrationStatus "ok"|"migrated"|"reset"|"newer"
 
--- schema n -> n+1 (none yet)
+-- schema n -> n+1
 ---@type table<integer, fun(savedVariables: table)>
-local MIGRATIONS = {}
+local MIGRATIONS = {
+    -- 1 -> 2 (feature 018): AZEcaught's local state starts empty; game records are unchanged
+    [1] = function(savedVariables) savedVariables.caught = {} end,
+}
 
 ---@param savedVariables any
 ---@return table|nil
@@ -76,6 +79,10 @@ end
 function Store.SanitizePersisted(savedVariables)
     local droppedCount = addon.Games.SanitizePersisted(savedVariables)
     addon.Trace.SanitizePersisted(savedVariables)
+    local droppedCaught = addon.AzeCaught and addon.AzeCaught.SanitizePersisted(savedVariables) or 0
+    if droppedCaught > 0 then
+        addon.AzeCaught.Journal("WARNING", "load", "invalid saved AZEcaught data was dropped", { count = droppedCaught })
+    end
     return droppedCount
 end
 

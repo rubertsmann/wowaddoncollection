@@ -810,9 +810,9 @@ end
 function Survivor.Begin(myName, stake, targetIndex, now, randomFunction)
     local target = Survivor.Target(targetIndex)
     if not target then return nil, "target" end
-    local refused = addon.Games.Refusal(myName, stake)
+    Survivor.ResolvePending(now)   -- a run left open by a crash is lost before the next one starts (and before the funds check)
+    local refused = addon.Games.Refusal(myName, stake, true)
     if refused then return nil, refused end
-    Survivor.ResolvePending(now)   -- a run left open by a crash is lost before the next one starts
     settings().survivorPending = { name = myName, c = stake, t = now }
     return Survivor.NewRun(myName, stake, target, randomFunction)
 end

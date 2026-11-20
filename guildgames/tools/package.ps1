@@ -22,7 +22,7 @@ function Get-ShippedFiles($path) {
     Get-ChildItem $path -File
     foreach ($directory in (Get-ChildItem $path -Directory)) { Get-ShippedFiles $directory.FullName }
 }
-$items = "GuildGames.toc", "Core", "Locales", "UI", "Libs", "README.md"
+$items = "GuildGames.toc", "Bindings.xml", "Core", "Locales", "UI", "Libs", "README.md"
 $files = foreach ($item in $items) {
     $path = Join-Path $repo $item
     if (-not (Test-Path $path)) { throw "missing: $path" }
@@ -54,6 +54,7 @@ try {
 $bad = @($names | Where-Object { $_ -match '\\' -or $_ -notlike 'GuildGames/*' })
 if ($bad.Count -gt 0) { throw "bad zip entry names: $($bad -join ', ')" }
 if ($names -notcontains "GuildGames/GuildGames.toc") { throw "GuildGames/GuildGames.toc missing from zip" }
+if ($names -notcontains "GuildGames/Bindings.xml") { throw "GuildGames/Bindings.xml missing from zip (AZEcaught key binding, feature 018)" }
 if ($names -contains "GuildGames/GuildGames-Dev.toc") { throw "the dev TOC must not ship" }
 if ($tocText -match '(?m)^## X-Build:') { throw "GuildGames.toc carries a build flag; the shipped TOC must be the live build" }
 if ($tocText -notmatch '(?m)^## SavedVariables:\s*GuildGamesDB\s*$') { throw "GuildGames.toc must declare '## SavedVariables: GuildGamesDB'" }

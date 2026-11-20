@@ -28,7 +28,7 @@ end
 return {
     ["store: data from a newer schema is left untouched and this session refuses to play"] = function(harness)
         local addon = harness.addon({ now = NOW })
-        local saved = { schema = 2, games = { ["X-R"] = { future = true } } }
+        local saved = { schema = 3, games = { ["X-R"] = { future = true } } }
         local kept, status = addon.Store.Init(saved)
         harness.equal(status, "newer"); harness.truthy(kept == saved); harness.truthy(saved.games["X-R"].future)
         harness.truthy(addon.db.readonly)
@@ -40,7 +40,7 @@ return {
         local _, status = addon.Store.Init({ schema = "x" })
         harness.equal(status, "reset", "a corrupt schema marker starts empty")
         local out, plain = addon.Store.Init({ games = {} })
-        harness.equal(plain, "ok"); harness.equal(out.schema, 1)
+        harness.equal(plain, "ok"); harness.equal(out.schema, 2)
     end,
 
     ["store: re-keying meets two spellings on one key (newer wins); prune and clean"] = function(harness)

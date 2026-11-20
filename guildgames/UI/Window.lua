@@ -461,8 +461,88 @@ function UI.BuildMinimapButton()
         onClick = function() UI.Toggle() end,
         onTooltip = function(tooltip)
             tooltip:SetText(addon.TITLE)
-            tooltip:AddLine(Text["Coin flip, slots and survivor"], 1, 1, 1)
+            tooltip:AddLine(Text["Coin flip, slots, survivor and AZEcaught"], 1, 1, 1)
+            addon.Log.Protected("caught.tooltip", "the AZEcaught tooltip failed", UI.AddCompanionTooltip, tooltip)
             tooltip:AddLine(Text["Click: open window. Right-drag: move."], 0.7, 0.7, 0.7)
         end,
     })
+    UI.RefreshMinimapBadge()
 end
+
+------------------------------------------------------------------ AZEcaught on the minimap button (feature 018, R14)
+
+local ZONE_RANK = { ok = 0, needy = 1, critical = 2, empty = 2 }
+
+-- How many needs want care now (needy or worse) and the worst zone rank (0 ok, 1 needy, 2 critical).
+---@return integer count
+---@return integer worst
+function UI.CompanionAlerts()
+    local companion = addon.AzeCaught and addon.db and addon.AzeCaught.Active()
+    if not companion then return 0, 0 end
+    local count, worst = 0, 0
+    for _, need in ipairs(addon.AzeCaught.NEEDS) do
+        local rank = ZONE_RANK[addon.AzeCaught.ZoneOf(companion, need)] or 0
+        if rank > 0 then count = count + 1 end
+        if rank > worst then worst = rank end
+    end
+    return count, worst
+end
+
+-- The badge shows the number of needs that want care (red when one is critical); off with /gg notify off.
+function UI.RefreshMinimapBadge()
+    local button = UI.minimapButton
+    if not button or not button.badge then return end
+    local count, worst = UI.CompanionAlerts()
+    local notify = addon.AzeCaught.State().notify
+    if count > 0 and notify then
+        button.badgeText:SetText(tostring(count))
+        button.badge:Show()
+        button.icon:SetVertexColor(1, worst >= 2 and 0.45 or 0.85, worst >= 2 and 0.45 or 0.6)
+    else
+        button.badge:Hide()
+        button.icon:SetVertexColor(1, 1, 1)
+    end
+end
+
+---@param seconds number
+---@return string
+local function minutesText(seconds)
+    if seconds == math.huge then return "-" end
+    local minutes = math.max(0, math.floor(seconds / 60))
+    if minutes >= 60 then return addon.Locale.Format(Text["{h}h {m}m"], { h = math.floor(minutes / 60), m = minutes % 60 }) end
+    return addon.Locale.Format(Text["{m}m"], { m = minutes })
+end
+
+-- The companion's needs and schedule in the minimap tooltip.
+---@param tooltip table
+function UI.AddCompanionTooltip(tooltip)
+    local AzeCaught = addon.AzeCaught
+    local companion = addon.db and AzeCaught.Active()
+    local Format = addon.Locale.Format
+    tooltip:AddLine(" ")
+    if not companion then
+        tooltip:AddLine(Text["AZEcaught: no companion"], 0.7, 0.7, 0.7)
+        return
+    end
+    tooltip:AddDoubleLine("AZEcaught: " .. addon.Utility.Escape(companion.n), Format(Text["{hearts} hearts"], { hearts = companion.hearts }),
+        1, 0.82, 0, 1, 0.3, 0.4)
+    local labels = { hunger = Text["Food"], thirst = Text["Water"], affection = Text["Petting"], energy = Text["Energy"] }
+    local profile = AzeCaught.ProfileOf(companion)
+    local colors = { ok = { 0.3, 0.85, 0.35 }, needy = { 1, 0.75, 0.15 }, critical = { 1, 0.25, 0.2 }, empty = { 1, 0.1, 0.1 } }
+    for _, need in ipairs(AzeCaught.NEEDS) do
+        local zone = AzeCaught.ZoneOf(companion, need)
+        local seconds = AzeCaught.SecondsUntilNeedy(companion, need)
+        local color = colors[zone]
+        tooltip:AddDoubleLine(("%s %d%%"):format(labels[need], math.floor(companion[need] + 0.5)),
+            seconds == math.huge and Text["never"] or seconds > 0 and Format(Text["care in {time}"], { time = minutesText(seconds) }) or Text["now"],
+            color[1], color[2], color[3], 1, 1, 1)
+    end
+    if companion.asleep then tooltip:AddLine(Format(Text["Asleep, wakes in {time}"], { time = minutesText(companion.asleep) }), 0.65, 0.5, 1) end
+    tooltip:AddLine(Format(Text["Water every {water}, food every {food}, petting every {pet}, sleep {sleep} every {awake} (play time)."],
+        { water = minutesText(profile.intervals.thirst or math.huge), food = minutesText(profile.intervals.hunger or math.huge),
+          pet = minutesText(profile.intervals.affection or math.huge), sleep = minutesText(AzeCaught.SLEEP_DURATION),
+          awake = minutesText(profile.intervals.energy or math.huge) }), 0.7, 0.7, 0.7, true)
+    if not AzeCaught.State().notify then tooltip:AddLine(Text["Reminders are off (/gg notify on)."], 0.7, 0.7, 0.7) end
+end
+
+addon.Events.On("CAUGHT_CHANGED", function() UI.RefreshMinimapBadge() end)

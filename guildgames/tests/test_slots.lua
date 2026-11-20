@@ -59,6 +59,7 @@ return {
     ["slots: return to player is about 94% and a long simulation agrees"] = function(harness)
         local addon = fresh(harness)
         local rtp = addon.Slots.ReturnToPlayer()
+        addon.Wallet.Ledger().earned = 1e9   -- the money pool (feature 018) must not run dry during the simulation
         harness.truthy(rtp > 0.9 and rtp < 0.97, "rtp " .. rtp)
         local seed, paid, staked = 11, 0, 0
         local random = function() seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648 end

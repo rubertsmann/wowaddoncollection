@@ -61,6 +61,8 @@ return {
         end
         harness.equal(select(2, addon.Games.Flip("Me-R", 10, "X", NOW, constant(0.1))), "pick")
         harness.equal(addon.Games.Get("Me-R"), nil)
+        harness.equal(select(2, addon.Games.Flip("Me-R", 1000000000, "H", NOW, constant(0.1))), "funds", "more than the pool holds (018 R18)")
+        addon.Wallet.Ledger().earned = 1000000000
         harness.truthy(addon.Games.Flip("Me-R", 1000000000, "H", NOW, constant(0.1)), "the maximum stake (100 000g) is allowed")
     end,
 

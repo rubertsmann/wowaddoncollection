@@ -34,6 +34,8 @@ local addonName, addon = ...
 ---@field recent GameFlip[] newest first, at most MAXIMUM_RECENT
 ---@field slots? GameSection slot machine results (feature 014)
 ---@field survivor? GameSection survivor results (feature 016)
+---@field caught? table AZEcaught: { c = current companion | nil, weeks = { [periodKey] = peak level } } (feature 018,
+---  protocol 1.1; 1.0 peers drop it). Not a GameSection: not in Games.ORDER, sanitized by AzeCaught.SanitizeSection.
 
 ---@class FlipResult
 ---@field outcome "H"|"T"
@@ -41,7 +43,7 @@ local addonName, addon = ...
 ---@field stake integer copper
 ---@field net integer +stake or -stake (copper)
 
----@alias FlipRefusal "stake"|"pick"|"readonly"|"name"
+---@alias FlipRefusal "stake"|"pick"|"readonly"|"name"|"funds"
 
 ---@class GamesModule
 ---@field simulated table<string, GameRecord> fake records (dev command), never stored, never sent
@@ -251,6 +253,15 @@ function Games.Sanitize(gameRecord)
             clean[gameKey] = section
         end
     end
+    -- AZEcaught (feature 018): a bad companion section is dropped alone; the casino results stay
+    if gameRecord.caught ~= nil and addon.AzeCaught then
+        local section = addon.AzeCaught.SanitizeSection(gameRecord.caught, horizon)
+        if section then
+            clean.caught = section
+        else
+            addon.AzeCaught.Journal("WARNING", "sanitize", "a companion section was invalid and dropped", { owner = gameRecord.name })
+        end
+    end
     return clean
 end
 
@@ -351,14 +362,17 @@ local function applyPlay(section, entry)
     for index = #section.recent, Games.MAXIMUM_RECENT + 1, -1 do section.recent[index] = nil end
 end
 
--- Checks the common preconditions of a play. Returns nil when it may go ahead, else the refusal.
+-- Checks the common preconditions of a play. Returns nil when it may go ahead, else the refusal. `checkFunds`: the
+-- stake must not be more than the money pool holds (feature 018 R18). Only where a play STARTS; a settle never checks.
 ---@param myName any
 ---@param stake any
+---@param checkFunds? boolean
 ---@return FlipRefusal|nil
-local function refusal(myName, stake)
+local function refusal(myName, stake, checkFunds)
     if not addon.Utility.SafeInteger(stake, 1, Games.MAXIMUM_STAKE) then return "stake" end
     if database().readonly then return "readonly" end
     if not addon.Utility.IsSafeName(myName) then return "name" end
+    if checkFunds and addon.Wallet then return addon.Wallet.FundsRefusal(myName, stake) end
     return nil
 end
 Games.Refusal = refusal
@@ -389,7 +403,7 @@ end
 function Games.Flip(myName, stake, pick, now, randomFunction)
     if not addon.Utility.SafeInteger(stake, 1, Games.MAXIMUM_STAKE) then return nil, "stake" end
     if pick ~= "H" and pick ~= "T" then return nil, "pick" end
-    local refused = refusal(myName, stake)
+    local refused = refusal(myName, stake, true)
     if refused then return nil, refused end
     local outcome = randomFunction() < 0.5 and "H" or "T"
     local won = outcome == pick
@@ -411,6 +425,22 @@ function Games.RecordPlay(myName, gameKey, stake, net, now)
     local entry = sanitizeEntry({ c = stake, n = net, t = now }, gameKey, math.huge)
     if gameKey == "coin" or not entry then error("invalid play for " .. tostring(gameKey) .. ": net " .. tostring(net)) end
     record(myName, gameKey, entry, now)
+    return true
+end
+
+-- Replaces one non-play section of my record (AZEcaught's "caught") and commits a new rev. Returns true when stored.
+---@param myName string
+---@param key "caught"
+---@param section table
+---@param now integer
+---@return boolean
+function Games.SetSection(myName, key, section, now)
+    if database().readonly or not addon.Utility.IsSafeName(myName) or key ~= "caught" then return false end
+    local previousRecord = database().games[myName]
+    local gameRecord = previousRecord and addon.Utility.DeepCopy(previousRecord) or emptyRecord(myName)
+    gameRecord[key] = section
+    gameRecord.rev = math.max(now, (previousRecord and previousRecord.rev or 0) + 1)
+    database().games[myName] = gameRecord
     return true
 end
 

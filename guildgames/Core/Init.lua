@@ -35,7 +35,7 @@ addon.VERSION = addon.BASE_VERSION
 ---@type integer
 addon.PROTOCOL_MAJOR = 1
 ---@type integer
-addon.PROTOCOL_MINOR = 0
+addon.PROTOCOL_MINOR = 1   -- 1.1: the optional "caught" record section (feature 018)
 ---@type integer alias: the major is what the payload "v" field carries
 addon.PROTOCOL = addon.PROTOCOL_MAJOR
 ---@type string
@@ -82,6 +82,26 @@ if SlashCmdList then
             addon.Print(addon.SLASH_COMMANDS[1] .. " [" .. table.concat(commandWords, "|") .. "]")
         end
     end
+end
+
+-- Blocked actions ("reserved for the Blizzard UI" dialog). Registered in the FIRST file so a block while the other files
+-- load is caught too. Until the saved data is loaded (and the log can store lines) entries wait in addon.blockedEarly;
+-- Core/Events.lua writes them to the log after ADDON_LOADED. The function name also goes to chat at once.
+---@type table[]
+addon.blockedEarly = {}
+if CreateFrame then
+    local blockedFrame = CreateFrame("Frame")
+    for _, blockedEvent in ipairs({ "ADDON_ACTION_FORBIDDEN", "ADDON_ACTION_BLOCKED" }) do
+        pcall(blockedFrame.RegisterEvent, blockedFrame, blockedEvent)
+    end
+    blockedFrame:SetScript("OnEvent", function(_, blockedEvent, blamedAddon, functionName)
+        if blamedAddon ~= addonName then return end
+        local entry = { kind = blockedEvent == "ADDON_ACTION_FORBIDDEN" and "forbidden" or "blocked",
+            ["function"] = tostring(functionName), combat = tostring(InCombatLockdown and InCombatLockdown() or false),
+            stack = type(debugstack) == "function" and debugstack(2, 12, 0) or nil }
+        addon.Print(("the game blocked %s (%s). Details: %s debug"):format(entry["function"], entry.kind, addon.SLASH_COMMANDS[1]))
+        if addon.OnActionBlocked and addon.db then addon.OnActionBlocked(entry) else table.insert(addon.blockedEarly, entry) end
+    end)
 end
 
 addon.SlashCommands.version = function()
