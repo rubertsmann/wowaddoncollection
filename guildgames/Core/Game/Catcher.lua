@@ -18,10 +18,9 @@ local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 Catcher.CIRCLE_MASK = CIRCLE_MASK
 local ICON_SIZE = 26
 local ROPE_COLOR = { 0.78, 0.58, 0.3 }
-local ROPE_SEGMENTS = 16
-local ROPE_FLIGHT = 0.35            -- seconds from the player until the rope lands on the target
+local ROPE_DELAY = 0.35             -- seconds from the wind-up on the player to the lasso on the target
 local PLAYER_SCREEN_HEIGHT = 0.42   -- the player's character stands about here (share of the screen height, centred)
-local ROPE_RISE = 0.2               -- the rope flies this share of the screen height up and away before it fades
+local FRONT_RISE = 0.2              -- no nameplate: the lasso lands this share of the screen height above the player
 local LANDING_DROP = 18             -- the lasso lands this far below the target's nameplate (on its body)
 local LANDING_LINGER = 0.9          -- seconds the landing pin stays on the plate (then it lets go of it)
 local HOSTILE_FLAG = 0x40          -- COMBATLOG_OBJECT_REACTION_HOSTILE
@@ -302,94 +301,66 @@ local function iconFor(unit)
     return button
 end
 
------------------------------------------------------------------- throw effect: the rope leaves the player, the lasso lands on the target
+------------------------------------------------------------------ throw effect: a wind-up on the player, then the lasso on the target
 
-local effect   -- { frame, segments, head, pin } built on first use
+local effect   -- { playerPin, targetPin } built on first use
 
 -- The client does not let an addon know where an enemy is on the screen (journal 2026-11-20): its world position is
 -- hidden (UnitPosition), range checks are restricted in combat, measuring a nameplate taints the addon ("Can't measure
 -- restricted regions") and a line may not end on one ("Not allowed to depend on NamePlate1"). A plain frame with ONE
--- anchor on a nameplate is allowed (the rope icon is placed that way). So the throw is two parts that never need the
--- target's screen position:
---   1. flight: the rope leaves the player (centre of the screen, PLAYER_SCREEN_HEIGHT) on an arc up and away and fades;
---   2. landing: the lasso tightens and bursts in a 1x1 "pin" frame anchored to the target's nameplate, so it plays on
---      the real enemy wherever it is. Nothing measures the pin; it lets go of the plate after LANDING_LINGER.
--- No nameplate (plates off, target not on screen) or a refused anchor: the landing plays where the rope faded ("front").
+-- anchor on a nameplate is allowed (the rope icon is placed that way). So the throw is two effects, nothing in between
+-- (user 2026-11-20: "first a cool animation on the player and then after a short amount on the enemy"):
+--   1. wind-up on the player (screen centre, PLAYER_SCREEN_HEIGHT): a rope ring gathers in, sparks rise, a gold flash;
+--   2. ROPE_DELAY later the lasso closes and bursts on the target, in a 1x1 pin frame anchored to its nameplate, so it
+--      plays on the real enemy wherever it is. Nothing measures the pin; it lets go of the plate after LANDING_LINGER.
+-- No nameplate (plates off, target not on screen) or a refused anchor: the lasso plays above the player ("front").
 -- Journaled as `throw.effect` with the mode and the reason.
 ---@param unit string the target unit
 ---@return table|nil details what was played (also Catcher.lastEffect)
 function Catcher.PlayRopeEffect(unit)
     local ok, problem = pcall(function()
         local width, height = UIParent:GetWidth(), UIParent:GetHeight()
-        local fromX, fromY = width / 2, height * PLAYER_SCREEN_HEIGHT
-        local toX, toY = fromX, fromY + height * ROPE_RISE
+        local playerX, playerY = width / 2, height * PLAYER_SCREEN_HEIGHT
         if not effect then
-            local frame = CreateFrame("Frame", nil, UIParent)
-            frame:SetAllPoints(UIParent); frame:SetFrameStrata("HIGH"); frame:EnableMouse(false)
-            local segments = {}
-            for index = 1, ROPE_SEGMENTS do
-                local segment = frame:CreateTexture(nil, "ARTWORK")
-                segment:SetColorTexture(ROPE_COLOR[1], ROPE_COLOR[2], ROPE_COLOR[3], 1)
-                segment:Hide()
-                segments[index] = segment
+            -- each pin is its own frame (parent UIParent, one anchor); the effect textures live in it
+            local function newPin()
+                local pin = CreateFrame("Frame", nil, UIParent)
+                pin:SetSize(1, 1); pin:SetFrameStrata("HIGH"); pin:EnableMouse(false)
+                return pin
             end
-            local head = frame:CreateTexture(nil, "OVERLAY")
-            addon.UIHelpers.SetTextureOr(head, addon.Animate.SPARKLE_TEXTURE, { 1, 0.9, 0.5 })
-            pcall(head.SetBlendMode, head, "ADD")
-            head:SetSize(22, 22); head:Hide()
-            -- the landing pin: its own frame (parent UIParent, one anchor), like the rope icon; the landing textures
-            -- live in it, so only this frame depends on the plate
-            local pin = CreateFrame("Frame", nil, UIParent)
-            pin:SetSize(1, 1); pin:SetFrameStrata("HIGH"); pin:EnableMouse(false)
-            effect = { frame = frame, segments = segments, head = head, pin = pin }
+            effect = { playerPin = newPin(), targetPin = newPin() }
         end
         local Animate = addon.Animate
+        local playerPin, targetPin = effect.playerPin, effect.targetPin
+        playerPin:ClearAllPoints(); playerPin:SetPoint("CENTER", UIParent, "BOTTOMLEFT", playerX, playerY)
         local mode, why = "front", nil
         local plate = Api.NamePlateFor(unit)
         if plate then
             local anchored, anchorError = pcall(function()
-                effect.pin:ClearAllPoints()
-                effect.pin:SetPoint("TOP", plate, "BOTTOM", 0, -LANDING_DROP)
+                targetPin:ClearAllPoints()
+                targetPin:SetPoint("TOP", plate, "BOTTOM", 0, -LANDING_DROP)
             end)
             if anchored then mode = "nameplate" else why = tostring(anchorError) end
         else
             why = "no nameplate"
         end
         if mode == "front" then
-            effect.pin:ClearAllPoints(); effect.pin:SetPoint("CENTER", UIParent, "BOTTOMLEFT", toX, toY)
+            targetPin:ClearAllPoints(); targetPin:SetPoint("CENTER", UIParent, "BOTTOMLEFT", playerX, playerY + height * FRONT_RISE)
         end
-        local lift = height * 0.06
-        local function place(region, arcProgress)
-            local x, y = Animate.ArcPoint(fromX, fromY, toX, toY, lift, arcProgress)
-            region:ClearAllPoints(); region:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
-        end
-        Animate.Tween("ropeThrow", ROPE_FLIGHT, function(elapsed)
-            local progress = math.min(1, elapsed / ROPE_FLIGHT)
-            local fade = progress < 0.6 and 1 or (1 - progress) / 0.4   -- it flies away from the camera: fades out
-            place(effect.head, progress)
-            local headSize = 22 * (1 - 0.4 * progress)
-            effect.head:SetSize(headSize, headSize); effect.head:SetAlpha(fade); effect.head:Show()
-            for index, segment in ipairs(effect.segments) do
-                -- the rope trails behind the tip and thins out
-                local segmentProgress = progress * (1 - (index - 1) / ROPE_SEGMENTS)
-                place(segment, segmentProgress)
-                local size = 5 - 2.5 * segmentProgress
-                segment:SetSize(size, size)
-                segment:SetAlpha(0.9 * fade)
-                segment:Show()
-            end
-        end, function()
-            effect.head:Hide()
-            for _, segment in ipairs(effect.segments) do segment:Hide() end
-            local pin = effect.pin
-            -- the lasso closes around the target, then the hit bursts
-            Animate.Ring("ropeLasso", pin, pin, 70, 18, ROPE_COLOR, 0.3)
-            Animate.Burst("ropeHit", pin, pin, 0, 0,
+        -- 1. wind-up on the player: the rope gathers in, sparks rise, a gold ring flashes out
+        Animate.Ring("ropeWind", playerPin, playerPin, 110, 26, ROPE_COLOR, ROPE_DELAY)
+        Animate.Burst("ropeCast", playerPin, playerPin, 0, 0,
+            { count = 14, color = { 1, 0.85, 0.4 }, speed = 120, gravity = -80, size = 11, spread = math.pi * 0.8, duration = 0.6 })
+        -- 2. the lasso on the target
+        Animate.Tween("ropeThrow", ROPE_DELAY, function() end, function()
+            Animate.Ring("ropeFlash", playerPin, playerPin, 20, 90, { 1, 0.85, 0.3 }, 0.3)
+            Animate.Ring("ropeLasso", targetPin, targetPin, 80, 18, ROPE_COLOR, 0.3)
+            Animate.Burst("ropeHit", targetPin, targetPin, 0, 0,
                 { count = 16, color = { 1, 0.8, 0.35 }, speed = 100, gravity = 200, size = 12, duration = 0.7 })
-            Animate.Ring("ropeHit", pin, pin, 10, 70, { 1, 0.85, 0.3 }, 0.45)
+            Animate.Ring("ropeHit", targetPin, targetPin, 10, 70, { 1, 0.85, 0.3 }, 0.45)
             -- let go of the plate once the landing is over (a recycled plate then carries nothing of ours)
             Animate.Tween("ropeLanding", LANDING_LINGER, function() end, function()
-                pin:ClearAllPoints(); pin:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+                targetPin:ClearAllPoints(); targetPin:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
             end)
         end)
         local details = { unit = unit, mode = mode, why = why }

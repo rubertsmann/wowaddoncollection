@@ -229,18 +229,11 @@ return {
                     harness.truthy(pcall(addon.SlashCommands.caught, command), "/gg caught " .. command)
                 end
                 harness.equal(addon.AzeCaught.IconSettings().size, 26, "reset at the end")
-                -- the rope flies on an arc from the player to the target (user 2026-11-20)
-                local Animate = addon.Animate
-                local startX, startY = Animate.ArcPoint(0, 0, 200, 0, 50, 0)
-                local endX, endY = Animate.ArcPoint(0, 0, 200, 0, 50, 1)
-                local middleX, middleY = Animate.ArcPoint(0, 0, 200, 0, 50, 0.5)
-                harness.equal(startX, 0); harness.equal(startY, 0); harness.equal(endX, 200); harness.equal(endY, 0)
-                harness.equal(middleX, 100); harness.equal(middleY, 50, "the arc peaks at the lift in the middle")
                 -- The client rules (journal 2026-11-20): nameplates are restricted regions. Measuring one ("GetCenter():
                 -- Can't measure restricted regions ... Lua Taint") and drawing a line to one ("Line:SetEndPoint(): Not
                 -- allowed to depend on NamePlate1") are refused; a plain frame with ONE anchor on it works (the rope icon).
                 -- The game also hides where the enemy is (UnitPosition: hidden, journal 2026-11-20 "position hidden"), so
-                -- the rope flies up from the player and the landing plays in a pin frame anchored to the target's plate.
+                -- a wind-up plays on the player, then the lasso in a pin frame anchored to the target's plate.
                 local savedNamePlate, savedCreateFrame = C_NamePlate, CreateFrame
                 local plate, lockedPlate, refused, anchoredToPlate = stub(), stub(), {}, {}
                 for _, restrictedPlate in ipairs({ plate, lockedPlate }) do

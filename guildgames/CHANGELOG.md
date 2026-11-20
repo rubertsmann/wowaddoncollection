@@ -15,9 +15,9 @@
     reset"). Hovering the model shows everything known about the NPC; its needs and thresholds come from its stats
     (creature type, power type, rarity).
   - The rope icon is round and sits above the nameplate; its glow turns from red to green as the chance grows, it can be
-    moved, resized or turned off (Options > AddOns, `/gg caught icon`), and each enemy takes one throw. A throw flies a
-    rope up and away from you and the lasso lands on the target itself (on its nameplate; in front of you when the
-    target has none). The care buttons
+    moved, resized or turned off (Options > AddOns, `/gg caught icon`), and each enemy takes one throw. A throw winds
+    up on your character and a moment later the lasso closes on the target itself (on its nameplate; above you when
+    the target has none). The care buttons
     are icons, greyed out while not usable, with a short cooldown.
   - A Guild view ranks every member's companion (NPC level + rarity + hearts); the weekly place pays 500g / 300g / 150g /
     25g into the pool. The minimap button shows a badge when a need is due (`/gg notify off` turns it off).

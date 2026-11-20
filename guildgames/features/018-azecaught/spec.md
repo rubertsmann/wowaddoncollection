@@ -125,11 +125,12 @@ Stats, collection and UI additions (user, 2026-11-20)
   - **One throw per enemy** (`thrown`, kept 10 min).
   - The icon can be turned off, moved and resized: Options > AddOns > GuildGames AZEcaught, or
     `/gg caught icon on|off|x|y|size|reset`. Clamped and journaled; the key binding still works when it is off.
-  - A throw plays in two parts that never need the target's screen position (the client hides it from addons: see
-    below): the rope leaves the player (screen centre, 42% height) on an arc up and away and fades; then the lasso
-    tightens and bursts ON the target, in a 1x1 pin frame anchored to its nameplate (one anchor, like the rope icon),
-    18 px below the plate. The pin lets go of the plate 0.9 s later. No nameplate or a refused anchor: the landing
-    plays where the rope faded ("front").
+  - A throw plays two effects and nothing in between, so it never needs the target's screen position (the client
+    hides it from addons: see below; user 2026-11-20: "the trails can be just removed ... first a cool animation on the
+    player and then after a short amount on the enemy"): a wind-up on the player (screen centre, 42% height: a rope
+    ring gathers in, sparks rise, a gold ring flashes out), then 0.35 s later the lasso tightens and bursts ON the
+    target, in a 1x1 pin frame anchored to its nameplate (one anchor, like the rope icon), 18 px below the plate. The
+    pin lets go of the plate 0.9 s later. No nameplate or a refused anchor: the lasso plays above the player ("front").
     - What the client refuses (journal 2026-11-20): world positions of enemies (`UnitPosition`: hidden), range
       checks against enemies in combat, measuring a nameplate ("Can't measure restricted regions ... Lua Taint") and a
       line ending on one ("Line:SetEndPoint(): Not allowed to depend on NamePlate1"). The camera-projection version
