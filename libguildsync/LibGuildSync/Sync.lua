@@ -14,7 +14,7 @@
 -- OnMessage returns (status, reason): "ok" | "ignored" | "dropped" | "error", for the network trace.
 -- Every player name from the wire is compared and stored in canonical form (Utility.CanonicalName).
 local lib = LibStub("LibGuildSync-1.0")
-local Sync = lib:Module("Sync", 1)
+local Sync = lib:Module("Sync", 2)
 if not Sync then return end
 
 ---@class SyncEnvironment

@@ -12,4 +12,5 @@
     <Script file="Guild.lua"/>
     <Script file="Channel.lua"/>
     <Script file="Widgets.lua"/>
+    <Script file="Addon.lua"/>
 </Ui>

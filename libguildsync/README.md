@@ -30,6 +30,7 @@ GuildGames.
 | `Channel.New(options)` | transport for one prefix: chunking, reassembly, gate, echo/realm learning, HELLO coalescing, roster/identity check, minute ticker | per addon; **one send token bucket and one driver frame for all channels** |
 | `Guild` | roster, my name (Forever "First Surname"), identity facts | shared |
 | `Widgets` | plain-frame helpers: button, font string, scroll list, selectable row, dialog frame, TimeAgo | shared |
+| `Addon` (MINOR 2) | `Setup(addon, addonName, options)`: build flag, version, title, prefix, SavedVariables, frame names, slash commands and dispatcher, Print; `AddDiagnosticCommands(addon)`: comm, hello, debug, trace | per addon (functions only) |
 
 Trust model: guild members are trusted, everyone else is not. A peer can only author its own records (checked by
 `Sync`), and every received record is rebuilt by the kind's own allow-list `sanitize`.

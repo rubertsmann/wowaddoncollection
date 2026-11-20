@@ -26,11 +26,13 @@ suffix), and helper logic that was copied between files lives in one place.
   parameter names. Saved-data and wire field names do not change.
 - R6: `docs/coding-conventions.md` exists for GuildGames.
 - R7: No behaviour change other than the duration text (Decision 2): the offline suite stays green (116 before).
+- R8: The identity/build flag, slash dispatcher and diagnostic commands (`comm`, `hello`, `debug`, `trace`) exist once, in
+  LibGuildSync (MINOR 2, module `Addon`), used by GuildGames and TalentShare with unchanged names and output (GuildGames
+  `/gg comm` gains "incompatible peers=N", as TalentShare had).
 
 ## Non-goals
 - No protocol, schema or saved-data change.
 - No new player-facing feature, no release/version bump.
-- Moving the shared Init / diagnostics slash commands into LibGuildSync (touches TalentShare and the library): T8.
 
 ## Design
 - Files touched: every `Core/*.lua` (moved), `Core/Library.lua` -> `Core/Base/{Utility,Log,Locale}.lua`,
@@ -48,7 +50,7 @@ suffix), and helper logic that was copied between files lives in one place.
 - [x] T5 (S): one Model.Duration; one Model.RefusalText. Verify: new Model tests; locale lint.
 - [x] T6 (M): renames (`...Id` -> `...ID`, `dt`, `t`, `info`). Verify: full suite.
 - [x] T7 (S): docs/coding-conventions.md, CHANGELOG, doc.md. Verify: read.
-- [ ] T8 (M, optional): shared Init/diagnostic slash commands in LibGuildSync for both addons. Decide after T7.
+- [x] T8 (M): shared Init/diagnostic slash commands in LibGuildSync MINOR 2 for both addons. Verify: libguildsync tests/test_addon.lua; TalentShare and GuildGames suites.
 
 ## Review Focus (failure modes a happy-path test would miss)
 1. RF1: a module that a load-time line uses now loads later (event bus moved to Events.lua) -> nil index at load. Pinned by: test_load (both identities run every TOC file).
@@ -72,6 +74,7 @@ suffix), and helper logic that was copied between files lives in one place.
 - 2026-11-20: Decision 1: pure game rules go to `Core/Minigames/` (not `Core/Games/`, too close to `Core/Game/`, which is the WoW client side as in TalentShare).
 - 2026-11-20: Decision 2: one duration text, `Model.Duration` (rounds to the nearest minute, whole hours as "2h"). The companion panel and the minimap tooltip used to floor and always show minutes ("2h 0m"); they now match the NPC info overlay.
 - 2026-11-20: Decision 3: work on branch `refactor/guildgames-structure`, one commit per task.
+- 2026-11-20: Decision 4: T8 done (part of "implement everything"): LibGuildSync MINOR 1 -> 2, additive module `Addon`. A MINOR 1 copy (released TalentShare 0.7.3) loaded first is upgraded in place (pinned by a library test). TalentShare's next release ships it.
 
 ## Open questions
-- T8 scope (changes TalentShare too): decided after T7.
+- none

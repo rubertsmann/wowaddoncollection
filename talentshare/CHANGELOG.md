@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- Internal: the build identity, slash dispatcher and the `comm`/`hello`/`debug`/`trace` commands come from LibGuildSync
+  MINOR 2 (`Addon` module, shared with GuildGames; GuildGames feature 019). Same names, same output.
+
 ## 0.7.3
 Player-facing notes (English/Deutsch): `RELEASE_NOTES.md`. Protocol 2.3, schema 5 (both unchanged). Bug fix only.
 - **Fix (feature 017):** most enchants showed their tools and reagents ("Werkzeuge: ...") instead of their effect, because

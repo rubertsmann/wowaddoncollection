@@ -1,7 +1,7 @@
 -- LibGuildSync: internal pub/sub, one instance per addon (Events.New). Every handler runs protected: an error in one
 -- handler is logged (Log.Exception, with stack) and the others still run.
 local lib = LibStub("LibGuildSync-1.0")
-local Events = lib:Module("Events", 1)
+local Events = lib:Module("Events", 2)
 if not Events then return end
 
 -- An event bus for one addon; functions are called with a dot (events.On(name, handler), events.Fire(name, ...)).

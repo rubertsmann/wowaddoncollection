@@ -5,7 +5,7 @@
 --   * Files of an equal or older copy are skipped: lib:Module returns nil for them, and each file returns at once.
 -- RULE: every file passes the same MINOR as below to lib:Module (tests/test_core.lua pins it). Bump MINOR on ANY change.
 -- RULE: state that must survive an in-place upgrade lives in fields created with `x = x or {}`, never in file locals.
-local MAJOR, MINOR = "LibGuildSync-1.0", 1
+local MAJOR, MINOR = "LibGuildSync-1.0", 2
 
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end

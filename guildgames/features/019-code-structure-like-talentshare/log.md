@@ -56,3 +56,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: every name the conventions doc cites exists (grep).
 - Evidence: luajit tests/run.lua -> "121 passed, 0 failed"
 - Next: T8 decide/implement: Init build identity + diagnostic slash commands shared in LibGuildSync (touches TalentShare); user: in-game check IG1 (verify.md)
+
+## 2026-11-20 23:40 | BUILD | T8 identity and diagnostics shared in LibGuildSync
+- Did: libguildsync/LibGuildSync/Addon.lua (new module `Addon`, MINOR 1 -> 2 in every library file): `Addon.Setup(addon, addonName, { name, prefix, command, fallbackVersion, color })` (TOC field reader, build flag, version, title, prefix, SavedVariables, frame names, slash commands + dispatcher, Print, SavedVariables mismatch warning) and `Addon.AddDiagnosticCommands(addon)` (comm, hello, debug, trace). Core/Base/Init.lua of GuildGames and TalentShare call Setup (protocol constants, the version command and GuildGames' early blocked-action hook stay in each addon); both Communication.lua call AddDiagnosticCommands. New libguildsync tests/test_addon.lua (6 tests, incl. a MINOR 1 copy without Addon.lua upgraded by MINOR 2). CHANGELOGs: libguildsync MINOR 2, TalentShare Unreleased; library README module table. spec R8, Decision 4.
+- Result: same identity names for both builds of both addons (pinned by the library tests and TalentShare test_build_flag/test_identity/test_hardening); GuildGames `/gg comm` gains "incompatible peers=N".
+- Evidence: libguildsync luajit tests/run.lua -> "33 passed, 0 failed" (27 before); talentshare -> "231 passed, 0 failed"; guildgames -> "121 passed, 0 failed"
+- Next: user: in-game check (verify.md IG1, both dev builds; restart the game first). Then status done, merge refactor/guildgames-structure.

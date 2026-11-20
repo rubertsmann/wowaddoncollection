@@ -26,8 +26,9 @@ No new strings. The shared refusal texts keep literal `Text[...]` keys in Core/V
 
 ## Limits and known issues
 - Not yet started in the game client (verify.md IG1).
-- Init.lua and the diagnostic slash commands (`comm`, `hello`, `debug`, `trace`) are still near-copies of TalentShare's;
-  moving them into LibGuildSync is T8 (touches TalentShare).
+- The identity (build flag, names, slash dispatcher) and the diagnostic commands come from LibGuildSync MINOR 2
+  (`Addon.Setup`, `Addon.AddDiagnosticCommands`), shared with TalentShare. `/gg comm` now also prints
+  "incompatible peers=N".
 
 ## Changelog line
 - Code reorganised like TalentShare (folders by role, shared helpers, naming lints); durations now read "2h" instead of "2h 0m" (feature 019).

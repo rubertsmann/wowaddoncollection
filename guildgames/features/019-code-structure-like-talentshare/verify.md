@@ -20,13 +20,15 @@ Result after work:    `luajit tests/run.lua` -> 121 passed, 0 failed
 | RF3 | a removed guard where the module can be absent | full suite (harness without Api/UI), coinflip tool, test_games_ui stub | OFFLINE | 121 passed | pass | 2026-11-20 |
 | RF4 | merged refusal text loses a literal key | locale lint (every Text[...] key translated, every deDE key used) | OFFLINE | 121 passed | pass | 2026-11-20 |
 | RF5 | rename hits a saved/wire field | diff check: the only renamed table key is nextID on the in-memory survivor run; sanitize tests pass | OFFLINE + READ-ONLY | 121 passed | pass | 2026-11-20 |
+| R8 | identity + diagnostics once, in LibGuildSync | libguildsync tests/test_addon.lua (live/dev names for both addons, TOC flag, -dev once, SavedVariables warning, dispatcher, diagnostics output, MINOR 1 -> 2 upgrade); TalentShare test_build_flag/test_identity/test_hardening; GuildGames test_load | OFFLINE | libguildsync 33 passed; TalentShare 231 passed; GuildGames 121 passed | pass | 2026-11-20 |
 | IG1 | the dev build loads in the client with the new TOC (no "not loaded" line, no Lua error), the four games and AZEcaught open | user, steps below | NOT-VERIFIED | | | |
 
 ## In-game checklist (things only the user can do)
 - [ ] `powershell tools/deploy.ps1` (already run on 2026-11-20 22:35), then RESTART the game (a new TOC is not read by /reload).
 - [ ] `/console scriptErrors 1`, `/ggd`: no "not loaded: ..." line in chat, no Lua error. Play one coin flip, one slot spin, start and give up a survivor run, open AZEcaught (companion, collection, guild views; hover the model for the NPC info).
 - [ ] Minimap tooltip and companion bars show times as "1h 30m" / "2h" (Decision 2).
-- [ ] `/ggd debug 20` shows no new ERROR line.
+- [ ] `/ggd debug 20` shows no new ERROR line; `/ggd comm`, `/ggd trace 5` and `/ggd version` (LibGuildSync minor 2) answer.
+- [ ] TalentShare dev build (`tools/deploy.ps1` there, restart): `/tsd` opens, `/tsd comm` answers, no "not loaded" line.
 
 ## Accepted gaps
 - none yet

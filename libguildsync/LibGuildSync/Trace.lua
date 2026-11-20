@@ -20,7 +20,7 @@
 ---@field parts? integer number of chunks
 ---@field bytes? integer encoded size
 local lib = LibStub("LibGuildSync-1.0")
-local Trace = lib:Module("Trace", 1)
+local Trace = lib:Module("Trace", 2)
 if not Trace then return end
 
 ---@class TraceOptions

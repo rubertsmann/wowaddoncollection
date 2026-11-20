@@ -45,31 +45,6 @@ local Communication = LibStub("LibGuildSync-1.0").Channel.New({
 })
 addon.Communication = Communication
 
------------------------------------------------------------------- slash commands (diagnostics, English on purpose)
-
-addon.SlashCommands.comm = function()
-    local statistics = Communication.sync and Communication.sync.statistics or { sent = 0, received = 0, dropped = 0 }
-    addon.Print(("comm: active=%s protocol=%d.%d sent=%d received=%d dropped=%d rejected=%d queue=%d chunks out/in=%d/%d send failures=%d roster=%d"):format(
-        tostring(Communication.active), addon.PROTOCOL_MAJOR, addon.PROTOCOL_MINOR, statistics.sent, statistics.received,
-        statistics.dropped, Communication.rejected, #Communication.queue, Communication.chunksSent, Communication.chunksReceived,
-        Communication.sendFailures, addon.Utility.Count(Communication.roster)))
-end
-
-addon.SlashCommands.hello = function()
-    if not Communication.active then addon.Print("not active (not in a guild?)") return end
-    Communication.RequestHello(false, true)
-    addon.Print("hello sent")
-end
-
--- /gg debug [count]: the last log lines (default 15); /gg trace [count] [problems]: the last network trace entries
-addon.SlashCommands.debug = function(arguments)
-    local lineCount = tonumber((arguments or ""):match("%d+")) or 15
-    local logLines = addon.db and addon.db.debug or {}
-    for index = math.max(1, #logLines - lineCount + 1), #logLines do print(logLines[index]) end
-end
-
-addon.SlashCommands.trace = function(arguments)
-    local entryCount = tonumber((arguments or ""):match("%d+")) or 20
-    local traceEntries = addon.Trace.List((arguments or ""):match("problems") and "problems" or nil)
-    for index = math.min(entryCount, #traceEntries), 1, -1 do print(addon.Utility.Escape(addon.Trace.Format(traceEntries[index]))) end
-end
+-- comm, hello, debug [count], trace [count] [problems]: LibGuildSync-1.0 Addon.AddDiagnosticCommands (shared with
+-- TalentShare; English on purpose)
+LibStub("LibGuildSync-1.0").Addon.AddDiagnosticCommands(addon)

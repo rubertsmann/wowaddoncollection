@@ -1,7 +1,7 @@
 -- LibGuildSync: the guild and identity client calls every sync addon needs (roster, my name). Calls that fail on this
 -- client (missing or changed API) return nil instead of breaking the caller.
 local lib = LibStub("LibGuildSync-1.0")
-local Guild = lib:Module("Guild", 1)
+local Guild = lib:Module("Guild", 2)
 if not Guild then return end
 
 -- pcall(func, ...) returning func's results, or nil when it is missing or raised an error.

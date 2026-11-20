@@ -1,6 +1,6 @@
 -- LibGuildSync: inbound gate and incompatibility hints. Pure Lua (no WoW calls) so the rules are unit-tested offline.
 local lib = LibStub("LibGuildSync-1.0")
-local Guard = lib:Module("Guard", 1)
+local Guard = lib:Module("Guard", 2)
 if not Guard then return end
 
 -- Trust model: guild members are trusted, everyone else is not. Addon whispers work between ANY two players on a realm,

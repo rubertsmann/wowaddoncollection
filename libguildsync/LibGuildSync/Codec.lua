@@ -2,7 +2,7 @@
 -- encoding, and the plain-text chunk header that carries the protocol version. The serializer is shared; the protocol
 -- version is per addon (Codec.New{ major, minor }), because every addon has its own prefix and wire protocol.
 local lib = LibStub("LibGuildSync-1.0")
-local Codec = lib:Module("Codec", 1)
+local Codec = lib:Module("Codec", 2)
 if not Codec then return end
 
 -- Transport limits, defined ONCE: Channel chunks with CHUNK_BYTES and rejects more than MAXIMUM_PARTS; Decode accepts

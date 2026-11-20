@@ -20,7 +20,7 @@
 -- line repeated right after itself is stored once with a repeat count. Peer text is escaped. Error lines are also printed
 -- to the chat frame in a development build.
 local lib = LibStub("LibGuildSync-1.0")
-local Log = lib:Module("Log", 1)
+local Log = lib:Module("Log", 2)
 if not Log then return end
 
 ---@alias LogLevel "ERROR"|"WARNING"|"INFORMATION"|"DEBUG"

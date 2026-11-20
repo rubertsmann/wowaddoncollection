@@ -5,7 +5,7 @@
 --   locale.Register(code, { english key = translation, ... })
 -- clientCode = the game client's language; code = the UI language, normally the same, overridable for testing.
 local lib = LibStub("LibGuildSync-1.0")
-local Locale = lib:Module("Locale", 1)
+local Locale = lib:Module("Locale", 2)
 if not Locale then return end
 
 -- "{name}" placeholders filled from `values`; an unknown placeholder stays visible ("{name}") instead of vanishing.
