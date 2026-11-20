@@ -7,7 +7,8 @@ local xmlHandle = assert(io.open("Libs/LibGuildSync/LibGuildSync.xml", "rb"))
 for fileName in xmlHandle:read("*a"):gmatch('<Script%s+file="([^"]+)"') do dofile("Libs/LibGuildSync/" .. fileName) end
 xmlHandle:close()
 local addon = { PROTOCOL_MAJOR = 1, PROTOCOL_MINOR = 0, PROTOCOL = 1, PREFIX = "GGames", SlashCommands = {}, Print = print }
-for _, path in ipairs({ "Core/Library.lua", "Core/Games.lua", "Core/Store.lua", "Core/CoinFlip.lua" }) do
+for _, path in ipairs({ "Core/Base/Utility.lua", "Core/Base/Log.lua", "Core/Debug/Trace.lua", "Core/Base/Locale.lua",
+    "Core/Data/Store.lua", "Core/Data/Games.lua", "Core/Minigames/CoinFlip.lua" }) do
     assert(loadfile(path))("GuildGames", addon)
 end
 local outcome = (arg[1] == "T") and "T" or "H"

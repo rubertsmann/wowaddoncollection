@@ -4,7 +4,7 @@ local addonName, addon = ...
 --   Companion   the 3D model, hearts, need bars with threshold marks, the care buttons and their effects
 --   Collection  every found NPC (caught ones first), a model preview, click a caught one to make it the companion
 --   Guild       every member's current companion as a leaderboard (companion level), with a preview of the selected one
--- Logic lives in Core/AzeCaught.lua; this file only shows it and calls it. Model loading and emotes are journaled
+-- Logic lives in Core/Minigames/AzeCaught.lua; this file only shows it and calls it. Model loading and emotes are journaled
 -- (spikes S1/S2), so a white or missing model can be traced with /gg caught log model.
 ---@class AzeCaughtPanelModule
 local Panel = {}

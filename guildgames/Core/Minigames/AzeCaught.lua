@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- AZEcaught (feature 018): catch hostile NPCs and raise one as a companion. PURE Lua: no WoW calls. The client side is
--- Core/Catcher.lua (combat log, nameplates, model capture) and UI/AzeCaughtPanel.lua. Clocks and random numbers are
+-- Core/Game/Catcher.lua (combat log, nameplates, model capture) and UI/AzeCaughtPanel.lua. Clocks and random numbers are
 -- PARAMETERS, so any bug report can be replayed offline from `/gg caught export` and the journal.
 --
 -- Time: needs change only during ACTIVE time (logged in, R10). The client calls AzeCaught.Tick(dt) once a second with

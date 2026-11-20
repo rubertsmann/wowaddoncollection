@@ -1,6 +1,6 @@
 <!-- AZEcaught (feature 018): the "throw rope" key binding (Options > Key Bindings > AddOns). Bookkeeping only: it never
      casts, targets or uses anything, so a plain (non-secure) binding is enough. The function is defined in
-     Core/Catcher.lua; the dev build defines the same global (the last loaded copy wins). -->
+     Core/Game/Catcher.lua; the dev build defines the same global (the last loaded copy wins). -->
 <Bindings>
     <Binding name="AZECAUGHT_THROW" header="GUILDGAMES" category="ADDONS">
         if GuildGamesAzeCaughtThrow then GuildGamesAzeCaughtThrow() end

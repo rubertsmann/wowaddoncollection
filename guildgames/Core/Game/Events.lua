@@ -1,20 +1,29 @@
 local addonName, addon = ...
 
--- WoW event wiring. The internal bus (addon.Events: On/Fire, handlers run protected) is made in Core/Library.lua.
--- Internal events: DATA_CHANGED(kind), GAMES_CHANGED (a play of mine was stored), WINDOW_OPENED.
-local Events = addon.Events
+-- Internal pub/sub + WoW event wiring. Every handler runs protected: an error in one handler is logged (Log.Exception,
+-- with stack) and the others still run.
+-- Internal events: DATA_CHANGED(kind), GAMES_CHANGED (a play of mine was stored), CAUGHT_CHANGED, WINDOW_OPENED.
+---@class EventsModule
+local Events = {}
+addon.Events = Events
 
 -- Events.lua loads after every module it depends on. If one is missing, the TOC in use is out of date (typically the
 -- generated GuildGames-Dev.toc after a file was added): one plain message instead of a chain of nil-index errors.
 do
     local missingModules = {}
-    for _, moduleName in ipairs({ "Utility", "Log", "Trace", "Locale", "Codec", "Store", "Api", "Games", "CoinFlip", "Slots",
+    for _, moduleName in ipairs({ "Utility", "Log", "Trace", "Locale", "Codec", "Guard", "Store", "Api", "Games", "CoinFlip", "Slots",
         "Survivor", "Wallet", "AzeCaught", "Model", "Sync", "Communication", "Catcher" }) do
         if not addon[moduleName] then missingModules[#missingModules + 1] = moduleName end
     end
     if #missingModules > 0 then
         addon.Print("not loaded: " .. table.concat(missingModules, ", ") .. ". The TOC is out of date. Dev build: run tools/deploy.ps1 (it regenerates GuildGames-Dev.toc), then restart the game (/reload does not re-read the TOC).")
     end
+end
+
+-- the bus itself is a LibGuildSync-1.0 Events instance (LibGuildSync/Events.lua): On(name, handler), Fire(name, ...)
+do
+    local bus = LibStub("LibGuildSync-1.0").Events.New(addon.Log)
+    Events.On, Events.Fire = bus.On, bus.Fire
 end
 
 -- a play is announced coalesced (at most one HELLO per 30 s), so play spam cannot flood the guild channel
@@ -34,18 +43,6 @@ addon.SlashCommands.clean = function(arguments)
     Events.Fire("DATA_CHANGED", "games")
     addon.Communication.RequestHello(true, true)   -- online members introduce themselves; their records are pulled again
     addon.Print(("cleaned: removed %d game records."):format(removed))
-end
-
--- /gg locale [code|auto]: UI language override for testing translations
-addon.SlashCommands.locale = function(arguments)
-    local languageCode = (arguments or ""):match("^%s*(%S*)") or ""
-    if languageCode == "" then
-        addon.Print(("UI language %s, game client %s"):format(addon.Locale.code, addon.Locale.clientCode))
-        return
-    end
-    if not addon.db then return end
-    addon.db.ui.locale = languageCode ~= "auto" and languageCode or nil
-    addon.Print(("UI language set to %s: /reload to apply"):format(languageCode))
 end
 
 local eventFrame = CreateFrame("Frame")
@@ -109,7 +106,7 @@ end
 function onGameEvent.PLAYER_GUILD_UPDATE() addon.Communication.Start() end
 
 -- The client blocked a function only Blizzard code may call ("reserved for the Blizzard UI" dialog) and blamed this
--- addon (the event is caught in Core/Init.lua, the first file). Logged with the function name, the combat state, the
+-- addon (the event is caught in Core/Base/Init.lua, the first file). Logged with the function name, the combat state, the
 -- stack and the last AZEcaught steps, so the cause can be found from /gg debug (or the SavedVariables file).
 ---@param details table { kind, function, combat, stack }
 function addon.OnActionBlocked(details)

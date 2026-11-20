@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- Survivor panel (third game). Rules and simulation: Core/Survivor.lua. Everything here is presentation:
+-- Survivor panel (third game). Rules and simulation: Core/Minigames/Survivor.lua. Everything here is presentation:
 --   arena (an almost clear overlay): the tower in the middle with its health bar and a glow, monsters drawn from a pool,
 --     bolts with a short trail, the cleave as a sword sweeping round the tower plus a shockwave, the nova as a frost ring,
 --     death puffs, a red flash when the tower is hurt

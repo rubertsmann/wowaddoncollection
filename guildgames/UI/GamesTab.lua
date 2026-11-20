@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- The games (feature 014): the coin flip, the slot machine, survivor (UI/SurvivorArena.lua) and their guild leaderboards. Built lazily by UI/Window.lua (first open).
--- Rules and records: Core/Games.lua; coin motion: Core/CoinFlip.lua; effects: UI/Animate.lua; rows: Model.
+-- Rules and records: Core/Data/Games.lua; coin motion: Core/Minigames/CoinFlip.lua; effects: UI/Animate.lua; rows: Model.
 -- The flip is decided and STORED before the coin moves (Games.Flip); the animation only reveals it. While the coin is in
 -- the air the Flip button is disabled and the leaderboard is not refreshed, so my new row does not spoil the result.
 -- For fun only: the addon never reads, checks or moves real gold.

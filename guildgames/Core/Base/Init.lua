@@ -86,7 +86,7 @@ end
 
 -- Blocked actions ("reserved for the Blizzard UI" dialog). Registered in the FIRST file so a block while the other files
 -- load is caught too. Until the saved data is loaded (and the log can store lines) entries wait in addon.blockedEarly;
--- Core/Events.lua writes them to the log after ADDON_LOADED. The function name also goes to chat at once.
+-- Core/Game/Events.lua writes them to the log after ADDON_LOADED. The function name also goes to chat at once.
 ---@type table[]
 addon.blockedEarly = {}
 if CreateFrame then

@@ -55,9 +55,9 @@ return {
         for _, file in ipairs(tocFiles("GuildGames.toc")) do listed[file] = true; assert(io.open(file, "rb"), "TOC lists missing file " .. file):close() end
         local listing = io.popen('dir /b /s Core\\*.lua UI\\*.lua Locales\\*.lua 2>nul || find Core UI Locales -name "*.lua"')
         for line in listing:lines() do
-            local relative = ("/" .. line:gsub("\\", "/")):match(".*/((Core|UI|Locales)/[%w_]+%.lua)$")
-                or ("/" .. line:gsub("\\", "/")):match(".*/(Core/[%w_]+%.lua)$") or ("/" .. line:gsub("\\", "/")):match(".*/(UI/[%w_]+%.lua)$")
-                or ("/" .. line:gsub("\\", "/")):match(".*/(Locales/[%w_]+%.lua)$")
+            local path = "/" .. line:gsub("\\", "/")
+            local relative = path:match(".*/(Core/[%w_/]+%.lua)$") or path:match(".*/(UI/[%w_/]+%.lua)$")
+                or path:match(".*/(Locales/[%w_/]+%.lua)$")
             if relative then harness.truthy(listed[relative], relative .. " exists but is not in GuildGames.toc") end
         end
         listing:close()
@@ -396,7 +396,7 @@ return {
             UnitIsDead = function() return secret end }
         for key, value in pairs(globals) do saved[key] = _G[key]; _G[key] = value end
         local ok, snapshot = pcall(function()
-            assert(loadfile("Core/Api.lua"))("GuildGames", addon)
+            assert(loadfile("Core/Game/Api.lua"))("GuildGames", addon)
             return addon.Api.UnitSnapshot("target")
         end)
         for key in pairs(globals) do _G[key] = saved[key] end
@@ -421,7 +421,7 @@ return {
             UnitStat = function() return 5, 5, 0, 0 end }
         for key, value in pairs(globals) do saved[key] = _G[key]; _G[key] = value end
         local ok, dump = pcall(function()
-            assert(loadfile("Core/Api.lua"))("GuildGames", addon)
+            assert(loadfile("Core/Game/Api.lua"))("GuildGames", addon)
             return addon.Api.UnitDump("target")
         end)
         for key in pairs(globals) do _G[key] = saved[key] end

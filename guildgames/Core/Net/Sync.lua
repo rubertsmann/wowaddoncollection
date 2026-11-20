@@ -7,7 +7,7 @@ local addonName, addon = ...
 -- (kept from TalentShare 0.6.0, where the games started):
 --   HELLO {grev?, login?}   broadcast (GUILD) or reply (WHISPER): the revision of my game record (left out while I have none)
 --   WANTG {names, via?}     "send me your game record"; only the sender's own name is honoured
---   GAMES {games}           a character's game record (Core/Games.lua); only its author may send it
+--   GAMES {games}           a character's game record (Core/Data/Games.lua); only its author may send it
 ---@class SyncModule
 local Sync = {}
 addon.Sync = Sync

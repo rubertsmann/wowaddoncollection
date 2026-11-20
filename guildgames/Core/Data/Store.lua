@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- SavedVariables schema and queries. Pure Lua (no WoW calls) so it runs in the offline tests.
---   games[playerName] = GameRecord: that character's game results (Core/Games.lua; the field names are the wire format)
+--   games[playerName] = GameRecord: that character's game results (Core/Data/Games.lua; the field names are the wire format)
 --   ui                = window settings (stakes, scope, selected game, UI language override)
 --   me                = my canonical "Name-Realm"
 --   debug, trace      = the log and the network trace rings

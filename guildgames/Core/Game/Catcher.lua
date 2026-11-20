@@ -2,7 +2,7 @@ local addonName, addon = ...
 
 -- AZEcaught's client side (feature 018): the combat log (found NPCs, deaths), the rope icon on nameplates, the throw
 -- (icon, key binding, /gg catch), the active-time ticker, publishing my companion to the guild, the weekly payout and
--- the /gg caught diagnostics. Game logic stays in Core/AzeCaught.lua (pure); WoW reads go through Core/Api.lua.
+-- the /gg caught diagnostics. Game logic stays in Core/Minigames/AzeCaught.lua (pure); WoW reads go through Core/Game/Api.lua.
 -- Everything here writes to the AZEcaught journal (/gg caught log) so a problem on a player's machine can be followed.
 ---@class CatcherModule
 local Catcher = {}
@@ -65,7 +65,7 @@ function Catcher.CaptureDisplay(unit)
 end
 
 ------------------------------------------------------------------ found NPCs
--- No combat log on this client (forbidden for addons, see Core/Api.lua): an NPC counts as fought when it has the player
+-- No combat log on this client (forbidden for addons, see Core/Game/Api.lua): an NPC counts as fought when it has the player
 -- on its threat list (UNIT_THREAT_LIST_UPDATE, the target, nameplates) or when the rope is thrown at it.
 
 -- Notes a hostile NPC from a unit token (level, rarity, display). Reads the unit's details only once per GUID; values

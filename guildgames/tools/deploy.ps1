@@ -41,7 +41,7 @@ $lines = Get-Content $liveToc -Encoding UTF8 | ForEach-Object {
     if ($_ -match '^## Title:') { '## Title: GuildGames (dev)' }
     elseif ($_ -match '^## Notes:') { '## Notes: [DEV BUILD] ' + ($_ -replace '^## Notes:\s*', '') }
     elseif ($_ -match '^## Version:\s*(.+)$') { '## Version: ' + $Matches[1].Trim() + '-dev' }
-    elseif ($_ -match '^## SavedVariables:') { '## SavedVariables: GuildGamesDevDB'; '## X-Build: dev' }   # X-Build = the build flag Core/Init.lua reads (addon.BUILD); the live TOC has no such line
+    elseif ($_ -match '^## SavedVariables:') { '## SavedVariables: GuildGamesDevDB'; '## X-Build: dev' }   # X-Build = the build flag Core/Base/Init.lua reads (addon.BUILD); the live TOC has no such line
     elseif ($_ -match '^## X-Website:') { $null }
     else { $_ }
 } | Where-Object { $null -ne $_ }

@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- Slot machine panel of the Games tab (feature 014). Rules: Core/Slots.lua (the spin is decided and STORED before
+-- Slot machine panel of the Games tab (feature 014). Rules: Core/Minigames/Slots.lua (the spin is decided and STORED before
 -- the reels move). Everything here is presentation:
 --   cabinet with chasing light bulbs (idle: slow chase, spin: fast chase, win: all flash, loss: dim)
 --   lever that is pulled on every spin (click the knob to spin, too)

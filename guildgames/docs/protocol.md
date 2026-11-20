@@ -1,7 +1,7 @@
 # GuildGames wire protocol and stored data
 
-Protocol **1.1**, schema **2** (next release; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Init.lua` (versions, prefix), `Core/Sync.lua`
-(messages), `Core/Games.lua` (record, validation), `Core/Store.lua` (schema). The transport, chunk header, compatibility
+Protocol **1.1**, schema **2** (next release; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Base/Init.lua` (versions, prefix), `Core/Net/Sync.lua`
+(messages), `Core/Data/Games.lua` (record, validation), `Core/Data/Store.lua` (schema). The transport, chunk header, compatibility
 rules, guild gate and record-pull engine are LibGuildSync-1.0's (`Libs/LibGuildSync`, documented in the libguildsync repo).
 Tests: `tests/test_games_sync.lua`, `tests/test_games.lua`, `tests/test_store_and_locale.lua`.
 
@@ -24,7 +24,7 @@ protocol, so TalentShare and GuildGames never read each other's messages.
   Every 15 minutes an anti-entropy HELLO goes out.
 
 ## 3. Record, validation, stored data
-- **Record** (`Core/Games.lua`), one per character, authored only by that character, replaced as a whole by a newer `rev`:
+- **Record** (`Core/Data/Games.lua`), one per character, authored only by that character, replaced as a whole by a newer `rev`:
   `{ name, rev, total = {won, lost, wins, losses}, weeks = { ["YYYY-Www"] = {won, lost, wins, losses} } (<= 4 keys),
   recent = { {c = stake, r = "W"|"L", t = time} } (<= 20, newest first) }`. Amounts are in **copper** (1g = 10 000c),
   bookkeeping only (no real gold is read or moved). Week keys are ISO 8601 weeks in UTC.
@@ -58,6 +58,6 @@ protocol, so TalentShare and GuildGames never read each other's messages.
   `journal` (<= 400 log lines), `notify`, `verbose`); migration 1 -> 2 adds it empty; re-validated on every load and kept
   by `/gg clean`. `games[name]`, re-validated on every load,
   emptied by `/gg clean`, pruned with players who left the guild. A newer schema on disk is left untouched (read-only session).
-- **Display:** names are escaped in `Core/Model.lua`. Dev-build simulated players (`/ggd game sim`) live outside the
+- **Display:** names are escaped in `Core/View/Model.lua`. Dev-build simulated players (`/ggd game sim`) live outside the
   database and are never sent.
 

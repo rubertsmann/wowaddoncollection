@@ -12,7 +12,7 @@ local function sourceFiles()
     local listing = io.popen('dir /b /s Core\\*.lua UI\\*.lua 2>nul || find Core UI -name "*.lua"')
     for line in listing:lines() do
         local path = ("/" .. line:gsub("\\", "/"))
-        local relative = path:match(".*/(Core/[%w_]+%.lua)$") or path:match(".*/(UI/[%w_]+%.lua)$")
+        local relative = path:match(".*/(Core/[%w_/]+%.lua)$") or path:match(".*/(UI/[%w_/]+%.lua)$")
         if relative then files[#files + 1] = relative end
     end
     listing:close()
