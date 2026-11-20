@@ -62,3 +62,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: same identity names for both builds of both addons (pinned by the library tests and TalentShare test_build_flag/test_identity/test_hardening); GuildGames `/gg comm` gains "incompatible peers=N".
 - Evidence: libguildsync luajit tests/run.lua -> "33 passed, 0 failed" (27 before); talentshare -> "231 passed, 0 failed"; guildgames -> "121 passed, 0 failed"
 - Next: user: in-game check (verify.md IG1, both dev builds; restart the game first). Then status done, merge refactor/guildgames-structure.
+
+## 2026-11-20 23:55 | VERIFY | GuildGames in game; TalentShare review
+- Did: user started the GuildGames dev build: "ggd seems to run fine" -> verify.md IG1 IN-GAME. Ran review-talentshare on the TalentShare part (commit 5fe0338): talentshare/review/shared-addon-setup.md: no blocking finding; S1 (docs: the "identity only in Init.lua" rule text), S2 (optional prefix length check); MINOR 1 -> 2 in-place upgrade analysed safe.
+- Result: GuildGames verified in game (user's summary); TalentShare with the shared Addon.Setup not yet started in game (IG2).
+- Evidence: talentshare/review/shared-addon-setup.md; suites 231 / 33 / 121 passed
+- Next: user: TalentShare dev build check (IG2): tools/deploy.ps1 in talentshare, restart, /tsd, /tsd comm, /tsd version. Then fix S1 text, status done, merge refactor/guildgames-structure.

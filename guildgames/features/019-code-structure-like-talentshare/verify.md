@@ -21,7 +21,8 @@ Result after work:    `luajit tests/run.lua` -> 121 passed, 0 failed
 | RF4 | merged refusal text loses a literal key | locale lint (every Text[...] key translated, every deDE key used) | OFFLINE | 121 passed | pass | 2026-11-20 |
 | RF5 | rename hits a saved/wire field | diff check: the only renamed table key is nextID on the in-memory survivor run; sanitize tests pass | OFFLINE + READ-ONLY | 121 passed | pass | 2026-11-20 |
 | R8 | identity + diagnostics once, in LibGuildSync | libguildsync tests/test_addon.lua (live/dev names for both addons, TOC flag, -dev once, SavedVariables warning, dispatcher, diagnostics output, MINOR 1 -> 2 upgrade); TalentShare test_build_flag/test_identity/test_hardening; GuildGames test_load | OFFLINE | libguildsync 33 passed; TalentShare 231 passed; GuildGames 121 passed | pass | 2026-11-20 |
-| IG1 | the dev build loads in the client with the new TOC (no "not loaded" line, no Lua error), the four games and AZEcaught open | user, steps below | NOT-VERIFIED | | | |
+| IG1 | the dev build loads in the client with the new TOC (no "not loaded" line, no Lua error), the four games and AZEcaught open | user ran the dev build after a restart | IN-GAME | user, 2026-11-20: "ggd seems to run fine" (no details on each step) | pass | 2026-11-20 |
+| IG2 | TalentShare dev build still loads with LibGuildSync MINOR 2 (`/tsd`, `/tsd comm`, `/tsd version`) | user, steps in talentshare/review/shared-addon-setup.md | NOT-VERIFIED | | | |
 
 ## In-game checklist (things only the user can do)
 - [ ] `powershell tools/deploy.ps1` (already run on 2026-11-20 22:35), then RESTART the game (a new TOC is not read by /reload).
