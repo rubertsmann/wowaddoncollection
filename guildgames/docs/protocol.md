@@ -9,11 +9,11 @@ Tests: `tests/test_games_sync.lua`, `tests/test_games.lua`, `tests/test_store_an
 - Addon-message prefix `GGames` (dev build `GGamesDev`), channels `GUILD` and `WHISPER` only, guild members only.
 - Chunk header `<major>.<minor>|<id>|<idx>|<total>|<part>` (`1.0|...`). The payload carries `v = 1`. A peer with another
   major is dropped before anything is buffered, with one notice per session.
-- The send budget (burst 5, 0.9 per second) is **shared** with every other addon that embeds LibGuildSync (TalentShare).
+- The send budget (burst 5, 0.9 per second) is **shared** with every other addon that embeds LibGuildSync (ProfessionShare).
 
 ## 2. Messages
 The names are kept from TalentShare 0.6.0 (protocol 2.3), where the games started. They now run on their own prefix and
-protocol, so TalentShare and GuildGames never read each other's messages.
+protocol, so ProfessionShare and GuildGames never read each other's messages.
 - `HELLO {grev?, login?}`: broadcast on GUILD (a whispered reply to a `login` HELLO). `grev` = my record's `rev`, left out
   while I have no record.
 - `WANTG {names, via?}`: "send me your record". Whisper first, repeated on GUILD with `via = "GUILD"` after 45 and 90 s,

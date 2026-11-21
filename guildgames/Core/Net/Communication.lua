@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- Transport: a LibGuildSync-1.0 Channel for addon.PREFIX (LibGuildSync/Channel.lua: chunking, the send bucket shared with
--- TalentShare and every other addon that embeds the library, reassembly, the guild gate, echo/realm learning, HELLO
+-- ProfessionShare and every other addon that embeds the library, reassembly, the guild gate, echo/realm learning, HELLO
 -- coalescing, roster and identity check, the minute ticker). Not in a guild -> inactive (no sends, no errors).
 -- The channel IS this module: Communication.Send, .OnAddonMessage, .RequestHelloSoon, .roster, .sync, ...
 
@@ -46,5 +46,5 @@ local Communication = LibStub("LibGuildSync-1.0").Channel.New({
 addon.Communication = Communication
 
 -- comm, hello, debug [count], trace [count] [problems]: LibGuildSync-1.0 Addon.AddDiagnosticCommands (shared with
--- TalentShare; English on purpose)
+-- ProfessionShare; English on purpose)
 LibStub("LibGuildSync-1.0").Addon.AddDiagnosticCommands(addon)

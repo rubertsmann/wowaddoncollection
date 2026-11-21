@@ -1,0 +1,6 @@
+## Interface: 16001
+## Title: ProfessionShareProbe
+## Notes: Dev-only. Records which profession/guild APIs exist on this client into SavedVariables.
+## SavedVariables: ProfessionShareProbeDB
+
+Probe.lua

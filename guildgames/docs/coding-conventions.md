@@ -1,6 +1,6 @@
 # Coding conventions
 
-How code in this addon is written: the same rules as TalentShare (`../talentshare/docs/coding-conventions.md`), so code
+How code in this addon is written: the same rules as ProfessionShare (`../professionshare/docs/coding-conventions.md`), so code
 reads the same in both addons. `tests/` enforce parts of it (load order, localization lint, module guards, the `ID`
 spelling, build flag); the rest is checked in review.
 
@@ -25,7 +25,7 @@ call the client. Clocks and random numbers are parameters, so a bug report can b
 - **Full words, never abbreviations or single letters.** `elapsedSeconds`, not `dt`; `progress`, not `t`;
   `npcInformation`, not `info`; `red, green, blue`, not `r, g, b`. Allowed: `UI`, `ID`, `API`, `UTF8`; `ok` (pcall
   result), `me`; Lua and WoW globals; `_` for an ignored value; `x`/`y` for screen and arena coordinates.
-- **Ids end in `ID`**: `npcID`, `typeID`, `displayID`, `animationID` (TalentShare: `recipeID`, `itemID`). Pinned by
+- **Ids end in `ID`**: `npcID`, `typeID`, `displayID`, `animationID` (ProfessionShare: `recipeID`, `itemID`). Pinned by
   tests/test_store_and_locale.lua.
 - **Data that leaves the code keeps its short names.** Wire fields (`t`, `v`, `grev`, `games`, `names`, `via`), saved
   record fields (`rev`, `recent`, `npc`, `disp`, `lvl`, `cls`, `st`, `n`, ...), journal detail keys that bug reports are

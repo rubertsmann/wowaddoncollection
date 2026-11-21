@@ -70,7 +70,7 @@ HELLO (at most one every 30 s). Peers pull the record by whisper and fall back t
 author of a record can send it, and every record is validated (shape, bounds, internal consistency). Results are
 self-reported, so the guild has to trust its members.
 
-The comms layer is **LibGuildSync-1.0** (embedded under `Libs/LibGuildSync`, shared with TalentShare): chunking, one
+The comms layer is **LibGuildSync-1.0** (embedded under `Libs/LibGuildSync`, shared with ProfessionShare): chunking, one
 send budget for every addon that embeds it, the guild-only gate, record pulls with retries. Protocol:
 [docs/protocol.md](docs/protocol.md).
 

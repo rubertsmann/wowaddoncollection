@@ -1,4 +1,4 @@
--- Addon (MINOR 2): identity, build flag, slash dispatcher and diagnostic commands shared by TalentShare and GuildGames.
+-- Addon (MINOR 2): identity, build flag, slash dispatcher and diagnostic commands shared by ProfessionShare and GuildGames.
 local MAJOR = "LibGuildSync-1.0"
 
 -- Runs `body(lib)` with the client globals Setup reads replaced: TOC metadata `tableOfContents`, a recording print and
@@ -16,19 +16,19 @@ local function withClient(harness, tableOfContents, body)
     return printed
 end
 
-local OPTIONS = { name = "TalentShare", prefix = "TShare", command = "ts", fallbackVersion = "0.7.3", color = "33ccff" }
+local OPTIONS = { name = "ProfessionShare", prefix = "PShare", command = "ps", fallbackVersion = "0.7.3", color = "33ccff" }
 
 return {
     ["addon: live identity from the three words; version from the TOC"] = function(harness)
-        withClient(harness, { Version = "1.2.3", SavedVariables = "TalentShareDB" }, function(lib)
+        withClient(harness, { Version = "1.2.3", SavedVariables = "ProfessionShareDB" }, function(lib)
             local addon = {}
-            lib.Addon.Setup(addon, "TalentShare", OPTIONS)
+            lib.Addon.Setup(addon, "ProfessionShare", OPTIONS)
             harness.equal(addon.BUILD, "live"); harness.equal(addon.IS_DEVELOPMENT_BUILD, false)
             harness.equal(addon.VERSION, "1.2.3"); harness.equal(addon.BASE_VERSION, "1.2.3")
-            harness.equal(addon.TITLE, "TalentShare"); harness.equal(addon.PREFIX, "TShare")
-            harness.equal(addon.SAVED_VARIABLES_NAME, "TalentShareDB"); harness.equal(addon.FRAME_PREFIX, "TalentShare")
-            harness.equal(addon.SLASH_COMMANDS[1], "/ts"); harness.equal(addon.SLASH_COMMANDS[2], "/talentshare")
-            harness.equal(_G.SLASH_TALENTSHARE1, "/ts"); harness.truthy(SlashCmdList.TALENTSHARE)
+            harness.equal(addon.TITLE, "ProfessionShare"); harness.equal(addon.PREFIX, "PShare")
+            harness.equal(addon.SAVED_VARIABLES_NAME, "ProfessionShareDB"); harness.equal(addon.FRAME_PREFIX, "ProfessionShare")
+            harness.equal(addon.SLASH_COMMANDS[1], "/ps"); harness.equal(addon.SLASH_COMMANDS[2], "/professionshare")
+            harness.equal(_G.SLASH_PROFESSIONSHARE1, "/ps"); harness.truthy(SlashCmdList.PROFESSIONSHARE)
         end)
     end,
 
@@ -45,40 +45,40 @@ return {
         end)
         withClient(harness, nil, function(lib)
             local addon = {}
-            lib.Addon.Setup(addon, "TalentShare-Dev", OPTIONS)
+            lib.Addon.Setup(addon, "ProfessionShare-Dev", OPTIONS)
             harness.equal(addon.BUILD, "dev", "the folder name alone selects dev")
             harness.equal(addon.VERSION, "0.7.3-dev", "fallback version when the client cannot read the TOC")
         end)
     end,
 
     ["addon: a TOC that saves another global is reported; Print uses the title"] = function(harness)
-        local printed = withClient(harness, { SavedVariables = "TalentShareDB" }, function(lib)
-            lib.Addon.Setup({}, "TalentShare-Dev", OPTIONS)
+        local printed = withClient(harness, { SavedVariables = "ProfessionShareDB" }, function(lib)
+            lib.Addon.Setup({}, "ProfessionShare-Dev", OPTIONS)
         end)
         harness.equal(#printed, 1)
-        harness.truthy(printed[1]:find("|cff33ccffTalentShare (dev)|r: the TOC saves TalentShareDB", 1, true), printed[1])
+        harness.truthy(printed[1]:find("|cff33ccffProfessionShare (dev)|r: the TOC saves ProfessionShareDB", 1, true), printed[1])
     end,
 
     ["addon: the slash dispatcher toggles, runs a word, or lists the words"] = function(harness)
         local printed = withClient(harness, {}, function(lib)
             local addon, toggled, received = {}, 0, nil
-            lib.Addon.Setup(addon, "TalentShare", OPTIONS)
+            lib.Addon.Setup(addon, "ProfessionShare", OPTIONS)
             addon.UI = { Toggle = function() toggled = toggled + 1 end }
             addon.SlashCommands.zeta = function(arguments) received = arguments end
             addon.SlashCommands.alpha = function() end
-            SlashCmdList.TALENTSHARE("  ")
+            SlashCmdList.PROFESSIONSHARE("  ")
             harness.equal(toggled, 1)
-            SlashCmdList.TALENTSHARE("ZETA  some words ")
+            SlashCmdList.PROFESSIONSHARE("ZETA  some words ")
             harness.equal(received, "some words")
-            SlashCmdList.TALENTSHARE("nope")
+            SlashCmdList.PROFESSIONSHARE("nope")
         end)
-        harness.truthy(printed[#printed]:find("/ts [alpha|zeta]", 1, true), printed[#printed])
+        harness.truthy(printed[#printed]:find("/ps [alpha|zeta]", 1, true), printed[#printed])
     end,
 
     ["addon: diagnostic commands read the channel, the log and the trace at use time"] = function(harness)
         local printed = withClient(harness, {}, function(lib)
             local addon = {}
-            lib.Addon.Setup(addon, "TalentShare", OPTIONS)
+            lib.Addon.Setup(addon, "ProfessionShare", OPTIONS)
             lib.Addon.AddDiagnosticCommands(addon)
             local helloCount = 0
             addon.PROTOCOL_MAJOR, addon.PROTOCOL_MINOR = 2, 3

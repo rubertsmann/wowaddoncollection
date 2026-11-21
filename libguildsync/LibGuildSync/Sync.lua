@@ -10,7 +10,7 @@
 -- repeated on GUILD with via = "GUILD", and the owner answers on GUILD, so a failing whisper path cannot block sync;
 -- one GUILD answer also serves every other member that was behind. After the last try the pull gives up; the peer's next
 -- HELLO restarts it once GIVE_UP_RESET_SECONDS have passed.
--- Addons add their own HELLO fields and message types with AddHelloHook and AddHandler (TalentShare's orders).
+-- Addons add their own HELLO fields and message types with AddHelloHook and AddHandler (ProfessionShare's orders).
 -- OnMessage returns (status, reason): "ok" | "ignored" | "dropped" | "error", for the network trace.
 -- Every player name from the wire is compared and stored in canonical form (Utility.CanonicalName).
 local lib = LibStub("LibGuildSync-1.0")

@@ -5,14 +5,15 @@ World of Warcraft **Forever** addons, one folder per addon. Each folder has its 
 
 | Folder | Addon | Latest release (tag) |
 |---|---|---|
-| [`talentshare/`](talentshare/README.md) | TalentShare: guild professions, recipes and crafting order board | `talentshare/v0.7.3` |
+| [`professionshare/`](professionshare/README.md) | ProfessionShare (until 0.7.3: TalentShare): guild professions, recipes and crafting order board | `talentshare/v0.7.3` (new tags: `professionshare/v*`) |
 | [`guildgames/`](guildgames/README.md) | GuildGames: coin flip, slot machine and Survivor with guild leaderboards | `guildgames/v0.1.0` |
-| [`libguildsync/`](libguildsync/README.md) | LibGuildSync-1.0: shared guild sync library, embedded by TalentShare and GuildGames | `libguildsync/minor-1` |
+| [`libguildsync/`](libguildsync/README.md) | LibGuildSync-1.0: shared guild sync library, embedded by ProfessionShare and GuildGames | `libguildsync/minor-1` |
 | [`fpvcigarette/`](fpvcigarette/README.md) | FPV Cigarette: first-person cigarette overlay, dancer window | `fpvcigarette/v0.2.0` |
 | [`foreverbetteruiplus/`](foreverbetteruiplus/README.md) | ForeverBetterUIPlus | not released yet |
 
-TalentShare and GuildGames embed `libguildsync/LibGuildSync`: their `tools/deploy.ps1` links it into `Libs/` (the link is
+ProfessionShare and GuildGames embed `libguildsync/LibGuildSync`: their `tools/deploy.ps1` links it into `Libs/` (the link is
 git-ignored) and `tools/package.ps1` copies the real files into the release zip.
 
-Until 0.7.1 this repository held only TalentShare (its history is kept; the files moved into `talentshare/`).
+Until 0.7.1 this repository held only TalentShare (its history is kept; the files moved into `talentshare/`, renamed to
+`professionshare/` with the addon on 2026-11-21).
 Tags of the other addons are prefixed with their folder name.

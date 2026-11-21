@@ -1,10 +1,10 @@
 -- LibGuildSync: what every addon that embeds the library sets up the same way: its identity (live or development build,
 -- version, prefix, SavedVariables, frame names, slash commands), the slash command dispatcher, and the diagnostic slash
--- commands (comm, hello, debug, trace). TalentShare and GuildGames used to carry a copy each.
+-- commands (comm, hello, debug, trace). ProfessionShare and GuildGames used to carry a copy each.
 -- Identity names follow one pattern from three words, so the live and the development build never share state:
---   name "TalentShare", prefix "TShare", command "ts"  ->
---   live: title "TalentShare", prefix "TShare", SavedVariables "TalentShareDB", frames "TalentShare", /ts /talentshare
---   dev:  title "TalentShare (dev)", prefix "TShareDev", "TalentShareDevDB", frames "TalentShareDev", /tsd /talentsharedev
+--   name "ProfessionShare", prefix "PShare", command "ps"  ->
+--   live: title "ProfessionShare", prefix "PShare", SavedVariables "ProfessionShareDB", frames "ProfessionShare", /ps /professionshare
+--   dev:  title "ProfessionShare (dev)", prefix "PShareDev", "ProfessionShareDevDB", frames "ProfessionShareDev", /psd /professionsharedev
 local lib = LibStub("LibGuildSync-1.0")
 local Addon = lib:Module("Addon", 2)
 if not Addon then return end
@@ -32,9 +32,9 @@ function Addon.IsDevelopmentBuild(addonName)
 end
 
 ---@class AddonIdentityOptions
----@field name string the live addon's name ("TalentShare"): title, SavedVariables and frame names, long slash command
----@field prefix string the live build's addon-message prefix ("TShare"), at most 13 bytes ("Dev" is appended)
----@field command string the live build's short slash command without "/" ("ts")
+---@field name string the live addon's name ("ProfessionShare"): title, SavedVariables and frame names, long slash command
+---@field prefix string the live build's addon-message prefix ("PShare"), at most 13 bytes ("Dev" is appended)
+---@field command string the live build's short slash command without "/" ("ps")
 ---@field fallbackVersion string version when the client cannot read the TOC (only the offline tests)
 ---@field color string chat colour of the title as "rrggbb"
 

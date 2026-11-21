@@ -535,8 +535,8 @@ end
 ---@type table|nil
 UI.minimapButton = nil
 
--- A coin on the minimap (LibGuildSync's button, shared with TalentShare): click opens the window, right-drag moves it.
--- Its default spot is away from TalentShare's (215 degrees; dev builds 245) so the two never cover each other.
+-- A coin on the minimap (LibGuildSync's button, shared with ProfessionShare): click opens the window, right-drag moves it.
+-- Its default spot is away from ProfessionShare's (215 degrees; dev builds 245) so the two never cover each other.
 function UI.BuildMinimapButton()
     if UI.minimapButton or not Minimap then return end
     UI.minimapButton = Widgets.CreateMinimapButton({

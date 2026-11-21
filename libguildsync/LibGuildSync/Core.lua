@@ -1,4 +1,4 @@
--- LibGuildSync-1.0: guild addon-message sync and the helpers around it, shared by TalentShare and GuildGames.
+-- LibGuildSync-1.0: guild addon-message sync and the helpers around it, shared by ProfessionShare and GuildGames.
 -- Embedded: every addon ships a copy under Libs\LibGuildSync and loads LibGuildSync.xml. LibStub keeps ONE copy active:
 --   * Core.lua of a NEWER copy (higher MINOR) takes over the library table; its module files then upgrade every module
 --     table in place (same table identity, so instances made by an older copy call the new code).

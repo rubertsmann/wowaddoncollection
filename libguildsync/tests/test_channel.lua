@@ -72,7 +72,7 @@ return {
             deliver(receiver, calls, "M-R")
             harness.equal(#received, 0)
             harness.equal(db.trace[#db.trace].st, "rejected")
-            receiver.OnAddonMessage("TShare", calls[1].text, "GUILD", "A-R")
+            receiver.OnAddonMessage("PShare", calls[1].text, "GUILD", "A-R")
             harness.equal(#received, 0, "another addon's prefix is not ours")
         end)
     end,
@@ -94,7 +94,7 @@ return {
     ["channel: one token bucket for every channel (two addons together keep the server rate)"] = function(harness)
         local lib = harness.library()
         withChat(0, function(calls)
-            local first = newChannel(harness, lib, "TShare", "A-R", {})
+            local first = newChannel(harness, lib, "PShare", "A-R", {})
             local second = newChannel(harness, lib, "GGames", "A-R", {})
             lib.Channel.Initialize(first); lib.Channel.Initialize(second)
             for index = 1, 10 do first.Send({ t = "X", n = index }, "GUILD"); second.Send({ t = "X", n = index }, "GUILD") end
@@ -103,7 +103,7 @@ return {
             harness.equal(#calls, lib.Channel.BUCKET_CAPACITY, "the burst is shared")
             local prefixes = {}
             for _, call in ipairs(calls) do prefixes[call.prefix] = (prefixes[call.prefix] or 0) + 1 end
-            harness.truthy(prefixes.TShare and prefixes.GGames, "both channels get a turn")
+            harness.truthy(prefixes.PShare and prefixes.GGames, "both channels get a turn")
             lib.Channel.Refill(1); lib.Channel.SendAll()
             harness.equal(#calls, lib.Channel.BUCKET_CAPACITY, "less than one token after 1 s at 0.9/s")
             lib.Channel.Refill(10); lib.Channel.SendAll()
@@ -128,12 +128,12 @@ return {
         GetNormalizedRealmName = function() return "MyRealm" end
         local ok, errorMessage = pcall(withChat, 0, function(calls)
             local renamed = 0
-            local first = newChannel(harness, lib, "TShare", "Me-MyRealm", {})
+            local first = newChannel(harness, lib, "PShare", "Me-MyRealm", {})
             local second = newChannel(harness, lib, "GGames", "Me-MyRealm", {})
             second.options.canonicalizeStored = function() renamed = renamed + 1; return 0 end
             lib.Channel.Initialize(first); lib.Channel.Initialize(second)
             first.Send({ t = "HELLO" }, "GUILD"); first._pump(10)
-            first.OnAddonMessage("TShare", calls[1].text, "GUILD", "Me-Other Spelling")
+            first.OnAddonMessage("PShare", calls[1].text, "GUILD", "Me-Other Spelling")
             harness.equal(first.lastEcho, "Me-Other Spelling")
             harness.truthy(lib.Utility.IsMyRealm("OtherSpelling"), "alias learned")
             harness.equal(renamed, 1, "the other addon re-keyed its names too")

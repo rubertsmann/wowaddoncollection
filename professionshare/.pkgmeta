@@ -1,0 +1,23 @@
+package-as: ProfessionShare
+
+# the player-facing notes are the release text on GitHub (and CurseForge once the upload is automated)
+manual-changelog:
+  filename: RELEASE_NOTES.md
+  markup-type: markdown
+
+ignore:
+  - tests
+  - dev
+  - eval
+  - docs
+  - tools
+  - dist
+  - screens-debug
+  - icon.png
+  - review
+  - features
+  - ProfessionShare-Dev.toc
+  - .claude
+  - .github
+  - .gitignore
+  - .pkgmeta

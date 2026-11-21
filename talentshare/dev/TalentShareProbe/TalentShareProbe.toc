@@ -1,6 +1,0 @@
-## Interface: 16001
-## Title: TalentShareProbe
-## Notes: Dev-only. Records which profession/guild APIs exist on this client into SavedVariables.
-## SavedVariables: TalentShareProbeDB
-
-Probe.lua

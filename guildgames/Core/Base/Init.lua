@@ -3,7 +3,7 @@ local addonName, addon = ...
 -- Identity. The ONLY place that knows whether this is the live addon ("GuildGames") or the side-by-side development copy
 -- ("GuildGames-Dev"); everything else reads these fields so both can run in one client without sharing state.
 -- BUILD FLAG and the names derived from it come from LibGuildSync-1.0 Addon.Setup (LibGuildSync/Addon.lua), shared with
--- TalentShare: "dev" when the generated GuildGames-Dev.toc says "## X-Build: dev" (tools/deploy.ps1) OR the folder name
+-- ProfessionShare: "dev" when the generated GuildGames-Dev.toc says "## X-Build: dev" (tools/deploy.ps1) OR the folder name
 -- contains "dev"; either signal is enough, so a mismatch fails toward isolation. It sets addon.BUILD,
 -- IS_DEVELOPMENT_BUILD, BASE_VERSION, VERSION, TITLE, PREFIX ("GGames"/"GGamesDev"), SAVED_VARIABLES_NAME, FRAME_PREFIX,
 -- SLASH_COMMANDS (/gg /guildgames or /ggd /guildgamesdev), SlashCommands (handlers by word) and Print, warns when the TOC

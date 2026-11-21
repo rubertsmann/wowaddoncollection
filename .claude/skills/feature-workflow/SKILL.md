@@ -1,11 +1,11 @@
 ---
 name: feature-workflow
-description: Plan, document and verify a new feature for any addon in the wowaddons monorepo (TalentShare, GuildGames, LibGuildSync, ...) (or a non-trivial change) with one fixed folder structure and log format under features/. Use when the user asks to add, plan, design, implement, document, verify or "finish" a feature, or asks what the state of a feature is. Also use to resume an unfinished feature.
+description: Plan, document and verify a new feature for any addon in the wowaddons monorepo (ProfessionShare, GuildGames, LibGuildSync, ...) (or a non-trivial change) with one fixed folder structure and log format under features/. Use when the user asks to add, plan, design, implement, document, verify or "finish" a feature, or asks what the state of a feature is. Also use to resume an unfinished feature.
 ---
 
 # Feature workflow (plan -> build -> verify -> document)
 
-**Monorepo:** git root is `wowaddons/`; every addon folder has its own `features/` (paths below are relative to the addon folder). Feature ids are unique across all addons (the scaffold script scans every `<addon>/features`). Run the script from the root with `-Root <addon>`. The project quick reference at the bottom is TalentShare's; for GuildGames read `guildgames/README.md` (tests `luajit tests/run.lua`, `/gg`, `/ggd`) and `guildgames/docs/protocol.md`.
+**Monorepo:** git root is `wowaddons/`; every addon folder has its own `features/` (paths below are relative to the addon folder). Feature ids are unique across all addons (the scaffold script scans every `<addon>/features`). Run the script from the root with `-Root <addon>`. The project quick reference at the bottom is ProfessionShare's; for GuildGames read `guildgames/README.md` (tests `luajit tests/run.lua`, `/gg`, `/ggd`) and `guildgames/docs/protocol.md`.
 
 Every feature lives in **one folder** with **fixed files**, so anyone (you after a context reset, the user, a reviewer) can read the state in under a minute. Never keep state only in chat.
 
@@ -26,7 +26,7 @@ Statuses (INDEX.md and the `Status:` line in spec.md, keep both in sync): `plann
 1. Read `features/INDEX.md` (does it already exist or overlap?), `docs/status.md`, `review/*.md` (standing findings), `README.md` trust model.
 2. Scaffold (creates folder, copies templates, fills id/date, adds the INDEX row, writes the first log entry):
    ```
-   powershell -File .claude/skills/feature-workflow/scripts/new-feature.ps1 -Name "Localization layer" -Root talentshare
+   powershell -File .claude/skills/feature-workflow/scripts/new-feature.ps1 -Name "Localization layer" -Root professionshare
    ```
    If PowerShell is unavailable, copy `templates/*.md` by hand and keep the exact file names.
 3. Fill `spec.md` before touching code (Phase 1). Ask the user only about decisions that change the outcome; record every answer under "Decisions".
@@ -56,7 +56,7 @@ One row per requirement `R*` and per Review Focus item. Each row has exactly one
 | `READ-ONLY` | reasoned from code, nothing executed | honest label, never counts as verified |
 | `NOT-VERIFIED` | not checked | say what is needed and from whom |
 
-Rules: never write `IN-GAME` for something only the offline suite covered. Unknown stays `NOT-VERIFIED`. A feature may only become `done` when every requirement is `OFFLINE`, `IN-GAME` or `MULTI-CLIENT`, or the user explicitly accepts the remaining `NOT-VERIFIED` rows (record who accepted and when). Run `review-talentshare` on the change before `done` if it touches the network, the store or the display of peer text.
+Rules: never write `IN-GAME` for something only the offline suite covered. Unknown stays `NOT-VERIFIED`. A feature may only become `done` when every requirement is `OFFLINE`, `IN-GAME` or `MULTI-CLIENT`, or the user explicitly accepts the remaining `NOT-VERIFIED` rows (record who accepted and when). Run `review-professionshare` on the change before `done` if it touches the network, the store or the display of peer text.
 
 Things that need the user (ask once, with exact steps, then log it as `BLOCKED`): starting the game, `/console scriptErrors 1`, slash commands and screenshots, a second guild member, CurseForge actions.
 
@@ -86,4 +86,4 @@ Read `features/INDEX.md`, then the feature's `log.md` (last 3 entries), `spec.md
 - Report outcomes faithfully: failing tests, skipped steps and unverified rows are written down, not smoothed over.
 
 ## Project quick reference
-Lua 5.1 addon for WoW Forever (interface 16001). Tests: `luajit tests/run.lua` (LuaJIT at `%LOCALAPPDATA%\Programs\LuaJIT\bin`). Deploy: `powershell tools/deploy.ps1`. Package: `powershell tools/package.ps1`. In game: `/ts version|scan|dump|comm|hello|chars|debug`. Pure modules vs client-only modules, wire protocol and trust model: see `.claude/skills/review-talentshare/SKILL.md`.
+Lua 5.1 addon for WoW Forever (interface 16001). Tests: `luajit tests/run.lua` (LuaJIT at `%LOCALAPPDATA%\Programs\LuaJIT\bin`). Deploy: `powershell tools/deploy.ps1`. Package: `powershell tools/package.ps1`. In game: `/ps version|scan|dump|comm|hello|chars|debug`. Pure modules vs client-only modules, wire protocol and trust model: see `.claude/skills/review-professionshare/SKILL.md`.

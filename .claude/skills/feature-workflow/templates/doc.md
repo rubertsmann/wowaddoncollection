@@ -7,7 +7,7 @@ Status: draft | Since version: <x.y.z> | Spec: [spec](spec.md) | Verification: [
 
 ## How to use
 - UI: <where to click>
-- Commands: `/ts ...`
+- Commands: `/ps ...`
 
 ## How it works
 - Data (SavedVariables): <shape>

@@ -1,0 +1,6 @@
+dist/
+.release/
+*.zip
+ProfessionShare-Dev.toc
+screens-debug/
+Libs/LibGuildSync/

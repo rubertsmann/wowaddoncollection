@@ -1,7 +1,7 @@
 # LibGuildSync-1.0
 
 Guild addon-message sync and the helpers around it, for WoW Forever (interface 16001) addons. It is embedded with
-LibStub: each addon ships a copy under `Libs/LibGuildSync` and only the newest copy runs. Used by TalentShare and
+LibStub: each addon ships a copy under `Libs/LibGuildSync` and only the newest copy runs. Used by ProfessionShare and
 GuildGames.
 
 ## Embedding

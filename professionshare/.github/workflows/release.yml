@@ -1,0 +1,33 @@
+name: Release AddOn
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # One version source: the TOC. A tag like v0.3.0 (or v0.3.0-beta1) must match "## Version: 0.3.0".
+      - name: Tag must match the TOC version
+        run: |
+          toc="$(sed -n 's/^## Version:[[:space:]]*//p' ProfessionShare.toc | tr -d '\r' | head -n1)"
+          tag="${GITHUB_REF_NAME#v}"
+          tag="${tag%%-*}"
+          if [ -z "$toc" ] || [ "$tag" != "$toc" ]; then
+            echo "tag '$GITHUB_REF_NAME' does not match the TOC version '$toc'"
+            exit 1
+          fi
+
+      # Secrets are scoped to the one step that needs them (not the whole workflow).
+      - uses: BigWigsMods/packager@v2
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}

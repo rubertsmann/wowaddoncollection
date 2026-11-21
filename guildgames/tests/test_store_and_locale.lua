@@ -94,7 +94,7 @@ return {
         harness.equal(Clamp(math.huge, 0, 1), 1); harness.equal(Clamp(-math.huge, 0, 1), 0)
     end,
 
-    -- docs/coding-conventions.md "Names": ids end in "ID" (npcID, typeID), as in TalentShare (recipeID, itemID)
+    -- docs/coding-conventions.md "Names": ids end in "ID" (npcID, typeID), as in ProfessionShare (recipeID, itemID)
     ["conventions: identifiers spell ids as ID, not Id"] = function(harness)
         local found = {}
         for _, path in ipairs(sourceFiles()) do
