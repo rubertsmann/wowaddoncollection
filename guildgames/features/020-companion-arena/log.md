@@ -14,3 +14,10 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: built; offline verified; needs the game and a second player.
 - Evidence: luajit tests/run.lua -> "133 passed, 0 failed" (new tests/test_arena.lua: 7 tests; test_load drives the arena view: train, accept, watch, steps, tick + settlement)
 - Next: user: restart the game (TOC changed), run the in-game checklist in verify.md; then a fight with a guild member on this build (MULTI-CLIENT row).
+
+## 2026-11-21 02:01 | BLOCKED | in-game and two-player verification
+- Did: everything that can run offline is built and tested (afe97cb). The remaining verify.md rows (R9-R11 look in game, MC two real players) need the WoW client and a second guild member; Claude cannot start or drive the game. The requested PC sleep timer was refused by the permission check (not worked around).
+- Result: waiting on the user.
+- Evidence: luajit tests/run.lua -> "133 passed, 0 failed"
+- Next: user: restart the game, run the in-game checklist in verify.md (/ggd arena, train, challenge a guild member on this build, accept, bet, watch); report or /reload so the journal (arena.* lines) can be read from SavedVariables.
+
