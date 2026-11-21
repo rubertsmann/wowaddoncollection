@@ -191,6 +191,16 @@ function RecipeTable.Layout(visibleColumns, totalWidth)
     return cells
 end
 
+-- The width the cells of RecipeTable.Layout span (the right edge of the last one; 0 for none). More than the width the
+-- layout was given when the name hit its minimum: the window then scrolls the table sideways.
+---@param cells RecipeCell[]
+---@return number
+function RecipeTable.TableWidth(cells)
+    local right = 0
+    for _, cell in ipairs(cells or {}) do right = math.max(right, cell.left + cell.width) end
+    return right
+end
+
 ---@param text any
 ---@return string
 local function sortKey(text) return addon.Utility.SearchKey(type(text) == "string" and text or "") end

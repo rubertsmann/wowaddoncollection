@@ -7,6 +7,9 @@
   realm-free "Name". Before, a request from a member whose client still reports realms ("Drakk Nuk-SomeRealm") was
   ignored as "name mismatch", so that member never received the record. MINOR bump so this copy replaces an older
   MINOR 2 copy embedded by another addon, whatever the load order.
+- `Widgets.CreateMinimapButton`: the button sat at a fixed 80 px from the centre, INSIDE the larger Forever minimap. It
+  now sits half the minimap's size + 5 px out (`Widgets.MinimapButtonOffset`, LibDBIcon's rule incl. square minimap
+  shapes), so it lines up with other addons' buttons (Spoken), and follows the minimap when it is resized.
 
 ## MINOR 2 (2026-11-20)
 - New module `Addon` (GuildGames feature 019): `Addon.Setup(addon, addonName, { name, prefix, command, fallbackVersion,

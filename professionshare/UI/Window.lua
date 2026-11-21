@@ -307,7 +307,7 @@ local function refreshRecipes()
     local recipeRows = addon.Model.BuildRecipeRows(addon.Store, filter, addon.Api.ItemName, itemLookups)
     RecipeTable.Sort(recipeRows, RecipeTable.GetSort(interfaceSettings()))
     itemInfoArrived = false
-    recipeList.onLayout(recipeList)   -- the column choice may have changed in the options
+    recipeList:UpdateLayout()   -- the column choice may have changed in the options (and with it the table width)
     recipeList:SetData(recipeRows)
     mainFrame.recipeCountText:SetText(Plural(#recipeRows, Text["{n} recipe"], Text["{n} recipes"]))
     -- nothing cached anywhere yet: say how to fill it (recipes are only readable while a profession window is open)
@@ -1048,7 +1048,10 @@ local function buildRecipesTab(recipesTab)
         local settings = interfaceSettings()
         recipeCells = RecipeTable.Layout(RecipeTable.VisibleColumns(settings), list:ContentWidth())
         recipeHeader:SetColumns(recipeCells, RecipeTable.GetSort(settings))
+        -- a narrow window: the table keeps its minimum width and scrolls sideways instead of running under the detail panel
+        return RecipeTable.TableWidth(recipeCells)
     end
+    recipeList.onHorizontalScroll = function(offset) recipeHeader:SetHorizontalOffset(offset) end
     mainFrame.recipesEmptyText = createFontString(recipesTab, "GameFontDisable", "CENTER")
     mainFrame.recipesEmptyText:SetPoint("CENTER", recipeList, "CENTER", 0, 0); mainFrame.recipesEmptyText:SetWidth(380)
     mainFrame.recipesEmptyText:SetText(Text["No recipes known yet. Click your profession icons at the top right once."])

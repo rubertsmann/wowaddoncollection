@@ -99,6 +99,13 @@ return {
         for _, key in ipairs(RecipeTable.OPTIONAL_KEYS) do RecipeTable.SetColumn(ui, key, true) end
         layout = RecipeTable.Layout(RecipeTable.VisibleColumns(ui), 100)
         harness.equal(layout[1].width, RecipeTable.NAME_MINIMUM_WIDTH)
+        -- too narrow: the table is wider than it was given (the window scrolls it sideways; bug 2026-11-22: it ran under
+        -- the detail panel); wide enough: exactly the width it was given
+        local minimumWidth = RecipeTable.TableWidth(layout)
+        harness.truthy(minimumWidth > 100, "overflow is reported: " .. minimumWidth)
+        harness.equal(RecipeTable.TableWidth(RecipeTable.Layout(RecipeTable.VisibleColumns(ui), minimumWidth)), minimumWidth)
+        harness.equal(RecipeTable.TableWidth(RecipeTable.Layout(RecipeTable.VisibleColumns(ui), 900)), 900)
+        harness.equal(RecipeTable.TableWidth({}), 0)
     end,
 
     ["recipe table: quality colours, unknown quality gives no colour"] = function(harness)

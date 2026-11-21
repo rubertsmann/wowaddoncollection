@@ -157,6 +157,47 @@ end
 ---@field onClick fun(button: table, mouseButton: string)
 ---@field onTooltip? fun(tooltip: table) fills GameTooltip (already owned by the button)
 
+-- Gap between the minimap's edge and a button's centre, as LibDBIcon (Spoken and most addons) uses, so our buttons line
+-- up with theirs on the ring OUTSIDE the map.
+Widgets.MINIMAP_BUTTON_GAP = 5
+-- Used when the client cannot tell the minimap size: the classic 140 px minimap.
+Widgets.MINIMAP_FALLBACK_SIZE = 140
+
+-- Which quadrants (1 = bottom-right, 2 = bottom-left, 3 = top-right, 4 = top-left) are round, per GetMinimapShape().
+local MINIMAP_SHAPES = {
+    ROUND = { true, true, true, true }, SQUARE = { false, false, false, false },
+    ["CORNER-TOPLEFT"] = { false, false, false, true }, ["CORNER-TOPRIGHT"] = { false, false, true, false },
+    ["CORNER-BOTTOMLEFT"] = { false, true, false, false }, ["CORNER-BOTTOMRIGHT"] = { true, false, false, false },
+    ["SIDE-LEFT"] = { false, true, false, true }, ["SIDE-RIGHT"] = { true, false, true, false },
+    ["SIDE-TOP"] = { false, false, true, true }, ["SIDE-BOTTOM"] = { true, true, false, false },
+    ["TRICORNER-TOPLEFT"] = { false, true, true, true }, ["TRICORNER-TOPRIGHT"] = { true, false, true, true },
+    ["TRICORNER-BOTTOMLEFT"] = { true, true, false, true }, ["TRICORNER-BOTTOMRIGHT"] = { true, true, true, false },
+}
+
+-- The offset of a minimap button's centre from the minimap's centre at `angleDegrees`: just outside the edge of a minimap
+-- `width` x `height` (non-numbers fall back to the classic size) of shape `shape` (GetMinimapShape(), default ROUND).
+---@param angleDegrees number
+---@param width any
+---@param height any
+---@param shape any
+---@return number x, number y
+function Widgets.MinimapButtonOffset(angleDegrees, width, height, shape)
+    local function size(value)
+        return (type(value) == "number" and value > 0 and value == value) and value or Widgets.MINIMAP_FALLBACK_SIZE
+    end
+    local angleRadians = math.rad(tonumber(angleDegrees) or 225)
+    local x, y = math.cos(angleRadians), math.sin(angleRadians)
+    local quadrant = 1
+    if x < 0 then quadrant = quadrant + 1 end
+    if y > 0 then quadrant = quadrant + 2 end
+    local halfWidth = size(width) / 2 + Widgets.MINIMAP_BUTTON_GAP
+    local halfHeight = size(height) / 2 + Widgets.MINIMAP_BUTTON_GAP
+    if (MINIMAP_SHAPES[shape] or MINIMAP_SHAPES.ROUND)[quadrant] then return x * halfWidth, y * halfHeight end
+    -- a square corner: slide along the edge instead of cutting across the corner
+    local diagonalWidth, diagonalHeight = math.sqrt(2 * halfWidth ^ 2) - 10, math.sqrt(2 * halfHeight ^ 2) - 10
+    return math.max(-halfWidth, math.min(x * diagonalWidth, halfWidth)), math.max(-halfHeight, math.min(y * diagonalHeight, halfHeight))
+end
+
 -- A round minimap button: left click runs onClick, right-drag moves it around the minimap (the angle is saved by the
 -- caller). It has a hidden red badge (button.badge, button.badgeText) for a counter.
 ---@param options MinimapButtonOptions
@@ -177,9 +218,16 @@ function Widgets.CreateMinimapButton(options)
     buttonFrame.badge = badge
     badge:Hide()
     function buttonFrame:Place()
-        local angleRadians = math.rad(options.getAngle() or options.defaultAngle)
+        local width = type(Minimap.GetWidth) == "function" and Minimap:GetWidth() or nil
+        local height = type(Minimap.GetHeight) == "function" and Minimap:GetHeight() or nil
+        local shape = type(GetMinimapShape) == "function" and GetMinimapShape() or nil
+        local offsetX, offsetY = Widgets.MinimapButtonOffset(options.getAngle() or options.defaultAngle, width, height, shape)
         self:ClearAllPoints()
-        self:SetPoint("CENTER", Minimap, "CENTER", math.cos(angleRadians) * 80, math.sin(angleRadians) * 80)
+        self:SetPoint("CENTER", Minimap, "CENTER", offsetX, offsetY)
+    end
+    -- the minimap can change size after load (and the Forever minimap is larger than the classic one): follow it
+    if type(Minimap.HookScript) == "function" then
+        pcall(Minimap.HookScript, Minimap, "OnSizeChanged", function() buttonFrame:Place() end)
     end
     buttonFrame:RegisterForClicks("LeftButtonUp")
     buttonFrame:RegisterForDrag("RightButton")

@@ -2,7 +2,11 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
-## Unreleased
+## 1.0.1 (2026-11-22, protocol 2.3, schema 5, LibGuildSync MINOR 3)
+- Fix: in a narrow window the recipe table ran under the recipe detail panel; it now keeps its minimum width, is cut
+  off at its own edge and scrolls sideways (slider below the table, or Shift + mouse wheel).
+- Fix: the minimap button was drawn inside the minimap; it now sits on the ring outside it, like other addons'
+  buttons (LibGuildSync MINOR 3).
 - Fix: a client that reports no realm ignored requests from guild members whose client still reports realms ("asked
   for Name-Realm but I am Name (name mismatch)" in the trace), so those members never saw its recipes or recipe items.
   Such names are now the same player (LibGuildSync MINOR 3).

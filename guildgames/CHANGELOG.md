@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- Fix: the minimap button was drawn inside the minimap; it now sits on the ring outside it, like other addons'
+  buttons (LibGuildSync MINOR 3).
+
 ## 0.3.0 (2026-11-21, protocol 1.2, schema 2)
 - AZEcaught arena (protocol 1.2): challenge guild members' companions to hands-off auto battles with an optional
   wager; the challenged player accepts or declines; the guild bets on the winner for 5 minutes at odds from the win

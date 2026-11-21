@@ -1,3 +1,16 @@
+# ProfessionShare 1.0.1
+
+**English:** Fixes: guild members whose game still shows realm names can now see your recipes and recipe items again.
+The minimap button now sits on the ring outside the minimap, like other addons' buttons. In a narrow window the recipe
+table no longer runs under the recipe details: it scrolls sideways instead (slider below the table, or Shift + mouse
+wheel). Members on 1.0.0 keep syncing with you; everyone should update so the realm fix works both ways.
+
+**Deutsch:** Fehlerbehebungen: Gildenmitglieder, deren Spiel noch Realmnamen anzeigt, sehen deine Rezepte und
+Rezeptgegenstände wieder. Der Minimap-Knopf sitzt jetzt auf dem Ring außerhalb der Minimap, wie die Knöpfe anderer
+Addons. In einem schmalen Fenster läuft die Rezepttabelle nicht mehr unter die Rezeptdetails, sondern lässt sich
+seitlich scrollen (Schieberegler unter der Tabelle oder Umschalt + Mausrad). Mitglieder mit 1.0.0 tauschen weiter Daten
+mit dir aus; alle sollten aktualisieren, damit die Realm-Korrektur in beide Richtungen wirkt.
+
 # ProfessionShare 1.0.0
 
 **English:** TalentShare is now called **ProfessionShare**. Please remove the old TalentShare addon. The command is now

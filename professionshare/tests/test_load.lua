@@ -86,7 +86,7 @@ return {
                 addon.orders:Create("A-R", 1, 1, "Notiz")
                 local okT, errT = pcall(addon.UI.Toggle); harness.truthy(okT, "building the window failed: " .. tostring(errT))
                 harness.truthy(pcall(addon.UI.Refresh), "refreshing the window failed")
-                harness.truthy(pcall(addon.UI.SelectTab, "orders"), "switching to the orders tab failed")
+                local okO, errO = pcall(addon.UI.SelectTab, "orders"); harness.truthy(okO, "switching to the orders tab failed: " .. tostring(errO))
                 addon.Offers.Put({ name = "B-R", rev = 5, items = { [6661] = { bag = 1 } }, dibs = {} })
                 harness.truthy(pcall(addon.UI.SelectTab, "available"), "switching to the available tab failed")
                 harness.truthy(pcall(addon.UI.Refresh), "refreshing the available tab failed")
