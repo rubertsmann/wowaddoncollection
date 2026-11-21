@@ -270,6 +270,10 @@ return {
         harness.equal(Arena.DummyRespond(dummy, "A-R", NOW + 5), 1)
         harness.equal(Arena.DummyRespond(dummy, "A-R", NOW + 6), 0, "answers once")
         harness.equal(Arena.Fights(records, "A-R", NOW + 10)[id].state, "open")
+        -- dev skip: only dummy fights, decided at once (then the normal flow; reset for the rest of the test)
+        harness.equal(Arena.SkipDummyWait(records, "A-R", NOW + 20), 1)
+        harness.equal(Arena.Fights(records, "A-R", NOW + 20)[id].state, "done")
+        Arena.skipped[id] = nil
         local fightTime = NOW + 5 + Arena.BET_WINDOW
         Arena.Settle(records, "A-R", fightTime)
         local won = Arena.State().w == 1

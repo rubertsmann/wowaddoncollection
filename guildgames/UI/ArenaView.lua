@@ -259,10 +259,14 @@ local function buildFightsPage(panel)
     widgets.betB:SetPoint("LEFT", widgets.betA, "RIGHT", 4, 0)
     widgets.stopButton = Widgets.CreateButton(panel, Text["Stop"], 90, 22, function() ArenaView.Withdraw(ArenaView.state.selected) end)
     widgets.stopButton:SetPoint("TOPLEFT", 8, y)
-    -- dev build: the arena dummy challenges me (the same as /ggd arena request)
+    -- dev build (user 2026-11-21): icon tools: the arena dummy challenges me (= /ggd arena request); its fights run now
     if addon.IS_DEVELOPMENT_BUILD then
-        widgets.dummyButton = Widgets.CreateButton(panel, "[dev] Dummy challenges me", 170, 20, function() addon.Catcher.DevArenaRequest(0) end)
+        widgets.dummyButton = Widgets.CreateIconButton(panel, "debug", 24, "[dev] Add a challenge from the arena dummy to me",
+            function() addon.Catcher.DevArenaRequest(0) end)
         widgets.dummyButton:SetPoint("BOTTOMLEFT", 8, 6)
+        widgets.skipButton = Widgets.CreateIconButton(panel, "skip", 24, "[dev] Fight now: ends the waiting time of the dummy's accepted fights",
+            function() addon.Catcher.DevArenaSkip() end)
+        widgets.skipButton:SetPoint("LEFT", widgets.dummyButton, "RIGHT", 8, 0)
     end
     widgets.watchButton = Widgets.CreateButton(panel, Text["Watch"], 90, 22, function() ArenaView.Watch(ArenaView.state.selected) end)
     widgets.watchButton:SetPoint("TOPRIGHT", -8, y)

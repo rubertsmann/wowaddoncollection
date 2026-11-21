@@ -79,9 +79,12 @@ end
 local ICON_BUTTON = {
     accept = { texture = "Interface\\RaidFrame\\ReadyCheck-Ready", color = { 0.25, 0.85, 0.3 } },
     decline = { texture = "Interface\\RaidFrame\\ReadyCheck-NotReady", color = { 0.95, 0.3, 0.25 } },
+    -- dev build tools (user 2026-11-21): add a debug thing / make a timer run out
+    debug = { texture = "Interface\\Icons\\Trade_Engineering", color = { 1, 0.55, 0.15 }, crop = true, dev = true },
+    skip = { texture = "Interface\\Icons\\INV_Misc_PocketWatch_01", color = { 0.35, 0.75, 1 }, crop = true, dev = true },
 }
 ---@param parent table
----@param kind "accept"|"decline"
+---@param kind "accept"|"decline"|"debug"|"skip"
 ---@param size number
 ---@param tooltip string
 ---@param onClick? function
@@ -95,6 +98,11 @@ local function createIconButton(parent, kind, size, tooltip, onClick)
     button.icon = button:CreateTexture(nil, "ARTWORK")
     button.icon:SetPoint("CENTER"); button.icon:SetSize(size - 4, size - 4)
     addon.UIHelpers.SetTextureOr(button.icon, look.texture, look.color)
+    if look.crop and button.icon.SetTexCoord then button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    if look.dev then   -- dev tools wear an orange "DEV" corner tag
+        button.tag = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        button.tag:SetPoint("BOTTOMRIGHT", 3, -3); button.tag:SetText("|cffff9020dev|r")
+    end
     local function paint(self)
         local enabled = self:IsEnabled()
         local color = look.color

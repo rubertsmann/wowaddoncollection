@@ -427,6 +427,11 @@ return {
                         local okStop, stopError = pcall(ArenaView.Withdraw, stopID)
                         harness.truthy(okStop, tostring(stopError))
                         harness.truthy(Arena.State().ch[stopID].wd, "stopped")
+                        if addon.IS_DEVELOPMENT_BUILD then   -- the dev icon tools on the Fights page
+                            harness.truthy(ArenaView.widgets.dummyButton and ArenaView.widgets.skipButton, "dev icons built")
+                            harness.truthy(pcall(addon.Catcher.DevArenaRequest, 0), "dummy request")
+                            harness.truthy(pcall(addon.Catcher.DevArenaSkip), "skip")
+                        end
                         harness.truthy(pcall(Panel.SelectView, "guild"))
                         -- my own pet: no fight icon, no modal
                         local myRow

@@ -1157,6 +1157,17 @@ end
 -- the Fights page's dev button (user 2026-11-21: "send a fake request to me from the arena dummy")
 if addon.IS_DEVELOPMENT_BUILD then
     function Catcher.DevArenaRequest(gold) developmentCommands.request(tostring(gold or 0)) end
+    -- the Fights page's stopwatch (user 2026-11-21: "reduce the timer there for the anticipated fight")
+    function Catcher.DevArenaSkip() developmentCommands.skip() end
+end
+
+-- /ggd caught skip (also /ggd arena skip): the dummy's accepted fights are decided now (no 5 minute wait)
+function developmentCommands.skip()
+    local count = addon.Arena.SkipDummyWait(addon.Games.AllRecords(), me(), now())
+    AzeCaught.Journal("INFORMATION", "dev.skip", "the dummy fights' waiting time was cut short", { fights = count })
+    printLine(count > 0 and ("%d dummy fight(s) decided now"):format(count) or "no accepted fight with the arena dummy is waiting")
+    Catcher.ArenaTick(true)
+    addon.Events.Fire("CAUGHT_CHANGED")
 end
 
 -- adds the current target (or a test NPC) as caught, without a roll
@@ -1197,7 +1208,7 @@ end
 function commands.arena(arguments)
     local word, rest = (arguments or ""):match("^%s*(%S*)%s*(.-)%s*$")
     word = (word or ""):lower()
-    if addon.IS_DEVELOPMENT_BUILD and (word == "dummy" or word == "request") then developmentCommands[word](rest) return end
+    if addon.IS_DEVELOPMENT_BUILD and (word == "dummy" or word == "request" or word == "skip") then developmentCommands[word](rest) return end
     if not addon.UI.IsShown() then addon.UI.Toggle() end
     if addon.GamesTab.SelectGame then addon.GamesTab.SelectGame("caught") end
     addon.AzeCaughtPanel.SelectView("arena")

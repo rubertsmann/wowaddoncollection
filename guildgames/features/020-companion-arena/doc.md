@@ -27,7 +27,8 @@ The rest of the guild can bet on either side in those five minutes. Wins, losses
 - Dev build only: `/ggd arena dummy` adds "Arenadummy-Test" to the Guild list (memory only, never stored or sent; gone
   after a reload; `dummy off` removes it). Its companion mirrors yours with stats -15..+15%; it accepts your challenges
   within 5 s. `/ggd arena request [gold]` makes the dummy challenge you (it joins first if needed); the Fights page has
-  a "[dev] Dummy challenges me" button for the same.
+  a wrench icon for the same. `/ggd arena skip` (stopwatch icon on the Fights page) decides the dummy's accepted fights
+  now instead of after 5 minutes (memory only, dummy fights only).
 
 ## How it works
 - **Fighter** (`Arena.Fighter`): attack/defense/speed from `AzeCaught.CombatStats` (level, rarity, creature type, a

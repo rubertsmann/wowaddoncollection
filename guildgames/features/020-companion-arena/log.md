@@ -38,3 +38,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: offline suite green.
 - Evidence: luajit tests/run.lua -> "136 passed, 0 failed"
 - Next: user: /reload and look at the icons (Arena > Fights with "[dev] Dummy challenges me"; Collection > Make companion).
+
+## 2026-11-21 07:50 | BUILD | dev icon tools: dummy challenge and fight now
+- Did: user: "replace the dev dummy challenge me with a button icon that indicates debug add - also add a button to reduce the timer there for the anticipated fight". `UI/Window.lua`: icon kinds "debug" (wrench) and "skip" (stopwatch) with a "dev" tag; `UI/ArenaView.lua`: both icons bottom left of the Fights page (dev build only, tooltips). `Core/Minigames/Arena.lua`: `Arena.SkipDummyWait` / `Arena.skipped` (memory only, only fights with the dummy: decided now). `Core/Game/Catcher.lua`: `/ggd arena skip`, `Catcher.DevArenaSkip`.
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua (see the commit)
+- Next: user: /reload; Arena > Fights: wrench, tick, stopwatch, Watch.

@@ -491,6 +491,8 @@ function Arena.Fights(records, myName, now)
                 fight.answerAt = answer.at
                 if answer.ok then
                     fight.fb, fight.fightAt = answer.f, answer.at + Arena.BET_WINDOW
+                    -- dev: the waiting time of a dummy fight was cut short (memory only, Arena.SkipDummyWait)
+                    if Arena.skipped[id] then fight.fightAt = math.max(answer.at, math.min(fight.fightAt, Arena.skipped[id])) end
                     fight.state = now >= fight.fightAt and "done" or "open"
                 else
                     fight.state = "declined"
@@ -841,6 +843,24 @@ function Arena.DummyRecord(myFighter, now, seed)
         caught = { weeks = {}, c = { npc = fighter.npc, n = fighter.n, lvl = 20, cls = fighter.cls, disp = fighter.disp, h = 0,
             hu = 80, th = 80, af = 60, en = 90, fs = 0 } },
         arena = { w = 0, l = 0, ch = {}, an = {}, bt = {} } }
+end
+
+-- Dev: the dummy's open fights (with me) are decided at `now` instead of after the bet window. Only fights with the
+-- dummy (a memory-only record, so no real player computes them differently). Returns the number cut short.
+Arena.skipped = {}
+---@param records table<string, table>
+---@param myName string
+---@param now integer
+---@return integer
+function Arena.SkipDummyWait(records, myName, now)
+    local count = 0
+    for id, fight in pairs(Arena.Fights(records, myName, now)) do
+        if fight.state == "open" and (fight.a == Arena.DUMMY_NAME or fight.b == Arena.DUMMY_NAME) then
+            Arena.skipped[id] = now
+            count = count + 1
+        end
+    end
+    return count
 end
 
 -- The dummy accepts every pending challenge of mine to it. Returns the number accepted.
