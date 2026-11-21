@@ -365,6 +365,9 @@ return {
                         local me = addon.Utility.Me()
                         local okView, viewError = pcall(Panel.SelectView, "arena")
                         harness.truthy(okView, "arena view: " .. tostring(viewError))
+                        -- "guild" above opened the arena's Guild page (user 2026-11-21: the guild list moved into the arena)
+                        harness.equal(Panel.state.view, "arena"); harness.equal(addon.ArenaView.state.page, "guild")
+                        harness.truthy(pcall(addon.ArenaView.SelectPage, "fighter"))
                         harness.truthy(addon.ArenaView.widgets.statRows and addon.ArenaView.widgets.statRows.atk:IsShown() ~= false)
                         harness.truthy(pcall(addon.ArenaView.Train, "atk"), "train click")
                         local foe = { npc = 5, n = "Bear", cls = "elite", disp = 0, ty = 1, al = 3, atk = 30, def = 30, spd = 30, vit = 30, ab = "rend" }
@@ -376,7 +379,7 @@ return {
                         -- the foe challenges me: an incoming fight with Accept
                         records["Foe-R"].arena.ch["Foe-R#" .. start] = { to = me, at = start, wg = 0, f = foe }
                         harness.truthy(pcall(addon.ArenaView.SelectPage, "fights"))
-                        harness.truthy(addon.ArenaView.widgets.acceptButton:IsShown() ~= false, "accept offered")
+                        harness.equal(addon.ArenaView.widgets.acceptButton, nil, "accept only in the row (user 2026-11-21)")
                         local okAnswer, answerError = pcall(addon.ArenaView.Answer, true)
                         harness.truthy(okAnswer, tostring(answerError))
                         harness.truthy(Arena.State().an["Foe-R#" .. start], "accepted")
@@ -414,12 +417,39 @@ return {
                             if row.nameRaw == Arena.DUMMY_NAME then dummyRow = row end
                         end
                         harness.truthy(dummyRow, "the dummy is in the guild list")
+                        -- the guide arrow (user 2026-11-21): Arena tab, then the first other pet, then the fight icon, once
+                        addon.UIHelpers.Settings().arenaGuide = nil
+                        harness.equal(Panel.GuideStep(), "arena")
+                        harness.truthy(pcall(Panel.SelectView, "guild")); harness.equal(Panel.GuideStep(), "pet")
                         harness.truthy(pcall(Panel.SelectGuildRow, dummyRow))
+                        harness.equal(Panel.GuideStep(), "fight")
                         harness.equal(Panel.state.guildRow.nameRaw, Arena.DUMMY_NAME)
                         harness.truthy(Panel.widgets.fightButton:IsShown() ~= false, "the fight icon shows for another member's pet")
+                        -- long names: the font shrinks to fit, never below the minimum (user 2026-11-21)
+                        do
+                            local font = { size = 12, text = "" }
+                            local fake = { GetFont = function() return "Fonts\\FRIZQT__.TTF", font.size, "" end,
+                                SetFont = function(_, _, size) font.size = size end, SetText = function(_, text) font.text = text end,
+                                GetWidth = function() return 100 end,
+                                GetStringWidth = function() return #font.text * font.size / 2 end }
+                            addon.UI.Widgets.FitText(fake, ("x"):rep(20), 0.7)   -- 120 wide at 12: shrinks to 10 (100/120 of 12)
+                            harness.equal(font.size, 10)
+                            addon.UI.Widgets.FitText(fake, ("x"):rep(40), 0.7)   -- would need 5: stops at 70 %
+                            harness.equal(font.size, 8)
+                            addon.UI.Widgets.FitText(fake, "short", 0.7)          -- back to its own size
+                            harness.equal(font.size, 12)
+                        end
+                        -- the pet's stats as icon badges with numbers, the name on top (user 2026-11-21)
+                        harness.equal(#Panel.widgets.guildBadges, 8)
+                        local stats = Panel.GuildStats(Panel.state.guildRow)
+                        harness.equal(stats.level.count, tostring(dummyRow.lvl))
+                        harness.truthy(stats.wins and stats.losses and stats.hunger and stats.energy, "all stats")
                         local okOpen, opened = pcall(Panel.Challenge)
                         harness.truthy(okOpen and opened, "modal: " .. tostring(opened))
                         harness.equal(ArenaView.challenge.step, 1)
+                        harness.equal(Panel.GuideStep(), nil, "the guide is done after the fight icon")
+                        harness.equal(addon.UIHelpers.Settings().arenaGuide, "done")
+                        harness.truthy(pcall(Panel.UpdateGuide))
                         harness.truthy(pcall(ArenaView.ChallengeNext)); harness.equal(ArenaView.challenge.step, 2)
                         ArenaView.widgets.wagerBox:SetText("abc")
                         harness.truthy(pcall(ArenaView.ChallengeNext)); harness.equal(ArenaView.challenge.step, 2, "a bad wager stays")

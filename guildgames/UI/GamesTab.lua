@@ -489,7 +489,7 @@ function GamesTab.Refresh()
     if gameKey == "caught" then
         -- AZEcaught has its own guild view in its panel; the sidebar shows last week's best and a pointer to it
         widgets.leaderboardList:SetData({}); widgets.feedList:SetData({})
-        widgets.emptyText:SetText(Text["The guild's companions are in the Guild view of AZEcaught."]); widgets.emptyText:SetShown(true)
+        widgets.emptyText:SetText(Text["The guild's companions are in AZEcaught under Arena > Guild."]); widgets.emptyText:SetShown(true)
         widgets.feedTitle:SetText(""); widgets.playsHeader:SetText("")
         local winner = addon.Model.CompanionWinner(addon.Store.db.games, addon.Games.PreviousPeriodKey(now), myName)
         widgets.winnerText:SetText(winner and Format(Text["Last week's best: {name} ({level})"], { name = winner.name, level = winner.peak }) or "")

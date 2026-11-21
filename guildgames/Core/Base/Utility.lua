@@ -27,3 +27,18 @@ function Utility.Clamp(value, lowest, highest)
     if value > highest then return highest end
     return value
 end
+
+-- `text` cut to at most `maximumCharacters` UTF-8 characters, with "…" at the end when it was cut (user 2026-11-21:
+-- long pet names broke the layout). Use it before Escape. Not a string: "".
+---@param text any
+---@param maximumCharacters integer
+---@return string
+function Utility.ShortText(text, maximumCharacters)
+    if type(text) ~= "string" then return "" end
+    local starts = {}
+    for position in text:gmatch("()[^\128-\191][\128-\191]*") do
+        starts[#starts + 1] = position
+        if #starts > maximumCharacters then return text:sub(1, starts[maximumCharacters] - 1) .. "…" end
+    end
+    return text
+end

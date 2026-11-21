@@ -50,3 +50,64 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: offline suite green; the ids are the standard client ids, NOT-VERIFIED in game per creature model.
 - Evidence: luajit tests/run.lua -> "136 passed, 0 failed"
 - Next: user: /reload; dummy fight (wrench, tick, stopwatch), Watch: check the attack/hurt/death look; report models that stand still (journal model.* lines).
+
+## 2026-11-21 07:30 | BUILD | the Guild list moved into the Arena
+- Did: user: "move the gilde tab into arena next to fights". `UI/AzeCaughtPanel.lua`: top views Companion, Collection, Arena; the guild list is built into `ArenaView.widgets.guildPage` (shifted below the page buttons, 10 rows); `Panel.RefreshGuild`; `SelectView("guild")` (old saved setting) opens Arena > Guild. `UI/ArenaView.lua`: pages Fighter, Fights, Guild; the 0.5 s tick skips the Guild page. GamesTab pointer text + deDE.
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua -> "136 passed, 0 failed"
+- Next: user: /reload; Arena > Guild: list, preview, fight icon, challenge modal; then the in-game rows in verify.md.
+
+## 2026-11-21 07:33 | BUILD | Guild is the first Arena page
+- Did: user: "make gilde the first tab of the three". `UI/ArenaView.lua`: pages Guild, Fighter, Fights; the Arena opens on Guild by default.
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua -> "136 passed, 0 failed"
+- Next: user: /reload; check the Arena page order; then the in-game rows in verify.md.
+
+## 2026-11-21 07:37 | BUILD | Guild page: stat badges, name on top, no bottom note
+- Did: user: "remove the text from the bottom of the gilde screen ... only displaying icons + numbers for the stats - display the name ... on the top of the model". `UI/AzeCaughtPanel.lua`: the pay note is gone (its text is now the Level badge's tooltip); `Panel.BuildStatBadges` / `Panel.GuildStats`: 8 badges (level with rarity edge, hearts, arena wins, losses, food, water, petting, energy; asleep: "Zz", greyed) with tooltips, fading in on a new pet; the pet's name (rarity colour) above the model. 3 deDE keys.
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua -> "136 passed, 0 failed"
+- Next: user: /reload; Arena > Guild: click another pet, check badges, tooltips, the name and the fight icon placement.
+
+## 2026-11-21 07:42 | BUILD | fight icon below the badges; need bars with icons
+- Did: user: "bellow the stat bar - also adjust the begleiter tab ... only icons ... instead of the text futter wasser streicheln energie". `UI/AzeCaughtPanel.lua`: the Guild page's fight icon is centered below the stat badges; the Companion view's need bars show the care icon (food, water, petting, sleep) instead of the name (name in the tooltip), the bar is wider (BAR_WIDTH 170 -> 210).
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua -> "136 passed, 0 failed"
+- Next: user: /reload; check the Companion bars and the Guild page fight icon.
+
+## 2026-11-21 07:47 | BUILD | fight replay overlay: opaque, owners at the bottom, only Close
+- Did: user: "make the semi transparent background fully opaque - display the owner name on the bottom ... Remove the überspringen button and center the schließen button". `UI/ArenaView.lua` buildReplay/Watch: background alpha 1; the owner names moved from behind the pet names to the bottom of each side (`part.owner`, above the floor line); Skip button removed (deDE "Skip" removed); Close centered. `ArenaView.FinishReplay` stays (the replay's own end and tests).
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua -> "136 passed, 0 failed"
+- Next: user: /reload; watch a fight: check the overlay.
+
+## 2026-11-21 07:54 | BUILD | long pet names fit the UI
+- Did: user: "long pet names also sometimes break the ui either dynamically scale the text size or limit it". `UI/Window.lua` `Widgets.FitText` (one line, the font shrinks to a minimum of 70-85 %, the rest is cut by the width); `Core/Base/Utility.lua` `Utility.ShortText` (UTF-8 character limit with "…") for names inside multi-line texts. Used for: Companion name line, Collection rows and preview, Guild preview name, Arena fighter name, replay names and winner line, challenge matchup texts. Tests: test_store_and_locale (ShortText), test_load (FitText sizes).
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua -> "137 passed, 0 failed"
+- Next: user: /reload; look at a pet with a long name in each view.
+
+## 2026-11-21 08:00 | BUILD | train icon, level line fits
+- Did: user: "replace the trainieren text button with a icon - also dynamically scale the Arenastufe x and XP to fit the same line". `UI/Window.lua` icon kind "train" (Spell_Nature_Strength, gold); `UI/ArenaView.lua` stat rows use it (the full cost tooltip stays); the "Arena level x  a/b XP" line uses Widgets.FitText (down to 65 %).
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua -> "137 passed, 0 failed"
+- Next: user: /reload; Arena > Fighter.
+
+## 2026-11-21 08:06 | BUILD | arena guide arrow (once)
+- Did: user: "similar to the first catch arrow display a arrow on arena -> then on the first non you pet and then next to the fight button and then never display it again". `UI/AzeCaughtPanel.lua`: `Panel.GuideStep/AdvanceGuide/GuideTarget/UpdateGuide`, a bobbing red arrow (UI-MicroStream-Red, rotated for left/right): above the Arena tab -> (above the Guild page button if another page is open) -> right of the first visible guild row that is not mine -> left of the fight icon; steps end on: opening the Arena, clicking another member's pet, opening the challenge from the fight icon; then `ui.arenaGuide = "done"` (UI settings, per character). Only with a companion. `Panel.Refresh` split into `RefreshView` + `UpdateGuide`; ArenaView.Refresh updates it too.
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua -> "137 passed, 0 failed"
+- Next: user: /reload; follow the arrow once; check its position at each step.
+
+## 2026-11-21 08:11 | BUILD | busy-message wording; Accept greyed out while my fight is planned
+- Did: user: "remove the hint ability to stop accepted fights": the busy text is now "One fight at a time: wait until your current fight is over." (+deDE). User: "grey out the accept button on the fights tab when there is a active planned fight": `UI/ArenaView.lua` RefreshFights sets `state.busy` (Arena.Busy, outgoing: an open fight or my waiting challenge); the row tick and the detail Accept are disabled (grey) and their tooltip is the busy text.
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua -> "137 passed, 0 failed"
+- Next: user: /reload; with a planned fight, have the dummy challenge you: the tick is grey.
+
+## 2026-11-21 08:14 | BUILD | no Accept/Decline below the fight details
+- Did: user: "when you highlight a fight request in the bottom left there is a accept and deny button remove that". `UI/ArenaView.lua`: the detail acceptButton/declineButton are gone; Accept/Decline stay in the fight's row. test_load checks they are not built.
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua -> "137 passed, 0 failed"
+- Next: user: /reload; Arena > Fights: select a request.
+

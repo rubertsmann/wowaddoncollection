@@ -78,6 +78,15 @@ return {
         harness.equal(#badPlaceholders, 0, "placeholders differ: " .. table.concat(badPlaceholders, " | "))
     end,
 
+    ["utility: ShortText cuts long names by UTF-8 characters and marks the cut"] = function(harness)
+        local ShortText = harness.addon().Utility.ShortText
+        harness.equal(ShortText("Wolf", 10), "Wolf")
+        harness.equal(ShortText("Gargantuan Sludge", 10), "Gargantua…", "10 characters with the mark")
+        harness.equal(ShortText("Ärger Übel", 5), "Ärge…", "umlauts count once, never split")
+        harness.equal(ShortText("Exactly10!", 10), "Exactly10!")
+        harness.equal(ShortText(nil, 5), "")
+    end,
+
     ["utility: Clamp limits both ends and turns NaN into the lower bound"] = function(harness)
         local Clamp = harness.addon().Utility.Clamp
         harness.equal(Clamp(5, 0, 10), 5); harness.equal(Clamp(-1, 0, 10), 0); harness.equal(Clamp(11, 0, 10), 10)

@@ -79,12 +79,14 @@ end
 local ICON_BUTTON = {
     accept = { texture = "Interface\\RaidFrame\\ReadyCheck-Ready", color = { 0.25, 0.85, 0.3 } },
     decline = { texture = "Interface\\RaidFrame\\ReadyCheck-NotReady", color = { 0.95, 0.3, 0.25 } },
+    -- train a stat (Arena > Fighter, user 2026-11-21: an icon instead of the "Train" button)
+    train = { texture = "Interface\\Icons\\Spell_Nature_Strength", color = { 1, 0.75, 0.2 }, crop = true },
     -- dev build tools (user 2026-11-21): add a debug thing / make a timer run out
     debug = { texture = "Interface\\Icons\\Trade_Engineering", color = { 1, 0.55, 0.15 }, crop = true, dev = true },
     skip = { texture = "Interface\\Icons\\INV_Misc_PocketWatch_01", color = { 0.35, 0.75, 1 }, crop = true, dev = true },
 }
 ---@param parent table
----@param kind "accept"|"decline"|"debug"|"skip"
+---@param kind "accept"|"decline"|"train"|"debug"|"skip"
 ---@param size number
 ---@param tooltip string
 ---@param onClick? function
@@ -169,7 +171,35 @@ end
 
 -- The widget helpers GamesTab and SlotMachine use: LibGuildSync's lists and texts plus the flat buttons and boxes
 -- above. TimeAgo uses this addon's texts (Text["just now"], Text["{n}m ago"], Text["{n}h ago"], Text["{n}d ago"]).
-UI.Widgets = { ROW_HEIGHT = Widgets.ROW_HEIGHT, CreateButton = createFlatButton, MakePrimary = makePrimary, CreateIconButton = createIconButton,
+-- One line of text that fits its font string's width (user 2026-11-21: long pet names broke the layout): the font
+-- shrinks down to `minimumScale` (default 0.75) of its size, and what still does not fit ends in "..." (no wrapping).
+-- The font string needs a width. Clients without GetFont/SetFont just get the text, cut by the width.
+---@param fontString table
+---@param text string
+---@param minimumScale? number
+local fitFonts = setmetatable({}, { __mode = "k" })   -- font string -> its own font { file, size, flags }
+local function fitText(fontString, text, minimumScale)
+    if fontString.SetWordWrap then fontString:SetWordWrap(false) end
+    if fontString.SetMaxLines then pcall(fontString.SetMaxLines, fontString, 1) end
+    if fontString.GetFont and fontString.SetFont and not fitFonts[fontString] then
+        local font, size, flags = fontString:GetFont()
+        if type(font) == "string" and type(size) == "number" then fitFonts[fontString] = { font, size, flags } end
+    end
+    local base = fitFonts[fontString]
+    if base then fontString:SetFont(base[1], base[2], base[3]) end
+    fontString:SetText(text)
+    if not base then return end
+    local width = fontString:GetWidth()
+    local measure = fontString.GetUnboundedStringWidth or fontString.GetStringWidth
+    local needed = measure(fontString)
+    if type(width) == "number" and width > 0 and type(needed) == "number" and needed > width then
+        local scale = math.max(minimumScale or 0.75, width / needed)
+        fontString:SetFont(base[1], math.max(6, math.floor(base[2] * scale)), base[3])
+        fontString:SetText(text)
+    end
+end
+
+UI.Widgets = { ROW_HEIGHT = Widgets.ROW_HEIGHT, FitText = fitText, CreateButton = createFlatButton, MakePrimary = makePrimary, CreateIconButton = createIconButton,
     CreateEditBox = createFlatEditBox, CreateFontString = Widgets.CreateFontString,
     CreateScrollList = Widgets.CreateScrollList, CreateSelectableRow = Widgets.CreateSelectableRow,
     TimeAgo = function(timestamp) return Widgets.TimeAgo(timestamp, Text) end }

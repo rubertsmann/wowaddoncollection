@@ -3,7 +3,7 @@ local addonName, addon = ...
 -- The AZEcaught game panel (feature 018, R6-R9, R11, R12, R16): three views in the 300 x 336 game stage.
 --   Companion   the 3D model, hearts, need bars with threshold marks, the care buttons and their effects
 --   Collection  every found NPC (caught ones first), a model preview, click a caught one to make it the companion
---   Guild       every member's current companion as a leaderboard (companion level), with a preview of the selected one
+--   Guild       (a page of the Arena since 2026-11-21) every member's current companion as a leaderboard (companion level), with a preview of the selected one
 -- Logic lives in Core/Minigames/AzeCaught.lua; this file only shows it and calls it. Model loading and emotes are journaled
 -- (spikes S1/S2), so a white or missing model can be traced with /gg caught log model.
 ---@class AzeCaughtPanelModule
@@ -59,10 +59,10 @@ local function nextEmoteToken(model)
     emoteTokens[model] = (emoteTokens[model] or 0) + 1
     return emoteTokens[model]
 end
-local BAR_WIDTH = 170
+local BAR_WIDTH = 210   -- the label is an icon now (user 2026-11-21), the bar got its room
 
 ---@class AzeCaughtPanelState
----@field view "companion"|"collection"|"guild"
+---@field view "companion"|"collection"|"arena"
 ---@field previewNpc integer|nil collection preview
 ---@field guildRow CompanionRow|nil guild preview
 ---@field confirmNpc integer|nil a switch that makes the old companion run away waits for a second click
@@ -253,10 +253,12 @@ local function createBar(parent, y)
     local Widgets = addon.UI.Widgets
     local bar = CreateFrame("Frame", nil, parent)
     bar:SetSize(286, 14); bar:SetPoint("TOPLEFT", 8, y)
-    bar.label = Widgets.CreateFontString(bar, "GameFontNormalSmall", "LEFT")
-    bar.label:SetPoint("LEFT", 0, 0); bar.label:SetWidth(60)
+    -- the need as an icon instead of its name (user 2026-11-21); the name stays in the tooltip
+    bar.icon = bar:CreateTexture(nil, "ARTWORK")
+    bar.icon:SetSize(16, 16); bar.icon:SetPoint("LEFT", 0, 0)
+    if bar.icon.SetTexCoord then bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
     local track = bar:CreateTexture(nil, "BACKGROUND")
-    track:SetSize(BAR_WIDTH, 10); track:SetPoint("LEFT", 62, 0); track:SetColorTexture(0, 0, 0, 0.55)
+    track:SetSize(BAR_WIDTH, 10); track:SetPoint("LEFT", 22, 0); track:SetColorTexture(0, 0, 0, 0.55)
     bar.track = track
     bar.fill = bar:CreateTexture(nil, "ARTWORK")
     bar.fill:SetHeight(10); bar.fill:SetPoint("LEFT", track, "LEFT", 0, 0)
@@ -287,8 +289,11 @@ end
 ---@param value number
 ---@param companion CompanionState|nil (nil for a peer's bars)
 local function fillBar(bar, need, value, companion)
+    if bar.need ~= need then
+        local icons = { hunger = CARE_ICONS.feed, thirst = CARE_ICONS.water, affection = CARE_ICONS.pet, energy = CARE_ICONS.sleep }
+        addon.UIHelpers.SetTextureOr(bar.icon, icons[need] or CARE_ICONS.feed, { 0.6, 0.6, 0.6 })
+    end
     bar.need = need
-    bar.label:SetText(needLabel(need))
     -- the companion's own thresholds (from its stats); peers' bars use the base ones
     local profile = AzeCaught.ProfileOf(companion)
     for index, level in ipairs({ profile.critical, profile.ok }) do
@@ -314,16 +319,22 @@ end
 
 ------------------------------------------------------------------ views
 
----@param view "companion"|"collection"|"guild"|"arena"
+---@param view "companion"|"collection"|"guild"|"arena" "guild": the arena's Guild page
 function Panel.SelectView(view)
-    Panel.state.view = view
     settings().caughtView = view
+    if view == "guild" then   -- the guild list lives in the arena (user 2026-11-21)
+        view = "arena"
+        addon.ArenaView.state.page = "guild"
+        if addon.ArenaView.widgets.panel then addon.ArenaView.SelectPage("guild") end
+    end
+    Panel.state.view = view
     for key, frame in pairs(widgets.views or {}) do frame:SetShown(key == view) end
     for key, button in pairs(widgets.viewButtons or {}) do
         button:SetEnabled(key ~= view)
         if button.SetSelected then button:SetSelected(key == view) end
     end
     AzeCaught.Journal("DEBUG", "ui.view", "a view was selected", { view = view })
+    if view == "arena" then Panel.AdvanceGuide("arena") end
     Panel.Refresh()
 end
 
@@ -623,7 +634,7 @@ local function fillCollectionRow(row, entry)
     row.active:SetShown(entry.active)
     row.selected:SetShown(entry.npc == Panel.state.selectedNpc)
     local color = entry.caught > 0 and (RARITY_COLOR[entry.cls] or "ffffff") or "777777"
-    row.name:SetText("|cff" .. color .. entry.name .. "|r")
+    addon.UI.Widgets.FitText(row.name, "|cff" .. color .. entry.name .. "|r", 0.85)
     if Panel.state.section == "seen" then   -- how often seen (user 2026-11-21), then the level
         row.info:SetText(inlineIcon("seen", 11) .. "|cff88bbff" .. entry.history.seen .. "|r |cffaaaaaa" .. entry.lvl .. "|r")
     else
@@ -780,21 +791,24 @@ end
 local function buildGuildView(panel)
     local Widgets = addon.UI.Widgets
     widgets.guildWinner = Widgets.CreateFontString(panel, "GameFontNormalSmall", "LEFT")
-    widgets.guildWinner:SetPoint("TOPLEFT", 8, -26); widgets.guildWinner:SetWidth(284)
-    widgets.guildList = Widgets.CreateScrollList(panel, 190, Widgets.ROW_HEIGHT * 11, createGuildRow, fillGuildRow)
-    widgets.guildList:SetPoint("TOPLEFT", 4, -44)
+    widgets.guildWinner:SetPoint("TOPLEFT", 8, -46); widgets.guildWinner:SetWidth(180)
+    widgets.guildList = Widgets.CreateScrollList(panel, 190, Widgets.ROW_HEIGHT * 10, createGuildRow, fillGuildRow)
+    widgets.guildList:SetPoint("TOPLEFT", 4, -62)
     widgets.guildEmpty = Widgets.CreateFontString(panel, "GameFontDisable", "CENTER")
     widgets.guildEmpty:SetPoint("TOP", widgets.guildList, "TOP", -10, -60); widgets.guildEmpty:SetWidth(170)
     widgets.guildEmpty:SetText(Text["No guild member has a companion yet."])
-    local preview = createModel(panel, 104, 130)
-    preview:SetPoint("TOPRIGHT", -2, -44)
+    local preview = createModel(panel, 104, 116)
+    preview:SetPoint("TOPRIGHT", -2, -78)
     widgets.guildModel = preview
-    widgets.guildPreviewText = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
-    widgets.guildPreviewText:SetPoint("TOP", preview, "BOTTOM", 0, -2); widgets.guildPreviewText:SetWidth(104)
+    -- the selected pet's name above the model, its stats as icon badges with numbers below (user 2026-11-21: like
+    -- the collection's caught view, no text block)
+    widgets.guildPreviewName = Widgets.CreateFontString(panel, "GameFontNormal", "CENTER")
+    widgets.guildPreviewName:SetPoint("BOTTOM", preview, "TOP", 0, 3); widgets.guildPreviewName:SetWidth(108)
+    widgets.guildBadges = Panel.BuildStatBadges(panel, preview)
     -- the arena challenge (feature 020, reworked user 2026-11-21): one fight icon on another member's pet opens the
     -- challenge modal (ArenaView.OpenChallenge: matchup, wager, confirm)
     local fight = CreateFrame("Button", nil, panel)
-    fight:SetSize(30, 30); fight:SetPoint("BOTTOMRIGHT", preview, "BOTTOMRIGHT", -2, 2)
+    fight:SetSize(30, 30); fight:SetPoint("TOP", preview, "BOTTOM", 0, -4 - 2 * (BADGE_SIZE + 4) - 4)   -- centered below the stat badges (user 2026-11-21)
     fight:SetFrameLevel(preview:GetFrameLevel() + 5)
     fight.border = fight:CreateTexture(nil, "BACKGROUND"); fight.border:SetPoint("TOPLEFT", -2, 2); fight.border:SetPoint("BOTTOMRIGHT", 2, -2)
     fight.border:SetColorTexture(0.8, 0.2, 0.15, 0.95)
@@ -818,12 +832,174 @@ local function buildGuildView(panel)
     fight:SetScript("OnLeave", function(self) self.glow:SetAlpha(0); if GameTooltip then GameTooltip:Hide() end end)
     fight:Hide()
     widgets.fightButton = fight
-    local note = Widgets.CreateFontString(panel, "GameFontDisableSmall", "CENTER")
-    note:SetPoint("TOP", 0, -276); note:SetWidth(290)
-    note:SetText(Format(Text["Level = NPC level + rarity + hearts. Weekly pay: {first}, {second}, {third}, others {other}."],
-        { first = money(AzeCaught.PAYOUTS[1]), second = money(AzeCaught.PAYOUTS[2]), third = money(AzeCaught.PAYOUTS[3]),
-          other = money(AzeCaught.PAYOUT_OTHER) }))
     addon.ArenaView.BuildChallenge(panel)
+end
+
+------------------------------------------------------------------ guild pet stats as badges (user 2026-11-21)
+
+local RARITY_RGB = {}
+for rarity, hex in pairs(RARITY_COLOR) do
+    RARITY_RGB[rarity] = { tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255 }
+end
+local GUILD_STATS = {
+    { key = "level", label = function() return Text["Level"] end, icon = "Interface\\Icons\\Ability_Hunter_BeastTraining", color = { 1, 0.82, 0.2 } },
+    { key = "hearts", label = function() return Text["Hearts"] end, icon = "Interface\\Icons\\INV_ValentinesCandy", color = { 1, 0.25, 0.4 } },
+    { key = "wins", label = function() return Text["Arena wins"] end, icon = "Interface\\Icons\\INV_Sword_27", color = { 0.35, 0.85, 0.35 } },
+    { key = "losses", label = function() return Text["Arena losses"] end, icon = "Interface\\Icons\\Ability_Rogue_FeignDeath", color = { 0.9, 0.3, 0.3 } },
+    { key = "hunger", label = function() return Text["Food"] end, icon = CARE_ICONS.feed, color = { 0.9, 0.6, 0.25 } },
+    { key = "thirst", label = function() return Text["Water"] end, icon = CARE_ICONS.water, color = { 0.35, 0.65, 1 } },
+    { key = "affection", label = function() return Text["Petting"] end, icon = CARE_ICONS.pet, color = { 1, 0.45, 0.7 } },
+    { key = "energy", label = function() return Text["Energy"] end, icon = CARE_ICONS.sleep, color = { 0.6, 0.5, 1 } },
+}
+Panel.GUILD_STATS = GUILD_STATS
+
+-- Eight icon badges (two rows of four) under the guild preview: level, hearts, arena wins/losses, the four needs.
+---@param panel table
+---@param preview table
+---@return table[] badges by order, also by key
+function Panel.BuildStatBadges(panel, preview)
+    local Widgets = addon.UI.Widgets
+    local badges = {}
+    local total = 4 * BADGE_SIZE + 3 * BADGE_GAP
+    for index, stat in ipairs(GUILD_STATS) do
+        local column, line = (index - 1) % 4, math.floor((index - 1) / 4)
+        local badge = CreateFrame("Frame", nil, panel)
+        badge:SetSize(BADGE_SIZE, BADGE_SIZE)
+        badge:SetPoint("TOPLEFT", preview, "BOTTOM", -total / 2 + column * (BADGE_SIZE + BADGE_GAP), -4 - line * (BADGE_SIZE + 4))
+        badge.key, badge.stat = stat.key, stat
+        badge.frame = badge:CreateTexture(nil, "BACKGROUND"); badge.frame:SetPoint("TOPLEFT", -1, 1); badge.frame:SetPoint("BOTTOMRIGHT", 1, -1)
+        badge.icon = badge:CreateTexture(nil, "ARTWORK"); badge.icon:SetAllPoints()
+        addon.UIHelpers.SetTextureOr(badge.icon, stat.icon, stat.color)
+        if badge.icon.SetTexCoord then badge.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+        badge.count = Widgets.CreateFontString(badge, "NumberFontNormalSmall", "RIGHT")
+        badge.count:SetPoint("BOTTOMRIGHT", 2, -2)
+        badge:EnableMouse(true)
+        badge:SetScript("OnEnter", function(self)
+            if not GameTooltip or not self.tip then return end
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+            GameTooltip:SetText(stat.label(), stat.color[1], stat.color[2], stat.color[3])
+            for _, tipLine in ipairs(self.tip) do GameTooltip:AddLine(tipLine, 1, 1, 1, true) end
+            GameTooltip:Show()
+        end)
+        badge:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+        badge:Hide()
+        badges[index], badges[stat.key] = badge, badge
+    end
+    return badges
+end
+
+-- The badge values of a guild row: { key = { count = "short text", tip = { lines } } }.
+---@param row CompanionRow
+---@return table<string, { count: string, tip: string[] }>
+function Panel.GuildStats(row)
+    local arena = row.mine and addon.Arena.State() or (addon.Games.Get(row.nameRaw) or {}).arena
+    arena = type(arena) == "table" and arena or {}
+    local stats = {
+        level = { count = tostring(row.lvl), tip = { ("%s %d · %s"):format(Text["Level"], row.lvl, rarityText(row.cls)),
+            Format(Text["Level = NPC level + rarity + hearts. Weekly pay: {first}, {second}, {third}, others {other}."],
+                { first = money(AzeCaught.PAYOUTS[1]), second = money(AzeCaught.PAYOUTS[2]), third = money(AzeCaught.PAYOUTS[3]),
+                  other = money(AzeCaught.PAYOUT_OTHER) }) } },
+        hearts = { count = tostring(row.hearts or 0), tip = { tostring(row.hearts or 0) } },
+        wins = { count = tostring(arena.w or 0), tip = { tostring(arena.w or 0) } },
+        losses = { count = tostring(arena.l or 0), tip = { tostring(arena.l or 0) } },
+    }
+    for _, need in ipairs({ "hunger", "thirst", "affection", "energy" }) do
+        local value = math.floor((tonumber(row[need]) or 0) + 0.5)
+        stats[need] = { count = tostring(value), tip = { value .. "%" } }
+    end
+    if row.asleep then
+        stats.energy.count = "Zz"
+        stats.energy.tip[#stats.energy.tip + 1] = Text["asleep"]
+    end
+    return stats
+end
+
+------------------------------------------------------------------ the arena guide arrow (user 2026-11-21)
+
+-- Like the first-throw arrow: a bobbing red arrow shows the way to the first fight, once: the Arena tab, then the first
+-- pet that is not mine (Arena > Guild), then the fight icon. Each step ends when it is done; after the fight icon was
+-- clicked it never shows again (settings().arenaGuide = "done"). Only with a companion (no fight without one).
+local GUIDE_ARROW = "Interface\\Buttons\\UI-MicroStream-Red"   -- points down
+local GUIDE_FALLBACK = { 1, 0.15, 0.1, 1 }
+local GUIDE_NEXT = { arena = "pet", pet = "fight", fight = "done" }
+
+-- The current guide step, or nil (done or no companion).
+---@return "arena"|"pet"|"fight"|nil
+function Panel.GuideStep()
+    local step = settings().arenaGuide
+    if step == "done" or not AzeCaught.Active() then return nil end
+    return (step == "pet" or step == "fight") and step or "arena"
+end
+
+-- Moves the guide on when `step` is the current one.
+---@param step "arena"|"pet"|"fight"
+function Panel.AdvanceGuide(step)
+    if Panel.GuideStep() ~= step then return end
+    settings().arenaGuide = GUIDE_NEXT[step]
+    AzeCaught.Journal("DEBUG", "ui.guide", "the arena guide moved on", { from = step, to = GUIDE_NEXT[step] })
+    Panel.UpdateGuide()
+end
+
+---@param panel table
+local function buildGuideArrow(panel)
+    local holder = CreateFrame("Frame", nil, panel)
+    holder:SetSize(26, 26); holder:SetFrameLevel(panel:GetFrameLevel() + 60); holder:Hide()
+    holder.glow = holder:CreateTexture(nil, "OVERLAY", nil, 1)
+    holder.glow:SetPoint("CENTER"); holder.glow:SetSize(42, 42)
+    addon.UIHelpers.SetTextureOr(holder.glow, GUIDE_ARROW, GUIDE_FALLBACK)
+    pcall(holder.glow.SetBlendMode, holder.glow, "ADD")
+    holder.glow:SetVertexColor(1, 0.2, 0.1, 0.6)
+    holder.arrow = holder:CreateTexture(nil, "OVERLAY", nil, 2)
+    holder.arrow:SetAllPoints()
+    addon.UIHelpers.SetTextureOr(holder.arrow, GUIDE_ARROW, GUIDE_FALLBACK)
+    holder.time = 0
+    holder:SetScript("OnUpdate", function(self, elapsedSeconds)
+        if not self.target then return end
+        self.time = self.time + (tonumber(elapsedSeconds) or 0)
+        local wave = 0.5 + 0.5 * math.sin(self.time * 6)
+        local push = 3 + 6 * wave
+        self:ClearAllPoints()
+        if self.side == "left" then       -- left of the target, pointing right
+            self:SetPoint("RIGHT", self.target, "LEFT", -push, 0)
+        elseif self.side == "right" then  -- right of the target, pointing left
+            self:SetPoint("LEFT", self.target, "RIGHT", push, 0)
+        else                              -- above the target, pointing down
+            self:SetPoint("BOTTOM", self.target, "TOP", 0, push)
+        end
+        self.glow:SetAlpha(0.3 + 0.6 * wave)
+    end)
+    widgets.guideArrow = holder
+end
+
+-- Where the arrow points now: the frame and the side it sits on, or nil.
+---@return table|nil target
+---@return "above"|"left"|"right"|nil side
+function Panel.GuideTarget()
+    local step = Panel.GuideStep()
+    if not step or not widgets.panel or not widgets.panel:IsVisible() then return nil end
+    if Panel.state.view ~= "arena" then return widgets.viewButtons.arena, "above" end
+    local ArenaView = addon.ArenaView
+    if ArenaView.state.page ~= "guild" then return ArenaView.widgets.pageButtons.guild, "above" end
+    if step == "fight" and widgets.fightButton and widgets.fightButton:IsShown() then return widgets.fightButton, "left" end
+    -- "pet" (and "fight" while my own pet is selected): the first visible row that is not mine
+    for _, row in ipairs(widgets.guildList and widgets.guildList.rows or {}) do
+        if type(row.entry) == "table" and not row.entry.mine and row:IsShown() then return row, "right" end
+    end
+    return nil
+end
+
+-- Shows the arrow at the current step's target (or hides it).
+function Panel.UpdateGuide()
+    local holder = widgets.guideArrow
+    if not holder then return end
+    local target, side = Panel.GuideTarget()
+    holder.target, holder.side = target, side
+    if not target then holder:Hide() return end
+    local turn = side == "left" and math.pi / 2 or side == "right" and -math.pi / 2 or 0
+    for _, texture in ipairs({ holder.arrow, holder.glow }) do
+        if texture.SetRotation then pcall(texture.SetRotation, texture, turn) end
+    end
+    holder:Show()
 end
 
 ------------------------------------------------------------------ build and refresh
@@ -834,20 +1010,22 @@ function Panel.Build(panel)
     local Widgets = addon.UI.Widgets
     widgets.panel = panel
     widgets.views, widgets.viewButtons = {}, {}
-    local labels = { companion = Text["Companion"], collection = Text["Collection"], guild = Text["Guild"], arena = Text["Arena"] }
-    for index, view in ipairs({ "companion", "collection", "guild", "arena" }) do
+    -- the guild list is a page of the arena (user 2026-11-21: "move the gilde tab into arena next to fights")
+    local labels = { companion = Text["Companion"], collection = Text["Collection"], arena = Text["Arena"] }
+    for index, view in ipairs({ "companion", "collection", "arena" }) do
         local key = view
         local frame = CreateFrame("Frame", nil, panel)
         frame:SetPoint("TOPLEFT", 0, 0); frame:SetPoint("BOTTOMRIGHT", 0, 0)
         widgets.views[view] = frame
-        local button = Widgets.CreateButton(panel, labels[view], 70, 18, function() Panel.SelectView(key) end)
-        button:SetPoint("TOPLEFT", 4 + (index - 1) * 73, -2)
+        local button = Widgets.CreateButton(panel, labels[view], 94, 18, function() Panel.SelectView(key) end)
+        button:SetPoint("TOPLEFT", 4 + (index - 1) * 97, -2)
         widgets.viewButtons[view] = button
     end
     buildCompanionView(widgets.views.companion)
     buildCollectionView(widgets.views.collection)
-    buildGuildView(widgets.views.guild)
     addon.ArenaView.Build(widgets.views.arena)
+    buildGuildView(addon.ArenaView.widgets.guildPage)
+    buildGuideArrow(panel)
     -- the bars move while the panel is visible: redraw twice a second
     local elapsedTotal = 0
     panel:SetScript("OnUpdate", function(_, elapsedSeconds)
@@ -855,7 +1033,9 @@ function Panel.Build(panel)
         if elapsedTotal < 0.5 then return end
         elapsedTotal = 0
         if Panel.state.view == "companion" then addon.Log.Protected("caught.ui", "refreshing the companion failed", Panel.RefreshCompanion) end
-        if Panel.state.view == "arena" then addon.Log.Protected("caught.ui", "refreshing the arena failed", addon.ArenaView.Refresh) end
+        if Panel.state.view == "arena" and addon.ArenaView.state.page ~= "guild" then
+            addon.Log.Protected("caught.ui", "refreshing the arena failed", addon.ArenaView.Refresh)
+        end
     end)
     panel:HookScript("OnShow", function()
         widgets.model.shownKey = nil   -- the model resets on show: load it again
@@ -887,8 +1067,8 @@ function Panel.RefreshCompanion()
     if widgets.model.asleepShown ~= (companion.asleep ~= nil) then
         Panel.IdleOfCompanion(widgets.model, companion.asleep and "fellAsleep" or "wokeUp")
     end
-    widgets.nameText:SetText(("|cff%s%s|r  |cffaaaaaa%s %d · %s|r"):format(RARITY_COLOR[companion.cls] or "ffffff",
-        addon.Utility.Escape(companion.n), Text["Level"], companion.lvl, rarityText(companion.cls)))
+    addon.UI.Widgets.FitText(widgets.nameText, ("|cff%s%s|r  |cffaaaaaa%s %d · %s|r"):format(RARITY_COLOR[companion.cls] or "ffffff",
+        addon.Utility.Escape(addon.Utility.ShortText(companion.n, 28)), Text["Level"], companion.lvl, rarityText(companion.cls)))
     widgets.heartText:SetText((companion.hearts < 0 and "|cff993333" or "|cffff4060") .. companion.hearts .. "|r")
     widgets.streakText:SetText(Format(Text["Fed streak {fed} · care streak {care} · rank {rank}"],
         { fed = companion.fedStreak, care = companion.careStreak, rank = AzeCaught.CompanionLevel(companion) }))
@@ -1019,24 +1199,35 @@ function Panel.RefreshPreview()
         return
     end
     showModel(widgets.previewModel, { npc = Panel.state.previewNpc, disp = entry.disp }, "preview")
-    widgets.previewText:SetText(("%s\n%s %d · %s"):format(addon.Utility.Escape(entry.n), Text["Level"], entry.lvl, rarityText(entry.cls)))
+    widgets.previewText:SetText(("%s\n%s %d · %s"):format(addon.Utility.Escape(addon.Utility.ShortText(entry.n, 20)), Text["Level"], entry.lvl, rarityText(entry.cls)))
     Panel.ShowHistoryBadges(Panel.state.previewNpc, entry)
 end
 
 function Panel.RefreshGuildPreview()
     local row = Panel.state.guildRow
     if not row then
-        showModel(widgets.guildModel, nil, "guild") widgets.guildPreviewText:SetText("")
+        showModel(widgets.guildModel, nil, "guild") widgets.guildPreviewName:SetText("")
+        for _, badge in ipairs(widgets.guildBadges) do badge:Hide() end
+        Panel.state.guildBadgeOwner = nil
         if widgets.fightButton then widgets.fightButton:Hide() end
         return
     end
     showModel(widgets.guildModel, { npc = row.npc, disp = row.disp }, "guild")
-    -- arena wins/losses (feature 020): mine from the local state, others from their record
-    local arena = row.mine and addon.Arena.State() or (addon.Games.Get(row.nameRaw) or {}).arena
-    local arenaLine = type(arena) == "table" and ("\n" .. Format(Text["Arena {wins}-{losses}"], { wins = arena.w or 0, losses = arena.l or 0 })) or ""
-    widgets.guildPreviewText:SetText(("%s\n%s %d · %s\n%s %d%% %s %d%%\n%s %d%% %s %d%%%s%s"):format(row.companion, Text["Level"], row.lvl,
-        rarityText(row.cls), Text["Food"], row.hunger, Text["Water"], row.thirst, Text["Petting"], row.affection, Text["Energy"], row.energy,
-        row.asleep and ("\n" .. Text["asleep"]) or "", arenaLine))
+    -- the name on top (rarity colour), the stats as badges (arena wins/losses: mine local, others from their record)
+    addon.UI.Widgets.FitText(widgets.guildPreviewName, ("|cff%s%s|r"):format(RARITY_COLOR[row.cls] or "ffffff", row.companion), 0.7)
+    local isNew = Panel.state.guildBadgeOwner ~= row.nameRaw
+    Panel.state.guildBadgeOwner = row.nameRaw
+    local stats = Panel.GuildStats(row)
+    for index, badge in ipairs(widgets.guildBadges) do
+        local stat = stats[badge.key]
+        badge.count:SetText(stat.count); badge.tip = stat.tip
+        local edge = badge.key == "level" and RARITY_RGB[row.cls] or badge.stat.color
+        badge.frame:SetColorTexture(edge[1] * 0.6, edge[2] * 0.6, edge[3] * 0.6, 0.9)
+        local faded = badge.key == "energy" and row.asleep
+        if badge.icon.SetDesaturated then badge.icon:SetDesaturated(faded) end
+        badge.icon:SetAlpha(faded and 0.55 or 1)
+        if isNew then badge:SetAlpha(0); addon.Animate.FadeIn(badge, 0.1 + 0.04 * index) else badge:Show() end
+    end
     -- the fight icon: only on another member's pet; it pops in when such a pet is selected
     if row.mine then
         widgets.fightButton:Hide()
@@ -1049,18 +1240,26 @@ end
 ---@param row CompanionRow
 function Panel.SelectGuildRow(row)
     Panel.state.guildRow = row
+    if row and not row.mine then Panel.AdvanceGuide("pet") end
     Panel.Refresh()
 end
 
 -- The fight icon: opens the challenge modal for the selected pet (feature 020). Returns true when it opened.
 ---@return boolean
 function Panel.Challenge()
-    return addon.ArenaView.OpenChallenge(Panel.state.guildRow)
+    local opened = addon.ArenaView.OpenChallenge(Panel.state.guildRow)
+    if opened then Panel.AdvanceGuide("fight") end
+    return opened
 end
 
 -- Redraws the visible view (CAUGHT_CHANGED, GAMES_CHANGED, DATA_CHANGED and on show).
 function Panel.Refresh()
     if not widgets.views then return end
+    Panel.RefreshView()
+    Panel.UpdateGuide()
+end
+
+function Panel.RefreshView()
     local view = Panel.state.view
     if view == "companion" then
         Panel.RefreshCompanion()
@@ -1077,7 +1276,13 @@ function Panel.Refresh()
         if not Panel.state.previewNpc and rows[1] then Panel.state.previewNpc = rows[1].npc end
         Panel.RefreshPreview()
         refreshSwitchButton()
-    else
+    end
+end
+
+-- The arena's Guild page: every member's companion, the selected one in the preview (ArenaView.Refresh calls it).
+function Panel.RefreshGuild()
+    if not widgets.guildList then return end
+    do
         local now = addon.Utility.Now()
         local records = addon.Games.AllRecords()
         local rows = addon.Model.BuildCompanionRows(records, me())
@@ -1094,5 +1299,6 @@ function Panel.Refresh()
 end
 
 addon.Events.On("CAUGHT_CHANGED", function() if widgets.panel and widgets.panel:IsVisible() then Panel.Refresh() end end)
-addon.Events.On("GAMES_CHANGED", function() if widgets.panel and widgets.panel:IsVisible() and Panel.state.view == "guild" then Panel.Refresh() end end)
-addon.Events.On("DATA_CHANGED", function() if widgets.panel and widgets.panel:IsVisible() and Panel.state.view == "guild" then Panel.Refresh() end end)
+local function guildShown() return widgets.panel and widgets.panel:IsVisible() and Panel.state.view == "arena" and addon.ArenaView.state.page == "guild" end
+addon.Events.On("GAMES_CHANGED", function() if guildShown() then Panel.Refresh() end end)
+addon.Events.On("DATA_CHANGED", function() if guildShown() then Panel.Refresh() end end)

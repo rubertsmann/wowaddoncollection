@@ -4,7 +4,8 @@
 - AZEcaught arena (protocol 1.2): challenge guild members' companions to hands-off auto battles with an optional
   wager; the challenged player accepts or declines; the guild bets on the winner for 5 minutes at odds from the win
   chance; train Attack/Defense/Speed/Vitality, gain arena levels, keep wins and losses, and watch every fight as a replay.
-  In the Guild view a fight icon on another member's pet opens a step-by-step challenge window (matchup, wager, confirm).
+  The Guild list is now a page of the Arena (Guild, Fighter, Fights); a fight icon on another member's pet there opens a
+  step-by-step challenge window (matchup, wager, confirm).
   One fight at a time per player; a waiting challenge can be stopped (stake back); Accept/Decline/Stop sit in the Fights list.
 - Accept/decline and yes/no buttons are tick and X icons (the word shows in the tooltip).
 - Arena replay: the companions attack, flinch when hit and fall dead at 0 health.
