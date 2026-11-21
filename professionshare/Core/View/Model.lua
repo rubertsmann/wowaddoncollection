@@ -633,3 +633,70 @@ function Model.ChatText(link, plainName, quantity)
     if quantity and quantity > 1 then chatText = chatText .. " x" .. quantity end
     return chatText
 end
+
+------------------------------------------------------------------ member builds (live build, one viewer)
+
+-- The "member builds" button (bottom left of the window) is for one maintainer character only. The repository is
+-- public and holds no real character names, so the name is kept as a hash (djb2 of the lower-case name without realm).
+-- Not a secret or a security boundary: the list only shows what this client already received.
+Model.BUILD_VIEWER_HASHES = { [3558222112] = true }
+
+-- djb2 (mod 2^32) of `text`
+---@param text string
+---@return integer
+function Model.NameHash(text)
+    local hash = 5381
+    for index = 1, #text do hash = (hash * 33 + text:byte(index)) % 4294967296 end
+    return hash
+end
+
+-- Whether `playerName` ("Name" or "Name-Realm") may see the member builds button.
+---@param playerName any
+---@return boolean
+function Model.IsBuildViewer(playerName)
+    if type(playerName) ~= "string" or playerName == "" then return false end
+    local shortName = (playerName:match("^([^%-]+)") or playerName):lower():match("^%s*(.-)%s*$")
+    return Model.BUILD_VIEWER_HASHES[Model.NameHash(shortName)] == true
+end
+
+---@class MemberBuildRow
+---@field name string escaped player name
+---@field ver string|nil the build from their last HELLO this session (nil: none seen, e.g. a build before 1.0.1)
+---@field t integer last time a message from them arrived (or their HELLO)
+---@field messages integer messages from them in the trace
+
+-- Everyone who sent me an addon message (the trace's "in" entries, newest first as Trace.List gives them) and the build
+-- each one announced (Channel.PeerVersions rows), most recent first. Pure.
+---@param inboundEntries table[] TraceEntry list (dir "in")
+---@param versionRows table[] { name, ver, t }
+---@return MemberBuildRow[]
+function Model.MemberBuilds(inboundEntries, versionRows)
+    local byName, rows = {}, {}
+    local function rowFor(playerName)
+        local row = byName[playerName]
+        if not row then
+            row = { name = escape(playerName), t = 0, messages = 0 }
+            byName[playerName] = row; rows[#rows + 1] = row
+        end
+        return row
+    end
+    for _, traceEntry in ipairs(inboundEntries or {}) do
+        if type(traceEntry) == "table" and type(traceEntry.peer) == "string" and traceEntry.peer ~= "" then
+            local row = rowFor(traceEntry.peer)
+            row.messages = row.messages + 1
+            if type(traceEntry.t) == "number" and traceEntry.t > row.t then row.t = traceEntry.t end
+        end
+    end
+    for _, versionRow in ipairs(versionRows or {}) do
+        if type(versionRow) == "table" and type(versionRow.name) == "string" and versionRow.name ~= "" then
+            local row = rowFor(versionRow.name)
+            row.ver = type(versionRow.ver) == "string" and escape(versionRow.ver) or nil
+            if type(versionRow.t) == "number" and versionRow.t > row.t then row.t = versionRow.t end
+        end
+    end
+    table.sort(rows, function(left, right)
+        if left.t ~= right.t then return left.t > right.t end
+        return left.name < right.name
+    end)
+    return rows
+end

@@ -1347,6 +1347,40 @@ local function buildResizeGrip()
     mainFrame.resizeGrip = resizeGrip
 end
 
+-- Bottom left: a small button for one maintainer character (Model.IsBuildViewer) whose tooltip lists who sent me addon
+-- messages and the build each announced in its HELLO (LibGuildSync MINOR 3).
+local MEMBER_BUILDS_TOOLTIP_ROWS = 25
+local function buildMemberBuildsButton()
+    local buildsButton = CreateFrame("Button", nil, mainFrame)
+    buildsButton:SetSize(14, 14)
+    buildsButton:SetPoint("BOTTOMLEFT", mainFrame, "BOTTOMLEFT", 4, 4)
+    buildsButton:SetFrameLevel(mainFrame:GetFrameLevel() + 20)
+    buildsButton:SetNormalTexture("Interface\\FriendsFrame\\InformationIcon")
+    buildsButton:SetHighlightTexture("Interface\\FriendsFrame\\InformationIcon")
+    buildsButton:SetScript("OnEnter", function(self)
+        local Channel = LibStub("LibGuildSync-1.0").Channel
+        local Communication = addon.Communication
+        local rows = addon.Model.MemberBuilds(addon.Trace.List("in"), Communication and Channel.PeerVersions(Communication) or {})
+        GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
+        GameTooltip:SetText(Text["Member builds"], 1, 1, 1)
+        GameTooltip:AddLine(Format(Text["my build: {build}"], { build = Communication and Channel.VersionTag(Communication) or "?" }), 0.7, 0.7, 0.7)
+        if #rows == 0 then GameTooltip:AddLine(Text["no messages received yet"], 0.6, 0.6, 0.6) end
+        for rowIndex = 1, math.min(#rows, MEMBER_BUILDS_TOOLTIP_ROWS) do
+            local row = rows[rowIndex]
+            local versionText = row.ver and ("|cff33ff33" .. row.ver .. "|r") or ("|cff999999" .. Text["no build sent (before 1.0.1)"] .. "|r")
+            GameTooltip:AddDoubleLine(row.name .. " |cff999999(" .. Format(Text["{n} msg, {ago}"], { n = row.messages, ago = row.t > 0 and timeAgo(row.t) or "?" }) .. ")|r",
+                versionText, 1, 1, 1, 1, 1, 1)
+        end
+        if #rows > MEMBER_BUILDS_TOOLTIP_ROWS then
+            GameTooltip:AddLine(Format(Text["+{n} more"], { n = #rows - MEMBER_BUILDS_TOOLTIP_ROWS }), 0.6, 0.6, 0.6)
+        end
+        GameTooltip:Show()
+    end)
+    buildsButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    buildsButton:Hide()
+    mainFrame.memberBuildsButton = buildsButton
+end
+
 local function buildMainFrame()
     local frameName = addon.FRAME_PREFIX .. "Frame"
     mainFrame = createDialogFrame(frameName)
@@ -1361,7 +1395,12 @@ local function buildMainFrame()
     mainFrame:Hide()
     table.insert(UISpecialFrames, frameName)
     buildResizeGrip()
-    mainFrame:SetScript("OnShow", function() addon.Events.Fire("WINDOW_OPENED"); UI.Refresh() end)
+    buildMemberBuildsButton()
+    mainFrame:SetScript("OnShow", function()
+        -- my name is only known after login: decide on every open
+        mainFrame.memberBuildsButton:SetShown(addon.Model.IsBuildViewer(me()))
+        addon.Events.Fire("WINDOW_OPENED"); UI.Refresh()
+    end)
 
     local titleText = createFontString(mainFrame, "GameFontNormalLarge"); titleText:SetPoint("TOP", 0, -6); titleText:SetText(addon.TITLE)
 

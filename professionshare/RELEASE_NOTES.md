@@ -1,3 +1,12 @@
+# ProfessionShare 1.0.2
+
+**English:** Maintenance release: a diagnostic for the addon's maintainer that shows which version each guild member
+runs, so sync problems can be found faster. Nothing changes for you; updating keeps everyone on the same version.
+
+**Deutsch:** Wartungsversion: eine Diagnose für den Entwickler des Addons, die zeigt, welche Version jedes
+Gildenmitglied nutzt, damit Probleme beim Abgleich schneller gefunden werden. Für dich ändert sich nichts; mit dem
+Update bleiben alle auf demselben Stand.
+
 # ProfessionShare 1.0.1
 
 **English:** Fixes: guild members whose game still shows realm names can now see your recipes and recipe items again.

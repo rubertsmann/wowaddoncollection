@@ -2,6 +2,10 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.0.2 (2026-11-22, protocol 2.3, schema 5, LibGuildSync MINOR 3)
+- A small info button at the bottom left of the window, shown for one maintainer character only: its tooltip
+  lists who sent this client addon messages (from the trace) and the build each one announced in its HELLO.
+
 ## 1.0.1 (2026-11-22, protocol 2.3, schema 5, LibGuildSync MINOR 3)
 - Fix: in a narrow window the recipe table ran under the recipe detail panel; it now keeps its minimum width, is cut
   off at its own edge and scrolls sideways (slider below the table, or Shift + mouse wheel).
