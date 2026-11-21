@@ -173,7 +173,7 @@ function ArenaView.FightRows()
     local Arena = addon.Arena
     local myName, time = me(), now()
     local rows = {}
-    local order = { incoming = 1, open = 2, pending = 3, lapsed = 3, done = 4, declined = 5, expired = 5 }
+    local order = { incoming = 1, open = 2, pending = 3, lapsed = 3, done = 4, declined = 5, expired = 5, withdrawn = 5 }
     for id, fight in pairs(Arena.Fights(records(), myName, time)) do
         local state = fight.state
         if state == "pending" and fight.b == myName and not Arena.State().an[id] then state = "incoming" end
@@ -195,6 +195,7 @@ local function stateText(row)
     if row.state == "pending" or row.state == "lapsed" then return "|cff999999" .. Text["waiting"] .. "|r" end
     if row.state == "declined" then return "|cff999999" .. Text["declined"] .. "|r" end
     if row.state == "expired" then return "|cff999999" .. Text["expired"] .. "|r" end
+    if row.state == "withdrawn" then return "|cff999999" .. Text["stopped"] .. "|r" end
     local result = addon.Arena.Result(fight)
     local winner = result and (result.winner == "a" and fight.a or fight.b)
     if winner == myName then return "|cff66ff66" .. Text["won"] .. "|r" end
@@ -209,6 +210,13 @@ local function createFightRow(list)
     row.selected = row:CreateTexture(nil, "BACKGROUND", nil, 1); row.selected:SetAllPoints(); row.selected:SetColorTexture(0.3, 0.6, 1, 0.22); row.selected:Hide()
     row.names = Widgets.CreateFontString(row, "GameFontHighlightSmall", "LEFT"); row.names:SetPoint("LEFT", 4, 0); row.names:SetWidth(170)
     row.info = Widgets.CreateFontString(row, "GameFontHighlightSmall", "RIGHT"); row.info:SetPoint("RIGHT", -4, 0); row.info:SetWidth(110)
+    -- the actions right in the row (user 2026-11-21): Accept / Decline an incoming challenge, Stop my own waiting one
+    local height = math.max(14, (Widgets.ROW_HEIGHT or 18) - 2)
+    row.accept = Widgets.CreateButton(row, Text["Accept"], 56, height, function() if row.entry then ArenaView.Answer(true, row.entry.id) end end)
+    row.decline = Widgets.CreateButton(row, Text["Decline"], 56, height, function() if row.entry then ArenaView.Answer(false, row.entry.id) end end)
+    row.stop = Widgets.CreateButton(row, Text["Stop"], 56, height, function() if row.entry then ArenaView.Withdraw(row.entry.id) end end)
+    row.decline:SetPoint("RIGHT", -2, 0); row.accept:SetPoint("RIGHT", row.decline, "LEFT", -2, 0); row.stop:SetPoint("RIGHT", -2, 0)
+    if Widgets.MakePrimary then Widgets.MakePrimary(row.accept) end
     row:SetScript("OnEnter", function(self) self.hover:Show() end)
     row:SetScript("OnLeave", function(self) self.hover:Hide() end)
     row:SetScript("OnClick", function(self) if self.entry then ArenaView.state.selected = self.entry.id; ArenaView.Refresh() end end)
@@ -219,6 +227,10 @@ local function fillFightRow(row, entry)
     row.selected:SetShown(entry.id == ArenaView.state.selected)
     row.names:SetText(short(entry.fight.a) .. " |cff999999vs|r " .. short(entry.fight.b)
         .. (entry.fight.wager > 0 and ("  |cffffd100" .. money(entry.fight.wager) .. "|r") or ""))
+    local incoming = entry.state == "incoming"
+    local stoppable = (entry.state == "pending" or entry.state == "lapsed") and entry.fight.a == me()
+    row.accept:SetShown(incoming); row.decline:SetShown(incoming); row.stop:SetShown(stoppable)
+    row.info:SetShown(not incoming and not stoppable)
     row.info:SetText(stateText(entry))
 end
 
@@ -247,6 +259,13 @@ local function buildFightsPage(panel)
     widgets.betA:SetPoint("TOPLEFT", 104, y)
     widgets.betB = Widgets.CreateButton(panel, "B", 84, 22, function() ArenaView.Bet("b") end)
     widgets.betB:SetPoint("LEFT", widgets.betA, "RIGHT", 4, 0)
+    widgets.stopButton = Widgets.CreateButton(panel, Text["Stop"], 90, 22, function() ArenaView.Withdraw(ArenaView.state.selected) end)
+    widgets.stopButton:SetPoint("TOPLEFT", 8, y)
+    -- dev build: the arena dummy challenges me (the same as /ggd arena request)
+    if addon.IS_DEVELOPMENT_BUILD then
+        widgets.dummyButton = Widgets.CreateButton(panel, "[dev] Dummy challenges me", 170, 20, function() addon.Catcher.DevArenaRequest(0) end)
+        widgets.dummyButton:SetPoint("BOTTOMLEFT", 8, 6)
+    end
     widgets.watchButton = Widgets.CreateButton(panel, Text["Watch"], 90, 22, function() ArenaView.Watch(ArenaView.state.selected) end)
     widgets.watchButton:SetPoint("TOPRIGHT", -8, y)
     widgets.fightStatus = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
@@ -258,7 +277,8 @@ local REFUSALS = { readonly = Text["Saved data is read-only."], unknown = Text["
     closed = Text["Bets are closed for this fight."], own = Text["You cannot bet on your own fight."], twice = Text["You already bet on this fight."],
     stake = Text["Bet between {minimum} and {maximum}."], self = Text["You cannot challenge yourself."],
     nocompanionthere = Text["That player has no companion."], open = Text["You have too many open challenges."],
-    wager = Text["The wager is too high."], opponent = Text["Choose a guild member first."] }
+    wager = Text["The wager is too high."], opponent = Text["Choose a guild member first."],
+    busy = Text["One fight at a time: finish or stop your current fight first."], theybusy = Text["They are in a fight right now."] }
 ---@param reason string
 ---@return string
 function ArenaView.RefusalText(reason)
@@ -275,10 +295,25 @@ local function showResult(ok, reason, success)
     end
 end
 
-function ArenaView.Answer(accept)
-    local id = ArenaView.state.selected
+---@param accept boolean
+---@param id? string the fight (a row's button), else the selected one
+function ArenaView.Answer(accept, id)
+    id = id or ArenaView.state.selected
+    ArenaView.state.selected = id
     local ok, reason = addon.Arena.Answer(records(), me(), id, accept, now())
     showResult(ok, reason, accept and Text["Accepted. The fight is decided in 5 minutes."] or Text["Declined."])
+    ArenaView.Refresh()
+end
+
+-- Stops my waiting challenge (user 2026-11-21); the stake comes back right after.
+---@param id? string
+function ArenaView.Withdraw(id)
+    id = id or ArenaView.state.selected
+    ArenaView.state.selected = id
+    local ok, reason = addon.Arena.Withdraw(records(), me(), id, now())
+    showResult(ok, reason, Text["Challenge stopped."])
+    if ok then addon.Catcher.ArenaTick(true) end
+    ArenaView.Refresh()
 end
 
 function ArenaView.Bet(side)
@@ -302,7 +337,8 @@ function ArenaView.RefreshFights()
     local selected
     for _, row in ipairs(rows) do if row.id == ArenaView.state.selected then selected = row end end
     if not selected and rows[1] then selected = rows[1]; ArenaView.state.selected = rows[1].id end
-    for _, region in ipairs({ widgets.acceptButton, widgets.declineButton, widgets.betBox, widgets.betLabel, widgets.betA, widgets.betB, widgets.watchButton }) do
+    for _, region in ipairs({ widgets.acceptButton, widgets.declineButton, widgets.stopButton, widgets.betBox, widgets.betLabel, widgets.betA,
+        widgets.betB, widgets.watchButton }) do
         region:Hide()
     end
     if not selected then widgets.detail:SetText("") return end
@@ -325,6 +361,8 @@ function ArenaView.RefreshFights()
     widgets.detail:SetText(table.concat(lines, "\n"))
     if selected.state == "incoming" then
         widgets.acceptButton:Show(); widgets.declineButton:Show()
+    elseif (selected.state == "pending" or selected.state == "lapsed") and fight.a == myName then
+        widgets.stopButton:Show()
     elseif selected.state == "open" and fight.a ~= myName and fight.b ~= myName and not myBet then
         widgets.betBox:Show(); widgets.betLabel:Show()
         widgets.betA:SetLabel(short(fight.a)); widgets.betB:SetLabel(short(fight.b))
@@ -666,8 +704,7 @@ function ArenaView.CloseChallenge()
 end
 
 local function challengeError(reason)
-    local text = reason == "twice" and Text["You already challenged them."] or ArenaView.RefusalText(reason)
-    widgets.challengeError:SetText("|cffff6060" .. text .. "|r")
+    widgets.challengeError:SetText("|cffff6060" .. ArenaView.RefusalText(reason) .. "|r")
     addon.Animate.Shake(widgets.challengeBox, 4, 4)
 end
 
@@ -676,6 +713,9 @@ function ArenaView.ChallengeNext()
     local step = challenge.step
     if step == 1 then
         if not addon.AzeCaught.Active() then challengeError("nocompanion") return end
+        local fights = addon.Arena.Fights(records(), me(), now())
+        if addon.Arena.Busy(fights, me(), true) then challengeError("busy") return end
+        if addon.Arena.Busy(fights, challenge.opponent, false) then challengeError("theybusy") return end
         ArenaView.ShowChallengeStep(2)
     elseif step == 2 then
         local copper, reason = ArenaView.ReadWager()

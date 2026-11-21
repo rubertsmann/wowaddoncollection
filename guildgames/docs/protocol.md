@@ -47,7 +47,7 @@ protocol, so TalentShare and GuildGames never read each other's messages.
   companion changes, at least every 5 min, at once after select/care/death) and announced like a play.
 - **Arena section (optional, protocol 1.2, feature 020) `arena = { w, l, ch, an, bt }`:** my arena wins and losses
   (0..1e6) and my open entries, each table at most 20 entries keyed by the fight id `<challenger>#<time>` (a safe name,
-  at most 80 bytes). `ch[id] = {to, at, wg, f}`: my challenges only (the id names me, `at` equals the id's time, `to`
+  at most 80 bytes). `ch[id] = {to, at, wg, f, wd?}` (`wd`: stopped at, optional): my challenges only (the id names me, `at` equals the id's time, `to`
   is another safe name, wager 0..1000g in copper). `an[id] = {ok, at, f?}`: my answer to someone else's challenge
   (`f` required when `ok`). `bt[id] = {s = "a"|"b", c, o, at}`: my bet (10s..500g, odds 110..1000 hundredths).
   Fighter `f = {npc, n, cls, disp, ty, al, atk, def, spd, vit, ab}`: NPC id, name (<= 48 bytes), classification,

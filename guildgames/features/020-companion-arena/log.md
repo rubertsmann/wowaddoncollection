@@ -26,3 +26,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: offline suite green.
 - Evidence: luajit tests/run.lua -> "134 passed, 0 failed"
 - Next: user: /reload (no TOC change), `/ggd arena dummy`, AZEcaught > Guild: click the dummy, the fight icon, go through the modal; `/ggd arena request 1` and accept under Arena > Fights; watch after 5 minutes. Then the in-game rows in verify.md.
+
+## 2026-11-21 07:20 | BUILD | one fight at a time, Stop a challenge, dummy button (R13, R12)
+- Did: `Core/Minigames/Arena.lua`: `Arena.Busy`; Challenge refuses "busy"/"theybusy", Answer(accept) refuses "busy"; `Arena.Withdraw` (`ch.wd`, sanitized, an answer counts only before it; state "withdrawn"); Settle refunds the challenger and a late accepter once, and takes a refund back when an earlier accept turns up; the dummy ignores stopped challenges; `MAXIMUM_OPEN` removed. `UI/ArenaView.lua`: Accept/Decline/Stop buttons in each fight row, Stop in the details, "stopped" state, refusal texts, the challenge modal checks busy at step 1, dev button "[dev] Dummy challenges me" (`Catcher.DevArenaRequest`). docs/protocol.md, doc.md, spec.md (R13), 5 deDE keys (+1 removed).
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua -> "136 passed, 0 failed"
+- Next: user: /reload; Arena > Fights: "[dev] Dummy challenges me", Accept in the row; challenge the dummy from the Guild view, Stop it in Fights; then the in-game rows in verify.md.

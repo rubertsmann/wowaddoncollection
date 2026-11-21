@@ -15,14 +15,19 @@ The rest of the guild can bet on either side in those five minutes. Wins, losses
   stake leaves your pool now). **Back** goes one step back, **x** closes.
 - **Arena** view, **Fighter** page: your companion's arena level and XP, wins and losses, the four stats (Attack,
   Defense, Speed, Vitality) and **Train** per stat (tooltip: cost, energy, time), the running training and its ability.
-- **Arena** view, **Fights** page: incoming challenges (**Accept** / **Decline**), open fights (bet N gold on either
+- **One fight at a time**: while your challenge waits for an answer or your fight is running (accepted, not yet
+  fought), you cannot challenge anyone or accept a challenge (declining always works). A member who is in a running
+  fight cannot be challenged.
+- **Arena** view, **Fights** page: incoming challenges (**Accept** / **Decline** right in the row and below), your
+  waiting challenge (**Stop**: the stake comes back at once; an accept made before the stop still counts), open fights (bet N gold on either
   side at the shown odds), finished fights (**Watch** the replay: both models, health bars, floating damage, shakes,
   the winner's burst; **Skip** jumps to the end).
 - Chat tells you about a new challenge, an answer, your fight's result, a bet's result and finished training.
 - `/gg arena` (or `/gg caught arena`) opens the view.
 - Dev build only: `/ggd arena dummy` adds "Arenadummy-Test" to the Guild list (memory only, never stored or sent; gone
   after a reload; `dummy off` removes it). Its companion mirrors yours with stats -15..+15%; it accepts your challenges
-  within 5 s. `/ggd arena request [gold]` makes the dummy challenge you (it joins first if needed).
+  within 5 s. `/ggd arena request [gold]` makes the dummy challenge you (it joins first if needed); the Fights page has
+  a "[dev] Dummy challenges me" button for the same.
 
 ## How it works
 - **Fighter** (`Arena.Fighter`): attack/defense/speed from `AzeCaught.CombatStats` (level, rarity, creature type, a
@@ -37,7 +42,7 @@ The rest of the guild can bet on either side in those five minutes. Wins, losses
 - **Training**: 50s x (points + 1), 15 energy, 10 min of play time; +1 point (at most 25 per stat); one session at a
   time. **Levels**: win 40 XP, loss 15 XP; level n -> n + 1 needs n x 50 XP; at most level 50.
 - **Async flow over the record sync** (no new message types; protocol 1.2 adds the optional record section `arena`):
-  `arena = { w, l, ch = {[id] = {to, at, wg, f}}, an = {[id] = {ok, at, f?}}, bt = {[id] = {s, c, o, at}} }`,
+  `arena = { w, l, ch = {[id] = {to, at, wg, f, wd?}}, an = {[id] = {ok, at, f?}}, bt = {[id] = {s, c, o, at}} }`,
   id = `<challenger>#<time>`. A challenge lives in the challenger's record, the answer in the challenged player's
   record, a bet in the bettor's record. Only the named opponent's answer within 24 h counts. Every client computes
   the fight from the two snapshots and settles only its own money, once (`settled`).

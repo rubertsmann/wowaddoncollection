@@ -43,6 +43,11 @@ side bets from the rest of the guild.
   and Watch), in the Guild view one fight icon on another member's selected pet that opens a challenge modal in steps
   (matchup, wager, confirm, sent), an animated replay (two models, health bars, floating damage, shake on hit, the
   winner's burst).
+- R13 One fight at a time: a player with an own waiting challenge or an open fight can neither challenge nor accept
+  (decline always works); a player in an open fight cannot be challenged. The challenger can **Stop** a challenge
+  that is not answered yet (`ch.wd`): it refunds the challenger at once; an answer counts only when made before the
+  stop (an accept from before the stop that syncs late still makes the fight, and the refund is taken back); an
+  accept after the stop is refunded to the accepter. The Fights page offers Accept/Decline/Stop in each row.
 - R12 Dev build: a fake opponent (`/ggd arena dummy`, memory only, accepts my challenges) and a fake incoming
   challenge (`/ggd arena request [gold]`) to test alone.
 - R11 Notices: chat lines for a new challenge, an answer, a fight result and a bet result (once each).
@@ -57,7 +62,7 @@ side bets from the rest of the guild.
 - `Core/Data/Games.lua`: `SetSection` also takes `"arena"`; `Sanitize` keeps a valid `arena` section (dropped alone).
 - `Core/Game/Catcher.lua` (tick): runs `Arena.Tick` (training, expiry, settlement, notices) and publishes.
 - `UI/ArenaView.lua` (new): the arena view and the replay; `UI/AzeCaughtPanel.lua`: view button, challenge box.
-- Record section `arena = { w, l, ch = { [id] = {to, at, wg, f} }, an = { [id] = {ok, at, f?} }, bt = { [id] = {s, c, o, at} } }`,
+- Record section `arena = { w, l, ch = { [id] = {to, at, wg, f, wd?} }, an = { [id] = {ok, at, f?} }, bt = { [id] = {s, c, o, at} } }`,
   `id = "<challenger>#<at>"`; fighter `f = {npc, n, cls, disp, ty, al, atk, def, spd, vit, ab}`.
 - Local `db.caught.arena = { npcs = { [npc] = {xp, w, l, tr = {atk, def, spd, vit}} }, training = {stat, npc, done},
   settled = {[key] = true}, history = {...} }`.
@@ -113,6 +118,12 @@ side bets from the rest of the guild.
   model and shows only for another member's pet; the modal has 3 steps + "sent"; the dummy lives in `Games.simulated`
   (never stored or sent, like `/ggd games sim`); Settle never refunds a challenge whose fight was already settled
   (a vanished record, e.g. the dummy after a reload, must not pay twice).
+
+- 2026-11-21 User: "only allow one fight at the time on the accepting side and on the requesting side. under kämpfe
+  show an option to "stop" the request and also this is where you should able to accept. Also add an option to send a
+  fake request to me from the arena dummy". Claude decided: busy = an open fight, or (for my own actions) my waiting
+  challenge; the stop is an optional `wd` field in the challenge (protocol stays 1.2: 0.3.0 is unreleased, so no
+  released 1.2 peer drops it); `MAXIMUM_OPEN` removed.
 
 ## Open questions
 - Tuning (costs, XP, odds bounds) after playing (needs: user).

@@ -129,7 +129,7 @@ return {
         local id = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", wager, NOW))
         harness.equal(balance(A, "A-R"), startA - wager, "the stake left at once")
         local _, twice = A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", wager, NOW + 1)
-        harness.equal(twice, "twice")
+        harness.equal(twice, "busy", "one fight at a time")
         -- B sees the challenge (a notice once), C cannot answer it
         local notices = B.Arena.Settle(recordsFor(players, "B-R"), "B-R", NOW + 10)
         harness.equal(#notices, 1); harness.equal(notices[1].kind, "challenged")
@@ -281,11 +281,70 @@ return {
         for _, notice in ipairs(notices) do harness.truthy(notice.kind ~= "refund", "no refund after a settled fight") end
         harness.equal(balance(addon, "A-R"), won and start + 10000 or start - 10000)
         -- the dummy challenges me: an incoming fight I can accept
-        local incoming = Arena.DummyChallenge(dummy, "A-R", 5000, NOW + 100)
-        local fight = Arena.Fights(records, "A-R", NOW + 101)[incoming]
+        local later = fightTime + 100
+        local incoming = Arena.DummyChallenge(dummy, "A-R", 5000, later)
+        local fight = Arena.Fights(records, "A-R", later + 1)[incoming]
         harness.equal(fight.state, "pending"); harness.equal(fight.b, "A-R"); harness.equal(fight.wager, 5000)
         harness.truthy(Arena.SanitizeSection(dummy.arena, dummy.name, math.huge), "the dummy's section is valid")
-        assert(Arena.Answer(records, "A-R", incoming, true, NOW + 102))
-        harness.equal(Arena.Fights(records, "A-R", NOW + 103)[incoming].state, "open")
+        assert(Arena.Answer(records, "A-R", incoming, true, later + 2))
+        harness.equal(Arena.Fights(records, "A-R", later + 3)[incoming].state, "open")
+    end,
+
+    ["arena: one fight at a time on both sides; a stopped challenge refunds both once, an accept from before the stop still counts"] = function(harness)
+        local players = { ["A-R"] = player(harness, "A-R", 100), ["B-R"] = player(harness, "B-R", 200), ["C-R"] = player(harness, "C-R", 300) }
+        local A, B, C = players["A-R"], players["B-R"], players["C-R"]
+        local wager = 10000
+        local startA, startB = balance(A, "A-R"), balance(B, "B-R")
+        local first = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", wager, NOW))
+        -- the requesting side: no second challenge while mine waits
+        local _, busy = A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "C-R", 0, NOW + 1)
+        harness.equal(busy, "busy")
+        -- the accepting side: C challenges A, A cannot accept while A's own challenge waits
+        local fromC = assert(C.Arena.Challenge(recordsFor(players, "C-R"), "C-R", "A-R", 0, NOW + 2))
+        local _, acceptBusy = A.Arena.Answer(recordsFor(players, "A-R"), "A-R", fromC, true, NOW + 3)
+        harness.equal(acceptBusy, "busy")
+        harness.truthy(A.Arena.Answer(recordsFor(players, "A-R"), "A-R", fromC, false, NOW + 3), "a decline is always possible")
+        -- A stops the first challenge: refunded once, B can no longer accept
+        assert(A.Arena.Withdraw(recordsFor(players, "A-R"), "A-R", first, NOW + 10))
+        local _, again = A.Arena.Withdraw(recordsFor(players, "A-R"), "A-R", first, NOW + 11)
+        harness.equal(again, "late")
+        A.Arena.Settle(recordsFor(players, "A-R"), "A-R", NOW + 12)
+        A.Arena.Settle(recordsFor(players, "A-R"), "A-R", NOW + 13)
+        harness.equal(balance(A, "A-R"), startA, "refunded once")
+        local _, late = B.Arena.Answer(recordsFor(players, "B-R"), "B-R", first, true, NOW + 20)
+        harness.equal(late, "late")
+        harness.equal(A.Arena.Fights(recordsFor(players, "A-R"), "A-R", NOW + 20)[first].state, "withdrawn")
+        -- a free player can challenge again; B, in an open fight, is busy for others
+        local second = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", wager, NOW + 30))
+        assert(B.Arena.Answer(recordsFor(players, "B-R"), "B-R", second, true, NOW + 40))
+        local _, theyBusy = C.Arena.Challenge(recordsFor(players, "C-R"), "C-R", "B-R", 0, NOW + 50)
+        harness.equal(theyBusy, "theybusy")
+        local _, stopOpen = A.Arena.Withdraw(recordsFor(players, "A-R"), "A-R", second, NOW + 50)
+        harness.equal(stopOpen, "late", "an accepted fight cannot be stopped")
+        -- after the fight everyone is free again; the money adds up
+        local fightTime = NOW + 40 + 300
+        A.Arena.Settle(recordsFor(players, "A-R"), "A-R", fightTime)
+        B.Arena.Settle(recordsFor(players, "B-R"), "B-R", fightTime)
+        harness.equal(balance(A, "A-R") + balance(B, "B-R"), startA + startB, "nothing created or lost")
+        harness.truthy(C.Arena.Challenge(recordsFor(players, "C-R"), "C-R", "B-R", 0, fightTime + 1), "B is free after the fight")
+    end,
+
+    ["arena: an accept made before the stop but synced after the refund still counts, and the refund is undone"] = function(harness)
+        local players = { ["A-R"] = player(harness, "A-R", 100), ["B-R"] = player(harness, "B-R", 200) }
+        local A, B = players["A-R"], players["B-R"]
+        local wager = 10000
+        local startA, startB = balance(A, "A-R"), balance(B, "B-R")
+        local id = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", wager, NOW))
+        local recordsOfB = recordsFor(players, "B-R")   -- B accepts before seeing the stop
+        assert(A.Arena.Withdraw(recordsFor(players, "A-R"), "A-R", id, NOW + 20))
+        A.Arena.Settle({}, "A-R", NOW + 21)              -- A has not seen the accept yet: refund
+        harness.equal(balance(A, "A-R"), startA)
+        assert(B.Arena.Answer(recordsOfB, "B-R", id, true, NOW + 10))
+        local fightTime = NOW + 10 + 300
+        harness.equal(A.Arena.Fights(recordsFor(players, "A-R"), "A-R", fightTime)[id].state, "done", "the accept was first")
+        A.Arena.Settle(recordsFor(players, "A-R"), "A-R", fightTime)
+        B.Arena.Settle(recordsFor(players, "B-R"), "B-R", fightTime)
+        harness.equal(balance(A, "A-R") + balance(B, "B-R"), startA + startB, "the refund was undone")
+        harness.equal(A.Arena.State().w + A.Arena.State().l, 1)
     end,
 }

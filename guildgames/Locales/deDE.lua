@@ -376,10 +376,15 @@ addon.Locale.Register("deDE", {
         ["Their stats show once they accept. The fight runs on its own."] = "Ihre Werte siehst du, sobald sie annehmen. Der Kampf läuft von selbst.",
         ["They have 24 hours to answer. Follow it in Arena > Fights."] = "Sie haben 24 Stunden für eine Antwort. Verfolge es unter Arena > Kämpfe.",
         ["Wager"] = "Einsatz",
-        ["You already challenged them."] = "Du hast sie schon herausgefordert.",
         ["Your pool: {gold} · at most {maximum}"] = "Deine Kasse: {gold} · höchstens {maximum}",
         ["Your stake leaves your pool now."] = "Dein Einsatz verlässt jetzt deine Kasse.",
         ["against {name}"] = "gegen {name}",
         ["{mine} vs {theirs}"] = "{mine} gegen {theirs}",
+        -- one fight at a time, stop a challenge (user 2026-11-21)
+        ["Challenge stopped."] = "Herausforderung gestoppt.",
+        ["One fight at a time: finish or stop your current fight first."] = "Nur ein Kampf gleichzeitig: beende oder stoppe zuerst deinen laufenden Kampf.",
+        ["Stop"] = "Stoppen",
+        ["They are in a fight right now."] = "Sie kämpfen gerade schon.",
+        ["stopped"] = "gestoppt",
     },
 })

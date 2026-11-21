@@ -1154,6 +1154,11 @@ function developmentCommands.request(arguments)
     addon.Events.Fire("GAMES_CHANGED"); addon.Events.Fire("CAUGHT_CHANGED")
 end
 
+-- the Fights page's dev button (user 2026-11-21: "send a fake request to me from the arena dummy")
+if addon.IS_DEVELOPMENT_BUILD then
+    function Catcher.DevArenaRequest(gold) developmentCommands.request(tostring(gold or 0)) end
+end
+
 -- adds the current target (or a test NPC) as caught, without a roll
 function developmentCommands.add()
     local snapshot = Api.UnitSnapshot("target")

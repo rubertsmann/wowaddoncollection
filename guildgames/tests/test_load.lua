@@ -419,6 +419,15 @@ return {
                         for _, challenge in pairs(Arena.State().ch) do if challenge.to == Arena.DUMMY_NAME then sent = sent + 1 end end
                         harness.equal(sent, 1)
                         harness.truthy(pcall(ArenaView.ChallengeNext)); harness.truthy(not ArenaView.challenge.row, "closed")
+                        -- Fights (user 2026-11-21): my waiting challenge has Stop in its row and in the details; it stops
+                        harness.truthy(pcall(ArenaView.SelectPage, "fights"))
+                        harness.truthy(ArenaView.widgets.stopButton:IsShown(), "stop offered")
+                        local stopID
+                        for id, challenge in pairs(Arena.State().ch) do if challenge.to == Arena.DUMMY_NAME then stopID = id end end
+                        local okStop, stopError = pcall(ArenaView.Withdraw, stopID)
+                        harness.truthy(okStop, tostring(stopError))
+                        harness.truthy(Arena.State().ch[stopID].wd, "stopped")
+                        harness.truthy(pcall(Panel.SelectView, "guild"))
                         -- my own pet: no fight icon, no modal
                         local myRow
                         for _, row in ipairs(addon.Model.BuildCompanionRows(addon.Games.AllRecords(), me)) do if row.mine then myRow = row end end
