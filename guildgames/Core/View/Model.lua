@@ -174,6 +174,7 @@ end
 ---@field caught integer
 ---@field active boolean
 ---@field seen integer
+---@field history table AzeCaught.History (user 2026-11-21)
 
 -- My collection (R6): the active companion first, then caught NPCs, then only-found ones; each group by name.
 ---@param collection table<integer, CollectionEntry>
@@ -183,7 +184,8 @@ function Model.BuildCollectionRows(collection, activeNpc)
     local rows = {}
     for npcID, entry in pairs(collection or {}) do
         rows[#rows + 1] = { npc = npcID, name = escape(entry.n), nameKey = (entry.n or ""):lower(), lvl = entry.lvl, cls = entry.cls,
-            disp = entry.disp, caught = entry.caught, active = npcID == activeNpc, seen = entry.seen }
+            disp = entry.disp, caught = entry.caught, active = npcID == activeNpc, seen = entry.seen,
+            history = addon.AzeCaught.History(entry) }
     end
     table.sort(rows, function(left, right)
         if left.active ~= right.active then return left.active end
@@ -212,6 +214,34 @@ function Model.BuildCollectionSections(collection, activeNpc)
         return left.npc < right.npc
     end)
     return { caught = caught, seen = seen, caughtCount = caughtCount }
+end
+
+-- A short age for a badge ("now", "5m", "3h", "2d"); nil when unknown.
+---@param timestamp integer|nil
+---@param now integer
+---@return string|nil
+function Model.ShortAge(timestamp, now)
+    if type(timestamp) ~= "number" then return nil end
+    local Text, Format = addon.Text, addon.Locale.Format
+    local seconds = math.max(0, now - timestamp)
+    if seconds < 90 then return Text["now"] end
+    if seconds < 5400 then return Format(Text["{n}m"], { n = math.floor(seconds / 60) }) end
+    if seconds < 129600 then return Format(Text["{n}h"], { n = math.floor(seconds / 3600) }) end
+    return Format(Text["{n}d"], { n = math.floor(seconds / 86400) })
+end
+
+-- The history as icon badges (user 2026-11-21: "optimize the simple text based ui to an icon based ui with
+-- animations"): key, the number to count up to (nil: text only), the badge text, whether it is "empty" (shown dimmed).
+---@param history table AzeCaught.History
+---@param now integer server time
+---@return { key: string, value: integer|nil, text: string, empty: boolean }[]
+function Model.HistoryBadges(history, now)
+    return {
+        { key = "seen", value = history.seen, text = tostring(history.seen), empty = false },
+        { key = "kills", value = history.kills, text = tostring(history.kills), empty = history.kills == 0 },
+        { key = "caught", value = history.caught, text = history.caught .. "/" .. history.throws, empty = history.caught == 0 },
+        { key = "last", text = Model.ShortAge(history.last, now) or "?", empty = false },
+    }
 end
 
 -- Last week's best companion owner (the weekly winner line), or nil.
@@ -329,7 +359,7 @@ function Model.BuildNpcInfo(npcID, entry)
     local AzeCaught = addon.AzeCaught
     local stats = type(entry.st) == "table" and entry.st or {}
     local npcView = { title = escape(entry.n), rarityColor = RARITY_COLOR[entry.cls] or "ffffff", facts = {}, hiddenCount = 0,
-        needs = {}, traits = {} }
+        needs = {}, traits = {}, history = AzeCaught.History(entry) }
     local subtitle = { Format(Text["Level {n}"], { n = entry.lvl or 0 }) }
     if entry.cls ~= "normal" then subtitle[#subtitle + 1] = Model.RarityText(entry.cls) end   -- "Normal" says nothing
     if stats.typeName then

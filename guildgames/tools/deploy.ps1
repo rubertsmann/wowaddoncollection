@@ -1,6 +1,9 @@
 # Installs the working copy into the WoW Forever AddOns folder as a SEPARATE dev addon, so it can run next to the live one.
-#   AddOns\GuildGames-Dev  -> junction to this repo (edit files, then /reload in game); uses a generated, git-ignored
-#                              GuildGames-Dev.toc (own title, version "-dev", SavedVariables GuildGamesDevDB)
+#   AddOns\GuildGames-Dev  -> a real folder: junctions to this repo's Core, Locales, UI and Libs (edit files, then
+#                              /reload in game), plus two generated files: GuildGames-Dev.toc (own title, version
+#                              "-dev", SavedVariables GuildGamesDevDB; also kept git-ignored in the repo for the tests)
+#                              and Bindings.xml (the key binding with dev names: the game loads Bindings.xml from every
+#                              addon folder, and one name in two folders is an error)
 #   AddOns\GuildGames      -> the LIVE addon (CurseForge or `-InstallLive`); never touched unless you ask
 # RE-RUN THIS whenever GuildGames.toc changes (a file added or removed, a version bump): the dev TOC is a generated copy
 #   and goes stale, and the dev client then fails with "attempt to index a nil value" in the file that needs the new one.
@@ -63,8 +66,35 @@ if (-not (Test-Path $libraryLink)) {
     Write-Host "linked $libraryLink -> $librarySource"
 }
 
-# 3. link the dev addon
-Link "GuildGames-Dev" $repo
+# 3. the dev addon folder: junctions to the code folders, the generated TOC and Bindings.xml.
+#    An old dev junction to the whole repo (before 2026-11-21) is replaced; rmdir removes only the junction itself.
+$devFolder = Join-Path $addons "GuildGames-Dev"
+if ((Test-Path $devFolder) -and (IsJunction $devFolder)) {
+    cmd /c rmdir "$devFolder" | Out-Null
+    if (Test-Path $devFolder) { throw "could not remove the old junction $devFolder" }
+    Write-Host "removed the old junction $devFolder (it pointed at the whole repo)"
+}
+if (-not (Test-Path $devFolder)) { New-Item -ItemType Directory -Path $devFolder | Out-Null }
+foreach ($folder in "Core", "Locales", "UI", "Libs") {
+    $link = Join-Path $devFolder $folder
+    $target = Join-Path $repo $folder
+    if (Test-Path $link) {
+        if (-not (IsJunction $link)) { throw "$link exists and is a real folder - remove it first" }
+        if ((JunctionTarget $link) -ne $target) { throw "$link is a junction to $(JunctionTarget $link), not to $target" }
+        continue
+    }
+    New-Item -ItemType Junction -Path $link -Target $target | Out-Null
+    Write-Host "linked $link -> $target"
+}
+Copy-Item $devToc (Join-Path $devFolder "GuildGames-Dev.toc") -Force
+$bindings = [IO.File]::ReadAllText((Join-Path $repo "Bindings.xml"))
+foreach ($pair in @(@('"AZECAUGHT_THROW"', '"AZECAUGHT_THROW_DEV"'), @('"GUILDGAMES"', '"GUILDGAMESDEV"'),
+        @('GuildGamesAzeCaughtThrow', 'GuildGamesDevAzeCaughtThrow'))) {
+    if (-not $bindings.Contains($pair[0])) { throw "Bindings.xml no longer contains $($pair[0]); update deploy.ps1 and Catcher.BindingNames" }
+    $bindings = $bindings.Replace($pair[0], $pair[1])
+}
+[IO.File]::WriteAllText((Join-Path $devFolder "Bindings.xml"), $bindings, (New-Object Text.UTF8Encoding($false)))
+Write-Host "wrote $devFolder\GuildGames-Dev.toc and Bindings.xml (dev binding names)"
 
 # 4. optional: install the live build from the newest package
 if ($InstallLive) {

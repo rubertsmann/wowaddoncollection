@@ -10,7 +10,7 @@ local addonName, addon = ...
 -- saves another global than this build uses, and registers the slash commands.
 -- The fallback version only matters for the offline tests.
 LibStub("LibGuildSync-1.0").Addon.Setup(addon, addonName,
-    { name = "GuildGames", prefix = "GGames", command = "gg", fallbackVersion = "0.1.0", color = "ffcc33" })
+    { name = "GuildGames", prefix = "GGames", command = "gg", fallbackVersion = "0.2.0", color = "ffcc33" })
 
 -- Wire protocol (docs/protocol.md): MAJOR must match exactly between peers, MINOR may differ (additive changes only).
 ---@type integer

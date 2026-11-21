@@ -21,6 +21,8 @@ local function withCaught(harness, options)
     assert(AzeCaught.Throw({ guid = GUID, health = 0.1, name = "Wolf", level = 10, classification = (options and options.cls) or "normal" }, 10, 100, NOW))
     AzeCaught.forceNextCatch = true
     assert(AzeCaught.OnDeath(GUID, "Me-R", 101, NOW, constant(0.99)).caught)
+    -- the catch became the companion (none was active, user 2026-11-21); these tests select it themselves
+    AzeCaught.State().active, AzeCaught.State().peaks = nil, {}
     return addon
 end
 
@@ -643,6 +645,89 @@ return {
         harness.truthy(beast.speed > plain.speed, "beasts are fast")
         local odd = AzeCaught.CombatStats(0, { lvl = 0 / 0, cls = "nonsense", st = { type = 999 } })
         harness.truthy(odd.attack >= 1 and odd.defense >= 1 and odd.speed >= 1, "bad input still gives sane numbers")
+    end,
+
+    -- user 2026-11-21: the Seen tab keeps how often seen, first/last seen, killed and caught x/y
+    ["azecaught: history counts each enemy once: seen, last seen, kills, throws and catches"] = function(harness)
+        local addon = fresh(harness)
+        local AzeCaught = addon.AzeCaught
+        local other = "Creature-0-1-2-3-4711-0000000002"
+        local entry = AzeCaught.NoteFound({ npc = 4711, name = "Wolf", guid = GUID }, NOW)
+        AzeCaught.NoteFound({ npc = 4711, guid = GUID }, NOW + 10)
+        harness.equal(AzeCaught.History(entry).seen, 1, "the same enemy counts once")
+        AzeCaught.NoteFound({ npc = 4711, guid = other }, NOW + 60)
+        AzeCaught.NoteFound({ npc = 4711 }, NOW + 90)
+        local history = AzeCaught.History(entry)
+        harness.equal(history.seen, 2); harness.equal(history.first, NOW); harness.equal(history.last, NOW + 60)
+        harness.equal(history.kills, 0); harness.equal(history.caught, 0); harness.equal(history.throws, 0)
+        harness.truthy(AzeCaught.NoteKill(other, 4711, NOW + 70)); harness.equal(AzeCaught.NoteKill(other, 4711, NOW + 71), nil, "once")
+        harness.equal(AzeCaught.NoteKill("Creature-x", 999, NOW), nil, "unknown NPC")
+        -- a throw counts, its death is a kill, the catch counts and stays counted after the companion is gone
+        assert(AzeCaught.Throw({ guid = GUID, health = 0.1, name = "Wolf" }, 10, 100, NOW + 80))
+        AzeCaught.forceNextCatch = true
+        assert(AzeCaught.OnDeath(GUID, "Me-R", 101, NOW + 81, constant(0)).caught)
+        history = AzeCaught.History(entry)
+        harness.equal(history.kills, 2); harness.equal(history.throws, 1); harness.equal(history.caught, 1); harness.equal(history.last, NOW + 81)
+        entry.caught = 0
+        harness.equal(AzeCaught.History(entry).caught, 1, "catches ever")
+        -- a reload keeps the counters, drops a bad one alone; old entries read as seen once
+        entry.kills = -5
+        local loaded = harness.addon({ now = NOW }).Store.Init({ schema = 2, games = {}, caught = { collection = {
+            [4711] = entry, [5] = { n = "Old", lvl = 3, cls = "normal", disp = 0, seen = NOW, caught = 1 } } } })
+        local kept = loaded.caught.collection[4711]
+        harness.equal(kept.cnt, 2); harness.equal(kept.thr, 1); harness.equal(kept.got, 1); harness.equal(kept.kills, nil)
+        local old = addon.AzeCaught.History(loaded.caught.collection[5])
+        harness.equal(old.seen, 1); harness.equal(old.last, NOW); harness.equal(old.caught, 1); harness.equal(old.throws, 1)
+        -- the seen list makes room for the one not seen for the longest time
+        AzeCaught.Reset(false)
+        AzeCaught.MAXIMUM_SEEN = 2
+        AzeCaught.NoteFound({ npc = 1, name = "A" }, NOW); AzeCaught.NoteFound({ npc = 2, name = "B" }, NOW + 1)
+        AzeCaught.NoteFound({ npc = 1, guid = "Creature-a" }, NOW + 5)
+        AzeCaught.NoteFound({ npc = 3, name = "C" }, NOW + 6)
+        harness.truthy(AzeCaught.State().collection[1] and not AzeCaught.State().collection[2], "B was seen longest ago")
+    end,
+
+    -- user 2026-11-21: the history as icon badges (numbers to count up, dimmed when empty, short age)
+    ["azecaught: history badges: values, texts, empty flags and short ages"] = function(harness)
+        local addon = fresh(harness)
+        local Model = addon.Model
+        local badges = Model.HistoryBadges({ seen = 12, kills = 0, caught = 1, throws = 3, first = NOW - 9999, last = NOW - 7200 }, NOW)
+        harness.equal(#badges, 4)
+        harness.equal(badges[1].key, "seen"); harness.equal(badges[1].value, 12); harness.equal(badges[1].text, "12")
+        harness.equal(badges[2].key, "kills"); harness.truthy(badges[2].empty, "no kills: dimmed")
+        harness.equal(badges[3].text, "1/3"); harness.truthy(not badges[3].empty)
+        harness.equal(badges[4].key, "last"); harness.equal(badges[4].value, nil); harness.equal(badges[4].text, "2h")
+        harness.equal(Model.ShortAge(NOW - 10, NOW), addon.Text["now"])
+        harness.equal(Model.ShortAge(NOW - 300, NOW), "5m")
+        harness.equal(Model.ShortAge(NOW - 3 * 86400, NOW), "3d")
+        harness.equal(Model.ShortAge(NOW + 50, NOW), addon.Text["now"], "clock skew")
+        harness.equal(Model.ShortAge(nil, NOW), nil)
+    end,
+
+    -- user 2026-11-21: "make the first animal instantly a companion" (only when none is active)
+    ["azecaught: a catch becomes the companion when none is active, never replaces one"] = function(harness)
+        local addon = fresh(harness)
+        local AzeCaught = addon.AzeCaught
+        harness.equal(AzeCaught.Active(), nil)
+        assert(AzeCaught.Throw({ guid = GUID, health = 0.1, name = "Wolf", level = 10 }, 10, 100, NOW))
+        AzeCaught.forceNextCatch = true
+        local result = assert(AzeCaught.OnDeath(GUID, "Me-R", 101, NOW, constant(0)))
+        harness.truthy(result.caught and result.companion, "the first catch is the companion")
+        harness.equal(AzeCaught.Active().npc, 4711)
+        harness.truthy(journalHas(addon, "companion.auto"))
+        local other = "Creature-0-1-2-3-4712-0000000009"
+        assert(AzeCaught.Throw({ guid = other, health = 0.1, name = "Bear", level = 12 }, 10, 200, NOW))
+        AzeCaught.forceNextCatch = true
+        result = assert(AzeCaught.OnDeath(other, "Me-R", 201, NOW, constant(0)))
+        harness.truthy(result.caught and not result.companion, "an active companion stays")
+        harness.equal(AzeCaught.Active().npc, 4711)
+        -- read-only saved data: caught, but nothing selected
+        local readOnly = fresh(harness)
+        readOnly.Store.db.readonly = true
+        assert(readOnly.AzeCaught.Throw({ guid = GUID, health = 0.1, name = "Wolf" }, 10, 100, NOW))
+        readOnly.AzeCaught.forceNextCatch = true
+        local roll = readOnly.AzeCaught.OnDeath(GUID, "Me-R", 101, NOW, constant(0))
+        harness.truthy(roll and not roll.companion and not readOnly.AzeCaught.Active())
     end,
 
     -- user 2026-11-20: "remove the limit on caught" (it was 10)

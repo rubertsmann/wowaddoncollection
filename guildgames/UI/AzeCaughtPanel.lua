@@ -26,6 +26,22 @@ local CARE_ICON_SIZE = 34
 local CARE_ICONS = { feed = "Interface\\Icons\\INV_Misc_Food_15", water = "Interface\\Icons\\INV_Drink_07",
     pet = "Interface\\Icons\\Ability_Hunter_BeastSoothe", sleep = "Interface\\Icons\\Spell_Nature_Sleep",
     wake = "Interface\\Icons\\Ability_Warrior_BattleShout" }
+-- the history badges under the preview model and their icons (rows and hover panel use the same ones)
+local HISTORY_ICONS = { seen = "Interface\\Icons\\INV_Misc_Spyglass_03", kills = "Interface\\Icons\\Ability_DualWield",
+    caught = "Interface\\Icons\\Ability_Ensnare", last = "Interface\\Icons\\INV_Misc_PocketWatch_01",
+    first = "Interface\\Icons\\INV_Misc_Map_01" }
+local HISTORY_COLOR = { seen = { 0.55, 0.75, 1 }, kills = { 1, 0.42, 0.35 }, caught = { 1, 0.82, 0.2 }, last = { 0.85, 0.85, 0.85 } }
+local BADGE_SIZE, BADGE_GAP = 24, 2
+Panel.HISTORY_ICONS = HISTORY_ICONS
+-- inline icon for a text line (trimmed border)
+---@param key string
+---@param size? integer
+---@return string
+local function inlineIcon(key, size)
+    size = size or 12
+    return ("|T%s:%d:%d:0:0:64:64:5:59:5:59|t"):format(HISTORY_ICONS[key], size, size)
+end
+Panel.InlineIcon = inlineIcon
 local EMOTE_SECONDS = 2.5   -- an action's emote plays this long, then the model goes back to idle (user 2026-11-20)
 -- the camera (user 2026-11-20: "the zoom level is sometimes too far in and the complete 3D model is not visible"):
 -- full body (portrait zoom 0), then the camera this much farther away than the client's own fit; the mouse wheel
@@ -452,6 +468,15 @@ function Panel.ShowNpcInfo(tooltip, owner, npcID, entry)
                 0.5, 0.5, 0.5)
         end
     end
+    -- the history (user 2026-11-21): how often seen, killed, caught x/y, first and last seen
+    local history, timeAgo = npcView.history, addon.UI.Widgets.TimeAgo
+    line(" ")
+    line(Text["History"], 1, 0.82, 0)
+    double(inlineIcon("seen") .. " " .. Text["Seen"], Format(Text["{n} times"], { n = history.seen }), 0.65, 0.65, 0.65, 1, 1, 1)
+    double(inlineIcon("kills") .. " " .. Text["Killed"], tostring(history.kills), 0.65, 0.65, 0.65, 1, 1, 1)
+    double(inlineIcon("caught") .. " " .. Text["Caught"], history.caught .. "/" .. history.throws, 0.65, 0.65, 0.65, 1, 1, 1)
+    double(inlineIcon("first") .. " " .. Text["First seen"], timeAgo(history.first), 0.65, 0.65, 0.65, 1, 1, 1)
+    double(inlineIcon("last") .. " " .. Text["Last seen"], timeAgo(history.last), 0.65, 0.65, 0.65, 1, 1, 1)
     line(" ")
     line(Text["Combat"], 1, 0.82, 0)
     for _, stat in ipairs(npcView.combat) do double(stat.label, stat.value .. " " .. Panel.StatBar(stat), 0.65, 0.65, 0.65, 1, 1, 1) end
@@ -597,7 +622,11 @@ local function fillCollectionRow(row, entry)
     row.selected:SetShown(entry.npc == Panel.state.selectedNpc)
     local color = entry.caught > 0 and (RARITY_COLOR[entry.cls] or "ffffff") or "777777"
     row.name:SetText("|cff" .. color .. entry.name .. "|r")
-    row.info:SetText((entry.caught > 1 and ("x" .. entry.caught .. " ") or "") .. "|cffaaaaaa" .. entry.lvl .. "|r")
+    if Panel.state.section == "seen" then   -- how often seen (user 2026-11-21), then the level
+        row.info:SetText(inlineIcon("seen", 11) .. "|cff88bbff" .. entry.history.seen .. "|r |cffaaaaaa" .. entry.lvl .. "|r")
+    else
+        row.info:SetText((entry.caught > 1 and ("x" .. entry.caught .. " ") or "") .. "|cffaaaaaa" .. entry.lvl .. "|r")
+    end
 end
 
 ------------------------------------------------------------------ collection: sections, selection, switching
@@ -703,8 +732,9 @@ local function buildCollectionView(panel)
     attachInfoPanel(preview, previewNpc)
     widgets.previewText = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
     widgets.previewText:SetPoint("TOP", preview, "BOTTOM", 0, -4); widgets.previewText:SetWidth(104)
+    widgets.historyBadges = Panel.BuildHistoryBadges(panel, preview)
     widgets.switchButton = Widgets.CreateButton(panel, Text["Make companion"], 104, 22, function() Panel.RequestSwitch() end)
-    widgets.switchButton:SetPoint("TOPRIGHT", -2, -246)
+    widgets.switchButton:SetPoint("TOPRIGHT", -2, -258)
     widgets.switchButton:SetEnabled(false)
     widgets.collectionStatus = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
     widgets.collectionStatus:SetPoint("TOP", 0, -292); widgets.collectionStatus:SetWidth(290)
@@ -836,12 +866,127 @@ function Panel.RefreshCompanion()
     end
 end
 
+------------------------------------------------------------------ history badges (user 2026-11-21)
+
+-- Four icon badges under the preview model: seen, killed, caught x/y, last seen. Each has its number in the corner,
+-- a glow for pulses, a "+n" that floats up, and a tooltip with the label and the full value.
+---@param panel table
+---@param preview table the preview model
+---@return table[] badges by order, also by key
+function Panel.BuildHistoryBadges(panel, preview)
+    local Widgets = addon.UI.Widgets
+    local badges = {}
+    local labels = { seen = "Seen", kills = "Killed", caught = "Caught", last = "Last seen" }
+    local total = 4 * BADGE_SIZE + 3 * BADGE_GAP
+    for index, key in ipairs({ "seen", "kills", "caught", "last" }) do
+        local badge = CreateFrame("Frame", nil, panel)
+        badge:SetSize(BADGE_SIZE, BADGE_SIZE)
+        badge:SetPoint("TOPLEFT", preview, "BOTTOM", -total / 2 + (index - 1) * (BADGE_SIZE + BADGE_GAP), -30)
+        badge.key = key
+        local color = HISTORY_COLOR[key]
+        badge.frame = badge:CreateTexture(nil, "BACKGROUND"); badge.frame:SetPoint("TOPLEFT", -1, 1); badge.frame:SetPoint("BOTTOMRIGHT", 1, -1)
+        badge.frame:SetColorTexture(color[1] * 0.6, color[2] * 0.6, color[3] * 0.6, 0.9)
+        badge.icon = badge:CreateTexture(nil, "ARTWORK"); badge.icon:SetAllPoints()
+        addon.UIHelpers.SetTextureOr(badge.icon, HISTORY_ICONS[key], color)
+        if badge.icon.SetTexCoord then badge.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+        badge.glow = badge:CreateTexture(nil, "OVERLAY"); badge.glow:SetPoint("CENTER"); badge.glow:SetSize(BADGE_SIZE * 1.9, BADGE_SIZE * 1.9)
+        addon.UIHelpers.SetTextureOr(badge.glow, "Interface\\Buttons\\UI-ActionButton-Border", color)
+        if badge.glow.SetBlendMode then badge.glow:SetBlendMode("ADD") end
+        badge.glow:SetVertexColor(color[1], color[2], color[3]); badge.glow:SetAlpha(0); badge.glow:Hide()
+        badge.count = Widgets.CreateFontString(badge, "NumberFontNormalSmall", "RIGHT")
+        badge.count:SetPoint("BOTTOMRIGHT", 2, -2)
+        badge.float = Widgets.CreateFontString(panel, "GameFontNormalSmall", "CENTER"); badge.float:Hide()
+        badge:EnableMouse(true)
+        badge:SetScript("OnEnter", function(self)
+            if not GameTooltip or not self.tip then return end
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+            GameTooltip:SetText(Text[labels[key]], color[1], color[2], color[3])
+            for _, tipLine in ipairs(self.tip) do GameTooltip:AddLine(tipLine, 1, 1, 1) end
+            GameTooltip:Show()
+        end)
+        badge:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+        badge:Hide()
+        badges[index], badges[key] = badge, badge
+    end
+    return badges
+end
+
+-- Counts a badge's number up from `from` to `to` (an animation over 0.45 s), keeping its suffix ("/3").
+---@param badge table
+---@param from integer
+---@param to integer
+---@param suffix string
+local function countUp(badge, from, to, suffix)
+    if from == to then badge.count:SetText(to .. suffix) return end
+    addon.Animate.Tween("badge:" .. badge.key, 0.45, function(elapsed)
+        local progress = math.min(1, elapsed / 0.45)
+        badge.count:SetText(math.floor(from + (to - from) * (1 - (1 - progress) ^ 2) + 0.5) .. suffix)
+    end, function() badge.count:SetText(to .. suffix) end)
+end
+
+-- Shows the badges for `entry` (nil hides them). A new NPC: the badges fade in one after another and count up from
+-- 0. The same NPC with a higher value (a kill while the panel is open): that badge pulses, glows and floats "+n".
+---@param npcID integer|nil
+---@param entry CollectionEntry|nil
+---@return string|nil mode "new", "same" or nil (tests)
+function Panel.ShowHistoryBadges(npcID, entry)
+    local badges = widgets.historyBadges
+    if not badges then return nil end
+    if not entry then
+        for _, badge in ipairs(badges) do badge:Hide() end
+        Panel.state.badgeNpc, Panel.state.badgeValues = nil, nil
+        return nil
+    end
+    local history = AzeCaught.History(entry)
+    local list = addon.Model.HistoryBadges(history, addon.Utility.Now())
+    local isNew = Panel.state.badgeNpc ~= npcID
+    local previous = (not isNew and Panel.state.badgeValues) or {}
+    local values = {}
+    local timeAgo = addon.UI.Widgets.TimeAgo
+    for index, data in ipairs(list) do
+        local badge = badges[data.key]
+        badge.tip = data.key == "seen" and { Format(Text["{n} times"], { n = history.seen }), Text["First seen"] .. ": " .. timeAgo(history.first) }
+            or data.key == "kills" and { tostring(history.kills) }
+            or data.key == "caught" and { Format(Text["Caught {x}/{y}"], { x = history.caught, y = history.throws }) }
+            or { timeAgo(history.last) }
+        if badge.icon.SetDesaturated then badge.icon:SetDesaturated(data.empty) end
+        badge.icon:SetAlpha(data.empty and 0.45 or 1)
+        values[data.key] = data.value
+        local suffix = data.key == "caught" and ("/" .. history.throws) or ""
+        if data.value == nil then
+            badge.count:SetText(data.text)
+        elseif isNew then
+            countUp(badge, 0, data.value, suffix)
+        else
+            local before = previous[data.key] or data.value
+            countUp(badge, before, data.value, suffix)
+            if data.value > before then
+                addon.Animate.Pulse(badge, 1.35, 0.35)
+                addon.Animate.Flash("badge:" .. data.key, badge.glow, 0.9, 0.6)
+                addon.Animate.FloatText("badge:" .. data.key, badge.float, badge, 0, 8, "+" .. (data.value - before), HISTORY_COLOR[data.key], 22, 1)
+            end
+        end
+        if isNew then
+            badge:SetAlpha(0)
+            addon.Animate.FadeIn(badge, 0.15 + 0.08 * index)
+        else
+            badge:Show()
+        end
+    end
+    Panel.state.badgeNpc, Panel.state.badgeValues = npcID, values
+    return isNew and "new" or "same"
+end
+
 function Panel.RefreshPreview()
     local entry = Panel.state.previewNpc and AzeCaught.State().collection[Panel.state.previewNpc]
-    if not entry then showModel(widgets.previewModel, nil, "preview") widgets.previewText:SetText("") return end
+    if not entry then
+        showModel(widgets.previewModel, nil, "preview") widgets.previewText:SetText("")
+        Panel.ShowHistoryBadges(nil, nil)
+        return
+    end
     showModel(widgets.previewModel, { npc = Panel.state.previewNpc, disp = entry.disp }, "preview")
-    widgets.previewText:SetText(("%s\n%s %d · %s\n%s"):format(addon.Utility.Escape(entry.n), Text["Level"], entry.lvl,
-        rarityText(entry.cls), entry.caught > 0 and Format(Text["caught x{n}"], { n = entry.caught }) or Text["found"]))
+    widgets.previewText:SetText(("%s\n%s %d · %s"):format(addon.Utility.Escape(entry.n), Text["Level"], entry.lvl, rarityText(entry.cls)))
+    Panel.ShowHistoryBadges(Panel.state.previewNpc, entry)
 end
 
 function Panel.RefreshGuildPreview()

@@ -12,7 +12,7 @@ addon.Store = Store
 
 -- Schema history:
 --   1  0.1.0   games (moved from TalentShare 0.6.0, feature 015 there; nothing imported)
-Store.SCHEMA = 2   -- 2: db.caught (AZEcaught, feature 018)
+Store.SCHEMA = 2   -- 2  0.2.0   db.caught (AZEcaught, feature 018)
 
 local SECONDS_PER_DAY = 86400
 Store.TIME_SLACK = SECONDS_PER_DAY        -- timestamps further than this into the future are rejected (clock skew is seconds)

@@ -1,6 +1,6 @@
 # GuildGames wire protocol and stored data
 
-Protocol **1.1**, schema **2** (next release; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Base/Init.lua` (versions, prefix), `Core/Net/Sync.lua`
+Protocol **1.1**, schema **2** (since 0.2.0; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Base/Init.lua` (versions, prefix), `Core/Net/Sync.lua`
 (messages), `Core/Data/Games.lua` (record, validation), `Core/Data/Store.lua` (schema). The transport, chunk header, compatibility
 rules, guild gate and record-pull engine are LibGuildSync-1.0's (`Libs/LibGuildSync`, documented in the libguildsync repo).
 Tests: `tests/test_games_sync.lua`, `tests/test_games.lua`, `tests/test_store_and_locale.lua`.
@@ -53,7 +53,7 @@ protocol, so TalentShare and GuildGames never read each other's messages.
   (`wins <= won <= wins * 1e9`, same for losses); week keys `YYYY-Www` with year 2020..2100, week 1..53, not after the week
   of `now + 1 day`; `recent` a dense array of at most 20 flips with `c` in 1..1e9 (1c to 100 000g), `r` "W"/"L", `t` in `[0, now + 1 day]`.
   Results are self-reported (trust model): bounds and consistency are checked, truth is not.
-- **Stored data (schema 2, `GuildGamesDB`):** `caught` (AZEcaught: `collection[npcId] = {n, lvl, cls, disp, seen, caught}`
+- **Stored data (schema 2, `GuildGamesDB`):** `caught` (AZEcaught: `collection[npcId] = {n, lvl, cls, disp, seen, caught, st?, cnt?, last?, kills?, thr?, got?}`
   (<= 2000), `active` companion state, `activeSeconds`, `peaks`, `paidWeek`, `ledger = {earned, spent, entries}` (<= 60),
   `journal` (<= 400 log lines), `notify`, `verbose`); migration 1 -> 2 adds it empty; re-validated on every load and kept
   by `/gg clean`. `games[name]`, re-validated on every load,

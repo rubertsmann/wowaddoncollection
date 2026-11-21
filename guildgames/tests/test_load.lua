@@ -76,6 +76,12 @@ return {
                 harness.equal(addon.PREFIX, development and "GGamesDev" or "GGames")
                 harness.equal(addon.SAVED_VARIABLES_NAME, development and "GuildGamesDevDB" or "GuildGamesDB")
                 harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 1); harness.equal(addon.Store.SCHEMA, 2)
+                -- the key binding's globals carry this build's names (user 2026-11-21: live + dev installed together)
+                local binding = addon.Catcher.BindingNames(development)
+                harness.equal(binding.name, development and "AZECAUGHT_THROW_DEV" or "AZECAUGHT_THROW")
+                harness.equal(binding.func, development and "GuildGamesDevAzeCaughtThrow" or "GuildGamesAzeCaughtThrow")
+                harness.equal(type(rawget(_G, binding.func)), "function", binding.func)
+                harness.truthy(rawget(_G, "BINDING_NAME_" .. binding.name) and rawget(_G, "BINDING_HEADER_" .. binding.header), "binding labels")
                 harness.truthy(addon.UI and addon.GamesTab and addon.SlotMachine and addon.Communication and addon.Sync, "namespace incomplete")
                 addon.Store.Init({})
                 addon.Store.db.me = "A-R"
@@ -316,6 +322,72 @@ return {
                 harness.truthy(addon.AzeCaught.JournalLines(1, "throw.effect")[1]:find("was played", 1, true),
                     "the throw effect runs: " .. tostring(addon.AzeCaught.JournalLines(1, "throw.effect")[1]))
                 harness.truthy(pcall(_G.GuildGamesAzeCaughtThrow), "the key binding")
+                -- kills of enemies that fought me (user 2026-11-21): counted once, only for fought GUIDs
+                do
+                    local Api, Catcher = addon.Api, addon.Catcher
+                    local savedGuid, savedDead = Api.UnitGuid, Api.IsDead
+                    local guid = "Creature-0-1-2-3-88-00000000AA"
+                    addon.AzeCaught.NoteFound({ npc = 88, name = "Boar" }, 1)
+                    Api.UnitGuid = function() return guid end
+                    Api.IsDead = function() return true end
+                    harness.truthy(not Catcher.CheckKill("nameplate1"), "not fought: no kill")
+                    Catcher.fought[guid] = 88
+                    local okKill, counted = pcall(Catcher.CheckKill, "nameplate1")
+                    local twice = Catcher.CheckKill("nameplate1")
+                    Api.UnitGuid, Api.IsDead = savedGuid, savedDead
+                    harness.truthy(okKill and counted, tostring(counted)); harness.truthy(not twice, "once")
+                    harness.equal(addon.AzeCaught.State().collection[88].kills, 1)
+                    local lines = 0
+                    local tip = setmetatable({}, { __index = function() return function() lines = lines + 1 end end })
+                    harness.truthy(addon.AzeCaughtPanel.ShowNpcInfo(tip, {}, 88, addon.AzeCaught.State().collection[88]) > 5)
+                    -- the badges (user 2026-11-21: icon based, animated): a new NPC fades in, a higher value pulses
+                    local Panel = addon.AzeCaughtPanel
+                    harness.truthy(Panel.widgets.historyBadges and Panel.widgets.historyBadges.kills, "badges built")
+                    local boar = addon.AzeCaught.State().collection[88]
+                    local okShow, mode = pcall(Panel.ShowHistoryBadges, 88, boar)
+                    harness.truthy(okShow, tostring(mode)); harness.equal(mode, "new")
+                    local pulsed = {}
+                    local savedPulse = addon.Animate.Pulse
+                    addon.Animate.Pulse = function(region) pulsed[#pulsed + 1] = region.key end
+                    boar.kills = boar.kills + 1
+                    local okSame, sameMode = pcall(Panel.ShowHistoryBadges, 88, boar)
+                    addon.Animate.Pulse = savedPulse
+                    harness.truthy(okSame, tostring(sameMode)); harness.equal(sameMode, "same")
+                    harness.equal(#pulsed, 1); harness.equal(pulsed[1], "kills", "only the value that went up pulses")
+                    harness.equal(Panel.ShowHistoryBadges(nil, nil), nil)
+                end
+                -- the identity probe (user 2026-11-20): runs on any client, secret or missing functions are named, never raises
+                do
+                    local savedName, savedSecret = UnitName, rawget(_G, "issecretvalue")
+                    local hidden = {}
+                    UnitName = function() return hidden end
+                    rawset(_G, "issecretvalue", function(value) return value == hidden end)
+                    local okProbe, probe = pcall(addon.Api.IdentityProbe, "target")
+                    UnitName = savedName; rawset(_G, "issecretvalue", savedSecret)
+                    harness.truthy(okProbe, tostring(probe))
+                    harness.equal(probe.UnitName, "secret")
+                    harness.equal(probe["C_Secrets.ShouldUnitIdentityBeSecret"], "missing")
+                    harness.truthy(pcall(addon.SlashCommands.caught, "identity"), "/gg caught identity")
+                end
+                -- why an icon stays hidden (user 2026-11-20: none in the dungeon): every reason, journaled once per change
+                do
+                    local Reason, on = addon.Catcher.IconHiddenReason, { shown = true }
+                    local npc = { guid = "Creature-0-1-2-3-77-0000000003", npc = 77, health = 0.2 }
+                    harness.equal(Reason({ shown = false }, {}, npc, true), "turned off")
+                    harness.equal(Reason(on, {}, nil, nil), "unit unreadable (GUID hidden or no unit)")
+                    harness.equal(Reason(on, {}, { guid = "Player-1-2" }, true), "not an NPC")
+                    harness.equal(Reason(on, {}, { guid = npc.guid, npc = 77, hostile = false }, true), "not hostile")
+                    harness.equal(Reason(on, {}, { guid = npc.guid, npc = 77, health = 0.5 }, false), "health above the threshold")
+                    harness.equal(Reason(on, {}, { guid = npc.guid, npc = 77 }, nil), "health hidden and not the target")
+                    harness.equal(Reason(on, nil, npc, true), "no nameplate frame")
+                    harness.equal(Reason(on, {}, npc, true), nil)
+                    local before = #addon.AzeCaught.State().journal
+                    addon.Catcher.NoteIconReason("nameplate9", nil, "unit unreadable (GUID hidden or no unit)")
+                    addon.Catcher.NoteIconReason("nameplate9", nil, "unit unreadable (GUID hidden or no unit)")
+                    harness.truthy(addon.AzeCaught.JournalLines(1, "icon.state")[1]:find("GUID hidden", 1, true))
+                    addon.Catcher.NoteIconReason("nameplate9", npc, "health above the threshold")
+                    harness.truthy(#addon.AzeCaught.State().journal - before <= 1, "once per change; the normal case is not written")
+                end
                 -- the icon style (user 2026-11-20): ring by chance, pulse + one ping at the best moment, arrow until the first throw
                 do
                     local shownPaths = {}
@@ -390,6 +462,22 @@ return {
                 harness.truthy(addon.Store.db.debug[#addon.Store.db.debug]:find("function=TestFunction()", 1, true), "blocked action logged")
             end
         end)
+    end,
+
+    -- user 2026-11-21: live and dev installed together -> "Binding AZECAUGHT_THROW was attempted to be loaded more than
+    -- once". Bindings.xml carries the live names once each (deploy.ps1 swaps them for the dev copy) and the code
+    -- defines the binding's globals with the names of its own build.
+    ["load: the key binding has its own names per build (Bindings.xml, deploy.ps1, Catcher.BindingNames)"] = function(harness)
+        local handle = assert(io.open("Bindings.xml", "rb")); local xml = handle:read("*a"); handle:close()
+        local function count(text, plain) local n, from = 0, 1
+            while true do local at = text:find(plain, from, true); if not at then return n end; n, from = n + 1, at + 1 end end
+        handle = assert(io.open("tools/deploy.ps1", "rb")); local deploy = handle:read("*a"); handle:close()
+        local live = { header = "GUILDGAMES", name = "AZECAUGHT_THROW", func = "GuildGamesAzeCaughtThrow" }
+        local dev = { header = "GUILDGAMESDEV", name = "AZECAUGHT_THROW_DEV", func = "GuildGamesDevAzeCaughtThrow" }
+        harness.equal(count(xml, '"' .. live.name .. '"'), 1); harness.equal(count(xml, '"' .. live.header .. '"'), 1)
+        harness.equal(count(xml, "then " .. live.func .. "() end"), 1, "the binding calls the function")
+        for _, value in pairs(dev) do harness.truthy(deploy:find(value, 1, true), "deploy.ps1 writes the dev name " .. value) end
+        harness.truthy(live.name ~= dev.name and live.header ~= dev.header and live.func ~= dev.func)
     end,
 
     -- the generated GuildGames-Dev.toc (tools/deploy.ps1) goes stale when the live TOC gains a file

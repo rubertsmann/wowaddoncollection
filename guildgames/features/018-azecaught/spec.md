@@ -121,7 +121,13 @@ Stats, collection and UI additions (user, 2026-11-20)
   - **Caught**: no limit (user 2026-11-20 "remove the limit on caught"; it was 10). Duplicates count in the header
     "Caught (n)". Saved data is bounded only against corruption (`MAXIMUM_COLLECTION` 2000 entries).
   - **Seen**: every fought enemy with its highest level, highest first; at most `MAXIMUM_SEEN` = 100 uncaught, the one
-    seen longest ago makes room.
+    not seen for the longest time (last seen) makes room.
+  - R6a (user 2026-11-21 "keep more stats at the seen tab: how often seen, first seen, last seen, and add more infos
+    that we have"; "died to killed"; "caught x/x"): each entry keeps `cnt` (encounters, one per enemy GUID), `last`
+    (last seen or killed), `kills` (enemies that fought me and then died, one per GUID; a thrown-at NPC's death counts),
+    `thr` (ropes thrown) and `got` (catches ever). `AzeCaught.History` reads old entries as seen once, never killed.
+    Shown: the Seen row ("12x" + level), the preview ("Caught x/y", "Seen n x · Killed k"), and a **History** block
+    in the hover panel (seen, killed, caught x/y, first seen, last seen). Instances hide the GUID, so nothing there counts.
   - A click only selects a row. The **Make companion** button opens a confirm dialog "Stats will be reset" (plus the
     run-away warning for negative hearts).
 - R24: **Rope icon**: round, above the nameplate (not over the level). While armed ("catch mode", user 2026-11-20) it

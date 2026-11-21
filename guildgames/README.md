@@ -37,7 +37,8 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
   - The chance rises from 20% at 35% health to 90% at 10% health and below; elite, rare, rare elite and boss NPCs
     subtract 5, 10, 15 and 25 points. A catch pays a reward into the money pool: the riskier the catch, the more.
   - The collection has two sections: **Caught** (no limit; duplicates count) and **Seen** (every enemy you fought with
-    its highest level, the newest 100). Select a caught one and press **Make companion** (it asks first: stats are reset).
+    its highest level and how often you met it, the 100 seen most recently). The preview and the hover panel show
+    the history: seen, killed, caught x/y, first and last seen. Select a caught one and press **Make companion** (it asks first: stats are reset).
   - Hover the model to see everything known about the NPC. Its needs come from its stats: e.g. beasts are hungrier,
     undead and mechanical companions never get thirsty, rage users and rare NPCs get needy sooner.
   - Pick a caught NPC as your **companion** (3D model). In play time only, it needs water every hour, food every 2 hours,

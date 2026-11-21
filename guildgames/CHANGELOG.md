@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased (protocol 1.1, schema 2)
+## Unreleased
+- AZEcaught: the Seen tab keeps a history per NPC: how often you met it, how many you killed, caught x of y throws,
+  first and last seen (stored with the collection; older entries start at "seen once").
+- AZEcaught: the Seen stats are icon badges with small animations (fade in, count up, a pulse and "+1" when a number rises).
+- AZEcaught: a catch becomes your companion at once when you have none, so the guild sees it right away.
+- The dev build has its own key binding (no "Binding AZECAUGHT_THROW was attempted to be loaded more than once" with live and dev installed).
+
+## 0.2.0 (2026-11-20, protocol 1.1, schema 2)
 - Code reorganised like TalentShare (folders by role, shared helpers, naming lints); durations in the companion panel and
   minimap tooltip now read "2h" instead of "2h 0m" (feature 019).
 - New game **AZEcaught** (feature 018): catch hostile NPCs and raise one as a companion.

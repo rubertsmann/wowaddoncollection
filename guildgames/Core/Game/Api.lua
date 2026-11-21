@@ -166,6 +166,15 @@ function Api.UnitSnapshot(unit)
     return snapshot
 end
 
+-- The instance type ("party", "raid", "none", ...) for the journal, or nil when the client does not say.
+---@return string|nil
+function Api.InInstance()
+    if not IsInInstance then return nil end
+    local ok, inside, kind = pcall(IsInInstance)
+    if not ok then return nil end
+    return NotSecret(kind) or (NotSecret(inside) and "yes") or nil
+end
+
 -- The nameplate frame of a unit token, or nil.
 ---@param unit string
 ---@return table|nil
@@ -203,6 +212,66 @@ local STAT_NAMES = { "strength", "agility", "stamina", "intellect", "spirit" }
 -- Player-only functions (UnitStat, UnitArmor) are tried too, so the log shows what this client gives for an NPC.
 ---@param unit string
 ---@return table<string, string>
+-- Every other way this client might tell WHO a unit is (user 2026-11-20: dungeons hide UnitGUID, UnitName and the
+-- health, "are there maybe other functions that could expose that information"). Each value as dumpValue text
+-- ("secret", "missing", "error", "nil" or the value). Read-only; nothing here is stored.
+---@param unit string
+---@return table<string, string>
+function Api.IdentityProbe(unit)
+    local G = _G
+    local probe = { unit = unit }
+    local function try(key, func, ...) probe[key] = dumpValue(func, ...) end
+    try("UnitGUID", G.UnitGUID, unit)
+    try("UnitName", G.UnitName, unit)
+    try("UnitNameUnmodified", G.UnitNameUnmodified, unit)
+    try("GetUnitName", G.GetUnitName, unit, false)
+    try("UnitFullName", G.UnitFullName, unit)
+    try("UnitCreatureType", G.UnitCreatureType, unit)
+    try("UnitCreatureFamily", G.UnitCreatureFamily, unit)
+    try("UnitHealthPercent", G.UnitHealthPercent, unit)
+    try("UnitIsUnit target", G.UnitIsUnit, unit, "target")
+    try("UnitSelectionType", G.UnitSelectionType, unit)
+    try("UnitIsQuestBoss", G.UnitIsQuestBoss, unit)
+    try("UnitClassBase", G.UnitClassBase, unit)
+    local secrets = rawget(G, "C_Secrets")
+    try("C_Secrets.ShouldUnitIdentityBeSecret", secrets and secrets.ShouldUnitIdentityBeSecret, unit)
+    try("C_Secrets.ShouldUnitHealthMaxBeSecret", secrets and secrets.ShouldUnitHealthMaxBeSecret, unit)
+    -- the tooltip data the client builds for the unit
+    local tooltipInfo = rawget(G, "C_TooltipInfo")
+    local okTooltip, data = pcall(function() return tooltipInfo and tooltipInfo.GetUnit and tooltipInfo.GetUnit(unit) end)
+    if not okTooltip then probe["tooltip"] = "error"
+    elseif type(data) ~= "table" then probe["tooltip"] = tooltipInfo and "nil" or "missing"
+    else
+        probe["tooltip.guid"] = dumpValue(function() return data.guid end)
+        for index = 1, 4 do
+            local line = type(data.lines) == "table" and data.lines[index]
+            if line then probe["tooltip.line" .. index] = dumpValue(function() return line.leftText end) end
+        end
+    end
+    -- the model the client renders for the unit
+    local okModel, model = pcall(G.CreateFrame, "PlayerModel", nil, G.UIParent)
+    if okModel and model then
+        pcall(model.SetSize, model, 1, 1)
+        pcall(model.SetUnit, model, unit)
+        try("model.GetModelFileID", model.GetModelFileID, model)
+        try("model.GetDisplayInfo", model.GetDisplayInfo, model)
+        try("model.GetCreatureDisplayID", model.GetCreatureDisplayID, model)
+        pcall(model.ClearModel, model); pcall(model.Hide, model)
+    else
+        probe["model"] = "error"
+    end
+    -- the client's own nameplate text
+    local plate = Api.NamePlateFor(unit)
+    local okFrame, unitFrame = pcall(function() return plate and plate.UnitFrame end)
+    if not okFrame then unitFrame = nil; probe["nameplate.UnitFrame"] = "error" end
+    probe["nameplate"] = plate and "yes" or "nil"
+    if unitFrame then
+        try("nameplate.name", unitFrame.name and unitFrame.name.GetText, unitFrame.name)
+        probe["nameplate.unitField"] = dumpValue(function() return unitFrame.unit end)
+    end
+    return probe
+end
+
 function Api.UnitDump(unit)
     local G = _G
     local dump = { unit = unit }

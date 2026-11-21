@@ -98,6 +98,10 @@ AzeCaught.rolled = {}
 AzeCaught.thrown = {}   -- GUID -> clock of its throw: one throw per enemy (user 2026-11-20)
 AzeCaught.lastThrowAt = nil
 AzeCaught.forceNextCatch = false
+-- runtime only: GUIDs already counted as an encounter / a kill (each enemy counts once; cleared past MAXIMUM_COUNTED)
+AzeCaught.MAXIMUM_COUNTED = 500
+AzeCaught.counted, AzeCaught.countedCount = {}, 0
+AzeCaught.killed, AzeCaught.killedCount = {}, 0
 
 ------------------------------------------------------------------ state and journal
 
@@ -108,6 +112,11 @@ AzeCaught.forceNextCatch = false
 ---@field disp integer CreatureDisplayInfo id, 0 when unknown
 ---@field seen integer server time first found
 ---@field caught integer how many are caught (0 = only found)
+---@field cnt? integer encounters: different enemies (GUIDs) of this NPC seen (user 2026-11-21; missing = 1)
+---@field last? integer server time last seen or killed (missing = seen)
+---@field kills? integer how many died after fighting me (missing = 0)
+---@field thr? integer ropes thrown at it (missing = 0)
+---@field got? integer catches ever, also those that died or ran away later (missing = caught)
 
 ---@class CompanionState
 ---@field npc integer
@@ -308,6 +317,7 @@ end
 ---@field classification? string
 ---@field display? integer
 ---@field stats? NpcStats
+---@field guid? string the enemy (counts the encounter once)
 
 -- The creature type id from the client's id or its localized name (enUS/deDE), nil when unknown.
 ---@param typeID any
@@ -350,7 +360,49 @@ local function mergeStats(entry, stats)
     return changed
 end
 
+-- Marks `guid` in a runtime set once. Returns true the first time (the set is cleared when it grows too big).
+---@param setName "counted"|"killed"
+---@param guid any
+---@return boolean
+local function firstTime(setName, guid)
+    if type(guid) ~= "string" or guid == "" or AzeCaught[setName][guid] then return false end
+    local countName = setName .. "Count"
+    AzeCaught[countName] = AzeCaught[countName] + 1
+    if AzeCaught[countName] > AzeCaught.MAXIMUM_COUNTED then AzeCaught[setName], AzeCaught[countName] = {}, 1 end
+    AzeCaught[setName][guid] = true
+    return true
+end
+
+---@param value integer|nil
+---@return integer
+local function bump(value) return math.min(AzeCaught.MAXIMUM_ID, (value or 0) + 1) end
+
+-- An NPC's history for the Seen tab (user 2026-11-21: how often seen, first/last seen, killed, caught x/y). Old
+-- entries without the counters read as seen once, never killed.
+---@param entry CollectionEntry
+---@return { seen: integer, first: integer, last: integer, kills: integer, caught: integer, throws: integer }
+function AzeCaught.History(entry)
+    local caught = entry.got or entry.caught or 0
+    return { seen = entry.cnt or 1, first = entry.seen, last = entry.last or entry.seen, kills = entry.kills or 0,
+        caught = caught, throws = math.max(entry.thr or 0, caught) }
+end
+
+-- Counts a kill of an enemy that fought me, once per GUID. Returns the entry when it counted.
+---@param guid string
+---@param npcID integer
+---@param now integer server time
+---@return CollectionEntry|nil
+function AzeCaught.NoteKill(guid, npcID, now)
+    local entry = AzeCaught.State().collection[npcID or 0]
+    if not entry or addon.Store.db.readonly or not firstTime("killed", guid) then return nil end
+    entry.kills = bump(entry.kills)
+    if type(now) == "number" and now > (entry.last or 0) then entry.last = now end
+    AzeCaught.Journal("DEBUG", "kill", "a fought NPC was killed", { npc = npcID, guid = guid, kills = entry.kills })
+    return entry
+end
+
 -- Adds or updates a found NPC. Fast and silent when nothing new is learned (the combat log calls it on every hit).
+-- With `npcInformation.guid`, each enemy counts once as an encounter and moves "last seen".
 ---@param npcInformation NpcInformation
 ---@param now integer server time
 ---@return CollectionEntry|nil entry
@@ -364,6 +416,10 @@ function AzeCaught.NoteFound(npcInformation, now)
     local level = Utility.SafeInteger(npcInformation.level, 1, AzeCaught.MAXIMUM_LEVEL)
     local display = Utility.SafeInteger(npcInformation.display, 1, AzeCaught.MAXIMUM_ID)
     if entry then
+        if not addon.Store.db.readonly and firstTime("counted", npcInformation.guid) then
+            entry.cnt = bump(entry.cnt or 1)
+            if type(now) == "number" and now > (entry.last or 0) then entry.last = now end
+        end
         local changed = mergeStats(entry, npcInformation.stats)
         if changed then AzeCaught.ForgetProfile(npcID) end
         if level and level > entry.lvl then entry.lvl, changed = level, true end
@@ -388,7 +444,8 @@ function AzeCaught.NoteFound(npcInformation, now)
     for otherID, other in pairs(collection) do
         if (other.caught or 0) < 1 then
             seenOnly = seenOnly + 1
-            if other.seen < oldestSeen then oldestID, oldestSeen = otherID, other.seen end
+            local lastSeen = other.last or other.seen   -- the one not seen for the longest time
+            if lastSeen < oldestSeen then oldestID, oldestSeen = otherID, lastSeen end
         end
     end
     if seenOnly >= AzeCaught.MAXIMUM_SEEN and oldestID then
@@ -398,7 +455,9 @@ function AzeCaught.NoteFound(npcInformation, now)
     end
     local name = type(npcInformation.name) == "string" and npcInformation.name ~= "" and npcInformation.name or "?"
     entry = { n = Utility.TruncateUtf8(Utility.StripControlCharacters(name), AzeCaught.MAXIMUM_NAME_BYTES),
-        lvl = level or 1, cls = AzeCaught.Classification(npcInformation.classification), disp = display or 0, seen = now, caught = 0 }
+        lvl = level or 1, cls = AzeCaught.Classification(npcInformation.classification), disp = display or 0, seen = now, caught = 0,
+        cnt = 1, last = now }
+    firstTime("counted", npcInformation.guid)
     mergeStats(entry, npcInformation.stats)
     collection[npcID] = entry
     AzeCaught.Journal("INFORMATION", "found.new", "a new NPC was found",
@@ -448,8 +507,9 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
     if AzeCaught.lastThrowAt and clockSeconds - AzeCaught.lastThrowAt < AzeCaught.THROW_COOLDOWN then
         return refuse("cooldown", { npc = npcID, left = round1(AzeCaught.THROW_COOLDOWN - (clockSeconds - AzeCaught.lastThrowAt)) })
     end
-    AzeCaught.NoteFound({ npc = npcID, name = target.name, level = target.level, classification = target.classification,
-        display = target.display }, now)
+    local entry = AzeCaught.NoteFound({ npc = npcID, name = target.name, level = target.level,
+        classification = target.classification, display = target.display, guid = target.guid }, now)
+    if entry and not addon.Store.db.readonly then entry.thr = bump(entry.thr) end
     AzeCaught.lastThrowAt = clockSeconds
     AzeCaught.thrown[target.guid] = clockSeconds
     AzeCaught.throws[target.guid] = { at = clockSeconds, npc = npcID, health = health, playerLevel = playerLevel,
@@ -527,6 +587,7 @@ function AzeCaught.OnDeath(guid, myName, clockSeconds, now, randomFunction)
     if AzeCaught.rolled[guid] then return nil, "rolled" end
     local throw = AzeCaught.throws[guid]
     if not throw then return nil, "nothrow" end
+    AzeCaught.NoteKill(guid, throw.npc, now)   -- a thrown-at NPC that died was killed
     AzeCaught.throws[guid] = nil
     AzeCaught.rolled[guid] = clockSeconds
     local elapsed = clockSeconds - throw.at
@@ -554,11 +615,19 @@ function AzeCaught.OnDeath(guid, myName, clockSeconds, now, randomFunction)
           forced = forced or nil, first = first or nil })
     if not caught then return result end
     if entry then
+        entry.got = bump(entry.got or entry.caught)
         entry.caught = math.min(AzeCaught.MAXIMUM_ID, entry.caught + 1)
         result.reward = AzeCaught.Reward(breakdown.chance)
         AzeCaught.Journal("INFORMATION", "catch", "an NPC was caught",
             { npc = throw.npc, name = entry.n, timesCaught = entry.caught, reward = result.reward })
         if result.reward > 0 then addon.Wallet.Earn(myName, result.reward, "catch", now, entry.n) end
+        -- user 2026-11-21 "make the first animal instantly a companion": without an active companion the catch becomes
+        -- it at once (also after one died or ran away), so the guild sees it without a trip to the collection
+        if not AzeCaught.State().active and AzeCaught.Select(throw.npc, now) then
+            result.companion = true
+            AzeCaught.Journal("INFORMATION", "companion.auto", "the catch became the companion (none was active)",
+                { npc = throw.npc, name = entry.n })
+        end
     else
         AzeCaught.Journal("ERROR", "catch", "a caught NPC is missing from the collection", { npc = throw.npc })
     end
@@ -1237,7 +1306,11 @@ function AzeCaught.SanitizePersisted(savedVariables)
             and SafeInteger(entry.disp, 0, AzeCaught.MAXIMUM_ID) and SafeInteger(entry.seen, 0)
             and SafeInteger(entry.caught, 0, AzeCaught.MAXIMUM_ID) and Utility.Count(collection) < AzeCaught.MAXIMUM_COLLECTION then
             collection[id] = { n = entry.n, lvl = entry.lvl, cls = entry.cls, disp = entry.disp, seen = entry.seen, caught = entry.caught,
-                st = AzeCaught.CleanStats(entry.st) }
+                st = AzeCaught.CleanStats(entry.st),
+                -- the history (user 2026-11-21), optional: a bad value is dropped alone, the entry stays
+                cnt = SafeInteger(entry.cnt, 1, AzeCaught.MAXIMUM_ID), last = SafeInteger(entry.last, 0),
+                kills = SafeInteger(entry.kills, 0, AzeCaught.MAXIMUM_ID), thr = SafeInteger(entry.thr, 0, AzeCaught.MAXIMUM_ID),
+                got = SafeInteger(entry.got, 0, AzeCaught.MAXIMUM_ID) }
         else
             dropped = dropped + 1
         end
@@ -1341,6 +1414,7 @@ function AzeCaught.Reset(withWallet)
     caught.paidWeek, caught.firstCatchDone, caught.throwHintDone = nil, nil, nil
     if withWallet then caught.ledger = nil end
     AzeCaught.throws, AzeCaught.rolled, AzeCaught.thrown = {}, {}, {}
+    AzeCaught.counted, AzeCaught.countedCount, AzeCaught.killed, AzeCaught.killedCount = {}, 0, {}, 0
     AzeCaught.lastThrowAt, AzeCaught.forceNextCatch = nil, false
     AzeCaught.Journal("INFORMATION", "dev.reset", "AZEcaught was reset", summary)
     return summary
