@@ -172,6 +172,25 @@ return {
         harness.equal(a.sync.pending[1].message.note.rev, 3)
     end,
 
+    -- live 2026-11-21: a client without any realm ignored "Drakk Nuk-SomeRealm" from a member whose client reports realms
+    ["sync: a client without a realm takes a request for 'me-AnyRealm' as a request for me"] = function(harness)
+        local lib = harness.library()
+        local savedNormalized, savedRealm = GetNormalizedRealmName, GetRealmName
+        GetNormalizedRealmName, GetRealmName = function() return nil end, function() return nil end
+        local ok, err = pcall(function()
+            lib.Utility.NoteMyFullName("Drakk Nuk")
+            harness.equal(lib.Utility.CanonicalName("Drakk Nuk-CAMWOWEU4Realm3PvE"), "Drakk Nuk")
+            harness.equal(lib.Utility.CanonicalName("Bren Fall-Other Realm"), "Bren Fall")
+            local bus = newBus()
+            local a = peer(harness, lib, bus, "Drakk Nuk")
+            a.records["Drakk Nuk"] = { name = "Drakk Nuk", rev = 3, text = "x" }
+            local status, reason = a.sync:OnMessage({ v = PROTOCOL, t = "WANTN", names = { "Drakk Nuk-CAMWOWEU4Realm3PvE" } }, "Bren Fall")
+            harness.equal(status, "ok", reason); harness.equal(#a.sync.pending, 1)
+        end)
+        GetNormalizedRealmName, GetRealmName = savedNormalized, savedRealm
+        if not ok then error(err, 0) end
+    end,
+
     ["sync: hello hooks and custom handlers extend the protocol"] = function(harness)
         local lib = harness.library()
         local bus = newBus()

@@ -6,7 +6,7 @@
 --   live: title "ProfessionShare", prefix "PShare", SavedVariables "ProfessionShareDB", frames "ProfessionShare", /ps /professionshare
 --   dev:  title "ProfessionShare (dev)", prefix "PShareDev", "ProfessionShareDevDB", frames "ProfessionShareDev", /psd /professionsharedev
 local lib = LibStub("LibGuildSync-1.0")
-local Addon = lib:Module("Addon", 2)
+local Addon = lib:Module("Addon", 3)
 if not Addon then return end
 
 -- A field of addon `addonName`'s TOC file ("## <field>: value"), nil when the client cannot tell or the field is empty.
@@ -112,6 +112,12 @@ function Addon.AddDiagnosticCommands(addon)
             tostring(Communication.active), addon.PROTOCOL_MAJOR, addon.PROTOCOL_MINOR, statistics.sent, statistics.received,
             statistics.dropped, Communication.rejected, #Communication.queue, Communication.chunksSent,
             Communication.chunksReceived, Communication.sendFailures, Utility.Count(Communication.roster), Communication.hints.count))
+        -- MINOR 3: my build and the builds guild members announced in their HELLOs this session
+        local channelModule = lib.Channel
+        addon.Print(("comm: my build %s"):format(channelModule.VersionTag(Communication)))
+        local versionTexts = {}
+        for _, row in ipairs(channelModule.PeerVersions(Communication)) do versionTexts[#versionTexts + 1] = row.name .. " " .. row.ver end
+        addon.Print("comm: member builds seen: " .. (#versionTexts > 0 and table.concat(versionTexts, ", ") or "none yet"))
     end
 
     addon.SlashCommands.hello = function()

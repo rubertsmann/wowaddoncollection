@@ -5,7 +5,7 @@ local addonName, addon = ...
 -- what is ProfessionShare's own. Pure: all I/O goes through `environment`, so it is testable offline.
 -- OnMessage returns (status, reason): "ok" | "ignored" | "dropped" | "error", for the network trace (Core/Debug/Trace.lua).
 -- Messages (every message carries v = addon.PROTOCOL and a string type t). The field names are the WIRE FORMAT and stay:
---   HELLO {rev, login?, odig, orev?}  broadcast (GUILD) or reply (WHISPER): my record versions + digest of my orders
+--   HELLO {rev, login?, odig, orev?, ver?}  broadcast (GUILD) or reply (WHISPER): my record versions + digest of my orders
 --   WANT  {names, via?}         "send me your record"; only the sender's own name is honoured
 --   SNAP  {char, catalog}       a character record + catalog entries of its recipes
 --   OPUSH {orders}              whisper: orders the receiver lacks (<= 10 per message)

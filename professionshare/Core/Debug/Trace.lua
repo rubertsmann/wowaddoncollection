@@ -13,8 +13,10 @@ local count = addon.Utility.Count
 local function summarize(message)
     local messageType = message.t
     if messageType == "HELLO" then
-        return ("rev=%s orev=%s odig=%d%s"):format(tostring(message.rev), tostring(message.orev), count(message.odig),
-            message.login and " login" or "")
+        -- ver: the sender's "<addon version>/<LibGuildSync MINOR>" (1.0.1+), "-" from builds before the field
+        local versionTag = LibStub("LibGuildSync-1.0").Channel.SanitizeVersionTag(message.ver)
+        return ("rev=%s orev=%s odig=%d ver=%s%s"):format(tostring(message.rev), tostring(message.orev), count(message.odig),
+            versionTag or (message.ver == nil and "-" or "invalid"), message.login and " login" or "")
     elseif messageType == "WANT" or messageType == "WANTO" then
         local names = {}
         if type(message.names) == "table" then for index, playerName in ipairs(message.names) do names[index] = tostring(playerName) end end

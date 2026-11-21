@@ -1,6 +1,6 @@
 -- LibGuildSync: plain-frame window helpers (no secure templates, so they never taint and work in combat).
 local lib = LibStub("LibGuildSync-1.0")
-local Widgets = lib:Module("Widgets", 2)
+local Widgets = lib:Module("Widgets", 3)
 if not Widgets then return end
 
 Widgets.ROW_HEIGHT = 20

@@ -55,6 +55,7 @@ addon.Locale.Register("deDE", {
         ["Options"] = "Optionen",
         ["Item probe"] = "Gegenstands-Test",
         ["Fake enchanter"] = "Test-Verzauberer",
+        ["Fake request"] = "Test-Anfrage",
         ["No item (enchantments and others)"] = "Kein Gegenstand (Verzauberungen u. a.)",
         ["Other"] = "Sonstiges",
         ["Category"] = "Kategorie",

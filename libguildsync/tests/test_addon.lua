@@ -97,9 +97,11 @@ return {
             addon.SlashCommands.trace("5")
         end)
         harness.truthy(printed[1]:find("comm: active=false protocol=2.3 sent=0 received=0 dropped=0 rejected=1 queue=1 chunks out/in=4/5 send failures=0 roster=1 incompatible peers=2", 1, true), printed[1])
-        harness.truthy(printed[2]:find("not active", 1, true))
-        harness.truthy(printed[3]:find("hello sent", 1, true))
-        harness.equal(printed[4], "two"); harness.equal(printed[5], "three")
+        harness.truthy(printed[2]:find("comm: my build ?/" .. LibStub(MAJOR).MINOR, 1, true), printed[2])   -- MINOR 3: builds
+        harness.truthy(printed[3]:find("member builds seen: none yet", 1, true), printed[3])
+        harness.truthy(printed[4]:find("not active", 1, true))
+        harness.truthy(printed[5]:find("hello sent", 1, true))
+        harness.equal(printed[6], "two"); harness.equal(printed[7], "three")
     end,
 
     ["addon: a MINOR 1 copy without Addon.lua is upgraded by a MINOR 2 copy that brings it"] = function(harness)
@@ -113,7 +115,7 @@ return {
         harness.equal(LibStub(MAJOR).Addon, nil)
         harness.loadLibrary()
         local lib = LibStub(MAJOR)
-        harness.equal(lib.MINOR, 2)
+        harness.equal(lib.MINOR, 3)
         harness.equal(type(lib.Addon.Setup), "function")
     end,
 }

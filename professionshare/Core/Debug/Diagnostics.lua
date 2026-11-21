@@ -228,6 +228,12 @@ function Diagnostics.Report(options)
             tostring(communication.active), tostring(communication.ready), statistics.sent, statistics.received, statistics.dropped,
             communication.chunksSent or 0, communication.chunksReceived or 0, communication.sendFailures or 0,
             communication.rejected or 0, #(communication.queue or {}), communication.hints and communication.hints.count or 0)
+        local channelModule = LibStub("LibGuildSync-1.0").Channel
+        addLine("my build: %s (addon version / LibGuildSync MINOR)", channelModule.VersionTag(communication))
+        local versionTexts = {}
+        for _, row in ipairs(channelModule.PeerVersions(communication)) do versionTexts[#versionTexts + 1] = row.name .. " " .. row.ver end
+        addLine("member builds seen this session: %s", #versionTexts > 0 and table.concat(versionTexts, ", ")
+            or "none (members on builds before the version field send none)")
         for _, transfer in ipairs(communication.InFlight and communication.InFlight() or {}) do
             addLine("incomplete transfer from %s: %d/%d chunks, %ds old", tostring(transfer.sender), transfer.receivedCount,
                 transfer.partCount, transfer.ageSeconds)

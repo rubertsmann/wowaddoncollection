@@ -363,7 +363,72 @@ function DevProbe.AddFakeEnchanter()
         :format(addon.Utility.Count(knownRecipes)))
 end
 
+------------------------------------------------------------------ fake request (dev build only, name fix 2026-11-21)
+
+-- The realms a member whose client still reports realms appended to my name in the live log of 2026-11-21.
+local FAKE_REQUEST_REALMS = { "CAMWOWEU4Realm3PvE", "CAMWOWEU4Realm5PvE" }
+local FAKE_REQUESTER = "Fake Requester"
+
+-- Replays the request that member sent (WANTO and WANT naming me as "Name-Realm" and "FirstName-Realm") against MY real
+-- data, on a separate Sync whose sends are captured and never leave the client (no whisper to a player who does not
+-- exist, no change to the real sync's state). Prints and traces whether I would answer, and under which name.
+-- Before the fix a client without a realm answered nothing: "asked for ... but I am ... (name mismatch)".
+---@return { type: string, status: string, reason: string, answer: string|nil, answerName: string|nil, items: integer|nil }[]
+function DevProbe.SimulateRealmRequest()
+    local myName = addon.Store.db and addon.Store.db.me
+    if type(myName) ~= "string" or myName == "" then
+        addon.Print("fake request: my own name is not known yet")
+        return {}
+    end
+    local bareName = myName:match("^([^-]+)") or myName
+    local firstName = bareName:match("^(%S+)") or bareName
+    local askedNames = {}
+    for _, realmName in ipairs(FAKE_REQUEST_REALMS) do
+        askedNames[#askedNames + 1] = bareName .. "-" .. realmName
+        if firstName ~= bareName then askedNames[#askedNames + 1] = firstName .. "-" .. realmName end
+    end
+    local captured = {}
+    local simulatedSync = addon.Sync.New({
+        send = function(message, channel, target) captured[#captured + 1] = { message = message, channel = channel, target = target } end,
+        now = addon.Utility.Now, random = math.random, store = addon.Store, orders = addon.orders,
+        me = function() return addon.Store.db.me end, onChange = function() end,
+    })
+    local answerTypeByRequest = { WANTO = "OFFERS", WANT = "SNAP" }
+    local results = {}
+    for _, requestType in ipairs({ "WANTO", "WANT" }) do
+        local status, reason = simulatedSync:OnMessage({ v = addon.PROTOCOL, t = requestType, names = askedNames }, FAKE_REQUESTER)
+        addon.Trace.Add({ dir = "in", ch = "WHISPER", peer = FAKE_REQUESTER, mt = requestType, st = tostring(status),
+            info = "SIMULATED names=" .. table.concat(askedNames, ","), why = tostring(reason) })
+        results[#results + 1] = { type = requestType, status = tostring(status), reason = tostring(reason) }
+    end
+    simulatedSync:Tick(addon.Utility.Now() + 3600)   -- answers wait a few seconds; flush them now (captured, not sent)
+    for _, result in ipairs(results) do
+        for _, sent in ipairs(captured) do
+            if sent.message.t == answerTypeByRequest[result.type] then
+                local record = sent.message.offers or sent.message.char or {}
+                result.answer, result.answerName = sent.message.t, record.name
+                result.items = addon.Utility.Count(record.items or {}) + addon.Utility.Count(record.professions or {})
+                addon.Trace.Add({ dir = "out", ch = tostring(sent.channel), peer = FAKE_REQUESTER, mt = sent.message.t, st = "info",
+                    info = "SIMULATED, not sent: name=" .. tostring(record.name), why = "answer to the simulated " .. result.type })
+            end
+        end
+    end
+    local library = LibStub and LibStub("LibGuildSync-1.0", true)
+    addon.Print(("fake request as a member whose client reports realms (LibGuildSync MINOR %s active), asking for %s:")
+        :format(tostring(library and library.MINOR), table.concat(askedNames, ", ")))
+    for _, result in ipairs(results) do
+        if result.answer then
+            addon.Print(("  %s -> |cff33ff99answered|r with %s under the name %s"):format(result.type, result.answer, tostring(result.answerName)))
+        else
+            addon.Print(("  %s -> |cffff5555not answered|r: %s %s"):format(result.type, result.status, result.reason))
+        end
+    end
+    addon.Events.Fire("DATA_CHANGED", "trace")
+    return results
+end
+
 if addon.IS_DEVELOPMENT_BUILD then
+    addon.SlashCommands.fakerequest = function() DevProbe.SimulateRealmRequest() end
     addon.SlashCommands.fakeenchanter = function() DevProbe.AddFakeEnchanter() end
     addon.SlashCommands.itemprobe = function(arguments)
         local extraItemIDs = {}

@@ -108,10 +108,24 @@ return {
                     GetNormalizedRealmName = function() return nil end
                     addon.Store.db.me = "First Surname"
                     local okF, errF = pcall(addon.DevProbe.AddFakeEnchanter)
-                    GetNormalizedRealmName = savedRealm
                     harness.truthy(okF, "fake enchanter failed: " .. tostring(errF))
                     harness.truthy(addon.Store.db.chars["Fake Enchanter"], "the realm-free fake enchanter was added")
                     harness.truthy(addon.Store.keptNames["Fake Enchanter"], "and kept from the prune")
+                    -- dev fake request (name fix 2026-11-21): the realm-named request is answered under the asked name
+                    addon.Utility.NoteMyFullName("First Surname")
+                    addon.Store.PutCharacter({ name = "First Surname", class = "MAGE", level = 30, rev = 5, professions = {
+                        Kochkunst = { name = "Kochkunst", id = 185, loc = "deDE", rank = 10, max = 75, recipes = { [1] = true } } } })
+                    addon.Offers.Put({ name = "First Surname", rev = 6, items = { [777] = { bag = 1 } }, dibs = {} })
+                    local sentBefore = #(addon.Communication.queue or {})
+                    local okR, results = pcall(addon.DevProbe.SimulateRealmRequest)
+                    GetNormalizedRealmName = savedRealm
+                    harness.truthy(okR, "fake request failed: " .. tostring(results))
+                    harness.equal(#results, 2)
+                    for _, result in ipairs(results) do
+                        harness.truthy(result.answer, result.type .. " not answered: " .. result.status .. " " .. result.reason)
+                        harness.equal(result.answerName, "First Surname-CAMWOWEU4Realm3PvE")
+                    end
+                    harness.equal(#(addon.Communication.queue or {}), sentBefore, "the simulation must not send anything")
                     addon.Store.db.me = "A-R"
                 end
                 harness.truthy(addon.Events.ScanItems, "item scan hook missing")

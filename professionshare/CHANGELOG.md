@@ -2,6 +2,16 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## Unreleased
+- Fix: a client that reports no realm ignored requests from guild members whose client still reports realms ("asked
+  for Name-Realm but I am Name (name mismatch)" in the trace), so those members never saw its recipes or recipe items.
+  Such names are now the same player (LibGuildSync MINOR 3).
+- Every HELLO now names the sender's build (`ver=1.0.1/3`: addon version / LibGuildSync MINOR), shown in the Debug trace,
+  `/ps comm` and the export report ("member builds seen this session"), so a log shows which build each side ran.
+  Optional field: protocol stays 2.3, older clients ignore it and show as `ver=-`.
+- Dev build: Debug tab "Fake request" (`/psd fakerequest`) replays a request that names me with a realm against my
+  real data; the answers are captured, not sent, and printed and traced as SIMULATED.
+
 ## 1.0.0 (2026-11-21, protocol 2.3, schema 5, prefix PShare)
 - **Renamed to ProfessionShare** (2026-11-21). New addon folder `ProfessionShare`, SavedVariables `ProfessionShareDB`,
   slash commands `/ps` and `/professionshare` (dev build: `/psd`, `ProfessionShareDevDB`), addon-message prefix `PShare`

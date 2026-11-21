@@ -7,13 +7,13 @@
 local REALM, REALM_N = "CAMWOW EU4 Realm 5 PvE", "CAMWOWEU4Realm5PvE"
 local ROSTER = { "Drakk Nuk", "Bren Fall", "Mira Holt", "Tam Reed", "Tam Ash", "Lio Brand" }
 
-local function withForever(harness, fn)
+local function withForever(harness, fn, realmFree)
     local names = { "GetNormalizedRealmName", "GetRealmName", "UnitName", "UnitClass", "UnitLevel", "IsInGuild",
         "GetNumGuildMembers", "GetGuildRosterInfo", "Ambiguate", "C_GuildInfo", "GuildRoster", "UnitFullName", "GetGuildInfo", "GetBuildInfo" }
     local saved = {}
     for _, n in ipairs(names) do saved[n] = _G[n] end
-    GetNormalizedRealmName = function() return REALM_N end
-    GetRealmName = function() return REALM end
+    GetNormalizedRealmName = function() if not realmFree then return REALM_N end end
+    GetRealmName = function() if not realmFree then return REALM end end
     UnitName = function() return "Drakk", "Nuk" end
     UnitFullName = function() return "Drakk", "Nuk" end
     UnitClass = function() return "Hunter", "HUNTER" end
@@ -202,6 +202,49 @@ return {
             harness.equal((sync:OnMessage({ v = 2, t = "SNAP", char = harness.character("Mira-CAMWOWEU4Realm3PvE", 99, { 1 }), catalog = {} }, FLEXI)), "ok")
             harness.truthy(addon.Store.GetCharacter(FLEXI))
         end)
+    end,
+
+    -- live log 2026-11-21: this client knows no realm (GetNormalizedRealmName and GetRealmName empty), a member whose client
+    -- still reports realms asked WANTO {"Drakk Nuk-CAMWOWEU4Realm3PvE", "Drakk-...Realm3PvE", "Drakk-...Realm5PvE"} and got
+    -- "asked for ... but I am Drakk Nuk (name mismatch)": that member never saw my recipe items or my recipes.
+    ["forever: a client without a realm answers requests that name it with a realm"] = function(harness)
+        withForever(harness, function(addon)
+            addon.Store.db.me = addon.Api.GetPlayerInformation().name
+            addon.Api.GetGuildRoster()
+            local U = addon.Utility
+            harness.equal(addon.Store.db.me, "Drakk Nuk")
+            harness.equal(U.CanonicalName("Drakk Nuk-CAMWOWEU4Realm3PvE"), "Drakk Nuk")
+            harness.equal(U.CanonicalName("Drakk-CAMWOWEU4Realm5PvE"), "Drakk Nuk")
+            harness.equal(U.CanonicalName("Mira Holt-CAMWOWEU4Realm3PvE"), "Mira Holt")
+            harness.equal(U.CanonicalName("Mira-CAMWOWEU4Realm3PvE"), "Mira Holt")
+            harness.equal(U.CanonicalName("Drakk Nuk"), "Drakk Nuk")
+            addon.Store.PutCharacter(harness.character("Drakk Nuk", 50, { 6499 }))
+            addon.Offers.Put({ name = "Drakk Nuk", rev = 7, items = { [777] = { bag = 1 } }, dibs = {} })
+            local sent = {}
+            local sync = addon.Sync.New({ send = function(msg, dist, target) sent[#sent + 1] = { msg = msg, dist = dist, to = target } end,
+                now = function() return harness.clock end, random = function() return 0 end, store = addon.Store,
+                orders = addon.Orders.New(function() return harness.clock end, {}), me = function() return addon.Store.db.me end, onChange = function() end })
+            local asked = { "Drakk Nuk-CAMWOWEU4Realm3PvE", "Drakk-CAMWOWEU4Realm3PvE", "Drakk-CAMWOWEU4Realm5PvE" }
+            local status, reason = sync:OnMessage({ v = 2, t = "WANTO", names = asked }, "Mira Holt")
+            harness.equal(status, "ok", reason)
+            status, reason = sync:OnMessage({ v = 2, t = "WANT", names = asked }, "Mira Holt")
+            harness.equal(status, "ok", reason)
+            sync:Tick(harness.clock + 5)
+            local snap, offers
+            for _, s in ipairs(sent) do
+                if s.msg.t == "SNAP" and s.to == "Mira Holt" then snap = s.msg end
+                if s.msg.t == "OFFERS" and s.to == "Mira Holt" then offers = s.msg end
+            end
+            harness.truthy(snap and offers, "the request was not answered")
+            -- that member accepts a record only under the name it asked with
+            harness.equal(offers.offers.name, "Drakk Nuk-CAMWOWEU4Realm3PvE")
+            harness.equal(snap.char.name, "Drakk Nuk-CAMWOWEU4Realm3PvE")
+            harness.truthy(offers.offers.items[777], "my recipe item is in the answer")
+            -- its records, named with its realm, are stored under the realm-free key
+            harness.equal((sync:OnMessage({ v = 2, t = "SNAP", char = harness.character("Mira Holt-CAMWOWEU4Realm3PvE", 99, { 1 }), catalog = {} },
+                "Mira Holt")), "ok")
+            harness.truthy(addon.Store.GetCharacter("Mira Holt"), "the member's record is stored as Mira Holt")
+        end, true)
     end,
 
     ["forever: the name check shows the surname case as OK"] = function(harness)

@@ -142,6 +142,49 @@ return {
         if not ok then error(errorMessage, 0) end
     end,
 
+    -- MINOR 3: every HELLO names the sender's build, the receiver keeps it per member and notes it in the trace
+    ["channel: HELLO carries the build ('<addon version>/<MINOR>'), the receiver records it per member"] = function(harness)
+        local lib = harness.library()
+        withChat(0, function(calls)
+            local function realChannel(me, version)
+                local log, trace = harness.logAndTrace(lib)
+                local channel
+                channel = lib.Channel.New({
+                    prefix = "PShare", codec = lib.Codec.New({ major = 2, minor = 3 }), log = log, trace = trace, version = version,
+                    me = function() return me end, priorityTypes = { HELLO = true },
+                    guild = { IsGuilded = function() return true end, GetGuildRoster = function() return { ["A-R"] = true, ["B-R"] = true } end,
+                        RequestRoster = function() end },
+                    newSync = function(self)
+                        return lib.Sync.New({ send = self.Send, now = function() return harness.clock end, random = function() return 0 end,
+                            me = me, protocol = 2, log = log, trace = trace })
+                    end,
+                })
+                channel.ready = true
+                channel.Start()
+                return channel, trace
+            end
+            local sender = realChannel("A-R", "1.0.1")
+            local receiver, receiverTrace = realChannel("B-R", "1.0.1")
+            harness.equal(sender.VersionTag(), "1.0.1/" .. lib.MINOR)
+            sender.sync:Hello()
+            while #sender.queue > 0 do sender._pump(10) end
+            deliver(receiver, calls, "A-R")
+            local rows = receiver.PeerVersions()
+            harness.equal(#rows, 1); harness.equal(rows[1].name, "A-R"); harness.equal(rows[1].ver, "1.0.1/" .. lib.MINOR)
+            local helloEntry = receiverTrace.List("in")[1]
+            harness.truthy(helloEntry and tostring(helloEntry.why):find("version 1.0.1/" .. lib.MINOR, 1, true), tostring(helloEntry and helloEntry.why))
+            -- an older build sends no version; a garbage tag is not stored
+            harness.equal(lib.Channel.SanitizeVersionTag("1.0.0|cffff0000x"), nil)
+            harness.equal(lib.Channel.SanitizeVersionTag(string.rep("1", 40)), nil)
+            harness.equal(lib.Channel.SanitizeVersionTag(5), nil)
+            local status, reason = receiver.sync:OnMessage({ v = 2, t = "HELLO", ver = "evil|r" }, "C-R")
+            harness.equal(status, "ok"); harness.truthy(reason:find("version: invalid", 1, true), reason)
+            status, reason = receiver.sync:OnMessage({ v = 2, t = "HELLO" }, "D-R")
+            harness.truthy(reason:find("version: not sent", 1, true), reason)
+            harness.equal(#receiver.PeerVersions(), 1)
+        end)
+    end,
+
     ["channel: HELLOs are coalesced to one per interval"] = function(harness)
         local lib = harness.library()
         withChat(0, function()

@@ -138,3 +138,12 @@ Additive minor change: a 2.2 peer ignores `grev` and drops `WANTG`/`GAMES` as un
 ## 10. Version source
 One source: the TOC `## Version` (`Core/Base/Init.lua` reads it from addon metadata; a literal fallback exists for the offline
 tests and is pinned to the TOC by a test). The release workflow refuses a tag that does not match the TOC version.
+
+## 11. Build tag in HELLO (1.0.1, LibGuildSync MINOR 3, protocol stays 2.3)
+- **`HELLO` field `ver` (optional):** `"<addon version>/<active LibGuildSync MINOR>"`, e.g. `"1.0.1/3"`. Added by
+  LibGuildSync's Channel to every HELLO of every addon that embeds it. Older 2.x clients ignore the field.
+- Why: the chunk header carries only the protocol version. A fix that changes no message (the realm-free name fix)
+  looks the same from both builds, so without `ver` no log can say which build a member ran.
+- Receiver: kept per sender for the session (at most 200), only when it is a short plain string (`[%w.-+/_]`, 32 bytes);
+  noted in the HELLO's trace line (`ver=1.0.1/3`, `ver=-` from builds before the field) and listed by `/ps comm` and the
+  export report ("member builds seen this session"). Never used for decisions, only for diagnosis.

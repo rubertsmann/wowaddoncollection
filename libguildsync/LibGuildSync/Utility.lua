@@ -3,7 +3,7 @@
 -- ONE state for every addon that embeds the library: the realm spellings and surnames learned here belong to the player,
 -- not to an addon. Addon-specific identity (who "me" is in that addon's saved data) stays in the addon.
 local lib = LibStub("LibGuildSync-1.0")
-local Utility = lib:Module("Utility", 2)
+local Utility = lib:Module("Utility", 3)
 if not Utility then return end
 
 ---@class UtilityNameState
@@ -229,7 +229,12 @@ function Utility.CanonicalName(playerName)
             if type(completedName) == "string" then characterName = completedName end
         end
         local myRealm = Utility.MyRealm()
-        if myRealm == "" then return realmName ~= "" and (characterName .. "-" .. realmName:gsub("%s", "")) or characterName end
+        if myRealm == "" then
+            -- a client without any realm (Forever, 2026-11-21) keys everyone realm-free: "Name-AnyRealm" from a member whose
+            -- client still reports realms is the same player, or requests for me are refused as "name mismatch"
+            if realmName == "" or Utility.RealmFree() then return characterName end
+            return characterName .. "-" .. realmName:gsub("%s", "")
+        end
         return characterName .. "-" .. myRealm
     end
     return characterName .. "-" .. realmName:gsub("%s", "")

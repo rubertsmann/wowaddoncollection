@@ -861,10 +861,14 @@ local function buildDebugTab()
         local fakeEnchanterButton = createButton(debugTab, Text["Fake enchanter"], 110, 18, function() addon.DevProbe.AddFakeEnchanter() end)
         fakeEnchanterButton:SetPoint("TOPRIGHT", debugTab, "TOPRIGHT", 0, -26)   -- second row: the first is full at the minimum width
         mainFrame.fakeEnchanterButton = fakeEnchanterButton
+        -- name fix 2026-11-21: replays a request that names me with a realm, answers are captured, not sent
+        local fakeRequestButton = createButton(debugTab, Text["Fake request"], 100, 18, function() addon.DevProbe.SimulateRealmRequest() end)
+        fakeRequestButton:SetPoint("RIGHT", fakeEnchanterButton, "LEFT", -8, 0)
+        mainFrame.fakeRequestButton = fakeRequestButton
     end
     mainFrame.debugStatusText = createFontString(debugTab, "GameFontHighlightSmall")
     mainFrame.debugStatusText:SetPoint("TOPLEFT", 0, -28)
-    if mainFrame.fakeEnchanterButton then mainFrame.debugStatusText:SetPoint("RIGHT", mainFrame.fakeEnchanterButton, "LEFT", -8, 0)
+    if mainFrame.fakeRequestButton then mainFrame.debugStatusText:SetPoint("RIGHT", mainFrame.fakeRequestButton, "LEFT", -8, 0)
     else mainFrame.debugStatusText:SetPoint("RIGHT", 0, 0) end
     -- column headings of the name check (shown only in that view)
     local nameCheckHeader = CreateFrame("Frame", nil, debugTab); nameCheckHeader:SetSize(720, 16); nameCheckHeader:SetPoint("TOPLEFT", 0, -44)

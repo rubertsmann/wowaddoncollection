@@ -52,7 +52,9 @@ return {
 
     ["trace: summaries name the payload without dumping it"] = function(harness)
         local T = harness.addon().Trace
-        harness.equal(T.Summarize({ t = "HELLO", rev = 5, orev = 7, odig = { a = 1, b = 2 }, login = true }), "rev=5 orev=7 odig=2 login")
+        harness.equal(T.Summarize({ t = "HELLO", rev = 5, orev = 7, odig = { a = 1, b = 2 }, login = true }), "rev=5 orev=7 odig=2 ver=- login")
+        harness.equal(T.Summarize({ t = "HELLO", rev = 5, odig = {}, ver = "1.0.1/3" }), "rev=5 orev=nil odig=0 ver=1.0.1/3")
+        harness.equal(T.Summarize({ t = "HELLO", rev = 5, odig = {}, ver = "x|cff" }), "rev=5 orev=nil odig=0 ver=invalid")
         harness.equal(T.Summarize({ t = "WANT", names = { "A-R" } }), "names=A-R")
         harness.equal(T.Summarize({ t = "SNAP", char = harness.character("A-R", 9, { 1, 2, 3 }), catalog = { [1] = {} } }), "char=A-R rev=9 recipes=3 catalog=1")
         harness.equal(T.Summarize("junk"), "?")

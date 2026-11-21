@@ -8,7 +8,7 @@
 -- The channel's functions are called with a dot (channel.Send(message, "GUILD")), and its state is plain fields
 -- (channel.queue, channel.roster, channel.sync, ...), so an addon can expose the channel as its own module.
 local lib = LibStub("LibGuildSync-1.0")
-local Channel = lib:Module("Channel", 2)
+local Channel = lib:Module("Channel", 3)
 if not Channel then return end
 
 ---@class QueuedChunk
@@ -509,6 +509,58 @@ end
 
 ------------------------------------------------------------------ control
 
+------------------------------------------------------------------ build versions in HELLO (MINOR 3)
+
+-- Nothing else on the wire says which build a member runs: the chunk header carries only the protocol version, and a fix
+-- that changes no message (the realm-free name fix, 2026-11-21) looks the same from both builds. Every HELLO therefore
+-- carries `ver` = "<addon version>/<active LibGuildSync MINOR>" ("1.0.1/3"), an optional field older clients of the same
+-- protocol major ignore. Received tags are kept per sender for this session and noted in the HELLO's trace line.
+Channel.MAXIMUM_VERSION_LENGTH = 32
+Channel.MAXIMUM_PEER_VERSIONS = 200
+
+---@param channel table
+---@return string
+function Channel.VersionTag(channel)
+    return tostring((channel.options or {}).version or "?") .. "/" .. tostring(lib.MINOR)
+end
+
+-- A peer's tag, or nil when it is missing or not a short plain version string (it reaches the trace and the UI).
+---@param value any
+---@return string|nil
+function Channel.SanitizeVersionTag(value)
+    if type(value) ~= "string" or value == "" or #value > Channel.MAXIMUM_VERSION_LENGTH then return nil end
+    if not value:match("^[%w%.%-%+/_]+$") then return nil end
+    return value
+end
+
+---@param channel table
+---@param sync table
+local function addVersionHook(channel, sync)
+    if type(sync) ~= "table" or type(sync.AddHelloHook) ~= "function" then return end
+    channel.peerVersions = channel.peerVersions or {}   -- a channel built by a MINOR 2 copy before the upgrade has none
+    sync:AddHelloHook({
+        build = function(_, message) message.ver = Channel.VersionTag(channel) end,
+        handle = function(_, message, sender, notes)
+            if message.ver == nil then notes[#notes + 1] = "version: not sent (a build before the version field)" return end
+            local versionTag = Channel.SanitizeVersionTag(message.ver)
+            if not versionTag then notes[#notes + 1] = "version: invalid, ignored" return end
+            notes[#notes + 1] = "version " .. versionTag
+            if channel.peerVersions[sender] == nil and lib.Utility.Count(channel.peerVersions) >= Channel.MAXIMUM_PEER_VERSIONS then return end
+            channel.peerVersions[sender] = { ver = versionTag, t = lib.Utility.Now() }
+        end,
+    })
+end
+
+-- "Name 1.0.1/3" per member whose HELLO was seen this session, sorted by name; members that sent no version are absent.
+---@param channel table
+---@return { name: string, ver: string, t: integer }[]
+function Channel.PeerVersions(channel)
+    local rows = {}
+    for playerName, entry in pairs(channel.peerVersions or {}) do rows[#rows + 1] = { name = playerName, ver = entry.ver, t = entry.t } end
+    table.sort(rows, function(left, right) return left.name < right.name end)
+    return rows
+end
+
 -- Idempotent; called at login and whenever guild membership may have changed. Never before the addon set `ready`
 -- (until PLAYER_LOGIN the stored name can still be the previously played character).
 ---@param channel table
@@ -516,13 +568,14 @@ function Channel.Start(channel)
     local guild = guildOf(channel)
     if channel.active or not channel.ready or not guild.IsGuilded() then return end
     channel.sync = channel.options.newSync(channel)
+    addVersionHook(channel, channel.sync)
     channel.active = true
     channel.roster = guild.GetGuildRoster()   -- may be empty until the first roster update; WHISPERs fail closed meanwhile
     local me, protocol, rosterSize = channel.options.me(), channel.options.codec.protocol, lib.Utility.Count(channel.roster)
     channel.options.log.Information("communication.start", "sync started",
         { me = me, version = channel.options.version, rosterSize = rosterSize })
-    channel.options.trace.System("info", "sync started", ("me=%s v%s protocol %d.%d roster=%d"):format(tostring(me),
-        tostring(channel.options.version), protocol.major, protocol.minor, rosterSize))
+    channel.options.trace.System("info", "sync started", ("me=%s v%s protocol %d.%d roster=%d build %s"):format(tostring(me),
+        tostring(channel.options.version), protocol.major, protocol.minor, rosterSize, Channel.VersionTag(channel)))
     guild.RequestRoster()
 end
 
@@ -611,7 +664,9 @@ function Channel.New(options)
     local channel = { options = options, active = false, ready = false, queue = {}, buffers = {}, lastHello = 0, helloDueAt = nil,
         messageCounter = 0, salt = 0, roster = {}, hints = lib.Guard.NewHints(), rejected = 0, chunksSent = 0, chunksReceived = 0,
         sendFailures = 0, identityWarned = false, canonicalNameVersion = nil, lastEcho = nil, sync = nil, seen = {},
-        lastRejectionTraced = {}, InterpretResult = Channel.InterpretResult }
+        lastRejectionTraced = {}, peerVersions = {}, InterpretResult = Channel.InterpretResult }
+    function channel.VersionTag() return Channel.VersionTag(channel) end
+    function channel.PeerVersions() return Channel.PeerVersions(channel) end
     function channel.Me() return options.me() end
     function channel.Send(message, chatChannel, target) return Channel.Send(channel, message, chatChannel, target) end
     -- offline tests drive one channel's pump directly
