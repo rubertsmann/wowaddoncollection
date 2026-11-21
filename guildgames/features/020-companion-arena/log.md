@@ -44,3 +44,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: offline suite green.
 - Evidence: luajit tests/run.lua (see the commit)
 - Next: user: /reload; Arena > Fights: wrench, tick, stopwatch, Watch.
+
+## 2026-11-21 08:05 | BUILD | replay model animations: attack, hurt, death
+- Did: user: "for the animated fight - on each damage play the attack or getting hurt animation - and play the dead animation once at 0 hp". `UI/ArenaView.lua`: `ArenaView.ANIMATION` (AnimationData ids: attack 16-19, ability cast 52/51, hurt 9/8, critical 10, dodge 20/11, stun 14, ready 26/0, death 1, dead 6; the first the model has), `PlayAnimation` (back to ready after 0.45 s, newest wins), `PlayDeath` (once per replay, then lying), per-model state in a weak side table; Step: attacker attacks/casts, target flinches or dies at 0 health, DoT flinch, dodge, stun; Skip/finish: a knocked-out loser dies too. test_load: the models act, death once, a dead model stays dead.
+- Result: offline suite green; the ids are the standard client ids, NOT-VERIFIED in game per creature model.
+- Evidence: luajit tests/run.lua -> "136 passed, 0 failed"
+- Next: user: /reload; dummy fight (wrench, tick, stopwatch), Watch: check the attack/hurt/death look; report models that stand still (journal model.* lines).

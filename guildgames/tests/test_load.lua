@@ -385,7 +385,20 @@ return {
                         addon.Utility.Now = function() return start + 400 end
                         local okWatch, events = pcall(addon.ArenaView.Watch, "Foe-R#" .. start)
                         harness.truthy(okWatch and events and events > 0, "replay: " .. tostring(events))
+                        -- the models act on every step (user 2026-11-21): attack / hurt, the death once
+                        local played = {}
+                        local savedPlay = addon.ArenaView.PlayAnimation
+                        addon.ArenaView.PlayAnimation = function(model, key, back) played[#played + 1] = key return savedPlay(model, key, back) end
                         for _ = 1, 5 do harness.truthy(pcall(addon.ArenaView.Step)) end
+                        addon.ArenaView.PlayAnimation = savedPlay
+                        local acted = false
+                        for _, key in ipairs(played) do if key == "attack" or key == "cast" or key == "hurt" or key == "critical" then acted = true end end
+                        harness.truthy(acted, "the models act: " .. table.concat(played, ","))
+                        local model = addon.ArenaView.widgets.replayLeft.model
+                        addon.ArenaView.ResetModel(model)
+                        harness.truthy(addon.ArenaView.PlayDeath(model), "dies")
+                        harness.truthy(not addon.ArenaView.PlayDeath(model), "dies once")
+                        harness.equal(addon.ArenaView.PlayAnimation(model, "hurt", 0.4), nil, "a dead model stays dead")
                         harness.truthy(pcall(addon.ArenaView.FinishReplay)); harness.truthy(pcall(addon.ArenaView.StopReplay))
                         local okTick, tickError = pcall(addon.Catcher.ArenaTick, true)
                         harness.truthy(okTick, "arena tick: " .. tostring(tickError))
