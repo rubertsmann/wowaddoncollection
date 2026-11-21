@@ -6,6 +6,7 @@
   chance; train Attack/Defense/Speed/Vitality, gain arena levels, keep wins and losses, and watch every fight as a replay.
   In the Guild view a fight icon on another member's pet opens a step-by-step challenge window (matchup, wager, confirm).
   One fight at a time per player; a waiting challenge can be stopped (stake back); Accept/Decline/Stop sit in the Fights list.
+- Accept/decline and yes/no buttons are tick and X icons (the word shows in the tooltip).
 - AZEcaught: the Seen tab keeps a history per NPC: how often you met it, how many you killed, caught x of y throws,
   first and last seen (stored with the collection; older entries start at "seen once").
 - AZEcaught: the Seen stats are icon badges with small animations (fade in, count up, a pulse and "+1" when a number rises).

@@ -708,11 +708,11 @@ local function buildConfirmDialog(panel)
     line:SetColorTexture(1, 0.82, 0.2, 0.8)
     widgets.confirmText = Widgets.CreateFontString(box, "GameFontHighlight", "CENTER")
     widgets.confirmText:SetPoint("TOP", 0, -14); widgets.confirmText:SetWidth(240)
-    local yes = Widgets.CreateButton(box, Text["Yes"], 90, 22, function() Panel.ConfirmSwitch() end)
-    yes:SetPoint("BOTTOMRIGHT", box, "BOTTOM", -6, 12)
-    if Widgets.MakePrimary then Widgets.MakePrimary(yes) end
-    local no = Widgets.CreateButton(box, Text["No"], 90, 22, function() Panel.CancelSwitch() end)
-    no:SetPoint("BOTTOMLEFT", box, "BOTTOM", 6, 12)
+    -- tick / X (user 2026-11-21: icons instead of the words, the word in the tooltip)
+    local yes = Widgets.CreateIconButton(box, "accept", 28, Text["Yes"], function() Panel.ConfirmSwitch() end)
+    yes:SetPoint("BOTTOMRIGHT", box, "BOTTOM", -8, 12)
+    local no = Widgets.CreateIconButton(box, "decline", 28, Text["No"], function() Panel.CancelSwitch() end)
+    no:SetPoint("BOTTOMLEFT", box, "BOTTOM", 8, 12)
     widgets.confirmDialog = dialog
 end
 

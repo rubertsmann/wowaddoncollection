@@ -32,3 +32,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: offline suite green.
 - Evidence: luajit tests/run.lua -> "136 passed, 0 failed"
 - Next: user: /reload; Arena > Fights: "[dev] Dummy challenges me", Accept in the row; challenge the dummy from the Guild view, Stop it in Fights; then the in-game rows in verify.md.
+
+## 2026-11-21 07:35 | BUILD | tick / X icons instead of Accept/Decline and Yes/No
+- Did: user: "replace annehmen oder ablehnen with X or tick icons on the whole addon". `UI/Window.lua`: `Widgets.CreateIconButton(parent, "accept"|"decline", size, tooltip, onClick)` (ReadyCheck tick / X, hover tint, grey when disabled, the word in the tooltip). Used for the arena row and detail Accept/Decline and the companion switch Yes/No (`UI/AzeCaughtPanel.lua`); those were the only accept/decline buttons in GuildGames.
+- Result: offline suite green.
+- Evidence: luajit tests/run.lua -> "136 passed, 0 failed"
+- Next: user: /reload and look at the icons (Arena > Fights with "[dev] Dummy challenges me"; Collection > Make companion).

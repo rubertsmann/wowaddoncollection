@@ -73,6 +73,56 @@ local function createFlatButton(parent, label, minimumWidth, height, onClick)
     return button
 end
 
+-- A yes/no decision as an icon (user 2026-11-21: "replace annehmen oder ablehnen with X or tick icons on the whole
+-- addon"): "accept" is a green tick, "decline" a red X, on a dark plate tinted green/red on hover; the word stays in
+-- the tooltip. Disabled: grey. :SetLabel only changes the tooltip (callers that relabel buttons keep working).
+local ICON_BUTTON = {
+    accept = { texture = "Interface\\RaidFrame\\ReadyCheck-Ready", color = { 0.25, 0.85, 0.3 } },
+    decline = { texture = "Interface\\RaidFrame\\ReadyCheck-NotReady", color = { 0.95, 0.3, 0.25 } },
+}
+---@param parent table
+---@param kind "accept"|"decline"
+---@param size number
+---@param tooltip string
+---@param onClick? function
+---@return table
+local function createIconButton(parent, kind, size, tooltip, onClick)
+    local look = ICON_BUTTON[kind] or ICON_BUTTON.accept
+    local button = CreateFrame("Button", nil, parent)
+    button:SetSize(size, size)
+    button.kind, button.tooltip = kind, tooltip
+    button.plate = button:CreateTexture(nil, "BACKGROUND"); button.plate:SetAllPoints()
+    button.icon = button:CreateTexture(nil, "ARTWORK")
+    button.icon:SetPoint("CENTER"); button.icon:SetSize(size - 4, size - 4)
+    addon.UIHelpers.SetTextureOr(button.icon, look.texture, look.color)
+    local function paint(self)
+        local enabled = self:IsEnabled()
+        local color = look.color
+        if self.hovered and enabled then
+            self.plate:SetColorTexture(color[1] * 0.45, color[2] * 0.45, color[3] * 0.45, 0.8)
+        else
+            self.plate:SetColorTexture(0, 0, 0, enabled and 0.45 or 0.25)
+        end
+        if self.icon.SetDesaturated then self.icon:SetDesaturated(not enabled) end
+        self.icon:SetAlpha(enabled and 1 or 0.4)
+    end
+    function button:SetLabel(text) self.tooltip = text end
+    button:SetScript("OnClick", onClick)
+    button:SetScript("OnEnter", function(self)
+        self.hovered = true; paint(self)
+        if GameTooltip and self.tooltip then
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(self.tooltip, look.color[1], look.color[2], look.color[3])
+            GameTooltip:Show()
+        end
+    end)
+    button:SetScript("OnLeave", function(self) self.hovered = false; paint(self); if GameTooltip then GameTooltip:Hide() end end)
+    button:SetScript("OnEnable", paint)
+    button:SetScript("OnDisable", paint)
+    paint(button)
+    return button
+end
+
 -- The big action button (Flip, Spin): a gold plate that breathes softly while it can be pressed.
 ---@param button table
 local function makePrimary(button)
@@ -111,7 +161,7 @@ end
 
 -- The widget helpers GamesTab and SlotMachine use: LibGuildSync's lists and texts plus the flat buttons and boxes
 -- above. TimeAgo uses this addon's texts (Text["just now"], Text["{n}m ago"], Text["{n}h ago"], Text["{n}d ago"]).
-UI.Widgets = { ROW_HEIGHT = Widgets.ROW_HEIGHT, CreateButton = createFlatButton, MakePrimary = makePrimary,
+UI.Widgets = { ROW_HEIGHT = Widgets.ROW_HEIGHT, CreateButton = createFlatButton, MakePrimary = makePrimary, CreateIconButton = createIconButton,
     CreateEditBox = createFlatEditBox, CreateFontString = Widgets.CreateFontString,
     CreateScrollList = Widgets.CreateScrollList, CreateSelectableRow = Widgets.CreateSelectableRow,
     TimeAgo = function(timestamp) return Widgets.TimeAgo(timestamp, Text) end }
