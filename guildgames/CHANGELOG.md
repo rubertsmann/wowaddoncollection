@@ -1,8 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 (2026-11-22, protocol 1.2, schema 2, LibGuildSync MINOR 3)
 - Fix: the minimap button was drawn inside the minimap; it now sits on the ring outside it, like other addons'
   buttons (LibGuildSync MINOR 3).
+- Fix (LibGuildSync MINOR 3): a request from a member whose client still reports realm names ("Name-Realm") was
+  ignored as a name mismatch, so that member never received the record; such names now fold to the realm-free name.
+- Every HELLO carries the addon version and library MINOR (`ver`, optional field, no protocol change); `/gg comm`
+  lists each member's version.
 
 ## 0.3.0 (2026-11-21, protocol 1.2, schema 2)
 - AZEcaught arena (protocol 1.2): challenge guild members' companions to hands-off auto battles with an optional
