@@ -75,7 +75,7 @@ return {
                 harness.equal(addon.IS_DEVELOPMENT_BUILD, development)
                 harness.equal(addon.PREFIX, development and "GGamesDev" or "GGames")
                 harness.equal(addon.SAVED_VARIABLES_NAME, development and "GuildGamesDevDB" or "GuildGamesDB")
-                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 1); harness.equal(addon.Store.SCHEMA, 2)
+                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 2); harness.equal(addon.Store.SCHEMA, 2)
                 -- the key binding's globals carry this build's names (user 2026-11-21: live + dev installed together)
                 local binding = addon.Catcher.BindingNames(development)
                 harness.equal(binding.name, development and "AZECAUGHT_THROW_DEV" or "AZECAUGHT_THROW")
@@ -355,6 +355,43 @@ return {
                     harness.truthy(okSame, tostring(sameMode)); harness.equal(sameMode, "same")
                     harness.equal(#pulsed, 1); harness.equal(pulsed[1], "kills", "only the value that went up pulses")
                     harness.equal(Panel.ShowHistoryBadges(nil, nil), nil)
+                    -- the arena view (feature 020): fighter page, training, a fight from another player, the replay
+                    do
+                        local Arena, AzeCaught = addon.Arena, addon.AzeCaught
+                        boar.caught = 1
+                        if not (AzeCaught.Active() and AzeCaught.Active().npc == 88) then assert(AzeCaught.Select(88, 1)) end
+                        local me = addon.Utility.Me()
+                        local okView, viewError = pcall(Panel.SelectView, "arena")
+                        harness.truthy(okView, "arena view: " .. tostring(viewError))
+                        harness.truthy(addon.ArenaView.widgets.statRows and addon.ArenaView.widgets.statRows.atk:IsShown() ~= false)
+                        harness.truthy(pcall(addon.ArenaView.Train, "atk"), "train click")
+                        local foe = { npc = 5, n = "Bear", cls = "elite", disp = 0, ty = 1, al = 3, atk = 30, def = 30, spd = 30, vit = 30, ab = "rend" }
+                        local records = { ["Foe-R"] = { name = "Foe-R", caught = { c = { npc = 5 }, weeks = {} },
+                            arena = { w = 0, l = 0, ch = {}, an = {}, bt = {} } } }
+                        local savedRecords, savedNow = addon.Games.AllRecords, addon.Utility.Now
+                        addon.Games.AllRecords = function() return records end
+                        local start = savedNow()
+                        -- the foe challenges me: an incoming fight with Accept
+                        records["Foe-R"].arena.ch["Foe-R#" .. start] = { to = me, at = start, wg = 0, f = foe }
+                        harness.truthy(pcall(addon.ArenaView.SelectPage, "fights"))
+                        harness.truthy(addon.ArenaView.widgets.acceptButton:IsShown() ~= false, "accept offered")
+                        local okAnswer, answerError = pcall(addon.ArenaView.Answer, true)
+                        harness.truthy(okAnswer, tostring(answerError))
+                        harness.truthy(Arena.State().an["Foe-R#" .. start], "accepted")
+                        local savedServerTime = rawget(_G, "GetServerTime")
+                        rawset(_G, "GetServerTime", function() return start + 400 end)
+                        addon.Utility.Now = function() return start + 400 end
+                        local okWatch, events = pcall(addon.ArenaView.Watch, "Foe-R#" .. start)
+                        harness.truthy(okWatch and events and events > 0, "replay: " .. tostring(events))
+                        for _ = 1, 5 do harness.truthy(pcall(addon.ArenaView.Step)) end
+                        harness.truthy(pcall(addon.ArenaView.FinishReplay)); harness.truthy(pcall(addon.ArenaView.StopReplay))
+                        local okTick, tickError = pcall(addon.Catcher.ArenaTick, true)
+                        harness.truthy(okTick, "arena tick: " .. tostring(tickError))
+                        harness.equal(Arena.State().w + Arena.State().l, 1, "the fight was settled")
+                        addon.Games.AllRecords, addon.Utility.Now = savedRecords, savedNow
+                        rawset(_G, "GetServerTime", savedServerTime)
+                        harness.truthy(pcall(Panel.SelectView, "guild")); harness.truthy(pcall(Panel.Challenge), "challenge without a row")
+                    end
                 end
                 -- the identity probe (user 2026-11-20): runs on any client, secret or missing functions are named, never raises
                 do

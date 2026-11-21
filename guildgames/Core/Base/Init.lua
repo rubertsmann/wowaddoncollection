@@ -16,7 +16,7 @@ LibStub("LibGuildSync-1.0").Addon.Setup(addon, addonName,
 ---@type integer
 addon.PROTOCOL_MAJOR = 1
 ---@type integer
-addon.PROTOCOL_MINOR = 1   -- 1.1: the optional "caught" record section (feature 018)
+addon.PROTOCOL_MINOR = 2   -- 1.1: the optional "caught" record section (feature 018); 1.2: "arena" (feature 020)
 ---@type integer alias: the major is what the payload "v" field carries
 addon.PROTOCOL = addon.PROTOCOL_MAJOR
 

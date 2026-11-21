@@ -262,6 +262,15 @@ function Games.Sanitize(gameRecord)
             addon.AzeCaught.Journal("WARNING", "sanitize", "a companion section was invalid and dropped", { owner = gameRecord.name })
         end
     end
+    -- companion arena (feature 020, protocol 1.2): a bad arena section is dropped alone too
+    if gameRecord.arena ~= nil and addon.Arena then
+        local section = addon.Arena.SanitizeSection(gameRecord.arena, gameRecord.name, horizon)
+        if section then
+            clean.arena = section
+        else
+            addon.AzeCaught.Journal("WARNING", "sanitize", "an arena section was invalid and dropped", { owner = gameRecord.name })
+        end
+    end
     return clean
 end
 
@@ -430,12 +439,12 @@ end
 
 -- Replaces one non-play section of my record (AZEcaught's "caught") and commits a new rev. Returns true when stored.
 ---@param myName string
----@param key "caught"
+---@param key "caught"|"arena"
 ---@param section table
 ---@param now integer
 ---@return boolean
 function Games.SetSection(myName, key, section, now)
-    if database().readonly or not addon.Utility.IsSafeName(myName) or key ~= "caught" then return false end
+    if database().readonly or not addon.Utility.IsSafeName(myName) or (key ~= "caught" and key ~= "arena") then return false end
     local previousRecord = database().games[myName]
     local gameRecord = previousRecord and addon.Utility.DeepCopy(previousRecord) or emptyRecord(myName)
     gameRecord[key] = section

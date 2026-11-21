@@ -241,6 +241,7 @@ local function createModel(parent, width, height, idleFunction)
     end)
     return model
 end
+Panel.CreateModel, Panel.ShowModel = createModel, showModel   -- the arena view (feature 020) uses the same models
 
 ------------------------------------------------------------------ need bars
 
@@ -312,7 +313,7 @@ end
 
 ------------------------------------------------------------------ views
 
----@param view "companion"|"collection"|"guild"
+---@param view "companion"|"collection"|"guild"|"arena"
 function Panel.SelectView(view)
     Panel.state.view = view
     settings().caughtView = view
@@ -759,6 +760,7 @@ local function createGuildRow(list)
         if self.entry then Panel.state.guildRow = self.entry; Panel.RefreshGuildPreview() end
     end)
     row:SetScript("OnLeave", function(self) self.hover:Hide() end)
+    row:SetScript("OnClick", function(self) if self.entry then Panel.state.guildRow = self.entry; Panel.RefreshGuildPreview() end end)
     return row
 end
 
@@ -787,6 +789,15 @@ local function buildGuildView(panel)
     widgets.guildModel = preview
     widgets.guildPreviewText = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
     widgets.guildPreviewText:SetPoint("TOP", preview, "BOTTOM", 0, -2); widgets.guildPreviewText:SetWidth(104)
+    -- the arena challenge (feature 020): the wager in gold, then Challenge for the row under the mouse
+    widgets.wagerBox = Widgets.CreateEditBox(panel, 40)
+    widgets.wagerBox:SetPoint("TOPRIGHT", -66, -236); widgets.wagerBox:SetText("0")
+    local wagerLabel = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "RIGHT")
+    wagerLabel:SetPoint("RIGHT", widgets.wagerBox, "LEFT", -2, 0); wagerLabel:SetText(Text["Wager (gold)"])
+    widgets.challengeButton = Widgets.CreateButton(panel, Text["Challenge"], 60, 20, function() Panel.Challenge() end)
+    widgets.challengeButton:SetPoint("TOPRIGHT", -2, -235)
+    widgets.challengeStatus = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "RIGHT")
+    widgets.challengeStatus:SetPoint("TOPRIGHT", -4, -258); widgets.challengeStatus:SetWidth(200)
     local note = Widgets.CreateFontString(panel, "GameFontDisableSmall", "CENTER")
     note:SetPoint("TOP", 0, -276); note:SetWidth(290)
     note:SetText(Format(Text["Level = NPC level + rarity + hearts. Weekly pay: {first}, {second}, {third}, others {other}."],
@@ -802,19 +813,20 @@ function Panel.Build(panel)
     local Widgets = addon.UI.Widgets
     widgets.panel = panel
     widgets.views, widgets.viewButtons = {}, {}
-    local labels = { companion = Text["Companion"], collection = Text["Collection"], guild = Text["Guild"] }
-    for index, view in ipairs({ "companion", "collection", "guild" }) do
+    local labels = { companion = Text["Companion"], collection = Text["Collection"], guild = Text["Guild"], arena = Text["Arena"] }
+    for index, view in ipairs({ "companion", "collection", "guild", "arena" }) do
         local key = view
         local frame = CreateFrame("Frame", nil, panel)
         frame:SetPoint("TOPLEFT", 0, 0); frame:SetPoint("BOTTOMRIGHT", 0, 0)
         widgets.views[view] = frame
-        local button = Widgets.CreateButton(panel, labels[view], 94, 18, function() Panel.SelectView(key) end)
-        button:SetPoint("TOPLEFT", 4 + (index - 1) * 98, -2)
+        local button = Widgets.CreateButton(panel, labels[view], 70, 18, function() Panel.SelectView(key) end)
+        button:SetPoint("TOPLEFT", 4 + (index - 1) * 73, -2)
         widgets.viewButtons[view] = button
     end
     buildCompanionView(widgets.views.companion)
     buildCollectionView(widgets.views.collection)
     buildGuildView(widgets.views.guild)
+    addon.ArenaView.Build(widgets.views.arena)
     -- the bars move while the panel is visible: redraw twice a second
     local elapsedTotal = 0
     panel:SetScript("OnUpdate", function(_, elapsedSeconds)
@@ -822,6 +834,7 @@ function Panel.Build(panel)
         if elapsedTotal < 0.5 then return end
         elapsedTotal = 0
         if Panel.state.view == "companion" then addon.Log.Protected("caught.ui", "refreshing the companion failed", Panel.RefreshCompanion) end
+        if Panel.state.view == "arena" then addon.Log.Protected("caught.ui", "refreshing the arena failed", addon.ArenaView.Refresh) end
     end)
     panel:HookScript("OnShow", function()
         widgets.model.shownKey = nil   -- the model resets on show: load it again
@@ -993,9 +1006,30 @@ function Panel.RefreshGuildPreview()
     local row = Panel.state.guildRow
     if not row then showModel(widgets.guildModel, nil, "guild") widgets.guildPreviewText:SetText("") return end
     showModel(widgets.guildModel, { npc = row.npc, disp = row.disp }, "guild")
-    widgets.guildPreviewText:SetText(("%s\n%s %d · %s\n%s %d%% %s %d%%\n%s %d%% %s %d%%%s"):format(row.companion, Text["Level"], row.lvl,
+    -- arena wins/losses (feature 020): mine from the local state, others from their record
+    local arena = row.mine and addon.Arena.State() or (addon.Games.Get(row.nameRaw) or {}).arena
+    local arenaLine = type(arena) == "table" and ("\n" .. Format(Text["Arena {wins}-{losses}"], { wins = arena.w or 0, losses = arena.l or 0 })) or ""
+    widgets.guildPreviewText:SetText(("%s\n%s %d · %s\n%s %d%% %s %d%%\n%s %d%% %s %d%%%s%s"):format(row.companion, Text["Level"], row.lvl,
         rarityText(row.cls), Text["Food"], row.hunger, Text["Water"], row.thirst, Text["Petting"], row.affection, Text["Energy"], row.energy,
-        row.asleep and ("\n" .. Text["asleep"]) or ""))
+        row.asleep and ("\n" .. Text["asleep"]) or "", arenaLine))
+    if widgets.challengeButton then
+        widgets.challengeButton:SetEnabled(not row.mine)
+        widgets.challengeButton:SetLabel(Format(Text["Challenge {name}"], { name = addon.Utility.Escape(row.nameRaw:match("^([^%-]+)") or row.nameRaw) }))
+    end
+end
+
+-- Challenges the guild row under the mouse with the wager in the box (feature 020).
+function Panel.Challenge()
+    local row = Panel.state.guildRow
+    local gold = tonumber(widgets.wagerBox:GetText() or "") or 0
+    local id, reason = addon.Arena.Challenge(addon.Games.AllRecords(), addon.Utility.Me(), row and row.nameRaw or "", math.floor(gold * 10000),
+        addon.Utility.Now())
+    if id then
+        widgets.challengeStatus:SetText("|cff66ff66" .. Text["Challenge sent."] .. "|r")
+        addon.Catcher.PublishArena()
+    else
+        widgets.challengeStatus:SetText("|cffff6060" .. addon.ArenaView.RefusalText(reason) .. "|r")
+    end
 end
 
 -- Redraws the visible view (CAUGHT_CHANGED, GAMES_CHANGED, DATA_CHANGED and on show).
@@ -1004,6 +1038,8 @@ function Panel.Refresh()
     local view = Panel.state.view
     if view == "companion" then
         Panel.RefreshCompanion()
+    elseif view == "arena" then
+        addon.ArenaView.Refresh()
     elseif view == "collection" then
         local caught = AzeCaught.State()
         local active = caught.active

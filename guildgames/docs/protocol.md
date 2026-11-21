@@ -1,6 +1,6 @@
 # GuildGames wire protocol and stored data
 
-Protocol **1.1**, schema **2** (since 0.2.0; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Base/Init.lua` (versions, prefix), `Core/Net/Sync.lua`
+Protocol **1.2**, schema **2** (1.2 since the companion arena, 0.3.0; 1.1 since 0.2.0; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Base/Init.lua` (versions, prefix), `Core/Net/Sync.lua`
 (messages), `Core/Data/Games.lua` (record, validation), `Core/Data/Store.lua` (schema). The transport, chunk header, compatibility
 rules, guild gate and record-pull engine are LibGuildSync-1.0's (`Libs/LibGuildSync`, documented in the libguildsync repo).
 Tests: `tests/test_games_sync.lua`, `tests/test_games.lua`, `tests/test_store_and_locale.lua`.
@@ -45,6 +45,16 @@ protocol, so TalentShare and GuildGames never read each other's messages.
   `caught` section is **dropped alone** (the record stays). Protocol 1.0 peers drop the unknown key (allow-list copy), so
   the change is additive (minor 1.1). It is written by `Games.SetSection` with a new `rev` (at most every 30 s while the
   companion changes, at least every 5 min, at once after select/care/death) and announced like a play.
+- **Arena section (optional, protocol 1.2, feature 020) `arena = { w, l, ch, an, bt }`:** my arena wins and losses
+  (0..1e6) and my open entries, each table at most 20 entries keyed by the fight id `<challenger>#<time>` (a safe name,
+  at most 80 bytes). `ch[id] = {to, at, wg, f}`: my challenges only (the id names me, `at` equals the id's time, `to`
+  is another safe name, wager 0..1000g in copper). `an[id] = {ok, at, f?}`: my answer to someone else's challenge
+  (`f` required when `ok`). `bt[id] = {s = "a"|"b", c, o, at}`: my bet (10s..500g, odds 110..1000 hundredths).
+  Fighter `f = {npc, n, cls, disp, ty, al, atk, def, spd, vit, ab}`: NPC id, name (<= 48 bytes), classification,
+  display id, creature type 0..100, arena level 1..50, the four stats 1..1e6, ability (`rend|breath|burn|surge|smash|
+  drain|focus|barrier|strike`). A bad `arena` section is dropped alone. Every client computes a fight from the two
+  snapshots and the id (`Arena.Fight`, deterministic) and settles only its own pool; an answer counts only from the
+  challenged player within 24 h of the challenge. Written by `Games.SetSection("arena")`; 1.1 peers drop it.
 - **Money pool (local only, never sent):** `balance = 20g + casino net (coin + slots + survivor) - pending survivor stake
   + ledger.earned - ledger.spent`. Every casino play START (flip, spin, survivor run) is refused with `funds` when the stake
   is above the balance; settling a run never is.
@@ -55,7 +65,8 @@ protocol, so TalentShare and GuildGames never read each other's messages.
   Results are self-reported (trust model): bounds and consistency are checked, truth is not.
 - **Stored data (schema 2, `GuildGamesDB`):** `caught` (AZEcaught: `collection[npcId] = {n, lvl, cls, disp, seen, caught, st?, cnt?, last?, kills?, thr?, got?}`
   (<= 2000), `active` companion state, `activeSeconds`, `peaks`, `paidWeek`, `ledger = {earned, spent, entries}` (<= 60),
-  `journal` (<= 400 log lines), `notify`, `verbose`); migration 1 -> 2 adds it empty; re-validated on every load and kept
+  `journal` (<= 400 log lines), `notify`, `verbose`, `arena` = local arena state: per NPC `{xp, w, l, tr}`, the running
+  training, my `ch`/`an`/`bt`, `settled`, `noticed`, `history` (<= 30)); migration 1 -> 2 adds it empty; re-validated on every load and kept
   by `/gg clean`. `games[name]`, re-validated on every load,
   emptied by `/gg clean`, pruned with players who left the guild. A newer schema on disk is left untouched (read-only session).
 - **Display:** names are escaped in `Core/View/Model.lua`. Dev-build simulated players (`/ggd game sim`) live outside the

@@ -28,6 +28,7 @@ Core\Minigames\Slots.lua
 Core\Minigames\Survivor.lua
 Core\Data\Wallet.lua
 Core\Minigames\AzeCaught.lua
+Core\Minigames\Arena.lua
 Core\View\Model.lua
 Core\Net\Sync.lua
 Core\Net\Communication.lua
@@ -41,5 +42,6 @@ UI\GamesTab.lua
 UI\SlotMachine.lua
 UI\SurvivorArena.lua
 UI\AzeCaughtPanel.lua
+UI\ArenaView.lua
 UI\AzeCaughtOptions.lua
 UI\DevProbe.lua

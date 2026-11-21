@@ -1346,6 +1346,7 @@ function AzeCaught.SanitizePersisted(savedVariables)
     if caught.icon ~= nil then caught.icon = AzeCaught.CleanIconSettings(caught.icon) end
     caught.verbose = caught.verbose == true or nil
     if addon.Wallet.SanitizePersisted(caught) then dropped = dropped + 1 end
+    if addon.Arena.SanitizePersisted(caught, savedVariables.me) then dropped = dropped + 1 end
     return dropped
 end
 
@@ -1411,6 +1412,7 @@ function AzeCaught.Reset(withWallet)
     local summary = { found = addon.Utility.Count(caught.collection), caught = AzeCaught.CaughtCount(),
         companion = caught.active ~= nil, wallet = withWallet == true }
     caught.collection, caught.active, caught.activeSeconds, caught.peaks = {}, nil, 0, {}
+    caught.arena = nil   -- the arena progress, fights and bets (feature 020)
     caught.paidWeek, caught.firstCatchDone, caught.throwHintDone = nil, nil, nil
     if withWallet then caught.ledger = nil end
     AzeCaught.throws, AzeCaught.rolled, AzeCaught.thrown = {}, {}, {}

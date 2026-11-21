@@ -39,14 +39,14 @@ local Harness = {}
 Harness.PURE_FILES = { "Core/Base/Utility.lua", "Core/Base/Log.lua", "Core/Debug/Trace.lua", "Core/Base/Locale.lua",
     "Locales/enUS.lua", "Locales/deDE.lua", "Core/Net/Codec.lua", "Core/Net/Guard.lua", "Core/Data/Store.lua",
     "Core/Data/Games.lua", "Core/Minigames/CoinFlip.lua", "Core/Minigames/Slots.lua", "Core/Minigames/Survivor.lua",
-    "Core/Data/Wallet.lua", "Core/Minigames/AzeCaught.lua", "Core/View/Model.lua", "Core/Net/Sync.lua",
+    "Core/Data/Wallet.lua", "Core/Minigames/AzeCaught.lua", "Core/Minigames/Arena.lua", "Core/View/Model.lua", "Core/Net/Sync.lua",
     "Core/Net/Communication.lua" }
 
 -- A fresh addon table with every pure module loaded and an empty store.
 ---@param options? { now: integer }
 ---@return table addon
 function Harness.addon(options)
-    local addon = { PROTOCOL_MAJOR = 1, PROTOCOL_MINOR = 1, PROTOCOL = 1, PREFIX = "GGames", TITLE = "GuildGames", SlashCommands = {},
+    local addon = { PROTOCOL_MAJOR = 1, PROTOCOL_MINOR = 2, PROTOCOL = 1, PREFIX = "GGames", TITLE = "GuildGames", SlashCommands = {},
         Print = function() end }   -- same values as Core/Base/Init.lua (tests/test_load.lua pins them)
     Harness.clock = (options and options.now) or 1000
     GetServerTime = function() return Harness.clock end

@@ -732,6 +732,73 @@ function Catcher.PublishSoon(force)
     if AzeCaught.Publish(me(), now()) then addon.Events.Fire("GAMES_CHANGED") end
 end
 
+------------------------------------------------------------------ companion arena (feature 020)
+
+local ARENA_TICK = 5   -- seconds between arena checks (training, answers, fights, bets)
+Catcher.lastArena = 0
+
+-- Writes my arena section into my game record (a new rev) and announces it; redraws the panel.
+function Catcher.PublishArena()
+    if addon.Games.SetSection(me(), "arena", addon.Arena.BuildSection(), now()) then addon.Events.Fire("GAMES_CHANGED") end
+    addon.Events.Fire("CAUGHT_CHANGED")
+end
+
+local STAT_TEXT = { atk = Text["Attack"], def = Text["Defense"], spd = Text["Speed"], vit = Text["Vitality"] }
+Catcher.ARENA_STAT_TEXT = STAT_TEXT
+
+-- One chat line per arena notice (Arena.Settle).
+---@param notice table
+---@return string|nil
+function Catcher.ArenaNoticeText(notice)
+    local function short(name) return addon.Utility.ChatSafe((name or "?"):match("^([^%-]+)") or name or "?") end
+    if notice.kind == "challenged" then
+        return Format(Text["{name} challenges your companion to an arena fight (wager {gold}). Answer in AZEcaught > Arena."],
+            { name = short(notice.from), gold = money(notice.wager) })
+    elseif notice.kind == "answered" then
+        return Format(notice.accepted and Text["{name} accepted your arena challenge. The fight is decided in 5 minutes."]
+            or Text["{name} declined your arena challenge."], { name = short(notice.by) })
+    elseif notice.kind == "won" then
+        return "|cff66ff66" .. Format(Text["Arena: your companion beat {name}! (+{gold})"], { name = short(notice.opponent), gold = money(notice.wager * 2) }) .. "|r"
+    elseif notice.kind == "lost" then
+        return "|cffff6060" .. Format(Text["Arena: {name} beat your companion."], { name = short(notice.opponent) }) .. "|r"
+    elseif notice.kind == "refund" then
+        return notice.wager > 0 and Format(Text["Arena: {gold} came back to your pool."], { gold = money(notice.wager) }) or nil
+    elseif notice.kind == "betwon" then
+        return "|cff66ff66" .. Format(Text["Arena bet won: {gold} on {name}."], { gold = money(notice.payout), name = short(notice.fighter) }) .. "|r"
+    elseif notice.kind == "betlost" then
+        return Format(Text["Arena bet lost: {name} did not win."], { name = short(notice.fighter) })
+    end
+    return nil
+end
+
+-- Training, answers, fights and bets: runs every ARENA_TICK seconds from the tick (and on demand).
+---@param force? boolean
+function Catcher.ArenaTick(force)
+    local clock = Api.Clock()
+    if not force and clock - Catcher.lastArena < ARENA_TICK then return end
+    Catcher.lastArena = clock
+    local Arena = addon.Arena
+    local publish = false
+    local finished = Arena.FinishTraining()
+    if finished then
+        local entry = AzeCaught.State().collection[finished.npc]
+        addon.Print(Format(Text["Training done: {name}'s {stat} is now {points}."], { name = addon.Utility.ChatSafe(entry and entry.n or "?"),
+            stat = STAT_TEXT[finished.stat], points = finished.points }))
+        Api.PlaySound(Api.SoundKitFor({ "LEVELUPSOUND", "IG_QUEST_LIST_COMPLETE" }))
+        addon.Events.Fire("CAUGHT_CHANGED")
+    end
+    local notices, changed = Arena.Settle(addon.Games.AllRecords(), me(), now())
+    for _, notice in ipairs(notices) do
+        local line = Catcher.ArenaNoticeText(notice)
+        if line then addon.Print(line) end
+        if notice.kind == "challenged" then Api.PlaySound(Api.SoundKitFor({ "READY_CHECK", "RAID_WARNING" })) end
+        if notice.kind == "won" or notice.kind == "lost" or notice.kind == "refund" or notice.kind == "betwon" then publish = true end
+        if notice.kind == "won" or notice.kind == "lost" then Catcher.lastFight = notice.id end
+    end
+    if changed or publish then Catcher.PublishArena()
+    elseif #notices > 0 then addon.Events.Fire("CAUGHT_CHANGED") end
+end
+
 function Catcher.RunPayout()
     local amount, reason, rank = AzeCaught.WeeklyPayout(me(), addon.Store.db.games, now())
     if amount > 0 then
@@ -765,6 +832,7 @@ function Catcher.OnTick()
         if clock - Catcher.lastPublish >= PUBLISH_EVERY then Catcher.PublishSoon(true) end
     end
     if result.changed or result.died then addon.Events.Fire("CAUGHT_CHANGED") end
+    addon.Log.Protected("caught.arena", "the arena check failed", Catcher.ArenaTick)
     local periodKey = addon.Games.PeriodKey(serverNow)
     if Catcher.week and periodKey ~= Catcher.week then Catcher.RunPayout() end
     Catcher.week = periodKey
@@ -1086,6 +1154,14 @@ addon.SlashCommands.caught = function(arguments)
     if addon.IS_DEVELOPMENT_BUILD then for _, name in ipairs(addon.Utility.SortedKeys(developmentCommands)) do words[#words + 1] = name end end
     printLine(addon.SLASH_COMMANDS[1] .. " caught [" .. table.concat(words, "|") .. "]")
 end
+
+-- /gg caught arena: opens the arena view (feature 020)
+function commands.arena()
+    if not addon.UI.IsShown() then addon.UI.Toggle() end
+    if addon.GamesTab.SelectGame then addon.GamesTab.SelectGame("caught") end
+    addon.AzeCaughtPanel.SelectView("arena")
+end
+addon.SlashCommands.arena = function() commands.arena() end
 
 -- /gg caught icon [on|off|x <n>|y <n>|size <n>|reset] (user 2026-11-20)
 function commands.icon(arguments) addon.AzeCaughtOptions.Command(arguments) end
