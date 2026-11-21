@@ -14,3 +14,7 @@ dist/
 *.zip
 __pycache__/
 *-Dev.toc
+
+# CurseForge upload token (tools/upload-curseforge.ps1), in any spelling (.curseforge-token, .cursforge-token, ...)
+.curs*-token*
+*.token

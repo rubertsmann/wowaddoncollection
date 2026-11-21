@@ -38,6 +38,9 @@ Run `powershell tools/package.ps1`, unzip `dist/ProfessionShare-<version>.zip` i
 separate **ProfessionShare-Dev** addon (own data, prefix and `/psd`), so it runs next to the live `ProfessionShare`;
 `powershell tools/deploy.ps1 -InstallLive` also installs the newest `dist` zip as the live addon.
 Re-run `tools/deploy.ps1` after every change to `ProfessionShare.toc` (the dev TOC is a generated copy) and restart the game.
+Releases go to CurseForge with `powershell tools/upload-curseforge.ps1 -Addon professionshare` from the repo root,
+after `package.ps1` (settings in `tools/curseforge.json`; token in `$env:CF_API_TOKEN` or a gitignored
+`.curseforge-token` in the repo root or user folder; `-DryRun` checks without uploading).
 
 ## Use
 
