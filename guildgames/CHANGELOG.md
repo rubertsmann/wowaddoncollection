@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-11-21, protocol 1.2, schema 2)
 - AZEcaught arena (protocol 1.2): challenge guild members' companions to hands-off auto battles with an optional
   wager; the challenged player accepts or declines; the guild bets on the winner for 5 minutes at odds from the win
   chance; train Attack/Defense/Speed/Vitality, gain arena levels, keep wins and losses, and watch every fight as a replay.

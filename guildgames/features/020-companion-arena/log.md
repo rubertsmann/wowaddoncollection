@@ -111,3 +111,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Evidence: luajit tests/run.lua -> "137 passed, 0 failed"
 - Next: user: /reload; Arena > Fights: select a request.
 
+
+## 2026-11-21 08:19 | NOTE | release 0.3.0
+- Did: version 0.3.0 in GuildGames.toc, Init.lua fallback and CHANGELOG (protocol 1.2, schema 2); tag guildgames/v0.3.0; dist zip via tools/package.ps1.
+- Result: released on request (user 2026-11-21: "commit and push everything - and create a new version").
+- Evidence: luajit tests/run.lua -> 137 passed, 0 failed
+- Next: in-game check of the Arena UI (guide arrow, badges, icons, replay layout); nothing of it is verified in the client yet.
