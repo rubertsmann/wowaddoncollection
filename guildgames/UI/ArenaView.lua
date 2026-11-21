@@ -463,6 +463,240 @@ function ArenaView.StopReplay()
     if widgets.replay then widgets.replay:Hide() end
 end
 
+------------------------------------------------------------------ the challenge modal (user 2026-11-21)
+
+-- Opened by the one fight icon on another member's pet in the Guild view. Steps: 1 matchup (both companions), 2 wager
+-- (presets or a custom amount, checked against my pool), 3 confirm (sends), then "sent". Back / Next at the bottom.
+local STEP_TEXT = { Text["Matchup"], Text["Wager"], Text["Confirm"] }
+local WAGER_PRESETS = { 0, 1, 5, 10, 50, 100 }   -- gold
+ArenaView.challenge = { step = 1, wager = 0 }
+
+---@param parent table the Guild view frame
+function ArenaView.BuildChallenge(parent)
+    local Widgets = addon.UI.Widgets
+    local dialog = CreateFrame("Frame", nil, parent)
+    dialog:SetAllPoints(); dialog:SetFrameLevel(parent:GetFrameLevel() + 40); dialog:EnableMouse(true); dialog:Hide()
+    local dim = dialog:CreateTexture(nil, "BACKGROUND"); dim:SetAllPoints(); dim:SetColorTexture(0, 0, 0, 0.7)
+    local box = CreateFrame("Frame", nil, dialog)
+    box:SetSize(288, 290); box:SetPoint("TOP", 0, -24)
+    local plate = box:CreateTexture(nil, "BORDER"); plate:SetAllPoints(); plate:SetColorTexture(0.07, 0.06, 0.09, 0.97)
+    local line = box:CreateTexture(nil, "ARTWORK"); line:SetHeight(2); line:SetPoint("TOPLEFT"); line:SetPoint("TOPRIGHT")
+    line:SetColorTexture(0.9, 0.3, 0.25, 0.9)
+    widgets.challengeTitle = Widgets.CreateFontString(box, "GameFontNormal", "LEFT")
+    widgets.challengeTitle:SetPoint("TOPLEFT", 10, -8); widgets.challengeTitle:SetWidth(240)
+    local close = Widgets.CreateButton(box, "x", 20, 18, function() ArenaView.CloseChallenge() end)
+    close:SetPoint("TOPRIGHT", -4, -5)
+    -- the step track: 1 Matchup > 2 Wager > 3 Confirm
+    widgets.stepLabels = {}
+    for index = 1, #STEP_TEXT do
+        local label = Widgets.CreateFontString(box, "GameFontHighlightSmall", "CENTER")
+        label:SetPoint("TOPLEFT", 6 + (index - 1) * 92, -28); label:SetWidth(92)
+        widgets.stepLabels[index] = label
+    end
+    widgets.stepBar = createBar(box, 276, 3, { 0.9, 0.3, 0.25 })
+    widgets.stepBar:SetPoint("TOPLEFT", 6, -44)
+    widgets.stepPages = {}
+    for index = 1, 4 do
+        local page = CreateFrame("Frame", nil, box)
+        page:SetPoint("TOPLEFT", 0, -50); page:SetPoint("BOTTOMRIGHT", 0, 36)
+        widgets.stepPages[index] = page
+    end
+    -- 1 matchup: my fighter left, theirs right
+    local matchup = widgets.stepPages[1]
+    for _, side in ipairs({ "mine", "theirs" }) do
+        local part = {}
+        part.model = addon.AzeCaughtPanel.CreateModel(matchup, 110, 94)
+        part.model:SetPoint(side == "mine" and "TOPLEFT" or "TOPRIGHT", side == "mine" and 8 or -8, -2)
+        part.text = Widgets.CreateFontString(matchup, "GameFontHighlightSmall", "CENTER")
+        part.text:SetPoint("TOP", part.model, "BOTTOM", 0, -2); part.text:SetWidth(134)
+        widgets[side == "mine" and "matchMine" or "matchTheirs"] = part
+    end
+    local versus = Widgets.CreateFontString(matchup, "GameFontNormalLarge", "CENTER")
+    versus:SetPoint("TOP", 0, -40); versus:SetText("|cffff5040VS|r")
+    widgets.matchNote = Widgets.CreateFontString(matchup, "GameFontDisableSmall", "CENTER")
+    widgets.matchNote:SetPoint("BOTTOM", 0, 14); widgets.matchNote:SetWidth(276)
+    -- 2 wager: presets, a custom amount, my pool
+    local wager = widgets.stepPages[2]
+    widgets.wagerButtons = {}
+    for index, gold in ipairs(WAGER_PRESETS) do
+        local amount = gold
+        local button = Widgets.CreateButton(wager, gold == 0 and Text["No wager"] or money(gold * 10000), 84, 24,
+            function() ArenaView.SetWager(amount * 10000) end)
+        button:SetPoint("TOPLEFT", 12 + ((index - 1) % 3) * 90, -10 - math.floor((index - 1) / 3) * 30)
+        button.copper = gold * 10000
+        widgets.wagerButtons[index] = button
+    end
+    local customLabel = Widgets.CreateFontString(wager, "GameFontHighlightSmall", "RIGHT")
+    customLabel:SetPoint("TOPRIGHT", wager, "TOP", 10, -82); customLabel:SetText(Text["Wager (gold)"])
+    widgets.wagerBox = Widgets.CreateEditBox(wager, 60)
+    widgets.wagerBox:SetPoint("LEFT", customLabel, "RIGHT", 8, 0)
+    widgets.wagerPool = Widgets.CreateFontString(wager, "GameFontHighlightSmall", "CENTER")
+    widgets.wagerPool:SetPoint("TOP", 0, -110); widgets.wagerPool:SetWidth(276)
+    local wagerHint = Widgets.CreateFontString(wager, "GameFontDisableSmall", "CENTER")
+    wagerHint:SetPoint("TOP", 0, -132); wagerHint:SetWidth(270)
+    wagerHint:SetText(Text["Both pay the same wager; the winner takes both. A decline or no answer in 24 hours gives it back."])
+    -- 3 confirm: the summary
+    widgets.confirmSummary = Widgets.CreateFontString(widgets.stepPages[3], "GameFontHighlight", "CENTER")
+    widgets.confirmSummary:SetPoint("TOP", 0, -24); widgets.confirmSummary:SetWidth(270)
+    -- 4 sent
+    widgets.sentText = Widgets.CreateFontString(widgets.stepPages[4], "GameFontNormalLarge", "CENTER")
+    widgets.sentText:SetPoint("TOP", 0, -50); widgets.sentText:SetWidth(270)
+    local sentHint = Widgets.CreateFontString(widgets.stepPages[4], "GameFontHighlightSmall", "CENTER")
+    sentHint:SetPoint("TOP", widgets.sentText, "BOTTOM", 0, -12); sentHint:SetWidth(260)
+    sentHint:SetText(Text["They have 24 hours to answer. Follow it in Arena > Fights."])
+    -- the refusal line and the buttons
+    widgets.challengeError = Widgets.CreateFontString(box, "GameFontHighlightSmall", "CENTER")
+    widgets.challengeError:SetPoint("BOTTOM", 0, 34); widgets.challengeError:SetWidth(276)
+    widgets.challengeBack = Widgets.CreateButton(box, Text["Back"], 90, 22, function() ArenaView.ChallengeBack() end)
+    widgets.challengeBack:SetPoint("BOTTOMLEFT", 8, 8)
+    widgets.challengeNext = Widgets.CreateButton(box, Text["Next"], 110, 22, function() ArenaView.ChallengeNext() end)
+    widgets.challengeNext:SetPoint("BOTTOMRIGHT", -8, 8)
+    if Widgets.MakePrimary then Widgets.MakePrimary(widgets.challengeNext) end
+    widgets.challengeBox, widgets.challenge = box, dialog
+    parent:HookScript("OnHide", function() ArenaView.CloseChallenge() end)
+end
+
+local function companionLine(row, arena)
+    local lines = { "|cffffd100" .. row.companion .. "|r", Text["Level"] .. " " .. row.lvl .. " · " .. addon.Model.RarityText(row.cls),
+        ("|cffff4060%+d|r"):format(row.hearts or 0) }
+    if type(arena) == "table" then lines[#lines + 1] = Format(Text["Arena {wins}-{losses}"], { wins = arena.w or 0, losses = arena.l or 0 }) end
+    if row.asleep then lines[#lines + 1] = "|cff999999" .. Text["asleep"] .. "|r" end
+    return table.concat(lines, "\n")
+end
+
+-- The wager in the box in copper, or nil and the refusal.
+---@return integer|nil
+---@return string|nil
+function ArenaView.ReadWager()
+    local gold = tonumber(widgets.wagerBox:GetText() or "")
+    if not gold or gold < 0 then return nil, "wager" end
+    local copper = math.floor(gold * 10000)
+    if copper > addon.Arena.MAXIMUM_WAGER then return nil, "wager" end
+    if copper > 0 then
+        local refusal = addon.Wallet.FundsRefusal(me(), copper)
+        if refusal then return nil, refusal end
+    end
+    return copper
+end
+
+---@param copper integer
+function ArenaView.SetWager(copper)
+    ArenaView.challenge.wager = copper
+    widgets.wagerBox:SetText(tostring(math.floor(copper / 10000)))
+    for _, button in ipairs(widgets.wagerButtons) do
+        if button.SetSelected then button:SetSelected(button.copper == copper) end
+        button:SetAlpha(button.copper == copper and 1 or 0.7)
+    end
+end
+
+-- Shows step `step` (1..4): the page, the track, the buttons.
+---@param step integer
+function ArenaView.ShowChallengeStep(step)
+    local challenge = ArenaView.challenge
+    challenge.step = step
+    widgets.challengeError:SetText("")
+    for index, page in ipairs(widgets.stepPages) do page:SetShown(index == step) end
+    for index, label in ipairs(widgets.stepLabels) do
+        local color = index == step and "|cffffd100" or index < step and "|cff66ff66" or "|cff777777"
+        label:SetText(color .. index .. "  " .. STEP_TEXT[index] .. "|r")
+    end
+    addon.Animate.Tween("challengeStep", 0.25, function(elapsed)
+        widgets.stepBar:SetValue(((step - 1) + math.min(1, elapsed / 0.25)) / 3)
+    end, function() widgets.stepBar:SetValue(math.min(step, 3) / 3) end)
+    widgets.challengeBack:SetLabel(step == 1 and Text["Cancel"] or Text["Back"])
+    widgets.challengeBack:SetShown(step < 4)
+    widgets.challengeNext:SetLabel(step == 3 and Text["Send challenge"] or step == 4 and Text["Close"] or Text["Next"])
+    local opponent = short(challenge.opponent)
+    widgets.challengeTitle:SetText(Format(Text["Challenge {name}"], { name = opponent }))
+    if step == 1 then
+        local companion = addon.AzeCaught.Active()
+        local fighter = companion and addon.Arena.Fighter(companion)
+        local mine = widgets.matchMine
+        if fighter then
+            addon.AzeCaughtPanel.ShowModel(mine.model, { npc = companion.npc, disp = companion.disp }, "challenge")
+            local level = addon.Arena.Level(addon.Arena.Npc(companion.npc).xp)
+            mine.text:SetText(("|cffffd100%s|r\n%s\n%s %d · %s %d\n%s %d · %s %d\n|cff999999%s|r"):format(addon.Utility.Escape(fighter.n),
+                Format(Text["Arena level {level}"], { level = level }), Text["Attack"], fighter.atk, Text["Defense"], fighter.def,
+                Text["Speed"], fighter.spd, Text["Vitality"], fighter.vit, ABILITY_NAME[fighter.ab]))
+        else
+            addon.AzeCaughtPanel.ShowModel(mine.model, nil, "challenge")
+            mine.text:SetText("|cffff6060" .. Text["You have no companion."] .. "|r")
+        end
+        local row = challenge.row
+        addon.AzeCaughtPanel.ShowModel(widgets.matchTheirs.model, { npc = row.npc, disp = row.disp }, "challenge")
+        if widgets.matchTheirs.model.SetFacing then pcall(widgets.matchTheirs.model.SetFacing, widgets.matchTheirs.model, -0.6) end
+        widgets.matchTheirs.text:SetText(companionLine(row, (records()[row.nameRaw] or {}).arena))
+        widgets.matchNote:SetText(Text["Their stats show once they accept. The fight runs on its own."])
+    elseif step == 2 then
+        widgets.wagerPool:SetText(Format(Text["Your pool: {gold} · at most {maximum}"], { gold = money(addon.Wallet.Balance(me())),
+            maximum = money(addon.Arena.MAXIMUM_WAGER) }))
+        ArenaView.SetWager(challenge.wager or 0)
+    elseif step == 3 then
+        local companion = addon.AzeCaught.Active()
+        local lines = { Format(Text["{mine} vs {theirs}"], { mine = addon.Utility.Escape(companion and companion.n or "?"),
+            theirs = challenge.row.companion }), Format(Text["against {name}"], { name = opponent }), "" }
+        lines[#lines + 1] = challenge.wager > 0 and ("|cffffd100" .. Format(Text["Wager: {gold} each"], { gold = money(challenge.wager) }) .. "|r")
+            or Text["No wager: just for honor and XP."]
+        if challenge.wager > 0 then lines[#lines + 1] = "|cff999999" .. Text["Your stake leaves your pool now."] .. "|r" end
+        widgets.confirmSummary:SetText(table.concat(lines, "\n"))
+    else
+        widgets.sentText:SetText("|cff66ff66" .. Text["Challenge sent."] .. "|r")
+        addon.Animate.Pulse(widgets.sentText, 1.3, 0.35)
+        addon.Animate.Burst("challengeSent", widgets.challengeBox, widgets.sentText, 0, 0, { count = 18, color = { 1, 0.82, 0.2 }, speed = 100, duration = 1 })
+    end
+end
+
+-- Opens the modal for a guild row (not my own). Returns true when it opened.
+---@param row CompanionRow|nil
+---@return boolean
+function ArenaView.OpenChallenge(row)
+    if not widgets.challenge or not row or row.mine then return false end
+    local challenge = ArenaView.challenge
+    challenge.row, challenge.opponent, challenge.wager = row, row.nameRaw, 0
+    widgets.challenge:Show()
+    widgets.challengeBox:SetAlpha(0)
+    addon.Animate.FadeIn(widgets.challengeBox, 0.2)
+    ArenaView.ShowChallengeStep(1)
+    return true
+end
+
+function ArenaView.CloseChallenge()
+    if widgets.challenge then widgets.challenge:Hide() end
+    ArenaView.challenge.row = nil
+end
+
+local function challengeError(reason)
+    local text = reason == "twice" and Text["You already challenged them."] or ArenaView.RefusalText(reason)
+    widgets.challengeError:SetText("|cffff6060" .. text .. "|r")
+    addon.Animate.Shake(widgets.challengeBox, 4, 4)
+end
+
+function ArenaView.ChallengeNext()
+    local challenge = ArenaView.challenge
+    local step = challenge.step
+    if step == 1 then
+        if not addon.AzeCaught.Active() then challengeError("nocompanion") return end
+        ArenaView.ShowChallengeStep(2)
+    elseif step == 2 then
+        local copper, reason = ArenaView.ReadWager()
+        if not copper then challengeError(reason) return end
+        challenge.wager = copper
+        ArenaView.ShowChallengeStep(3)
+    elseif step == 3 then
+        local id, reason = addon.Arena.Challenge(records(), me(), challenge.opponent or "", challenge.wager or 0, now())
+        if not id then challengeError(reason) return end
+        addon.Catcher.PublishArena()
+        ArenaView.ShowChallengeStep(4)
+    else
+        ArenaView.CloseChallenge()
+    end
+end
+
+function ArenaView.ChallengeBack()
+    local step = ArenaView.challenge.step
+    if step <= 1 or step >= 4 then ArenaView.CloseChallenge() else ArenaView.ShowChallengeStep(step - 1) end
+end
+
 ------------------------------------------------------------------ build and refresh
 
 ---@param page "fighter"|"fights"

@@ -17,7 +17,8 @@ Result after work:    `luajit tests/run.lua` -> 133 passed, 0 failed
 | R7 | settlement: winner takes both, W/L, XP, once | test_arena "challenge, accept, bets and settlement ..." | OFFLINE | suite line | pass | 2026-11-21 |
 | R8 | side bets: window, own fight refused, odds, payout | test_arena "challenge, accept, bets ..." | OFFLINE | suite line | pass | 2026-11-21 |
 | R9 | history and W/L in the guild preview | test_arena (history); test_load (guild view) | OFFLINE / NOT-VERIFIED (look in game) | suite line | pass offline | 2026-11-21 |
-| R10 | arena view, train, answer, replay | test_load "all TOC files run ..." (arena view: train, accept, watch, steps, tick) | OFFLINE / NOT-VERIFIED (look in game) | suite line | pass offline | 2026-11-21 |
+| R10 | arena view, train, answer, replay, guild fight icon + challenge modal | test_load "all TOC files run ..." (arena view: train, accept, watch, steps, tick; modal steps, fight icon) | OFFLINE / NOT-VERIFIED (look in game) | suite line | pass offline | 2026-11-21 |
+| R12 | dev dummy and fake request | test_arena "the dev dummy accepts my challenge ..."; test_load (modal with the dummy) | OFFLINE / NOT-VERIFIED (in game) | suite line "134 passed, 0 failed" | pass offline | 2026-11-21 |
 | R11 | chat notices once | test_arena (noticed once); test_load (ArenaTick) | OFFLINE / NOT-VERIFIED | suite line | pass offline | 2026-11-21 |
 | RF1 | same winner on every client | test_arena "challenge ..." (A's and B's result equal), determinism test | OFFLINE | suite line | pass | 2026-11-21 |
 | RF2 | money never doubles | test_arena settle twice, refund once | OFFLINE | suite line | pass | 2026-11-21 |

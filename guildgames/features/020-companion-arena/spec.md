@@ -40,8 +40,11 @@ side bets from the rest of the guild.
 - R9 History: my last `MAXIMUM_HISTORY` fights are kept locally; the guild view shows each member's arena W/L.
 - R10 UI: an "Arena" view in the AZEcaught panel: my fighter (arena level, XP bar, W/L, four stats with train buttons,
   training progress), the fight list (incoming: Accept/Decline; open: bet on either side with the odds; finished: result
-  and Watch), a Challenge button with a wager box in the Guild view, an animated replay (two models, health bars,
-  floating damage, shake on hit, the winner's burst).
+  and Watch), in the Guild view one fight icon on another member's selected pet that opens a challenge modal in steps
+  (matchup, wager, confirm, sent), an animated replay (two models, health bars, floating damage, shake on hit, the
+  winner's burst).
+- R12 Dev build: a fake opponent (`/ggd arena dummy`, memory only, accepts my challenges) and a fake incoming
+  challenge (`/ggd arena request [gold]`) to test alone.
 - R11 Notices: chat lines for a new challenge, an answer, a fight result and a bet result (once each).
 
 ## Non-goals
@@ -102,6 +105,14 @@ side bets from the rest of the guild.
   Barrier 10% of max health, Smash stuns 50%; pinned by "abilities are balanced".
 - 2026-11-21 Claude: a challenge not answered after 24 h "lapses" (no answer possible) but is refunded only after 24 h
   more, so an answer that syncs late still makes the fight happen instead of a refund on one side only.
+
+- 2026-11-21 User: "the gilde -> fight needs a little rework - all the button seem to be overlapping what we would need
+  is a multilevel modal when clicking on an the pet of another guild mate then the dialog needs to be only visible and a
+  single fighting icon should start the modal. Also add a custom dev version command to add a "fake" enemy and also a
+  fake "fight request command"". Claude decided: a click (not hover) selects a pet; the fight icon sits on the preview
+  model and shows only for another member's pet; the modal has 3 steps + "sent"; the dummy lives in `Games.simulated`
+  (never stored or sent, like `/ggd games sim`); Settle never refunds a challenge whose fight was already settled
+  (a vanished record, e.g. the dummy after a reload, must not pay twice).
 
 ## Open questions
 - Tuning (costs, XP, odds bounds) after playing (needs: user).

@@ -9,7 +9,10 @@ hands-off auto battle driven by the companions' stats, arena level, training, he
 The rest of the guild can bet on either side in those five minutes. Wins, losses and XP are kept per companion.
 
 ## How to use
-- **Guild** view: point at a member's row, enter a wager in gold (0 = just for fun), press **Challenge <name>**.
+- **Guild** view: click a member's pet; a red fight icon appears on its model. The icon opens the challenge window in
+  three steps: **Matchup** (both companions side by side: your stats, their level, rarity, hearts and arena record),
+  **Wager** (no wager, 1/5/10/50/100 gold or your own amount, checked against your pool), **Confirm** (sends; your
+  stake leaves your pool now). **Back** goes one step back, **x** closes.
 - **Arena** view, **Fighter** page: your companion's arena level and XP, wins and losses, the four stats (Attack,
   Defense, Speed, Vitality) and **Train** per stat (tooltip: cost, energy, time), the running training and its ability.
 - **Arena** view, **Fights** page: incoming challenges (**Accept** / **Decline**), open fights (bet N gold on either
@@ -17,6 +20,9 @@ The rest of the guild can bet on either side in those five minutes. Wins, losses
   the winner's burst; **Skip** jumps to the end).
 - Chat tells you about a new challenge, an answer, your fight's result, a bet's result and finished training.
 - `/gg arena` (or `/gg caught arena`) opens the view.
+- Dev build only: `/ggd arena dummy` adds "Arenadummy-Test" to the Guild list (memory only, never stored or sent; gone
+  after a reload; `dummy off` removes it). Its companion mirrors yours with stats -15..+15%; it accepts your challenges
+  within 5 s. `/ggd arena request [gold]` makes the dummy challenge you (it joins first if needed).
 
 ## How it works
 - **Fighter** (`Arena.Fighter`): attack/defense/speed from `AzeCaught.CombatStats` (level, rarity, creature type, a

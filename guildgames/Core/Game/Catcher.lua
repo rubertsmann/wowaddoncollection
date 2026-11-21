@@ -787,6 +787,12 @@ function Catcher.ArenaTick(force)
         Api.PlaySound(Api.SoundKitFor({ "LEVELUPSOUND", "IG_QUEST_LIST_COMPLETE" }))
         addon.Events.Fire("CAUGHT_CHANGED")
     end
+    -- the dev dummy (dev build only) accepts my challenges to it
+    local dummy = addon.IS_DEVELOPMENT_BUILD and addon.Games.simulated[Arena.DUMMY_NAME]
+    if dummy and Arena.DummyRespond(dummy, me(), now()) > 0 then
+        addon.Print("[dev] the arena dummy accepted your challenge: the fight is decided in " .. math.floor(Arena.BET_WINDOW / 60) .. " minutes")
+        addon.Events.Fire("CAUGHT_CHANGED")
+    end
     local notices, changed = Arena.Settle(addon.Games.AllRecords(), me(), now())
     for _, notice in ipairs(notices) do
         local line = Catcher.ArenaNoticeText(notice)
@@ -1121,6 +1127,33 @@ if addon.IS_DEVELOPMENT_BUILD then
     addon.SlashCommands.reset = function(arguments) addon.SlashCommands.caught("reset " .. (arguments or "")) end
 end
 
+-- /ggd caught dummy [off] (also /ggd arena dummy): a fake guild member with a companion in the Guild list, to test the
+-- arena alone (user 2026-11-21). Memory only (Games.simulated: never stored, never sent; gone after a reload). It
+-- accepts my challenges on the next arena tick (5 s).
+function developmentCommands.dummy(arguments)
+    local Arena = addon.Arena
+    if ((arguments or ""):match("^%s*(%S*)") or ""):lower() == "off" then
+        addon.Games.simulated[Arena.DUMMY_NAME] = nil
+        printLine("the arena dummy is gone")
+    else
+        local companion = AzeCaught.Active()
+        addon.Games.simulated[Arena.DUMMY_NAME] = Arena.DummyRecord(companion and Arena.Fighter(companion), now())
+        printLine(Arena.DUMMY_NAME .. " joined the guild list (memory only): challenge it in AZEcaught > Guild, it accepts within 5 s")
+    end
+    AzeCaught.Journal("INFORMATION", "dev.dummy", "the arena dummy was changed", { on = addon.Games.simulated[Arena.DUMMY_NAME] ~= nil })
+    addon.Events.Fire("GAMES_CHANGED"); addon.Events.Fire("CAUGHT_CHANGED")
+end
+-- /ggd caught request [gold] (also /ggd arena request): the dummy challenges me (it joins first if needed)
+function developmentCommands.request(arguments)
+    local Arena = addon.Arena
+    if not addon.Games.simulated[Arena.DUMMY_NAME] then developmentCommands.dummy("") end
+    local gold = tonumber((arguments or ""):match("(%d+)")) or 0
+    local id = Arena.DummyChallenge(addon.Games.simulated[Arena.DUMMY_NAME], me(), gold * 10000, now())
+    AzeCaught.Journal("INFORMATION", "dev.request", "the arena dummy challenged me", { id = id, wager = gold * 10000 })
+    Catcher.ArenaTick(true)
+    addon.Events.Fire("GAMES_CHANGED"); addon.Events.Fire("CAUGHT_CHANGED")
+end
+
 -- adds the current target (or a test NPC) as caught, without a roll
 function developmentCommands.add()
     local snapshot = Api.UnitSnapshot("target")
@@ -1155,13 +1188,16 @@ addon.SlashCommands.caught = function(arguments)
     printLine(addon.SLASH_COMMANDS[1] .. " caught [" .. table.concat(words, "|") .. "]")
 end
 
--- /gg caught arena: opens the arena view (feature 020)
-function commands.arena()
+-- /gg caught arena: opens the arena view (feature 020); the dev build also takes "dummy [off]" and "request [gold]"
+function commands.arena(arguments)
+    local word, rest = (arguments or ""):match("^%s*(%S*)%s*(.-)%s*$")
+    word = (word or ""):lower()
+    if addon.IS_DEVELOPMENT_BUILD and (word == "dummy" or word == "request") then developmentCommands[word](rest) return end
     if not addon.UI.IsShown() then addon.UI.Toggle() end
     if addon.GamesTab.SelectGame then addon.GamesTab.SelectGame("caught") end
     addon.AzeCaughtPanel.SelectView("arena")
 end
-addon.SlashCommands.arena = function() commands.arena() end
+addon.SlashCommands.arena = function(arguments) commands.arena(arguments) end
 
 -- /gg caught icon [on|off|x <n>|y <n>|size <n>|reset] (user 2026-11-20)
 function commands.icon(arguments) addon.AzeCaughtOptions.Command(arguments) end

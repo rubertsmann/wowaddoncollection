@@ -255,4 +255,37 @@ return {
         harness.equal(repaired.npcs[5].xp, 0); harness.equal(repaired.npcs[5].tr.atk, 0)
         harness.equal(next(repaired.ch), nil)
     end,
+
+    ["arena: the dev dummy accepts my challenge, fights and pays once; its challenge comes in; a vanished record never refunds a settled fight"] = function(harness)
+        local addon = player(harness, "A-R", 100)
+        local Arena, AzeCaught = addon.Arena, addon.AzeCaught
+        local dummy = Arena.DummyRecord(Arena.Fighter(AzeCaught.Active()), NOW)
+        harness.equal(dummy.name, Arena.DUMMY_NAME)
+        harness.truthy(addon.Utility.IsSafeName(dummy.name))
+        harness.truthy(Arena.SanitizeFighter(dummy.dummyFighter), "the dummy's fighter is valid")
+        harness.truthy(AzeCaught.SanitizeSection(dummy.caught, math.huge), "the dummy's companion is valid")
+        local records = { [dummy.name] = dummy }
+        local start = balance(addon, "A-R")
+        local id = assert(Arena.Challenge(records, "A-R", dummy.name, 10000, NOW))
+        harness.equal(Arena.DummyRespond(dummy, "A-R", NOW + 5), 1)
+        harness.equal(Arena.DummyRespond(dummy, "A-R", NOW + 6), 0, "answers once")
+        harness.equal(Arena.Fights(records, "A-R", NOW + 10)[id].state, "open")
+        local fightTime = NOW + 5 + Arena.BET_WINDOW
+        Arena.Settle(records, "A-R", fightTime)
+        local won = Arena.State().w == 1
+        harness.equal(Arena.State().w + Arena.State().l, 1)
+        harness.equal(balance(addon, "A-R"), won and start + 10000 or start - 10000)
+        -- the dummy is gone (a reload): the challenge looks unanswered and expires, but the fight was settled: no refund
+        local late = NOW + Arena.CHALLENGE_TTL + Arena.ANSWER_GRACE + 10
+        local notices = Arena.Settle({}, "A-R", late)
+        for _, notice in ipairs(notices) do harness.truthy(notice.kind ~= "refund", "no refund after a settled fight") end
+        harness.equal(balance(addon, "A-R"), won and start + 10000 or start - 10000)
+        -- the dummy challenges me: an incoming fight I can accept
+        local incoming = Arena.DummyChallenge(dummy, "A-R", 5000, NOW + 100)
+        local fight = Arena.Fights(records, "A-R", NOW + 101)[incoming]
+        harness.equal(fight.state, "pending"); harness.equal(fight.b, "A-R"); harness.equal(fight.wager, 5000)
+        harness.truthy(Arena.SanitizeSection(dummy.arena, dummy.name, math.huge), "the dummy's section is valid")
+        assert(Arena.Answer(records, "A-R", incoming, true, NOW + 102))
+        harness.equal(Arena.Fights(records, "A-R", NOW + 103)[incoming].state, "open")
+    end,
 }

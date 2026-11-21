@@ -662,7 +662,8 @@ function Arena.Settle(records, myName, now)
         if fight.a == myName and fight.answerAt then
             notice("a:" .. id, { kind = "answered", id = id, by = fight.b, accepted = fight.state ~= "declined" })
         end
-        if mine == "a" and (fight.state == "declined" or fight.state == "expired") and once("r:" .. id) then
+        -- (never after the fight itself was settled: a record that vanished, like the dev dummy after a reload, must not pay twice)
+        if mine == "a" and (fight.state == "declined" or fight.state == "expired") and not state.settled["f:" .. id] and once("r:" .. id) then
             pay(myName, fight.wager, "refund", now, fight.b)
             notices[#notices + 1] = { kind = "refund", id = id, opponent = fight.b, wager = fight.wager, why = fight.state }
         end
@@ -769,4 +770,61 @@ function Arena.SanitizePersisted(caught, me)
     end
     caught.arena = clean
     return repaired
+end
+
+------------------------------------------------------------------ the dev dummy (user 2026-11-21, dev build only)
+
+-- A fake guild member for testing the arena alone: a record in Games.simulated (memory only: never stored, never sent).
+Arena.DUMMY_NAME = "Arenadummy-Test"
+
+-- The dummy's record: its companion mirrors mine (the model always loads) with stats -15%..+15% from `seed`.
+---@param myFighter Fighter|nil
+---@param now integer
+---@param seed? integer
+---@return table record
+function Arena.DummyRecord(myFighter, now, seed)
+    local base = myFighter or { npc = 299, n = "Young Wolf", cls = "normal", disp = 0, ty = 1, al = 1, atk = 40, def = 40, spd = 40, vit = 40, ab = "rend" }
+    local fighter = addon.Utility.DeepCopy(base)
+    local random = generator((math.floor(seed or now) % (MODULUS - 1)) + 1)
+    for _, stat in ipairs(Arena.STATS) do
+        fighter[stat] = math.max(1, math.floor(base[stat] * (0.85 + 0.3 * random()) + 0.5))
+    end
+    fighter.n = base.n .. " (Dummy)"
+    return { name = Arena.DUMMY_NAME, rev = now, dummyFighter = fighter,
+        caught = { weeks = {}, c = { npc = fighter.npc, n = fighter.n, lvl = 20, cls = fighter.cls, disp = fighter.disp, h = 0,
+            hu = 80, th = 80, af = 60, en = 90, fs = 0 } },
+        arena = { w = 0, l = 0, ch = {}, an = {}, bt = {} } }
+end
+
+-- The dummy accepts every pending challenge of mine to it. Returns the number accepted.
+---@param dummy table the dummy's record
+---@param myName string
+---@param now integer
+---@return integer
+function Arena.DummyRespond(dummy, myName, now)
+    local accepted = 0
+    for id, challenge in pairs(Arena.State().ch) do
+        if challenge.to == dummy.name and not dummy.arena.an[id] and now <= challenge.at + Arena.CHALLENGE_TTL then
+            dummy.arena.an[id] = { ok = true, at = math.max(now, challenge.at), f = addon.Utility.DeepCopy(dummy.dummyFighter) }
+            accepted = accepted + 1
+        end
+    end
+    if accepted > 0 then dummy.rev = now end
+    return accepted
+end
+
+-- The dummy challenges me with `wager` copper. Returns the fight id.
+---@param dummy table
+---@param myName string
+---@param wager integer
+---@param now integer
+---@return string id
+function Arena.DummyChallenge(dummy, myName, wager, now)
+    local at = now
+    while dummy.arena.ch[dummy.name .. "#" .. at] do at = at + 1 end
+    local id = dummy.name .. "#" .. at
+    dummy.arena.ch[id] = { to = myName, at = at, wg = addon.Utility.Clamp(math.floor(tonumber(wager) or 0), 0, Arena.MAXIMUM_WAGER),
+        f = addon.Utility.DeepCopy(dummy.dummyFighter) }
+    dummy.rev = now
+    return id
 end

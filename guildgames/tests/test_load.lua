@@ -11,10 +11,12 @@ local PLAIN = { GetStringWidth = 40, GetWidth = 100, GetHeight = 20, GetText = "
     GetCenter = 0, GetNumPoints = 0, GetAlpha = 1, GetFrameLevel = 1 }
 local function stub()
     local widget = {}
-    local shown = false
+    local shown, text = false, ""
     return setmetatable(widget, {
         __index = function(_, key)
             if key == "IsShown" then return function() return shown end end
+            if key == "SetText" then return function(_, value) text = value == nil and "" or tostring(value) return widget end end
+            if key == "GetText" then return function() return text end end
             if key == "Show" then return function() shown = true end end
             if key == "Hide" then return function() shown = false end end
             if key == "SetShown" then return function(_, value) shown = value and true or false end end
@@ -390,7 +392,44 @@ return {
                         harness.equal(Arena.State().w + Arena.State().l, 1, "the fight was settled")
                         addon.Games.AllRecords, addon.Utility.Now = savedRecords, savedNow
                         rawset(_G, "GetServerTime", savedServerTime)
-                        harness.truthy(pcall(Panel.SelectView, "guild")); harness.truthy(pcall(Panel.Challenge), "challenge without a row")
+                        -- the guild view (user 2026-11-21): a click selects a pet, the fight icon opens the challenge modal
+                        local ArenaView = addon.ArenaView
+                        addon.Games.simulated[Arena.DUMMY_NAME] = Arena.DummyRecord(Arena.Fighter(AzeCaught.Active()), savedNow())
+                        harness.truthy(pcall(Panel.SelectView, "guild"))
+                        local dummyRow
+                        for _, row in ipairs(addon.Model.BuildCompanionRows(addon.Games.AllRecords(), me)) do
+                            if row.nameRaw == Arena.DUMMY_NAME then dummyRow = row end
+                        end
+                        harness.truthy(dummyRow, "the dummy is in the guild list")
+                        harness.truthy(pcall(Panel.SelectGuildRow, dummyRow))
+                        harness.equal(Panel.state.guildRow.nameRaw, Arena.DUMMY_NAME)
+                        harness.truthy(Panel.widgets.fightButton:IsShown() ~= false, "the fight icon shows for another member's pet")
+                        local okOpen, opened = pcall(Panel.Challenge)
+                        harness.truthy(okOpen and opened, "modal: " .. tostring(opened))
+                        harness.equal(ArenaView.challenge.step, 1)
+                        harness.truthy(pcall(ArenaView.ChallengeNext)); harness.equal(ArenaView.challenge.step, 2)
+                        ArenaView.widgets.wagerBox:SetText("abc")
+                        harness.truthy(pcall(ArenaView.ChallengeNext)); harness.equal(ArenaView.challenge.step, 2, "a bad wager stays")
+                        harness.truthy(pcall(ArenaView.SetWager, 10000)); harness.equal(ArenaView.ReadWager(), 10000)
+                        harness.truthy(pcall(ArenaView.ChallengeNext)); harness.equal(ArenaView.challenge.step, 3)
+                        harness.truthy(pcall(ArenaView.ChallengeBack)); harness.equal(ArenaView.challenge.step, 2)
+                        harness.truthy(pcall(ArenaView.ChallengeNext)); harness.truthy(pcall(ArenaView.ChallengeNext))
+                        harness.equal(ArenaView.challenge.step, 4, "sent")
+                        local sent = 0
+                        for _, challenge in pairs(Arena.State().ch) do if challenge.to == Arena.DUMMY_NAME then sent = sent + 1 end end
+                        harness.equal(sent, 1)
+                        harness.truthy(pcall(ArenaView.ChallengeNext)); harness.truthy(not ArenaView.challenge.row, "closed")
+                        -- my own pet: no fight icon, no modal
+                        local myRow
+                        for _, row in ipairs(addon.Model.BuildCompanionRows(addon.Games.AllRecords(), me)) do if row.mine then myRow = row end end
+                        if myRow then
+                            Panel.SelectGuildRow(myRow)
+                            harness.truthy(not Panel.widgets.fightButton:IsShown(), "no fight icon on my own pet")
+                            harness.equal(Panel.Challenge(), false)
+                        end
+                        addon.Games.simulated[Arena.DUMMY_NAME] = nil
+                        Panel.state.guildRow = nil
+                        harness.truthy(pcall(Panel.Refresh)); harness.truthy(pcall(Panel.Challenge), "challenge without a row")
                     end
                 end
                 -- the identity probe (user 2026-11-20): runs on any client, secret or missing functions are named, never raises

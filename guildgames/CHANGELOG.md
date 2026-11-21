@@ -4,6 +4,7 @@
 - AZEcaught arena (protocol 1.2): challenge guild members' companions to hands-off auto battles with an optional
   wager; the challenged player accepts or declines; the guild bets on the winner for 5 minutes at odds from the win
   chance; train Attack/Defense/Speed/Vitality, gain arena levels, keep wins and losses, and watch every fight as a replay.
+  In the Guild view a fight icon on another member's pet opens a step-by-step challenge window (matchup, wager, confirm).
 - AZEcaught: the Seen tab keeps a history per NPC: how often you met it, how many you killed, caught x of y throws,
   first and last seen (stored with the collection; older entries start at "seen once").
 - AZEcaught: the Seen stats are icon badges with small animations (fade in, count up, a pulse and "+1" when a number rises).

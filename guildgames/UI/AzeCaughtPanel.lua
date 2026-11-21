@@ -27,6 +27,7 @@ local CARE_ICONS = { feed = "Interface\\Icons\\INV_Misc_Food_15", water = "Inter
     pet = "Interface\\Icons\\Ability_Hunter_BeastSoothe", sleep = "Interface\\Icons\\Spell_Nature_Sleep",
     wake = "Interface\\Icons\\Ability_Warrior_BattleShout" }
 -- the history badges under the preview model and their icons (rows and hover panel use the same ones)
+local FIGHT_ICON = "Interface\\Icons\\Ability_Warrior_Challange"   -- the guild view's fight icon (user 2026-11-21)
 local HISTORY_ICONS = { seen = "Interface\\Icons\\INV_Misc_Spyglass_03", kills = "Interface\\Icons\\Ability_DualWield",
     caught = "Interface\\Icons\\Ability_Ensnare", last = "Interface\\Icons\\INV_Misc_PocketWatch_01",
     first = "Interface\\Icons\\INV_Misc_Map_01" }
@@ -755,12 +756,12 @@ local function createGuildRow(list)
     row.rank = Widgets.CreateFontString(row, "GameFontHighlightSmall", "RIGHT"); row.rank:SetPoint("LEFT", 0, 0); row.rank:SetWidth(18)
     row.owner = Widgets.CreateFontString(row, "GameFontHighlightSmall", "LEFT"); row.owner:SetPoint("LEFT", 22, 0); row.owner:SetWidth(80)
     row.level = Widgets.CreateFontString(row, "GameFontNormalSmall", "RIGHT"); row.level:SetPoint("RIGHT", -2, 0); row.level:SetWidth(76)
-    row:SetScript("OnEnter", function(self)
-        self.hover:Show()
-        if self.entry then Panel.state.guildRow = self.entry; Panel.RefreshGuildPreview() end
-    end)
+    row.selected = row:CreateTexture(nil, "BACKGROUND", nil, 2); row.selected:SetAllPoints(); row.selected:SetColorTexture(0.3, 0.6, 1, 0.22)
+    row.selected:Hide()
+    -- a click selects the pet (user 2026-11-21: hovering no longer switches it, so the mouse can reach the fight icon)
+    row:SetScript("OnEnter", function(self) self.hover:Show() end)
     row:SetScript("OnLeave", function(self) self.hover:Hide() end)
-    row:SetScript("OnClick", function(self) if self.entry then Panel.state.guildRow = self.entry; Panel.RefreshGuildPreview() end end)
+    row:SetScript("OnClick", function(self) if self.entry then Panel.SelectGuildRow(self.entry) end end)
     return row
 end
 
@@ -768,6 +769,7 @@ end
 ---@param entry CompanionRow
 local function fillGuildRow(row, entry)
     row.mine:SetShown(entry.mine)
+    row.selected:SetShown(Panel.state.guildRow ~= nil and Panel.state.guildRow.nameRaw == entry.nameRaw)
     row.rank:SetText(tostring(entry.rank))
     local owner = entry.nameRaw:match("^([^%-]+)") or entry.nameRaw
     row.owner:SetText(addon.Utility.Escape(owner))
@@ -789,20 +791,39 @@ local function buildGuildView(panel)
     widgets.guildModel = preview
     widgets.guildPreviewText = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
     widgets.guildPreviewText:SetPoint("TOP", preview, "BOTTOM", 0, -2); widgets.guildPreviewText:SetWidth(104)
-    -- the arena challenge (feature 020): the wager in gold, then Challenge for the row under the mouse
-    widgets.wagerBox = Widgets.CreateEditBox(panel, 40)
-    widgets.wagerBox:SetPoint("TOPRIGHT", -66, -236); widgets.wagerBox:SetText("0")
-    local wagerLabel = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "RIGHT")
-    wagerLabel:SetPoint("RIGHT", widgets.wagerBox, "LEFT", -2, 0); wagerLabel:SetText(Text["Wager (gold)"])
-    widgets.challengeButton = Widgets.CreateButton(panel, Text["Challenge"], 60, 20, function() Panel.Challenge() end)
-    widgets.challengeButton:SetPoint("TOPRIGHT", -2, -235)
-    widgets.challengeStatus = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "RIGHT")
-    widgets.challengeStatus:SetPoint("TOPRIGHT", -4, -258); widgets.challengeStatus:SetWidth(200)
+    -- the arena challenge (feature 020, reworked user 2026-11-21): one fight icon on another member's pet opens the
+    -- challenge modal (ArenaView.OpenChallenge: matchup, wager, confirm)
+    local fight = CreateFrame("Button", nil, panel)
+    fight:SetSize(30, 30); fight:SetPoint("BOTTOMRIGHT", preview, "BOTTOMRIGHT", -2, 2)
+    fight:SetFrameLevel(preview:GetFrameLevel() + 5)
+    fight.border = fight:CreateTexture(nil, "BACKGROUND"); fight.border:SetPoint("TOPLEFT", -2, 2); fight.border:SetPoint("BOTTOMRIGHT", 2, -2)
+    fight.border:SetColorTexture(0.8, 0.2, 0.15, 0.95)
+    fight.icon = fight:CreateTexture(nil, "ARTWORK"); fight.icon:SetAllPoints()
+    addon.UIHelpers.SetTextureOr(fight.icon, FIGHT_ICON, { 0.8, 0.2, 0.15 })
+    if fight.icon.SetTexCoord then fight.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    fight.glow = fight:CreateTexture(nil, "OVERLAY"); fight.glow:SetPoint("CENTER"); fight.glow:SetSize(58, 58)
+    addon.UIHelpers.SetTextureOr(fight.glow, "Interface\\Buttons\\UI-ActionButton-Border", { 1, 0.3, 0.2 })
+    if fight.glow.SetBlendMode then fight.glow:SetBlendMode("ADD") end
+    fight.glow:SetVertexColor(1, 0.35, 0.2); fight.glow:SetAlpha(0)
+    fight:SetScript("OnClick", function() Panel.Challenge() end)
+    fight:SetScript("OnEnter", function(self)
+        self.glow:SetAlpha(0.8)
+        local row = Panel.state.guildRow
+        if not GameTooltip or not row then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(Format(Text["Challenge {name}"], { name = addon.Utility.Escape(row.nameRaw:match("^([^%-]+)") or row.nameRaw) }), 1, 0.82, 0)
+        GameTooltip:AddLine(Text["An arena fight between your companions."], 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    fight:SetScript("OnLeave", function(self) self.glow:SetAlpha(0); if GameTooltip then GameTooltip:Hide() end end)
+    fight:Hide()
+    widgets.fightButton = fight
     local note = Widgets.CreateFontString(panel, "GameFontDisableSmall", "CENTER")
     note:SetPoint("TOP", 0, -276); note:SetWidth(290)
     note:SetText(Format(Text["Level = NPC level + rarity + hearts. Weekly pay: {first}, {second}, {third}, others {other}."],
         { first = money(AzeCaught.PAYOUTS[1]), second = money(AzeCaught.PAYOUTS[2]), third = money(AzeCaught.PAYOUTS[3]),
           other = money(AzeCaught.PAYOUT_OTHER) }))
+    addon.ArenaView.BuildChallenge(panel)
 end
 
 ------------------------------------------------------------------ build and refresh
@@ -1004,7 +1025,11 @@ end
 
 function Panel.RefreshGuildPreview()
     local row = Panel.state.guildRow
-    if not row then showModel(widgets.guildModel, nil, "guild") widgets.guildPreviewText:SetText("") return end
+    if not row then
+        showModel(widgets.guildModel, nil, "guild") widgets.guildPreviewText:SetText("")
+        if widgets.fightButton then widgets.fightButton:Hide() end
+        return
+    end
     showModel(widgets.guildModel, { npc = row.npc, disp = row.disp }, "guild")
     -- arena wins/losses (feature 020): mine from the local state, others from their record
     local arena = row.mine and addon.Arena.State() or (addon.Games.Get(row.nameRaw) or {}).arena
@@ -1012,24 +1037,25 @@ function Panel.RefreshGuildPreview()
     widgets.guildPreviewText:SetText(("%s\n%s %d · %s\n%s %d%% %s %d%%\n%s %d%% %s %d%%%s%s"):format(row.companion, Text["Level"], row.lvl,
         rarityText(row.cls), Text["Food"], row.hunger, Text["Water"], row.thirst, Text["Petting"], row.affection, Text["Energy"], row.energy,
         row.asleep and ("\n" .. Text["asleep"]) or "", arenaLine))
-    if widgets.challengeButton then
-        widgets.challengeButton:SetEnabled(not row.mine)
-        widgets.challengeButton:SetLabel(Format(Text["Challenge {name}"], { name = addon.Utility.Escape(row.nameRaw:match("^([^%-]+)") or row.nameRaw) }))
+    -- the fight icon: only on another member's pet; it pops in when such a pet is selected
+    if row.mine then
+        widgets.fightButton:Hide()
+    elseif not widgets.fightButton:IsShown() then
+        widgets.fightButton:Show(); addon.Animate.Pulse(widgets.fightButton, 1.3, 0.3)
     end
 end
 
--- Challenges the guild row under the mouse with the wager in the box (feature 020).
+-- Selects a guild row (a click; user 2026-11-21).
+---@param row CompanionRow
+function Panel.SelectGuildRow(row)
+    Panel.state.guildRow = row
+    Panel.Refresh()
+end
+
+-- The fight icon: opens the challenge modal for the selected pet (feature 020). Returns true when it opened.
+---@return boolean
 function Panel.Challenge()
-    local row = Panel.state.guildRow
-    local gold = tonumber(widgets.wagerBox:GetText() or "") or 0
-    local id, reason = addon.Arena.Challenge(addon.Games.AllRecords(), addon.Utility.Me(), row and row.nameRaw or "", math.floor(gold * 10000),
-        addon.Utility.Now())
-    if id then
-        widgets.challengeStatus:SetText("|cff66ff66" .. Text["Challenge sent."] .. "|r")
-        addon.Catcher.PublishArena()
-    else
-        widgets.challengeStatus:SetText("|cffff6060" .. addon.ArenaView.RefusalText(reason) .. "|r")
-    end
+    return addon.ArenaView.OpenChallenge(Panel.state.guildRow)
 end
 
 -- Redraws the visible view (CAUGHT_CHANGED, GAMES_CHANGED, DATA_CHANGED and on show).
@@ -1055,11 +1081,14 @@ function Panel.Refresh()
         local now = addon.Utility.Now()
         local records = addon.Games.AllRecords()
         local rows = addon.Model.BuildCompanionRows(records, me())
+        -- keep the selected pet (by owner, with its fresh row), else the first
+        local selectedName = Panel.state.guildRow and Panel.state.guildRow.nameRaw
+        Panel.state.guildRow = rows[1]
+        for _, row in ipairs(rows) do if row.nameRaw == selectedName then Panel.state.guildRow = row end end
         widgets.guildList:SetData(rows)
         widgets.guildEmpty:SetShown(#rows == 0)
         local winner = addon.Model.CompanionWinner(addon.Store.db.games, addon.Games.PreviousPeriodKey(now), me())
         widgets.guildWinner:SetText(winner and Format(Text["Last week's best: {name} ({level})"], { name = winner.name, level = winner.peak }) or "")
-        if not Panel.state.guildRow and rows[1] then Panel.state.guildRow = rows[1] end
         Panel.RefreshGuildPreview()
     end
 end
