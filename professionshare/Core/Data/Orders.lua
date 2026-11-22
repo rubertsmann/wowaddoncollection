@@ -14,7 +14,7 @@ local addonName, addon = ...
 ---@field requester string
 ---@field recipeID integer
 ---@field qty integer quantity, 1..99
----@field note string at most MAXIMUM_NOTE_BYTES
+---@field note string at most MAXIMUM_NOTE_BYTES ("" when none)
 ---@field createdAt integer
 ---@field name? string recipe name snapshot as the requester sees it (protocol 2.2+)
 ---@field loc? string language code of `name`

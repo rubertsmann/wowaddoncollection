@@ -4,7 +4,7 @@ local addonName, addon = ...
 -- every other addon that embeds the library, reassembly, the guild gate, echo/realm learning, HELLO coalescing, roster and
 -- identity check, the minute ticker). This file adds what is ProfessionShare's own: its Sync, its stored names, the notices
 -- in its language and the slash commands. Not in a guild -> inactive (no sends, no errors).
--- Every message in and out is recorded in the network trace (Core/Debug/Trace.lua, feature 008).
+-- Every message in and out is recorded in the network trace (Core/Debug/Trace.lua).
 -- The channel IS this module: Communication.Send, .OnAddonMessage, .RequestHello, .queue, .roster, .sync, ... are the
 -- channel's own functions and fields.
 

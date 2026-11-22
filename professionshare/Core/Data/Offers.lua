@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- Recipe items on offer (feature 007). Pure Lua: the WoW side is Api.ScanItems, the UI side is Model/Window.
+-- Recipe items on offer. Pure Lua: the WoW side is Api.ScanItems, the UI side is Model/Window.
 --
 -- One record per character, authored ONLY by that character and replaced as a whole by the newer `rev` (like a character
 -- record). Because a record is only ever written by its author, nobody can set or remove somebody else's dib.
@@ -392,7 +392,7 @@ function Offers.List(myName)
     return offerRows
 end
 
--- counts for /ps clean: number of records, number of offered items
+-- counts for the diagnostics: number of records, number of offered items
 ---@return integer recordCount
 ---@return integer itemCount
 function Offers.Counts()

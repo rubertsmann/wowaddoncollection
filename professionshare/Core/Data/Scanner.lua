@@ -61,7 +61,7 @@ function Scanner.Refresh(now)
     characterRecord.professions = characterRecord.professions or {}
     local clientLanguageCode = addon.Locale.clientCode
 
-    -- ranks (needs no window). A nil list means "API unsupported": keep what we have (RF2).
+    -- ranks (needs no window). A nil list means "API unsupported": keep what we have.
     local playerProfessions = Api.GetPlayerProfessions()
     if playerProfessions then
         local presentNames = {}
@@ -80,7 +80,7 @@ function Scanner.Refresh(now)
         end
     end
 
-    -- recipes (only while a profession window is open and its list is loaded). An empty list never wipes data (RF2).
+    -- recipes (only while a profession window is open and its list is loaded). An empty list never wipes data.
     local openProfession = Api.GetOpenProfession()
     Scanner.lastScanSummary = openProfession
         and ("%s#%s recipes=%d"):format(tostring(openProfession.name), tostring(openProfession.id), #openProfession.recipes)

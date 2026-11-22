@@ -12,8 +12,8 @@ local addonName, addon = ...
 --   ORDER {order}               broadcast: one order changed (order may carry a recipe name snapshot, 2.2+)
 --   WANTO {names, via?}         "send me your offers record" (2.1+)
 --   OFFERS {offers}             a character's offers/dibs record (2.1+)
--- Protocol 2.3 also had HELLO.grev, WANTG and GAMES (guild games, 0.6.0). They moved to the GuildGames addon (feature
--- 015): a 0.6 peer's grev is ignored, its WANTG/GAMES are dropped as unknown message types.
+-- Protocol 2.3 also had HELLO.grev, WANTG and GAMES (guild games, 0.6.0). They moved to the GuildGames addon: a 0.6
+-- peer's grev is ignored, its WANTG/GAMES are dropped as unknown message types.
 -- A peer can only author its OWN record (SNAP char.name / OFFERS name must equal the sender). Every player name from the
 -- wire is compared and stored in canonical form (Utility.CanonicalName), so differently spelled realms meet on one key.
 

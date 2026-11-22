@@ -8,7 +8,8 @@ local addonName, addon = ...
 local Api = {}
 addon.Api = Api
 
--- pcall(func, ...) returning func's results, or nil when it raised an error (logged at DEBUG with `callName`).
+-- pcall(func, ...) returning func's results, or nil when it is missing or raised an error (logged at DEBUG with
+-- `callName`).
 ---@param callName string the client function, for the log
 ---@param func function|nil
 ---@param ... any
@@ -240,6 +241,7 @@ end
 -- NOTE: addon code must NOT open professions itself. C_TradeSkillUI.OpenTradeSkill is blocked for addons on Forever
 -- (in game it opened nothing and showed "Interface-Aktion auf Grund eines Addons fehlgeschlagen"). Professions are
 -- opened by a real click on a secure button (UI/Window.lua profession buttons, same as the macro /cast <profession>).
+
 ---@return boolean
 function Api.InCombat()
     return (InCombatLockdown and InCombatLockdown()) and true or false
@@ -328,7 +330,7 @@ function Api.ItemName(itemID)
     return itemName
 end
 
--- feature 011: class id, subclass id, equip slot of an item from the client's item data (no server query needed).
+-- class id, subclass id, equip slot of an item from the client's item data (no server query needed).
 ---@param itemID any
 ---@return integer|nil classID
 ---@return integer|nil subclassID
@@ -376,7 +378,7 @@ function Api.CategoryGroupLabel(groupID)
 end
 
 -- Tooltip lines of an item (left text, " " right text), or nil while the client has not loaded the item yet (a load is
--- requested; ask again later). Read on THIS client only; the text is never sent to anyone (feature 011).
+-- requested; ask again later). Read on THIS client only; the text is never sent to anyone.
 ---@type table|nil hidden GameTooltip used to read tooltips on clients without C_TooltipInfo
 local scanningTooltip
 ---@param itemID any
@@ -430,8 +432,8 @@ function Api.HyperlinkTooltipLines(hyperlink)
     return tooltipLines
 end
 
--- Feature 017: the effect text of a spell, for recipes that make no item (enchants). On Forever the recipe id of
--- an enchant is its classic spell id (13419 = Enchant Cloak - Minor Agility; confirmed in game 2026-11-18). nil while the
+-- The effect text of a spell, for recipes that make no item (enchants). On Forever the recipe id of an enchant is its
+-- classic spell id (13419 = Enchant Cloak - Minor Agility; confirmed in game). nil while the
 -- client has not loaded the spell (the load is requested) or when it has no text.
 ---@param spellID integer
 ---@return string|nil
@@ -444,7 +446,7 @@ function Api.SpellDescription(spellID)
     return nil
 end
 
--- feature 016: quality, item level and required level of an item (the Recipes table). nil while the item is not cached:
+-- quality, item level and required level of an item (the Recipes table). nil while the item is not cached:
 -- the load is requested and GET_ITEM_INFO_RECEIVED (ITEM_INFO) redraws the table. 0 means "none" and gives nil.
 ---@param itemID integer
 ---@return integer|nil quality
@@ -490,7 +492,7 @@ function Api.ItemCount(itemID)
     return 0
 end
 
------------------------------------------------------------------- recipe items (feature 007: Offers)
+------------------------------------------------------------------ recipe items (Offers)
 
 -- Which windows are open right now. Set by Events.lua (bank, mail, guild bank and auction house contents are only
 -- readable while their window is open); a location that is not open is not scanned and keeps its last known state.
@@ -667,7 +669,7 @@ function Api.ScanItems()
     return scans
 end
 
------------------------------------------------------------------- craft and whisper from lists (feature 009)
+------------------------------------------------------------------ craft and whisper from lists
 
 ---@param text any
 ---@return boolean

@@ -8,6 +8,8 @@ local addonName, addon = ...
 --   orders[orderID]    = Order (see Orders.lua)
 --   offers[playerName] = OfferRecord: recipe items on offer + that character's dibs (see Offers.lua)
 --   hidden[offerKey]   = owner's revision when the viewer hid that offer
+--   profNames, itemText = profession names and item tooltip texts this client reported (this client only)
+--   debug, trace        = the log and the network trace rings; ui = window settings; me = my canonical name
 
 ---@class ProfessionEntry
 ---@field id? integer skill line id
@@ -56,8 +58,8 @@ addon.Store = Store
 --   1  0.1.0 / 0.2.0   raw records as received
 --   2  0.3.0           every persisted record is re-validated on load (allow-list copy); hostile or corrupt entries dropped
 --   3  0.4.0           + offers, hidden (recipe items board); additive, schema 2 data is kept
---   4  0.6.0           + games (guild games, feature 014); additive, schema 3 data is kept
---   5  0.7.0           - games and the games UI settings (moved to the GuildGames addon, feature 015; fresh start)
+--   4  0.6.0           + games (guild games); additive, schema 3 data is kept
+--   5  0.7.0           - games and the games UI settings (moved to the GuildGames addon; fresh start)
 Store.SCHEMA = 5
 
 local SECONDS_PER_DAY = 86400
@@ -82,11 +84,11 @@ local function withAllTables(savedVariables)
     for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "debug", "ui" }) do
         if type(savedVariables[key]) ~= "table" then savedVariables[key] = {} end
     end
-    -- network trace ring (Core/Debug/Trace.lua, feature 008)
+    -- network trace ring (Core/Debug/Trace.lua)
     if type(savedVariables.trace) ~= "table" then savedVariables.trace = {} end
     -- [clientLocale][skillLineID] = profession name the viewer's own client reported
     if type(savedVariables.profNames) ~= "table" then savedVariables.profNames = {} end
-    -- feature 011: { locale, items = { [itemID] = tooltip text } }, this client only
+    -- { locale, items = { [itemID] = tooltip text } }, this client only (Core/View/ItemText.lua)
     if type(savedVariables.itemText) ~= "table" then savedVariables.itemText = {} end
     return savedVariables
 end
@@ -226,10 +228,10 @@ local MIGRATIONS = {
     [2] = function(savedVariables)   -- additive: new tables only
         savedVariables.offers, savedVariables.hidden = savedVariables.offers or {}, savedVariables.hidden or {}
     end,
-    [3] = function(savedVariables)   -- additive: guild games (feature 014)
+    [3] = function(savedVariables)   -- additive: guild games
         if type(savedVariables.games) ~= "table" then savedVariables.games = {} end
     end,
-    [4] = function(savedVariables)   -- feature 015: the games moved to the GuildGames addon (fresh start, nothing imported)
+    [4] = function(savedVariables)   -- the games moved to the GuildGames addon (fresh start, nothing imported)
         savedVariables.games = nil
         if type(savedVariables.ui) == "table" then
             for _, key in ipairs({ "lastStakeCopper", "lastSlotStakeCopper", "gamesScope", "gameKey" }) do savedVariables.ui[key] = nil end
@@ -466,7 +468,6 @@ end
 
 ------------------------------------------------------------------ allow-list sanitizers (network and persisted data)
 
--- optional localization fields: id = skill line id, loc = language code of the name snapshot, name = that snapshot
 ---@param languageCode any
 ---@return boolean
 local function isValidLanguageCode(languageCode)
@@ -481,6 +482,8 @@ local function isValidProfessionName(professionName)
         or (addon.Utility.CleanString(professionName, 60) ~= nil and professionName ~= "" and not professionName:find("|", 1, true))
 end
 
+-- The optional localization fields of a profession entry: id = skill line id, loc = language code of the name
+-- snapshot, name = that snapshot.
 ---@param profession table
 ---@return boolean
 function Store.ValidateProfessionMetadata(profession)

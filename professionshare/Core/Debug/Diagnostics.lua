@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- Diagnostic report (feature 008): one plain-text block a guild member copies from the export window (/ps export or the
+-- Diagnostic report: one plain-text block a guild member copies from the export window (/ps export or the
 -- Debug tab) and pastes to the addon author. It holds everything needed to explain a sync problem from ONE client:
 -- identity (every source of "my name" and the roster's form of it), transport state, what this client holds about each
 -- member, pending pulls, the network trace and the log. Built from plain tables, so the offline tests run it with stubs.
@@ -17,7 +17,7 @@ local sortedKeys = Utility.SortedKeys
 -- One row per place a player name comes from or is turned into.
 
 ---@alias IdentityStatus "ok"|"fixed"|"bad"|"info"|"unknown"
--- ok, fixed (differs, but 0.4.1 normalizes it), bad (breaks sync), info, unknown
+-- ok, fixed (differs, but is normalized), bad (breaks sync), info, unknown
 
 ---@class IdentityRow
 ---@field method string the client call or source
@@ -76,7 +76,7 @@ function Diagnostics.IdentityRows(context)
         Text["first name + surname form my name; the addon appends the realm"],
         (type(identity.unitName) == "string" and identity.unitName ~= "" and not identity.unitName:find("-", 1, true)) and "ok" or "bad")
 
-    -- WoW Forever (seen 2026-11-21): the client may report no realm at all (both realm calls return nothing). With realm-free
+    -- WoW Forever: the client may report no realm at all (both realm calls return nothing). With realm-free
     -- names (surnames, or a roster without realm suffixes) nothing needs it: every name is kept without a realm. A problem
     -- only where names do carry realms.
     local realmMissing = identity.normalizedRealm == nil or identity.normalizedRealm == ""

@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
--- Network trace (feature 008): a LibGuildSync-1.0 Trace (entry fields and statuses: LibGuildSync/Trace.lua). One entry per
--- addon message in or out, plus "sys" entries for identity checks, roster prunes and incomplete transfers. Persisted in
+-- Network trace: a LibGuildSync-1.0 Trace (entry fields and statuses: LibGuildSync/Trace.lua). One entry per addon
+-- message in or out, plus "sys" entries (identity, roster, sync start, prunes). Persisted in
 -- addon.db.trace (bounded ring) so a /reload keeps the evidence; shown in the Debug tab and the /ps export report.
 -- What is ProfessionShare's own here: the one-line summary of each of its message types.
 

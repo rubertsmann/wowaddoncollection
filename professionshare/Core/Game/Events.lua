@@ -69,7 +69,7 @@ local function scheduleProfessionScan(delaySeconds)
     end)
 end
 
--- Recipe items (feature 007): bags are read at any time, bank/mail/guild bank/auctions only while their window is open
+-- Recipe items: bags are read at any time, bank/mail/guild bank/auctions only while their window is open
 -- (Api.open); a location that cannot be read keeps its last known state. A changed record is announced with a HELLO.
 local itemScanPending = false
 ---@param delaySeconds? number
@@ -190,7 +190,7 @@ function onGameEvent.TRADE_SKILL_SHOW()
     addon.Log.Debug("events.tradeSkill", "a profession window opened")
     addon.Api.open.tradeskill = true
     scheduleProfessionScan(1.5)
-    Events.Fire("TRADESKILL", true)   -- Orders tab: select a pending recipe, switch the Craft button (feature 009)
+    Events.Fire("TRADESKILL", true)   -- Orders tab: select a pending recipe, switch the Craft button
 end
 function onGameEvent.TRADE_SKILL_CLOSE()
     addon.Api.open.tradeskill = false
@@ -213,7 +213,7 @@ function onGameEvent.TRADE_SKILL_DATA_SOURCE_CHANGED() scheduleProfessionScan(1.
 function onGameEvent.SKILL_LINES_CHANGED() scheduleProfessionScan(2.0) end
 function onGameEvent.NEW_RECIPE_LEARNED() scheduleProfessionScan(1.5) end   -- keeps the cache current without reopening the window
 function onGameEvent.GET_ITEM_INFO_RECEIVED() Events.Fire("ITEM_INFO") end
--- feature 017: a spell the client loaded on request (enchant effect texts)
+-- a spell the client loaded on request (enchant effect texts)
 function onGameEvent.SPELL_DATA_LOAD_RESULT(_, success) if success ~= false then Events.Fire("SPELL_INFO") end end
 -- the game blocked one of our calls (protected action in combat, taint): recorded so /ps export shows what and where
 local function logBlockedAction(kind)
