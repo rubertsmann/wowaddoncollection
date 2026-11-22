@@ -187,7 +187,7 @@ return {
             for _, item in ipairs(b.C.queue) do a.C.OnAddonMessage("PShare", item.text, "GUILD", "B-R") end
             return a, b
         end
-        local a, b = pair(3, 2)                                  -- B has extra (additive) features
+        local a, b = pair(4, 2)                                  -- A is 2.3, B 2.4: one minor ahead (additive features)
         harness.equal(a.C.sync.statistics.received, 1); harness.equal(b.C.sync.statistics.received, 1)
         local a2, b2 = pair(0, 3)                                -- B speaks a different major
         harness.equal(a2.C.sync.statistics.received, 0); harness.equal(b2.C.sync.statistics.received, 0)
