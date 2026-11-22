@@ -25,18 +25,6 @@ function IsJunction($path) {
 }
 function JunctionTarget($path) { return (@((Get-Item $path -Force).Target) | Select-Object -First 1) }
 
-function Link($name, $target) {
-    $link = Join-Path $addons $name
-    if (Test-Path $link) {
-        if (-not (IsJunction $link)) { throw "$link exists and is a real folder - remove it first" }
-        if ((JunctionTarget $link) -ne $target) { throw "$link is a junction to $(JunctionTarget $link), not to $target" }
-        Write-Host "$name already linked"
-        return
-    }
-    New-Item -ItemType Junction -Path $link -Target $target | Out-Null
-    Write-Host "linked $link -> $target"
-}
-
 # 1. generate the dev TOC from the live one
 $liveToc = Join-Path $repo "GuildGames.toc"
 $devToc = Join-Path $repo "GuildGames-Dev.toc"
