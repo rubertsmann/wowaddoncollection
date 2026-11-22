@@ -46,3 +46,14 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
   "guildgames/Core/Base/Log.lua:17: [provenance] user 2026-11-22", 137 passed, 1 failed (reverted).
 - Next: user decision on the volume target (accept, or a second pass of name-instead-of-comment refactors); in-game
   check of the AzeCaught.Tick refactor (verify.md checklist); then status done.
+
+## 2026-11-22 13:28 | VERIFY | Second pass: tests and whole function bodies
+- Did: checked every test-file comment of all five addons against the code it describes (recomputed the arithmetic);
+  printed every documented function of the files first checked only comment-plus-context and compared each doc with
+  the whole body; read ProfessionShare Store.lua past line 300.
+- Result: more wrong comments fixed (b3/tests, Model.Professions, Api.SelectRecipe, /ps clean, window minimum size,
+  options header, ...); three test defects fixed in their own commits (cc80dcc, ef191b6, 9f97553); an audit false
+  positive on multiple assignment fixed (0c476da). verify.md now lists which method covered which file.
+- Evidence: guildgames 138 passed, professionshare 235 passed, libguildsync 38 passed (all 0 failed); fpvcigarette 13
+  tests, foreverbetteruiplus 8 tests, 0 failed; comment-audit --code-only HEAD: 0 file(s) with code changes.
+- Next: user decision on the volume target; in-game check of the AzeCaught.Tick refactor; then status done.

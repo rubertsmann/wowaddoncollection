@@ -30,7 +30,10 @@ policy and an audit tool keep it that way: each addon's offline suite now fails 
 | professionshare | 1990 | trace header; Store schema list; tryCall; resizable list width; `ns.BUILD` |
 | fpvcigarette, foreverbetteruiplus | 181, 91 | Fader's hover call; a missing class field; runner folders |
 
-Code findings, each in its own commit: dead `HOSTILE_FLAG` (Catcher.lua), dead `Link` (guildgames/tools/deploy.ps1).
+Code findings, each in its own commit: dead `HOSTILE_FLAG` (Catcher.lua), dead `Link` (guildgames/tools/deploy.ps1),
+two tests that no longer tested what their comments said (professionshare test_hardening, test_orders), a misnamed
+libguildsync test. The fixes are listed per commit message, not counted one by one; verify.md says how each file was
+checked.
 Pilot refactor: `AzeCaught.Tick`'s commented sections and `NoteFound`'s eviction block became named local functions.
 
 ## Limits and known issues
