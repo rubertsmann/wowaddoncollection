@@ -4,9 +4,9 @@ local addonName, addon = ...
 -- draws a run and forwards the item choices.
 --
 -- A tower stands in the middle of the arena. Monsters walk in from the edges and hurt the tower while they touch it. The
--- tower fights on its own with its weapons: a bolt (projectile at the nearest monster), a cleave (melee, hits everything
--- near the tower) and later a frost nova. Kills give experience; every level offers 3 items (a new weapon, a weapon
--- level, or a passive) and the run pauses until one is picked.
+-- tower fights on its own with its weapons: it starts with a bolt (projectile at the nearest monster); more weapons
+-- (cleave, frost nova, chain lightning, ...) and passives come from level-ups. Kills give experience; every level offers
+-- up to 3 items (a new weapon, a weapon level, or a passive) and the run pauses until one is picked.
 --
 -- Betting: the stake goes on a survival time (Survivor.TARGETS). Survive until then and the payout is factor x stake;
 -- fall earlier (or give up, or leave the game mid-run) and the stake is lost. A run is a game of skill (the item picks),
@@ -91,6 +91,7 @@ local addonName, addon = ...
 ---@field events SurvivorEvent[] what happened since the UI last took them
 ---@field accumulator number unsimulated seconds (fixed step)
 ---@field reachedFactor? integer endless: the payout factor reached so far
+---@field spirals table<string, number> spiral weapons: the angle of the next volley
 ---@field shield number barrier points left
 ---@field shieldPause number seconds until the barrier refills
 ---@field net? integer set by Settle
@@ -104,7 +105,7 @@ Survivor.HALF_WIDTH, Survivor.HALF_HEIGHT = 145, 100   -- arena, tower at (0, 0)
 Survivor.TOWER_RADIUS = 14
 Survivor.BASE_HP = 100
 
----@type SurvivorTarget[] shortest first; the factor of the last one is Games.SURVIVOR_MAXIMUM_FACTOR
+---@type SurvivorTarget[] shortest first; no factor above Games.SURVIVOR_MAXIMUM_FACTOR (endless mode reaches it)
 Survivor.TARGETS = {
     { seconds = 60, factor = 2 },
     { seconds = 90, factor = 3 },
@@ -227,7 +228,7 @@ Survivor.ICONS[#Survivor.ICONS + 1] = Survivor.TOWER_ICON
 ---@field jump? number chain: reach of each jump
 ---@field stats fun(level: integer): WeaponStats base numbers at a level (before might and haste)
 
--- Every ranged weapon: how it fires and its numbers per level. Data only; fire() and moveProjectiles() run them.
+-- Every ranged weapon: how it fires and its numbers per level. Data only; fireRanged() and moveProjectiles() run them.
 ---@type table<string, RangedWeapon>
 Survivor.RANGED = {
     bolt = { fire = "projectile", aim = "nearest", speed = 240, life = 0.9, radius = 6, size = 14,
@@ -596,7 +597,7 @@ local function fire(run, stepSeconds)
     end
 end
 
--- turns a projectile towards the nearest monster by at most `rate` x stepSeconds radians, keeping its speed
+-- turns a projectile towards the nearest monster by at most `homing` x stepSeconds radians, keeping its speed
 ---@param run SurvivorRun
 ---@param projectile SurvivorProjectile
 ---@param stepSeconds number
@@ -805,8 +806,8 @@ function Survivor.Begin(myName, stake, targetIndex, now, randomFunction)
     return Survivor.NewRun(myName, stake, target, randomFunction)
 end
 
--- Books the end of a run: won -> (factor - 1) x stake, anything else (lost, given up) -> -stake. Clears the pending mark.
--- Returns the signed net in copper.
+-- Books the end of a run (Survivor.Net; a run not won counts as lost) and clears the pending mark. Returns the signed net
+-- in copper.
 ---@param run SurvivorRun
 ---@param now integer
 ---@return integer net

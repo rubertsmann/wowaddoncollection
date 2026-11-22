@@ -1,6 +1,6 @@
 local _, addon = ...
 
--- Companion arena (feature 020): guild members' companions fight in a hands-off auto battle. Challenges, answers and
+-- Companion arena: guild members' companions fight in a hands-off auto battle. Challenges, answers and
 -- side bets travel in the owner's game record (section "arena", protocol 1.2), so it works while the other player is
 -- offline. Every client computes the fight itself from the two stored fighter snapshots and the fight id (no reported
 -- result is trusted) and settles ONLY its own money. Pure: no WoW calls; the clock, records and names are passed in.
@@ -79,7 +79,7 @@ function Arena.Npc(npcID)
     return entry
 end
 
------------------------------------------------------------------- levels and training (R2, R3)
+------------------------------------------------------------------ levels and training
 
 -- The arena level for `xp` and the XP into / needed for the next level.
 ---@param xp integer
@@ -152,7 +152,7 @@ function Arena.FinishTraining()
     return { stat = training.stat, npc = training.npc, points = npc.tr[training.stat] }
 end
 
------------------------------------------------------------------- fighters (R1)
+------------------------------------------------------------------ fighters
 
 ---@class Fighter
 ---@field npc integer
@@ -214,7 +214,7 @@ function Arena.SanitizeFighter(raw)
     return clean
 end
 
------------------------------------------------------------------- the battle (R4)
+------------------------------------------------------------------ the battle
 
 local MODULUS, MULTIPLIER = 2147483647, 48271   -- Park-Miller: exact in doubles, the same on every client
 
@@ -373,7 +373,7 @@ function Arena.Odds(chance)
     return addon.Utility.Clamp(math.floor(95 / chance), Arena.ODDS_LIMITS[1], Arena.ODDS_LIMITS[2])
 end
 
------------------------------------------------------------------- record section (R5-R8)
+------------------------------------------------------------------ record section
 
 -- My section for the game record: totals and the open entries (copies; the record is replaced as a whole).
 ---@return table
@@ -484,8 +484,8 @@ function Arena.Fights(records, myName, now)
             local fight = { id = id, a = name, b = challenge.to, at = challenge.at, wager = challenge.wg or 0, fa = challenge.f, bets = {} }
             local answers = sectionOf(records, challenge.to, myName)
             local answer = answers and answers.an and answers.an[id]
-            -- an answer only counts from the challenged player, inside the challenge's lifetime and before a stop
-            -- (user 2026-11-21: the challenger can stop a request that was not answered yet)
+            -- an answer only counts from the challenged player, inside the challenge's lifetime and before the
+            -- challenger stopped it
             if answer and answer.at >= challenge.at and answer.at <= challenge.at + Arena.CHALLENGE_TTL
                 and (not challenge.wd or answer.at < challenge.wd) then
                 fight.answerAt = answer.at
@@ -545,7 +545,7 @@ end
 
 ------------------------------------------------------------------ actions (each returns true or nil, reason)
 
--- One fight at a time (user 2026-11-21): `name` is busy with an open (accepted, not yet fought) fight, or, when
+-- One fight at a time: `name` is busy with an open (accepted, not yet fought) fight, or, when
 -- `outgoing`, also with an own challenge still waiting for an answer. Returns that fight's id or nil.
 ---@param fights table<string, ArenaFight>
 ---@param name string
@@ -622,7 +622,7 @@ function Arena.Answer(records, myName, id, accept, now)
     return true
 end
 
--- Stops my own challenge that was not answered yet (user 2026-11-21). The stake comes back on the next settlement.
+-- Stops my own challenge that was not answered yet. The stake comes back on the next settlement.
 -- Reasons: "readonly", "unknown", "late" (answered, or already over).
 ---@return boolean|nil
 ---@return string|nil reason
@@ -662,7 +662,7 @@ function Arena.Bet(records, myName, id, side, stake, now)
     return odds
 end
 
------------------------------------------------------------------- settlement (R7, R8, RF2)
+------------------------------------------------------------------ settlement
 
 local function pay(myName, amount, kind, now, note)
     if amount > 0 then addon.Wallet.Earn(myName, amount, kind, now, note) end
@@ -821,7 +821,7 @@ function Arena.SanitizePersisted(caught, me)
     return repaired
 end
 
------------------------------------------------------------------- the dev dummy (user 2026-11-21, dev build only)
+------------------------------------------------------------------ the dev dummy (dev build only)
 
 -- A fake guild member for testing the arena alone: a record in Games.simulated (memory only: never stored, never sent).
 Arena.DUMMY_NAME = "Arenadummy-Test"

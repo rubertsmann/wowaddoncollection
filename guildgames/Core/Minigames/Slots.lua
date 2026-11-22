@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- Slot machine (feature 014, second game). Pure Lua: rules, reel strip, paylines and the reel motion the UI plays
+-- Slot machine. Pure Lua: rules, reel strip, paylines and the reel motion the UI plays
 -- (UI/SlotMachine.lua). Results are stored with Games.RecordPlay in the "slots" section of my game record, BEFORE any
 -- animation, like the coin flip.
 --
@@ -127,7 +127,7 @@ function Slots.ReturnToPlayer()
 end
 
 -- One spin. The stops are drawn and the result STORED here (Games.RecordPlay), before any animation. Returns the result,
--- or nil and the refusal ("stake", "readonly", "name", "funds": more than the money pool holds, feature 018 R18).
+-- or nil and the refusal ("stake", "readonly", "name", "funds": more than the money pool holds).
 ---@param myName string|nil
 ---@param stake any copper, 1..Games.MAXIMUM_STAKE
 ---@param now integer

@@ -1,13 +1,12 @@
 local addonName, addon = ...
 
--- Coin flip animation math (feature 014). Pure: no WoW calls, so the curve is unit-tested offline and printed by
--- tools/coinflip.lua. UI/GamesTab.lua applies a pose every rendered frame through Animate.Tween.
+-- Coin flip animation math. Pure: no WoW calls, so the curve is unit-tested offline and printed by tools/coinflip.lua.
+-- UI/GamesTab.lua applies a pose every rendered frame through Animate.Tween.
 --   toss:  y follows a parabola, 0 -> HEIGHT -> 0
---   spin:  the coin turns about its vertical axis; its visible width is |cos(angle)|, the face swaps at each edge-on moment
---          (angle = pi/2 + k*pi); the spin decelerates (ease-out cubic) and ends flat on the outcome face.
-
--- The UI flips the coin end over end (about the horizontal axis): `width` is the visible share of the coin along the flip
--- axis (its height on screen), `edge` = sin(angle) says how much of the rim shows and on which side (> 0: below the face).
+--   spin:  the coin flips end over end (about the horizontal axis); `width` = |cos(angle)| is the visible share of the face
+--          along the flip axis (its height on screen), `edge` = sin(angle) how much of the rim shows and on which side
+--          (> 0: below the face). The face swaps at each edge-on moment (angle = pi/2 + k*pi); the spin decelerates
+--          (ease-out cubic) and ends flat on the outcome face.
 ---@class CoinPose
 ---@field width number MINIMUM_WIDTH..1 visible share of the face along the flip axis (|cos angle|)
 ---@field edge number -1..1 sin(angle): rim visibility and side; 0 when flat
