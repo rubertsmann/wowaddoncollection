@@ -372,6 +372,23 @@ end
 ---@return integer
 local function bump(value) return math.min(AzeCaught.MAXIMUM_ID, (value or 0) + 1) end
 
+-- Caught NPCs are never dropped; when MAXIMUM_SEEN seen-only NPCs are kept, the one seen longest ago makes room.
+---@param collection table<integer, CollectionEntry>
+local function makeRoomInSeenList(collection)
+    local seenOnlyCount, oldestID, oldestSeen = 0, nil, math.huge
+    for otherID, other in pairs(collection) do
+        if (other.caught or 0) < 1 then
+            seenOnlyCount = seenOnlyCount + 1
+            local lastSeen = other.last or other.seen
+            if lastSeen < oldestSeen then oldestID, oldestSeen = otherID, lastSeen end
+        end
+    end
+    if seenOnlyCount < AzeCaught.MAXIMUM_SEEN or not oldestID then return end
+    AzeCaught.Journal("DEBUG", "found.evicted", "the oldest seen NPC made room", { npc = oldestID, name = collection[oldestID].n,
+        limit = AzeCaught.MAXIMUM_SEEN })
+    collection[oldestID] = nil
+end
+
 -- An NPC's history for the Seen tab (how often seen, first/last seen, killed, caught x/y). Old entries without the
 -- counters read as seen once, never killed.
 ---@param entry CollectionEntry
@@ -434,20 +451,7 @@ function AzeCaught.NoteFound(npcInformation, now)
         end
         return entry, false
     end
-    -- the seen list is limited: the NPC seen longest ago that is not caught makes room (caught ones are never dropped)
-    local seenOnly, oldestID, oldestSeen = 0, nil, math.huge
-    for otherID, other in pairs(collection) do
-        if (other.caught or 0) < 1 then
-            seenOnly = seenOnly + 1
-            local lastSeen = other.last or other.seen
-            if lastSeen < oldestSeen then oldestID, oldestSeen = otherID, lastSeen end
-        end
-    end
-    if seenOnly >= AzeCaught.MAXIMUM_SEEN and oldestID then
-        AzeCaught.Journal("DEBUG", "found.evicted", "the oldest seen NPC made room", { npc = oldestID, name = collection[oldestID].n,
-            limit = AzeCaught.MAXIMUM_SEEN })
-        collection[oldestID] = nil
-    end
+    makeRoomInSeenList(collection)
     local name = type(npcInformation.name) == "string" and npcInformation.name ~= "" and npcInformation.name or "?"
     entry = { n = Utility.TruncateUtf8(Utility.StripControlCharacters(name), AzeCaught.MAXIMUM_NAME_BYTES),
         lvl = level or 1, cls = AzeCaught.Classification(npcInformation.classification), disp = display or 0, seen = now, caught = 0,
@@ -921,6 +925,106 @@ local function die(companion, cause)
     AzeCaught.lastDeath = description
 end
 
+---@param zone string
+---@return boolean
+local function isCriticalOrEmpty(zone) return zone == "critical" or zone == "empty" end
+
+---@param companion CompanionState
+---@param elapsedSeconds number
+---@return boolean wokeUp
+local function decayNeedsAndSleep(companion, elapsedSeconds)
+    local asleepFactor = companion.asleep and AzeCaught.ASLEEP_DECAY or 1
+    for _, need in ipairs({ "hunger", "thirst", "affection" }) do
+        companion[need] = clamp(companion[need] - elapsedSeconds * AzeCaught.DecayPerSecond(need, companion) * asleepFactor, 0, 100)
+    end
+    if not companion.asleep then
+        companion.energy = clamp(companion.energy - elapsedSeconds * AzeCaught.DecayPerSecond("energy", companion), 0, 100)
+        return false
+    end
+    companion.energy = clamp(companion.energy + elapsedSeconds * 100 / AzeCaught.SLEEP_DURATION, 0, 100)
+    companion.asleep = companion.asleep - elapsedSeconds
+    if companion.asleep > 0 then return false end
+    companion.asleep = nil
+    AzeCaught.Journal("INFORMATION", "companion.wake", "the companion woke up after its sleep",
+        { npc = companion.npc, energy = round1(companion.energy) })
+    return true
+end
+
+-- Both streaks break when a need turns critical.
+---@param companion CompanionState
+---@param need string
+local function breakStreaks(companion, need)
+    if need == "hunger" and companion.fedStreak > 0 then
+        AzeCaught.Journal("INFORMATION", "streak.broken", "the fed streak was broken", { streak = companion.fedStreak })
+        companion.fedStreak = 0
+    end
+    if companion.careStreak > 0 then
+        AzeCaught.Journal("INFORMATION", "streak.broken", "the care streak was broken", { streak = companion.careStreak, need = need })
+        companion.careStreak = 0
+    end
+end
+
+---@param companion CompanionState
+---@return boolean anyCritical
+---@return boolean anyZoneChanged
+local function updateZones(companion)
+    local anyCritical, anyZoneChanged = false, false
+    for _, need in ipairs(AzeCaught.NEEDS) do
+        local zone, previousZone = AzeCaught.ZoneOf(companion, need), companion.zones[need]
+        if isCriticalOrEmpty(zone) then anyCritical = true end
+        if zone ~= previousZone then
+            AzeCaught.Journal("INFORMATION", "need.zone", "a need changed zone",
+                { need = need, from = previousZone, to = zone, value = round1(companion[need]), npc = companion.npc })
+            if isCriticalOrEmpty(zone) and not isCriticalOrEmpty(previousZone) then breakStreaks(companion, need) end
+            companion.zones[need] = zone
+            anyZoneChanged = true
+        end
+    end
+    return anyCritical, anyZoneChanged
+end
+
+---@param companion CompanionState
+---@param elapsedSeconds number
+local function loseHeartsToNeglect(companion, elapsedSeconds)
+    companion.neglect = companion.neglect + elapsedSeconds
+    while companion.neglect >= AzeCaught.NEGLECT_STEP do
+        companion.neglect = companion.neglect - AzeCaught.NEGLECT_STEP
+        changeHearts(companion, -1, "neglect")
+    end
+end
+
+-- Hunger or thirst at 0 for STARVE_TIME kills the companion.
+---@param companion CompanionState
+---@param elapsedSeconds number
+---@return boolean died
+local function starveOrRecover(companion, elapsedSeconds)
+    if companion.hunger > 0 and companion.thirst > 0 then
+        if companion.starve > 0 then
+            AzeCaught.Journal("INFORMATION", "companion.starving", "the companion stopped starving", { after = round1(companion.starve) })
+            companion.starve = 0
+        end
+        return false
+    end
+    if companion.starve == 0 then
+        AzeCaught.Journal("WARNING", "companion.starving", "the companion started starving",
+            { hunger = round1(companion.hunger), thirst = round1(companion.thirst), dieIn = AzeCaught.STARVE_TIME })
+    end
+    companion.starve = companion.starve + elapsedSeconds
+    if companion.starve < AzeCaught.STARVE_TIME then return false end
+    die(companion, companion.hunger <= 0 and "hunger" or "thirst")
+    return true
+end
+
+-- A state line every SNAPSHOT_EVERY seconds: the decay can be reconstructed from these lines.
+---@param companion CompanionState
+---@param elapsedSeconds number
+local function writeSnapshotWhenDue(companion, elapsedSeconds)
+    companion.snap = companion.snap + elapsedSeconds
+    if companion.snap < AzeCaught.SNAPSHOT_EVERY then return end
+    companion.snap = 0
+    AzeCaught.Journal("DEBUG", "snapshot", "companion state", AzeCaught.Describe(companion))
+end
+
 ---@class TickResult
 ---@field died boolean
 ---@field changed boolean a zone or the hearts changed (the UI and the published record should refresh)
@@ -942,81 +1046,15 @@ function AzeCaught.Tick(elapsedSeconds, now)
     local companion = caught.active
     if not companion then return result end
     local heartsBefore = companion.hearts
-
-    -- decay / sleep
-    local otherFactor = companion.asleep and AzeCaught.ASLEEP_DECAY or 1
-    companion.hunger = clamp(companion.hunger - elapsedSeconds * AzeCaught.DecayPerSecond("hunger", companion) * otherFactor, 0, 100)
-    companion.thirst = clamp(companion.thirst - elapsedSeconds * AzeCaught.DecayPerSecond("thirst", companion) * otherFactor, 0, 100)
-    companion.affection = clamp(companion.affection - elapsedSeconds * AzeCaught.DecayPerSecond("affection", companion) * otherFactor, 0, 100)
-    if companion.asleep then
-        companion.energy = clamp(companion.energy + elapsedSeconds * 100 / AzeCaught.SLEEP_DURATION, 0, 100)
-        companion.asleep = companion.asleep - elapsedSeconds
-        if companion.asleep <= 0 then
-            companion.asleep = nil
-            AzeCaught.Journal("INFORMATION", "companion.wake", "the companion woke up after its sleep",
-                { npc = companion.npc, energy = round1(companion.energy) })
-            result.changed = true
-        end
-    else
-        companion.energy = clamp(companion.energy - elapsedSeconds * AzeCaught.DecayPerSecond("energy", companion), 0, 100)
+    if decayNeedsAndSleep(companion, elapsedSeconds) then result.changed = true end
+    local anyCritical, anyZoneChanged = updateZones(companion)
+    if anyZoneChanged then result.changed = true end
+    if anyCritical then loseHeartsToNeglect(companion, elapsedSeconds) end
+    if starveOrRecover(companion, elapsedSeconds) then
+        result.died, result.changed = true, true
+        return result
     end
-
-    -- zone crossings (streaks break when a need turns critical)
-    local anyCritical = false
-    for _, need in ipairs(AzeCaught.NEEDS) do
-        local zone = AzeCaught.ZoneOf(companion, need)
-        if zone == "critical" or zone == "empty" then anyCritical = true end
-        if zone ~= companion.zones[need] then
-            AzeCaught.Journal("INFORMATION", "need.zone", "a need changed zone",
-                { need = need, from = companion.zones[need], to = zone, value = round1(companion[need]), npc = companion.npc })
-            if (zone == "critical" or zone == "empty") and companion.zones[need] ~= "empty" and companion.zones[need] ~= "critical" then
-                if need == "hunger" and companion.fedStreak > 0 then
-                    AzeCaught.Journal("INFORMATION", "streak.broken", "the fed streak was broken", { streak = companion.fedStreak })
-                    companion.fedStreak = 0
-                end
-                if companion.careStreak > 0 then
-                    AzeCaught.Journal("INFORMATION", "streak.broken", "the care streak was broken",
-                        { streak = companion.careStreak, need = need })
-                    companion.careStreak = 0
-                end
-            end
-            companion.zones[need] = zone
-            result.changed = true
-        end
-    end
-
-    -- neglect: -1 heart per NEGLECT_STEP with any need critical
-    if anyCritical then
-        companion.neglect = companion.neglect + elapsedSeconds
-        while companion.neglect >= AzeCaught.NEGLECT_STEP do
-            companion.neglect = companion.neglect - AzeCaught.NEGLECT_STEP
-            changeHearts(companion, -1, "neglect")
-        end
-    end
-
-    -- starving / dying of thirst
-    if companion.hunger <= 0 or companion.thirst <= 0 then
-        if companion.starve == 0 then
-            AzeCaught.Journal("WARNING", "companion.starving", "the companion started starving",
-                { hunger = round1(companion.hunger), thirst = round1(companion.thirst), dieIn = AzeCaught.STARVE_TIME })
-        end
-        companion.starve = companion.starve + elapsedSeconds
-        if companion.starve >= AzeCaught.STARVE_TIME then
-            die(companion, companion.hunger <= 0 and "hunger" or "thirst")
-            result.died, result.changed = true, true
-            return result
-        end
-    elseif companion.starve > 0 then
-        AzeCaught.Journal("INFORMATION", "companion.starving", "the companion stopped starving", { after = round1(companion.starve) })
-        companion.starve = 0
-    end
-
-    -- periodic snapshot (the decay can be reconstructed from these lines)
-    companion.snap = companion.snap + elapsedSeconds
-    if companion.snap >= AzeCaught.SNAPSHOT_EVERY then
-        companion.snap = 0
-        AzeCaught.Journal("DEBUG", "snapshot", "companion state", AzeCaught.Describe(companion))
-    end
+    writeSnapshotWhenDue(companion, elapsedSeconds)
     if companion.hearts ~= heartsBefore then result.changed = true end
     if now then AzeCaught.NotePeak(companion, now) end
     return result
