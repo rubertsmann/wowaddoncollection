@@ -610,7 +610,7 @@ function SurvivorArena.Build(panel)
     pcall(widgets.hurtFlash.SetBlendMode, widgets.hurtFlash, "ADD")
     widgets.hurtFlash:SetAlpha(0); widgets.hurtFlash:Hide()
 
-    -- actors (monsters, bolts, puffs) on their own layer above the tower
+    -- the tower layer: the tower, its glow, barrier, thorns aura and health bar
     local towerLayer = CreateFrame("Frame", nil, arena)
     towerLayer:SetAllPoints()
     widgets.towerAnchor = CreateFrame("Frame", nil, towerLayer)
@@ -638,6 +638,7 @@ function SurvivorArena.Build(panel)
     widgets.hpFill:SetHeight(4); widgets.hpFill:SetWidth(44); widgets.hpFill:SetPoint("LEFT", hpBack, "LEFT", 0, 0)
     widgets.hpFill:SetColorTexture(0.2, 0.95, 0.25, 1)
 
+    -- actors (monsters, projectiles, blasts, puffs) on their own layer above the tower
     local actors = CreateFrame("Frame", nil, arena)
     actors:SetAllPoints(); actors:SetFrameLevel(addon.UIHelpers.FrameLevel(towerLayer) + 2)
     widgets.actors = actors

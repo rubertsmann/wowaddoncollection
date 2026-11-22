@@ -973,7 +973,7 @@ local function buildRecipesTab(recipesTab)
     local searchHintText = createFontString(recipesTab, "GameFontDisableSmall"); searchHintText:SetPoint("BOTTOMLEFT", searchBox, "TOPLEFT", 0, 0)
     searchHintText:SetText(Text["search name, reagent, slot or effect"])
 
-    -- effect texts are read a few per frame while this tab is open, so the first search does not freeze the game
+    -- effect texts are read 8 at a time every 0.2 s while this tab is open, so the first search does not freeze the game
     local secondsSinceRead, secondsSincePrefetch, secondsSinceRefresh, newTextArrived = 0, 3, 0, false
     recipesTab:SetScript("OnUpdate", function(_, elapsedSeconds)
         secondsSinceRead = secondsSinceRead + elapsedSeconds

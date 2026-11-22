@@ -63,3 +63,13 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: n/a
 - Evidence: n/a
 - Next: unchanged (user decision on the volume target; in-game check of the AzeCaught.Tick refactor)
+
+## 2026-11-22 13:31 | VERIFY | Builder-function comments against every use of their widgets
+- Did: listed the 97 comments inside every builder function of the UI files (scratchpad builders.py) and checked each
+  claim against every use of the widget it names (tooltip text, frame parent and level, Show/Hide/SetShown, click and
+  update handlers, flags reset elsewhere).
+- Result: three more fixes: SurvivorArena's "actors" comment sat above the tower layer (now one comment each), the
+  SlotMachine banner is on the cabinet, not the reel overlay, ProfessionShare reads effect texts 8 every 0.2 s (not
+  "a few per frame"). The "Limit" note in verify.md is replaced by this method.
+- Evidence: comment-audit --code-only HEAD: 0 file(s) with code changes; all five suites 0 failed.
+- Next: user decision on the volume target; in-game check of the AzeCaught.Tick refactor; then status done.

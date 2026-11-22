@@ -31,8 +31,10 @@ the refactor was not exercised in the game client.
 | Every comment with the code after it, plus every documented function printed whole and compared with its doc | guildgames UI/Window, GamesTab, SlotMachine, SurvivorArena, ArenaView, AzeCaughtPanel; professionshare Core/Data/Store.lua past line 300, Core/View (Model, Notify, RecipeTable), Core/Game (Api, Events), Core/Debug/Diagnostics.lua, UI (Window, Alerts, DevProbe, SecureDock, Table); fpvcigarette Overlay, Dancer, Log, Commands; foreverbetteruiplus (all) |
 | Every comment with the code it describes (test helpers, assertions, fixtures), arithmetic in comments recomputed | every tests/*.lua of all five addons |
 
-Limit: inside long builder functions (window/panel construction) a comment was compared with the statements after it,
-not with every later use of the widget it creates.
+Builder functions (every `build*` / `*.Build` / `Register` in the UI files of all addons, 97 comments): each comment
+was also checked against every later use of the widget it describes (tooltips, frame levels, show/hide toggles, click
+handlers, refresh flags), found by searching the file for the widget's name. This fixed three more comments
+(SurvivorArena layer comment above the wrong frame, SlotMachine banner parent, ProfessionShare effect-text read rate).
 
 Test defects the comment review exposed (fixed in their own commits): professionshare test_hardening's "different
 minors" case used the same minor (cc80dcc); test_orders' prune assertion could never fail (ef191b6); libguildsync's

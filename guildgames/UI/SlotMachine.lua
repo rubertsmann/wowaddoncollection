@@ -448,7 +448,7 @@ function SlotMachine.Build(panel)
     widgets.reels = {}
     for reel = 1, addon.Slots.REELS do widgets.reels[reel] = buildReel(reelsArea, reel) end
 
-    -- overlay above the reels: cell glows, paylines, multiplier pop, banner
+    -- overlay above the reels: cell glows, paylines, multiplier pop (the banner below sits on the cabinet)
     local overlay = CreateFrame("Frame", nil, reelsArea)
     overlay:SetAllPoints(); overlay:SetFrameLevel(addon.UIHelpers.FrameLevel(reelsArea) + 5)
     widgets.cellGlows = {}
