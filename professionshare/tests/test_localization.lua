@@ -1,4 +1,4 @@
--- names are resolved for the viewer, text is UTF-8 safe, mixed-language guilds converge
+-- Names are resolved for the viewer, text is UTF-8 safe, mixed-language guilds converge
 local function prof(name, id, loc, recipes, rank)
     local set = {}
     for _, r in ipairs(recipes) do set[r] = true end

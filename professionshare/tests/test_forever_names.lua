@@ -1,4 +1,4 @@
--- WoW Forever names, reproduced from a real /ps export (2026-11-16): characters have a first name AND a surname.
+-- WoW Forever names, reproduced from a real /ps export: characters have a first name AND a surname.
 --   UnitName("player") -> "Drakk", "Nuk"      GetRealmName() -> "CAMWOW EU4 Realm 5 PvE"
 --   GetNormalizedRealmName() -> "CAMWOWEU4Realm5PvE"      roster and chat senders -> "Drakk Nuk" (space, no realm)
 -- 0.4.0 keyed me as "Drakk-CAMWOWEU4Realm5PvE" while everyone else saw "Drakk Nuk": requests for me were never answered,
@@ -142,7 +142,7 @@ return {
         end)
     end,
 
-    -- second export (2026-11-16, live 0.4.1): the guild spans "CAMWOW EU4 Realm 1/3/5 PvE" and "CAMWOW EU5 Realm 3 PvE";
+    -- a second export (live 0.4.1): the guild spans "CAMWOW EU4 Realm 1/3/5 PvE" and "CAMWOW EU5 Realm 3 PvE";
     -- every client appended its own realm, so "Drakk Nuk-...Realm3" (asked by Mira) never matched "Drakk Nuk-...Realm5"
     ["forever: members on other realms of the guild are the same members (realm is not part of the name)"] = function(harness)
         withForever(harness, function(addon)

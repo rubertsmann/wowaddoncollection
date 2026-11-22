@@ -166,7 +166,7 @@ return {
         for _, file in ipairs(tocFiles("ProfessionShare.toc")) do
             if not file:match("^Libs/") and file ~= "Core/Net/Guard.lua" then   -- the stale dev TOC
                 local chunk = assert(loadfile(file), file)
-                pcall(chunk, "ProfessionShare-Dev", addon)                          -- Comm.lua fails here, later files must still load
+                pcall(chunk, "ProfessionShare-Dev", addon)                          -- Communication.lua fails here, later files must still load
             end
         end
         for k in pairs(globals) do _G[k] = saved[k] end

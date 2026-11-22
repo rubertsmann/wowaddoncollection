@@ -1,4 +1,4 @@
--- notifications about new orders (pure part: relevance, unseen, seen, fresh, settings).
+-- Notifications about new orders (pure part: relevance, unseen, seen, fresh, settings).
 local ME = "Me Holt"
 
 local function prof(name, id, recipes)

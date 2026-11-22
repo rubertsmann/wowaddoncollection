@@ -16,7 +16,7 @@ local function withGlobals(harness, setup, fn)
     if not ok then error(err, 0) end
 end
 
--- item ids: 6661 recipe, 6662 recipe, 100 sword (class 2), 5 unknown to the client
+-- item ids: 6661, 6662, 6663 recipes, 100 sword (class 2), 5 unknown to the client
 local CLASS = { [6661] = 9, [6662] = 9, [6663] = 9, [100] = 2 }
 local function instant(id) local c = CLASS[id]; if c then return id, "t", "s", "", 1234, c, 0 end end
 local function link(id) return "|cffffffff|Hitem:" .. id .. "::::::::60:::::|h[x]|h|r" end

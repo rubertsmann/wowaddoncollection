@@ -1,4 +1,4 @@
--- hardening and version compatibility. Adversarial cases RF1-RF7 (features/006-*/spec.md).
+-- Hardening and version compatibility. Adversarial cases RF1-RF7 (features/006-*/spec.md).
 
 local function slurp(path)
     local f = assert(io.open(path, "rb"), path)
@@ -6,7 +6,7 @@ local function slurp(path)
     return s
 end
 
--- a namespace with Comm wired to a recording Sync, as in the game after Comm.Start()
+-- an addon whose Communication is active with a recording send, as in the game after Communication.Start()
 local function commNs(harness, me, roster, now)
     local addon = harness.addon({ now = now })
     local out = { prints = {}, sent = {} }

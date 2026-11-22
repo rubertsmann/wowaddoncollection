@@ -1,5 +1,5 @@
--- the dev "Fake enchanter" record must survive the guild-roster prune, and the exemption list is
--- empty unless something fills it (the live build never does).
+-- Enchants (recipes without an item) are found by their effect text; the dev "Fake enchanter" record survives the
+-- guild-roster prune, and the exemption list is empty unless something fills it (the live build never does).
 return {
     ["search: an enchant is found by its effect text; recipes with an item are not asked"] = function(harness)
         local addon = harness.addon()

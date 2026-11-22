@@ -1,4 +1,4 @@
--- the shared helpers that replaced the per-module copies (Util table helpers, U.Me, U.ChatSafe,
+-- The shared helpers that replaced the per-module copies (Util table helpers, U.Me, U.ChatSafe,
 -- Store.Knows / Store.RecipeCount). Each test pins the behaviour the old copies had, incl. their malformed-input cases.
 local T = {}
 

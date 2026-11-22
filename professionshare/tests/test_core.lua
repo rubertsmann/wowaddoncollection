@@ -1,4 +1,4 @@
--- Util, Store, Codec, Model
+-- Utility, Store, Codec, Model
 return {
     ["util: FullName strips realm spaces and keeps existing realms"] = function(harness)
         local addon = harness.addon()

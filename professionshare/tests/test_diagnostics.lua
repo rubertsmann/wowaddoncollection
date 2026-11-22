@@ -1,4 +1,4 @@
--- sync diagnostics (network trace, decision reasons, identity checks, export report).
+-- Sync diagnostics (network trace, decision reasons, identity checks, export report).
 
 local function commNs(harness, me, roster)
     local addon = harness.addon()

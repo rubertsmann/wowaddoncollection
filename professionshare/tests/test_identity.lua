@@ -1,4 +1,4 @@
--- live and dev builds must never share state (R2, R3, RF1, RF3)
+-- Live and dev builds must never share state (R2, R3, RF1, RF3)
 local function load(addonFolderName)
     local addon = {}
     local chunk = assert(loadfile("Core/Base/Init.lua"))
