@@ -1,4 +1,4 @@
--- Guild games (feature 014): ISO week keys, coin flip rules, record validation, persistence, simulated players.
+-- Guild games: ISO week keys, coin flip rules, record validation, persistence, simulated players.
 local NOW = 1794873600   -- 2026-11-17 00:00 UTC (a Tuesday, ISO 2026-W47)
 local DAY = 86400
 
@@ -123,7 +123,7 @@ return {
         local ahead = addon.Utility.DeepCopy(good)
         ahead.weeks = { ["2026-W48"] = ahead.weeks["2026-W47"] }
         harness.truthy(sundayNight.Games.Sanitize(ahead), "a peer already in the next week")
-        -- extra fields from a newer 2.x minor are dropped, not fatal (RF4)
+        -- extra fields from a newer protocol minor are dropped, not fatal (RF4)
         local extra = addon.Utility.DeepCopy(good); extra.future = { 1, 2 }; extra.total.bonus = 5
         local clean = assert(addon.Games.Sanitize(extra))
         harness.equal(clean.future, nil); harness.equal(clean.total.bonus, nil)

@@ -1,4 +1,4 @@
--- The money pool (feature 018, R15/R18): balance, ledger, the stake limit in every casino game.
+-- The money pool (R15/R18): balance, ledger, the stake limit in every casino game.
 local NOW = 1794873600
 
 local function fresh(harness)

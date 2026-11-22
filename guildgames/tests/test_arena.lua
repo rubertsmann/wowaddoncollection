@@ -1,6 +1,6 @@
--- Companion arena (feature 020): fighters, training, levels, the deterministic battle, odds, the record section and
+-- Companion arena: fighters, training, levels, the deterministic battle, odds, the record section and
 -- the challenge / answer / bet / settle flow between two (three) simulated players exchanging records.
-local NOW = 1794873600   -- 2026-11-16
+local NOW = 1794873600   -- 2026-11-17 00:00 UTC
 
 -- a player with a caught, active companion of `npc` (beast unless `typeID`)
 local function player(harness, name, npc, typeID, level)

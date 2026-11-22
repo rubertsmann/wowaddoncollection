@@ -1,4 +1,4 @@
--- Games leaderboard view-models (feature 014, R6-R8).
+-- Games leaderboard view-models (R6-R8).
 local function totals(won, lost, wins, losses) return { won = won, lost = lost, wins = wins, losses = losses } end
 
 local function gameRecord(name, total, weeks, recent)
@@ -75,7 +75,7 @@ return {
         harness.equal(Model.PreviousWinner(records, "2026-W46").nameRaw, "A-R", "then by name")
     end,
 
-    -- feature 019: the one duration text (companion panel, minimap tooltip and NPC info used three copies)
+    -- the one duration text (companion panel, minimap tooltip and NPC info used three copies)
     ["model: Duration rounds to minutes, whole hours without minutes, never is a dash"] = function(harness)
         local Model = harness.addon().Model
         harness.equal(Model.Duration(math.huge), "-"); harness.equal(Model.Duration(nil), "-")

@@ -78,7 +78,7 @@ return {
                 harness.equal(addon.PREFIX, development and "GGamesDev" or "GGames")
                 harness.equal(addon.SAVED_VARIABLES_NAME, development and "GuildGamesDevDB" or "GuildGamesDB")
                 harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 2); harness.equal(addon.Store.SCHEMA, 2)
-                -- the key binding's globals carry this build's names (user 2026-11-21: live + dev installed together)
+                -- the key binding's globals carry this build's names (live + dev installed together)
                 local binding = addon.Catcher.BindingNames(development)
                 harness.equal(binding.name, development and "AZECAUGHT_THROW_DEV" or "AZECAUGHT_THROW")
                 harness.equal(binding.func, development and "GuildGamesDevAzeCaughtThrow" or "GuildGamesAzeCaughtThrow")
@@ -124,9 +124,9 @@ return {
                 harness.truthy(pcall(addon.UI.ToggleSidebar), "toggling the sidebar failed")
                 harness.equal(addon.db.ui.sidebarOpen, true)
                 harness.truthy(pcall(addon.UI.ToggleSidebar)); harness.equal(addon.db.ui.sidebarOpen, false)
-                -- AZEcaught (feature 018): the panel builds, every view, care, the commands and the ticker run without an error
+                -- AZEcaught: the panel builds, every view, care, the commands and the ticker run without an error
                 harness.truthy(addon.AzeCaughtPanel.widgets.model, "the AZEcaught panel was not built (see Log: caught.ui)")
-                -- the camera (user 2026-11-20: the model was sometimes cut off): full body, zoomed out, wheel per NPC
+                -- the camera (the model was sometimes cut off): full body, zoomed out, wheel per NPC
                 do
                     local Panel, calls = addon.AzeCaughtPanel, {}
                     local fake = { npc = 4711,
@@ -150,7 +150,7 @@ return {
                 local entry = addon.AzeCaught.NoteFound({ npc = 4711, name = "Wolf", level = 5 }, 1794873600)
                 entry.caught = 1
                 for _, view in ipairs({ "collection", "guild", "companion" }) do addon.AzeCaughtPanel.SelectView(view) end
-                -- switching: select a row, the button asks "Stats will be reset", confirming switches (user 2026-11-20)
+                -- switching: select a row, the button asks "Stats will be reset", confirming switches
                 local Panel = addon.AzeCaughtPanel
                 Panel.SelectView("collection"); Panel.SelectSection("caught")
                 Panel.SelectRow(4711)
@@ -166,7 +166,7 @@ return {
                 addon.AzeCaught.Active().hunger = 40
                 addon.AzeCaughtPanel.Care("feed"); addon.AzeCaughtPanel.Care("pet"); addon.AzeCaughtPanel.Care("sleep")
                 addon.AzeCaughtPanel.RefreshCompanion()
-                -- care buttons: greyed out when unusable, a click cooldown (user 2026-11-20)
+                -- care buttons: greyed out when unusable, a click cooldown
                 do
                     local Panel = addon.AzeCaughtPanel
                     local companion = addon.AzeCaught.Active()
@@ -183,7 +183,7 @@ return {
                     harness.truthy(addon.AzeCaught.JournalLines(1, "ui.cooldown")[1], "the ignored click is journaled")
                     Panel.state.careReadyAt = nil
                 end
-                -- the hover panel shows the NPC's info beside the model (user 2026-11-20)
+                -- the hover panel shows the NPC's info beside the model
                 local npcID, infoEntry = addon.AzeCaughtPanel.CompanionNpc()
                 local tooltipLines = {}
                 local fakeTooltip = { SetOwner = function() end, Show = function() end,
@@ -192,7 +192,7 @@ return {
                     AddDoubleLine = function(_, left, right) tooltipLines[#tooltipLines + 1] = left .. " | " .. right end }
                 local okInfo, lineCount = pcall(addon.AzeCaughtPanel.ShowNpcInfo, fakeTooltip, addon.AzeCaughtPanel.widgets.model, npcID, infoEntry)
                 harness.truthy(okInfo and lineCount > 5, "the info panel: " .. tostring(lineCount))
-                -- the model returns to idle after an action and whenever the panel shows (user 2026-11-20)
+                -- the model returns to idle after an action and whenever the panel shows
                 do
                     local Panel = addon.AzeCaughtPanel
                     local played, scripts = {}, {}
@@ -233,7 +233,7 @@ return {
                     Panel.widgets.model, C_Timer.After = realModel, realAfter
                 end
                 addon.Catcher.Start(); addon.Catcher.OnTick(); addon.Catcher.PollThrows(); addon.Catcher.CheckDeath("target"); addon.Catcher.RefreshIcons()
-                -- a catch logs the dump taken at the throw (feature 018)
+                -- a catch logs the dump taken at the throw
                 addon.Catcher.dumps["Creature-0-1-2-3-4711-AB"] = { at = 0, values = { name = "Wolf", creatureType = "Beast" } }
                 addon.Catcher.LogCatchDump("Creature-0-1-2-3-4711-AB", { npc = 4711, chance = 0.1, roll = 0.05, reward = 20000 })
                 local dumpLine = addon.AzeCaught.JournalLines(1, "catch.dump")[1] or ""
@@ -245,7 +245,7 @@ return {
                     harness.truthy(okCommand, "/gg caught " .. command .. ": " .. tostring(commandError))
                 end
                 harness.truthy(pcall(addon.SlashCommands.catch, ""), "/gg catch")
-                -- the icon options page (user 2026-11-20): built, toggles and steps the settings, the slash command too
+                -- the icon options page: built, toggles and steps the settings, the slash command too
                 local Options = addon.AzeCaughtOptions
                 harness.truthy(Options.widgets.frame, "the options page was built (see Log: caught.options)")
                 Options.Change("shown"); harness.equal(addon.AzeCaught.IconSettings().shown, false)
@@ -256,10 +256,10 @@ return {
                     harness.truthy(pcall(addon.SlashCommands.caught, command), "/gg caught " .. command)
                 end
                 harness.equal(addon.AzeCaught.IconSettings().size, 26, "reset at the end")
-                -- The client rules (journal 2026-11-20): nameplates are restricted regions. Measuring one ("GetCenter():
+                -- The client rules: nameplates are restricted regions. Measuring one ("GetCenter():
                 -- Can't measure restricted regions ... Lua Taint") and drawing a line to one ("Line:SetEndPoint(): Not
                 -- allowed to depend on NamePlate1") are refused; a plain frame with ONE anchor on it works (the rope icon).
-                -- The game also hides where the enemy is (UnitPosition: hidden, journal 2026-11-20 "position hidden"), so
+                -- The game also hides where the enemy is (UnitPosition: hidden "position hidden"), so
                 -- a wind-up plays on the player, then the lasso in a pin frame anchored to the target's plate.
                 local savedNamePlate, savedCreateFrame = C_NamePlate, CreateFrame
                 local plate, lockedPlate, refused, anchoredToPlate = stub(), stub(), {}, {}
@@ -296,7 +296,7 @@ return {
                 local played = addon.Catcher.lastEffect
                 harness.equal(played.mode, "nameplate", tostring(played.error) .. " " .. tostring(played.why))
                 harness.equal(#anchoredToPlate, 1, "exactly one frame (the landing pin) is anchored to the plate")
-                -- the fail effects (user 2026-11-20): escape on the target, snap where the icon was; same one-anchor rule
+                -- the fail effects: escape on the target, snap where the icon was; same one-anchor rule
                 addon.Catcher.PlayFailEffect("escape", "target")
                 for _ = 1, 60 do addon.Animate._onUpdate(nil, 0.02) end
                 harness.equal(addon.Catcher.lastFailEffect.mode, "nameplate", tostring(addon.Catcher.lastFailEffect.error))
@@ -324,7 +324,7 @@ return {
                 harness.truthy(addon.AzeCaught.JournalLines(1, "throw.effect")[1]:find("was played", 1, true),
                     "the throw effect runs: " .. tostring(addon.AzeCaught.JournalLines(1, "throw.effect")[1]))
                 harness.truthy(pcall(_G.GuildGamesAzeCaughtThrow), "the key binding")
-                -- kills of enemies that fought me (user 2026-11-21): counted once, only for fought GUIDs
+                -- kills of enemies that fought me: counted once, only for fought GUIDs
                 do
                     local Api, Catcher = addon.Api, addon.Catcher
                     local savedGuid, savedDead = Api.UnitGuid, Api.IsDead
@@ -342,7 +342,7 @@ return {
                     local lines = 0
                     local tip = setmetatable({}, { __index = function() return function() lines = lines + 1 end end })
                     harness.truthy(addon.AzeCaughtPanel.ShowNpcInfo(tip, {}, 88, addon.AzeCaught.State().collection[88]) > 5)
-                    -- the badges (user 2026-11-21: icon based, animated): a new NPC fades in, a higher value pulses
+                    -- the badges (icon based, animated): a new NPC fades in, a higher value pulses
                     local Panel = addon.AzeCaughtPanel
                     harness.truthy(Panel.widgets.historyBadges and Panel.widgets.historyBadges.kills, "badges built")
                     local boar = addon.AzeCaught.State().collection[88]
@@ -357,7 +357,7 @@ return {
                     harness.truthy(okSame, tostring(sameMode)); harness.equal(sameMode, "same")
                     harness.equal(#pulsed, 1); harness.equal(pulsed[1], "kills", "only the value that went up pulses")
                     harness.equal(Panel.ShowHistoryBadges(nil, nil), nil)
-                    -- the arena view (feature 020): fighter page, training, a fight from another player, the replay
+                    -- the arena view: fighter page, training, a fight from another player, the replay
                     do
                         local Arena, AzeCaught = addon.Arena, addon.AzeCaught
                         boar.caught = 1
@@ -365,7 +365,7 @@ return {
                         local me = addon.Utility.Me()
                         local okView, viewError = pcall(Panel.SelectView, "arena")
                         harness.truthy(okView, "arena view: " .. tostring(viewError))
-                        -- "guild" above opened the arena's Guild page (user 2026-11-21: the guild list moved into the arena)
+                        -- "guild" above opened the arena's Guild page (the guild list moved into the arena)
                         harness.equal(Panel.state.view, "arena"); harness.equal(addon.ArenaView.state.page, "guild")
                         harness.truthy(pcall(addon.ArenaView.SelectPage, "fighter"))
                         harness.truthy(addon.ArenaView.widgets.statRows and addon.ArenaView.widgets.statRows.atk:IsShown() ~= false)
@@ -388,7 +388,7 @@ return {
                         addon.Utility.Now = function() return start + 400 end
                         local okWatch, events = pcall(addon.ArenaView.Watch, "Foe-R#" .. start)
                         harness.truthy(okWatch and events and events > 0, "replay: " .. tostring(events))
-                        -- the models act on every step (user 2026-11-21): attack / hurt, the death once
+                        -- the models act on every step: attack / hurt, the death once
                         local played = {}
                         local savedPlay = addon.ArenaView.PlayAnimation
                         addon.ArenaView.PlayAnimation = function(model, key, back) played[#played + 1] = key return savedPlay(model, key, back) end
@@ -408,7 +408,7 @@ return {
                         harness.equal(Arena.State().w + Arena.State().l, 1, "the fight was settled")
                         addon.Games.AllRecords, addon.Utility.Now = savedRecords, savedNow
                         rawset(_G, "GetServerTime", savedServerTime)
-                        -- the guild view (user 2026-11-21): a click selects a pet, the fight icon opens the challenge modal
+                        -- the guild view: a click selects a pet, the fight icon opens the challenge modal
                         local ArenaView = addon.ArenaView
                         addon.Games.simulated[Arena.DUMMY_NAME] = Arena.DummyRecord(Arena.Fighter(AzeCaught.Active()), savedNow())
                         harness.truthy(pcall(Panel.SelectView, "guild"))
@@ -417,7 +417,7 @@ return {
                             if row.nameRaw == Arena.DUMMY_NAME then dummyRow = row end
                         end
                         harness.truthy(dummyRow, "the dummy is in the guild list")
-                        -- the guide arrow (user 2026-11-21): Arena tab, then the first other pet, then the fight icon, once
+                        -- the guide arrow: Arena tab, then the first other pet, then the fight icon, once
                         addon.UIHelpers.Settings().arenaGuide = nil
                         harness.equal(Panel.GuideStep(), "arena")
                         harness.truthy(pcall(Panel.SelectView, "guild")); harness.equal(Panel.GuideStep(), "pet")
@@ -425,7 +425,7 @@ return {
                         harness.equal(Panel.GuideStep(), "fight")
                         harness.equal(Panel.state.guildRow.nameRaw, Arena.DUMMY_NAME)
                         harness.truthy(Panel.widgets.fightButton:IsShown() ~= false, "the fight icon shows for another member's pet")
-                        -- long names: the font shrinks to fit, never below the minimum (user 2026-11-21)
+                        -- long names: the font shrinks to fit, never below the minimum
                         do
                             local font = { size = 12, text = "" }
                             local fake = { GetFont = function() return "Fonts\\FRIZQT__.TTF", font.size, "" end,
@@ -439,7 +439,7 @@ return {
                             addon.UI.Widgets.FitText(fake, "short", 0.7)          -- back to its own size
                             harness.equal(font.size, 12)
                         end
-                        -- the pet's stats as icon badges with numbers, the name on top (user 2026-11-21)
+                        -- the pet's stats as icon badges with numbers, the name on top
                         harness.equal(#Panel.widgets.guildBadges, 8)
                         local stats = Panel.GuildStats(Panel.state.guildRow)
                         harness.equal(stats.level.count, tostring(dummyRow.lvl))
@@ -462,7 +462,7 @@ return {
                         for _, challenge in pairs(Arena.State().ch) do if challenge.to == Arena.DUMMY_NAME then sent = sent + 1 end end
                         harness.equal(sent, 1)
                         harness.truthy(pcall(ArenaView.ChallengeNext)); harness.truthy(not ArenaView.challenge.row, "closed")
-                        -- Fights (user 2026-11-21): my waiting challenge has Stop in its row and in the details; it stops
+                        -- Fights: my waiting challenge has Stop in its row and in the details; it stops
                         harness.truthy(pcall(ArenaView.SelectPage, "fights"))
                         harness.truthy(ArenaView.widgets.stopButton:IsShown(), "stop offered")
                         local stopID
@@ -489,7 +489,7 @@ return {
                         harness.truthy(pcall(Panel.Refresh)); harness.truthy(pcall(Panel.Challenge), "challenge without a row")
                     end
                 end
-                -- the identity probe (user 2026-11-20): runs on any client, secret or missing functions are named, never raises
+                -- the identity probe: runs on any client, secret or missing functions are named, never raises
                 do
                     local savedName, savedSecret = UnitName, rawget(_G, "issecretvalue")
                     local hidden = {}
@@ -502,7 +502,7 @@ return {
                     harness.equal(probe["C_Secrets.ShouldUnitIdentityBeSecret"], "missing")
                     harness.truthy(pcall(addon.SlashCommands.caught, "identity"), "/gg caught identity")
                 end
-                -- why an icon stays hidden (user 2026-11-20: none in the dungeon): every reason, journaled once per change
+                -- why an icon stays hidden (none in the dungeon): every reason, journaled once per change
                 do
                     local Reason, on = addon.Catcher.IconHiddenReason, { shown = true }
                     local npc = { guid = "Creature-0-1-2-3-77-0000000003", npc = 77, health = 0.2 }
@@ -521,7 +521,7 @@ return {
                     addon.Catcher.NoteIconReason("nameplate9", npc, "health above the threshold")
                     harness.truthy(#addon.AzeCaught.State().journal - before <= 1, "once per change; the normal case is not written")
                 end
-                -- the icon style (user 2026-11-20): ring by chance, pulse + one ping at the best moment, arrow until the first throw
+                -- the icon style: ring by chance, pulse + one ping at the best moment, arrow until the first throw
                 do
                     local shownPaths = {}
                     local picture = stub(); rawset(picture, "SetTexture", function(_, path) shownPaths[#shownPaths + 1] = path return true end)
@@ -542,7 +542,7 @@ return {
                     harness.truthy(not button.pulsing and not button.glow:IsShown(), "no glow away from the best moment")
                     addon.Catcher.StyleIcon(button, { guid = weak.guid, health = nil })
                     harness.equal(button.chance, nil, "hidden health: no chance shown")
-                    -- catch mode (user 2026-11-20): the net icon while armed, the rope again after; shaking only near the end
+                    -- catch mode: the net icon while armed, the rope again after; shaking only near the end
                     harness.equal(shownPaths[#shownPaths], addon.Catcher.ROPE_ICON)
                     addon.AzeCaught.throws[weak.guid] = { at = 100, npc = 77 }
                     addon.Catcher.StyleIcon(button, weak)
@@ -566,7 +566,7 @@ return {
                         local okCommand, commandError = pcall(addon.SlashCommands.caught, command)
                         harness.truthy(okCommand, "/ggd caught " .. command .. ": " .. tostring(commandError))
                     end
-                    -- user 2026-11-20: "/ggd reset" did nothing (only /ggd caught reset existed); the dev build takes both
+                    -- "/ggd reset" did nothing (only /ggd caught reset existed); the dev build takes both
                     addon.AzeCaught.State().firstCatchDone, addon.AzeCaught.State().throwHintDone = true, true
                     addon.SlashCommands.reset("")
                     harness.equal(addon.AzeCaught.State().firstCatchDone, nil, "/ggd reset gives the guaranteed first catch back")
@@ -597,7 +597,7 @@ return {
         end)
     end,
 
-    -- user 2026-11-21: live and dev installed together -> "Binding AZECAUGHT_THROW was attempted to be loaded more than
+    -- live and dev installed together -> "Binding AZECAUGHT_THROW was attempted to be loaded more than
     -- once". Bindings.xml carries the live names once each (deploy.ps1 swaps them for the dev copy) and the code
     -- defines the binding's globals with the names of its own build.
     ["load: the key binding has its own names per build (Bindings.xml, deploy.ps1, Catcher.BindingNames)"] = function(harness)
@@ -654,7 +654,7 @@ return {
     end,
 
     -- Retail-based Forever client (build 70959): registering the combat log is FORBIDDEN for addons (the "reserved for
-    -- the Blizzard UI" dialog at load, feature 018). No file may register it or read it.
+    -- the Blizzard UI" dialog at load). No file may register it or read it.
     ["load: no file registers or reads the combat log (forbidden on this client)"] = function(harness)
         local offenders = {}
         for _, file in ipairs(tocFiles("GuildGames.toc")) do
@@ -694,7 +694,7 @@ return {
         harness.equal(snapshot.classification, "normal")
     end,
 
-    -- the catch dump (feature 018): every readable unit value; secrets, missing functions and errors are named
+    -- the catch dump: every readable unit value; secrets, missing functions and errors are named
     ["load: the unit dump names every value, a secret, a missing function and an error"] = function(harness)
         local addon = harness.addon({ now = 1794873600 })
         local secret = {}

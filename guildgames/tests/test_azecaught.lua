@@ -1,5 +1,5 @@
--- AZEcaught (feature 018): catch math, collection, companion state machine, record section, payout, journal.
-local NOW = 1794873600   -- 2026-11-16 (a Monday, week 2026-W47)
+-- AZEcaught: catch math, collection, companion state machine, record section, payout, journal.
+local NOW = 1794873600   -- 2026-11-17 00:00 UTC (a Tuesday, week 2026-W47)
 local GUID = "Creature-0-1-2-3-4711-0000ABCDEF"
 
 local function fresh(harness)
@@ -21,7 +21,7 @@ local function withCaught(harness, options)
     assert(AzeCaught.Throw({ guid = GUID, health = 0.1, name = "Wolf", level = 10, classification = (options and options.cls) or "normal" }, 10, 100, NOW))
     AzeCaught.forceNextCatch = true
     assert(AzeCaught.OnDeath(GUID, "Me-R", 101, NOW, constant(0.99)).caught)
-    -- the catch became the companion (none was active, user 2026-11-21); these tests select it themselves
+    -- the catch became the companion (none was active); these tests select it themselves
     AzeCaught.State().active, AzeCaught.State().peaks = nil, {}
     return addon
 end
@@ -39,7 +39,7 @@ local function journalHas(addon, text)
 end
 
 return {
-    -- user 2026-11-20: "at 10% life the catch chance is 90% - with a slight malus to elite and rare mob"
+    -- at 10% health the catch chance is 90%, with a slight malus for elite and rare NPCs
     ["azecaught: the chance rises linearly from 20% at 35% health to 90% at 10%, flat below; hidden health is the worst case"] = function(harness)
         local AzeCaught = fresh(harness).AzeCaught
         local function near(actual, expected, message) harness.truthy(math.abs(actual - expected) < 1e-9, (message or "") .. " " .. actual) end
@@ -459,7 +459,7 @@ return {
         harness.equal(AzeCaught.State().collection[4711].n, "Wolf")
     end,
 
-    -- user 2026-11-20: the care streak counts at most one care action per hour (play time)
+    -- the care streak counts at most one care action per hour (play time)
     ["azecaught: the care streak grows at most once per hour of play time"] = function(harness)
         local addon = withCaught(harness)
         local AzeCaught = addon.AzeCaught
@@ -486,7 +486,7 @@ return {
         harness.equal(AzeCaught.CARE_STREAK_GAP, 3600)
     end,
 
-    -- user 2026-11-20: the first catch roll ever always succeeds (once per character; dev add does not use it up)
+    -- the first catch roll ever always succeeds (once per character; dev add does not use it up)
     ["azecaught: the very first catch roll succeeds, later rolls use the chance"] = function(harness)
         local addon = fresh(harness)
         local AzeCaught = addon.AzeCaught
@@ -507,7 +507,7 @@ return {
         harness.equal(junk.caught.firstCatchDone, nil)
     end,
 
-    -- user 2026-11-20: need intervals and thresholds generated from the NPC's stats
+    -- need intervals and thresholds generated from the NPC's stats
     ["azecaught: stats are stored with the found NPC and filled in later; hidden values stay unknown"] = function(harness)
         local addon = fresh(harness)
         local AzeCaught = addon.AzeCaught
@@ -604,7 +604,7 @@ return {
         harness.equal(info.combat[1].label, "Attack"); harness.equal(info.combat[3].label, "Speed")
         harness.equal(info.combat[2].value, tostring(addon.AzeCaught.CombatStats(4711, entry).defense))
         harness.equal(#bare.combat, 3, "calculated even when the game hid everything")
-        -- bars: the base of a normal level-60 NPC is a full bar (user 2026-11-20)
+        -- bars: the base of a normal level-60 NPC is a full bar
         harness.equal(addon.AzeCaught.CombatScale(), 130)
         local weak = addon.Model.BuildNpcInfo(5, { n = "Z", lvl = 15, cls = "normal", disp = 0, caught = 0 })
         for _, stat in ipairs(weak.combat) do
@@ -615,7 +615,7 @@ return {
         for _, stat in ipairs(boss.combat) do harness.equal(stat.fill, 1, "capped"); harness.equal(stat.over, true) end
     end,
 
-    -- user 2026-11-20: Attack / Defense / Speed from level, rarity, creature type and a hash of the NPC id (display only)
+    -- Attack / Defense / Speed from level, rarity, creature type and a hash of the NPC id (display only)
     ["azecaught: combat stats are fixed per NPC and follow level, rarity and creature type"] = function(harness)
         local AzeCaught = fresh(harness).AzeCaught
         local function stats(npcID, level, cls, typeID)
@@ -647,7 +647,7 @@ return {
         harness.truthy(odd.attack >= 1 and odd.defense >= 1 and odd.speed >= 1, "bad input still gives sane numbers")
     end,
 
-    -- user 2026-11-21: the Seen tab keeps how often seen, first/last seen, killed and caught x/y
+    -- the Seen tab keeps how often seen, first/last seen, killed and caught x/y
     ["azecaught: history counts each enemy once: seen, last seen, kills, throws and catches"] = function(harness)
         local addon = fresh(harness)
         local AzeCaught = addon.AzeCaught
@@ -687,7 +687,7 @@ return {
         harness.truthy(AzeCaught.State().collection[1] and not AzeCaught.State().collection[2], "B was seen longest ago")
     end,
 
-    -- user 2026-11-21: the history as icon badges (numbers to count up, dimmed when empty, short age)
+    -- the history as icon badges (numbers to count up, dimmed when empty, short age)
     ["azecaught: history badges: values, texts, empty flags and short ages"] = function(harness)
         local addon = fresh(harness)
         local Model = addon.Model
@@ -704,7 +704,7 @@ return {
         harness.equal(Model.ShortAge(nil, NOW), nil)
     end,
 
-    -- user 2026-11-21: "make the first animal instantly a companion" (only when none is active)
+    -- a catch becomes the companion at once (only when none is active)
     ["azecaught: a catch becomes the companion when none is active, never replaces one"] = function(harness)
         local addon = fresh(harness)
         local AzeCaught = addon.AzeCaught
@@ -730,7 +730,7 @@ return {
         harness.truthy(roll and not roll.companion and not readOnly.AzeCaught.Active())
     end,
 
-    -- user 2026-11-20: "remove the limit on caught" (it was 10)
+    -- caught NPCs have no limit (it was 10)
     ["azecaught: caught NPCs have no limit: a throw and a roll still work with many caught"] = function(harness)
         local addon = fresh(harness)
         local AzeCaught = addon.AzeCaught
@@ -778,7 +778,7 @@ return {
         harness.equal(sections.caughtCount, 3); harness.equal(sections.caughtLimit, nil)
     end,
 
-    -- user 2026-11-20: care buttons are greyed out when they cannot be used; the check must agree with Care
+    -- care buttons are greyed out when they cannot be used; the check must agree with Care
     ["azecaught: CareAvailability agrees with Care's refusals and changes nothing"] = function(harness)
         local addon = withCaught(harness)
         local AzeCaught = addon.AzeCaught
@@ -802,7 +802,7 @@ return {
         check("pet", "asleep"); check("wake", nil)
     end,
 
-    -- user 2026-11-20: the rope hits each enemy only once
+    -- the rope hits each enemy only once
     ["azecaught: one throw per enemy: a second throw at the same GUID is refused, another enemy is fine"] = function(harness)
         local addon = fresh(harness)
         local AzeCaught = addon.AzeCaught
@@ -813,7 +813,7 @@ return {
         harness.equal(next(AzeCaught.thrown), nil, "the memory is bounded")
     end,
 
-    -- user 2026-11-20: the icon ring goes from red to green with the catch chance and pulses at the best moment
+    -- the icon ring goes from red to green with the catch chance and pulses at the best moment
     ["azecaught: throw quality follows the chance (rarity included); best at 10% health; nil when health is hidden"] = function(harness)
         local AzeCaught = fresh(harness).AzeCaught
         local function near(actual, expected, message) harness.truthy(math.abs(actual - expected) < 1e-9, (message or "") .. " " .. actual) end
@@ -835,7 +835,7 @@ return {
         r, g = AzeCaught.QualityColor(nil); harness.truthy(r > 0.9 and g > 0.7, "unknown: neutral yellow")
     end,
 
-    -- user 2026-11-20: "killed too slow" ends the throw when the window ends (the icon goes with a burst)
+    -- "killed too slow" ends the throw when the window ends (the icon goes with a burst)
     ["azecaught: a throw whose window passed is ended once, counts as rolled and a later death rolls nothing"] = function(harness)
         local addon = fresh(harness)
         local AzeCaught = addon.AzeCaught
@@ -850,7 +850,7 @@ return {
         harness.equal(select(2, AzeCaught.Throw({ guid = GUID, health = 0.1 }, 10, 110, NOW)), "rolled", "no second throw")
     end,
 
-    -- user 2026-11-20: a red arrow points at the rope icon until the character's first throw
+    -- a red arrow points at the rope icon until the character's first throw
     ["azecaught: the throw hint shows until the first throw (not for players who caught before), is saved and reset"] = function(harness)
         local addon = fresh(harness)
         local AzeCaught = addon.AzeCaught
@@ -869,7 +869,7 @@ return {
         harness.equal(AzeCaught.State().throwHintDone, nil)
     end,
 
-    -- user 2026-11-20: an addon option to move the rope icon or turn it off
+    -- an addon option to move the rope icon or turn it off
     ["azecaught: icon settings have defaults, are clamped, journaled and re-validated on load"] = function(harness)
         local addon = fresh(harness)
         local AzeCaught = addon.AzeCaught

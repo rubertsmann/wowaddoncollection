@@ -1,4 +1,4 @@
--- Slot machine rules (feature 014, second game): strip, paylines, payouts, storage before animation, reel motion,
+-- Slot machine rules (second game): strip, paylines, payouts, storage before animation, reel motion,
 -- record validation of the slots section, and the per-game leaderboards.
 local NOW = 1794873600   -- 2026-11-17 00:00 UTC
 
@@ -59,7 +59,7 @@ return {
     ["slots: return to player is about 94% and a long simulation agrees"] = function(harness)
         local addon = fresh(harness)
         local rtp = addon.Slots.ReturnToPlayer()
-        addon.Wallet.Ledger().earned = 1e9   -- the money pool (feature 018) must not run dry during the simulation
+        addon.Wallet.Ledger().earned = 1e9   -- the money pool must not run dry during the simulation
         harness.truthy(rtp > 0.9 and rtp < 0.97, "rtp " .. rtp)
         local seed, paid, staked = 11, 0, 0
         local random = function() seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648 end

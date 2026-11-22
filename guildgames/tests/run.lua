@@ -1,4 +1,4 @@
--- Offline test runner:  luajit tests/run.lua   (run from the repo root)
+-- Offline test runner:  luajit tests/run.lua   (run from the guildgames folder)
 -- Each tests/test_*.lua returns a table { ["test name"] = function(harness) ... end }.
 -- `harness.addon()` gives a fresh addon table with the pure modules loaded (and a fresh LibGuildSync, whose shared state
 -- would otherwise leak between tests); `harness.equal(actual, expected)` / `harness.truthy(value)` assert.

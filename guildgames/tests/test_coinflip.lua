@@ -1,4 +1,4 @@
--- Coin flip animation math (feature 014, R4): the pose curve UI/GamesTab.lua plays every frame.
+-- Coin flip animation math (R4): the pose curve UI/GamesTab.lua plays every frame.
 return {
     ["coinflip: starts flat on heads at rest and ends flat on the outcome"] = function(harness)
         local CoinFlip = harness.addon().CoinFlip

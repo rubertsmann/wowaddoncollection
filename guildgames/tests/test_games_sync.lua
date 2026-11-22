@@ -1,4 +1,4 @@
--- Guild games over the wire (feature 014, R5, RF1, RF4, RF5): HELLO.grev -> WANTG -> GAMES, retries, forgery, coalesced HELLO.
+-- Guild games over the wire (R5, RF1, RF4, RF5): HELLO.grev -> WANTG -> GAMES, retries, forgery, coalesced HELLO.
 local BIG = 1794873600   -- 2026-11-17 00:00 UTC: week keys are valid and "the future" is decidable
 
 local function peer(harness, bus, name, seed)
@@ -106,7 +106,7 @@ return {
             harness.truthy(note:find("games: invalid grev ignored", 1, true), tostring(grev))
         end
         harness.equal(#bus.queue, 0, "no WANTG for a hostile grev")
-        -- a 2.2 peer's HELLO has no grev: nothing about games
+        -- a HELLO without grev (a peer without a game record): nothing about games
         local _, note = a.sync:OnMessage({ t = "HELLO", v = P, rev = 0 }, "B-R")
         harness.truthy(not note:find("games", 1, true))
     end,

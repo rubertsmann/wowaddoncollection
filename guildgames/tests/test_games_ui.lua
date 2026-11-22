@@ -1,4 +1,4 @@
--- Games tab and animation helpers against a recording widget stub (feature 014, L3: R1, R3, R4 fallback, RF3, RF6).
+-- Games tab and animation helpers against a recording widget stub (L3: R1, R3, R4 fallback, RF3, RF6).
 -- It proves the logic around the widgets (button state, store-before-animate, fallbacks), not how anything looks.
 local NOW = 1794873600   -- 2026-11-17 00:00 UTC
 
