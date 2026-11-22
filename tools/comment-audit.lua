@@ -6,6 +6,7 @@
 --   member       Module.Name where Module is a table of this addon but Name is defined nowhere in it
 --   param        a ---@param that is not a parameter of the function below it
 -- --strict exits with 1 when anything is found (for tests/run.lua).
+-- --code-only <revision> exits with 1 when a changed Lua file differs from <revision> in more than comments/whitespace.
 
 local VENDORED_FOLDERS = { "/Libs/", "/libs/", "/dist/", "/Locales/", "/eval/", "/features/", "/review/" }
 
@@ -187,8 +188,29 @@ local function audit(root)
     return findings, #files, commentCount
 end
 
+-- --code-only <git revision>: proves that the Lua files changed since <revision> differ only in comments and whitespace.
+local function codeOnly(revision)
+    local pipe = assert(io.popen(('git diff --name-only "%s" -- "*.lua" ":!tools"'):format(revision)))
+    local changed = 0
+    for file in pipe:lines() do
+        local before = assert(io.popen(('git show "%s:%s" 2>nul'):format(revision, file))):read("*a")
+        local after = readFile(file) or ""
+        local _, beforeCode = extractComments(before)
+        local _, afterCode = extractComments(after)
+        local function squeeze(code) return (code:gsub("%s+", " ")) end
+        if before ~= "" and squeeze(beforeCode) ~= squeeze(afterCode) then
+            print("CODE CHANGED: " .. file)
+            changed = changed + 1
+        end
+    end
+    pipe:close()
+    print(("comment-audit --code-only %s: %d file(s) with code changes"):format(revision, changed))
+    os.exit(changed == 0 and 0 or 1)
+end
+
 local strict, summary, roots = false, false, {}
-for _, argument in ipairs(arg) do
+for index, argument in ipairs(arg) do
+    if argument == "--code-only" then codeOnly(arg[index + 1]) end
     if argument == "--strict" then strict = true
     elseif argument == "--summary" then summary = true
     else roots[#roots + 1] = argument end

@@ -1,15 +1,12 @@
 local addonName, addon = ...
 
--- AZEcaught (feature 018): catch hostile NPCs and raise one as a companion. PURE Lua: no WoW calls. The client side is
+-- AZEcaught: catch hostile NPCs and raise one as a companion. PURE Lua: no WoW calls. The client side is
 -- Core/Game/Catcher.lua (combat log, nameplates, model capture) and UI/AzeCaughtPanel.lua. Clocks and random numbers are
 -- PARAMETERS, so any bug report can be replayed offline from `/gg caught export` and the journal.
---
--- Time: needs change only during ACTIVE time (logged in, R10). The client calls AzeCaught.Tick(elapsedSeconds) once a second with
--- the GetTime() delta; each tick is clamped to MAXIMUM_TICK so a hang or loading screen cannot age the companion (RF2).
---
--- Debugging (R19): every step writes one structured line to the AZEcaught JOURNAL (db.caught.journal, its own ring so
--- combat noise cannot push casino lines out of /gg debug). WARNING and ERROR lines are mirrored to the main log.
--- `verbose` echoes every journal line to the chat frame.
+-- Needs change only during ACTIVE (logged-in) time: the client calls AzeCaught.Tick(elapsedSeconds) once a second; each
+-- tick is clamped to MAXIMUM_TICK so a hang or loading screen cannot age the companion.
+-- Every step writes one line to the AZEcaught JOURNAL (db.caught.journal, its own ring so combat noise cannot push casino
+-- lines out of /gg debug); WARNING and ERROR lines are mirrored to the main log; `verbose` echoes every line to chat.
 ---@class AzeCaughtModule
 local AzeCaught = {}
 addon.AzeCaught = AzeCaught
@@ -21,20 +18,20 @@ local library = LibStub("LibGuildSync-1.0")
 AzeCaught.THROW_HEALTH = 0.35            -- the rope icon shows at or below this health fraction
 AzeCaught.CATCH_WINDOW = 3               -- seconds from the throw in which the death must happen
 AzeCaught.THROW_COOLDOWN = 3             -- seconds between throws
--- the catch chance (user 2026-11-20): linear from CHANCE_AT_THROW_HEALTH (icon appears) to CHANCE_AT_BEST at BEST_HEALTH,
+-- the catch chance: linear from CHANCE_AT_THROW_HEALTH (icon appears) to CHANCE_AT_BEST at BEST_HEALTH,
 -- flat below; rarer NPCs subtract RARITY_MALUS points; never below MINIMUM_CHANCE. The level does not matter.
 AzeCaught.BEST_HEALTH = 0.10
 AzeCaught.CHANCE_AT_THROW_HEALTH = 0.20
 AzeCaught.CHANCE_AT_BEST = 0.90
 AzeCaught.MINIMUM_CHANCE = 0.05
 AzeCaught.RARITY_MALUS = { normal = 0, elite = 0.05, rare = 0.10, rareelite = 0.15, worldboss = 0.25 }
-AzeCaught.CATCH_REWARD = 2 * 10000       -- paid for a catch at CHANCE_AT_BEST; scaled up by the risk (user 2026-11-20)
+AzeCaught.CATCH_REWARD = 2 * 10000       -- paid for a catch at CHANCE_AT_BEST; scaled up by the risk
 AzeCaught.MAXIMUM_REWARD = 50 * 10000
 AzeCaught.RARITY_BONUS = { normal = 0, elite = 5, rare = 10, rareelite = 15, worldboss = 25 }
 AzeCaught.CLASSIFICATIONS = { "normal", "elite", "rare", "rareelite", "worldboss" }
 
 AzeCaught.NEEDS = { "hunger", "thirst", "affection", "energy" }
--- the care schedule (R6/R14): seconds of active time from full to NEEDY (50%); empty after twice that
+-- the care schedule: seconds of active time from full to NEEDY (50%); empty after twice that
 AzeCaught.FOOD_INTERVAL = 2 * 3600
 AzeCaught.WATER_INTERVAL = 1 * 3600
 AzeCaught.PET_INTERVAL = 2 * 3600
@@ -54,7 +51,7 @@ AzeCaught.FOOD_PRICE = 50 * 100          -- 50s
 AzeCaught.WATER_PRICE = 25 * 100         -- 25s
 AzeCaught.PAYOUTS = { 500 * 10000, 300 * 10000, 150 * 10000 }
 AzeCaught.PAYOUT_OTHER = 25 * 10000
-AzeCaught.MAXIMUM_COLLECTION = 2000     -- bound against corrupt saved data only; caught NPCs have no limit (user 2026-11-20)
+AzeCaught.MAXIMUM_COLLECTION = 2000     -- bound against corrupt saved data only; caught NPCs have no limit
 AzeCaught.MAXIMUM_SEEN = 100            -- seen-only NPCs; the oldest makes room for a new one
 AzeCaught.MAXIMUM_NAME_BYTES = 48
 AzeCaught.MAXIMUM_LEVEL = 200
@@ -63,7 +60,7 @@ AzeCaught.MAXIMUM_ID = 2147483647
 AzeCaught.MAXIMUM_WEEKS = 4
 AzeCaught.JOURNAL_ENTRIES = 400
 
--- Stats -> needs (user 2026-11-20): each NPC's need intervals and thresholds come from what the client tells about it.
+-- Stats -> needs: each NPC's need intervals and thresholds come from what the client tells about it.
 -- Factors multiply the base interval (smaller = needed more often); false = never needed. Unknown stats: base values.
 -- creature type ids: CreatureType (1 beast, 2 dragonkin, 3 demon, 4 elemental, 5 giant, 6 undead, 7 humanoid, 8 critter,
 -- 9 mechanical, 15 aberration)
@@ -95,7 +92,7 @@ AzeCaught.MAXIMUM_STAT = 2000000000
 -- runtime only (never stored): armed throws by GUID, GUIDs already rolled, last throw time, dev "force next catch"
 AzeCaught.throws = {}
 AzeCaught.rolled = {}
-AzeCaught.thrown = {}   -- GUID -> clock of its throw: one throw per enemy (user 2026-11-20)
+AzeCaught.thrown = {}   -- GUID -> clock of its throw: one throw per enemy
 AzeCaught.lastThrowAt = nil
 AzeCaught.forceNextCatch = false
 -- runtime only: GUIDs already counted as an encounter / a kill (each enemy counts once; cleared past MAXIMUM_COUNTED)
@@ -112,7 +109,7 @@ AzeCaught.killed, AzeCaught.killedCount = {}, 0
 ---@field disp integer CreatureDisplayInfo id, 0 when unknown
 ---@field seen integer server time first found
 ---@field caught integer how many are caught (0 = only found)
----@field cnt? integer encounters: different enemies (GUIDs) of this NPC seen (user 2026-11-21; missing = 1)
+---@field cnt? integer encounters: different enemies (GUIDs) of this NPC seen (missing = 1)
 ---@field last? integer server time last seen or killed (missing = seen)
 ---@field kills? integer how many died after fighting me (missing = 0)
 ---@field thr? integer ropes thrown at it (missing = 0)
@@ -167,7 +164,7 @@ AzeCaught.journalLog = journalLog
 
 local LEVEL_FUNCTION = { ERROR = "Error", WARNING = "Warning", INFORMATION = "Information", DEBUG = "Debug" }
 
--- One journal line (R19). area is "<part>.<step>" and is shown as "caught.<area>". WARNING/ERROR also go to the main log.
+-- One journal line. area is "<part>.<step>" and is shown as "caught.<area>". WARNING/ERROR also go to the main log.
 ---@param level LogLevel
 ---@param area string
 ---@param message string
@@ -185,7 +182,7 @@ function AzeCaught.Journal(level, area, message, details)
     return body
 end
 
--- A protected call whose failure lands in the journal AND the main log (with the stack).
+-- A protected call; a failure goes to the main log (with the stack) under "caught.<area>", not to the journal.
 ---@param area string
 ---@param message string
 ---@param func function
@@ -237,7 +234,7 @@ function AzeCaught.NpcIDFromGuid(guid)
     return addon.Utility.SafeInteger(tonumber(npcID), 1, AzeCaught.MAXIMUM_ID)
 end
 
------------------------------------------------------------------- catch chance (R4)
+------------------------------------------------------------------ catch chance
 
 ---@class ChanceBreakdown
 ---@field chance number
@@ -247,8 +244,7 @@ end
 ---@field classification string
 ---@field best boolean at or below BEST_HEALTH: the best moment this NPC can have
 
--- The catch chance (user 2026-11-20: "at 10% life the catch chance is 90%, with a slight malus to elite and rare"):
--- CHANCE_AT_THROW_HEALTH at THROW_HEALTH rising linearly to CHANCE_AT_BEST at BEST_HEALTH, flat below, minus the rarity
+-- The catch chance: CHANCE_AT_THROW_HEALTH at THROW_HEALTH rising linearly to CHANCE_AT_BEST at BEST_HEALTH, flat below, minus the rarity
 -- malus, at least MINIMUM_CHANCE. A hidden health counts as THROW_HEALTH (the worst case).
 ---@param healthFraction number|nil
 ---@param classification string|nil
@@ -265,9 +261,8 @@ function AzeCaught.Chance(healthFraction, classification)
         malus = malus, classification = rarity, best = health <= AzeCaught.BEST_HEALTH }
 end
 
--- How good a moment to throw is, for the icon ring (user 2026-11-20: "going from red to green outline according to the
--- catch chance"): 0 at MINIMUM_CHANCE (red), 1 at CHANCE_AT_BEST (green). Second value: the best moment (the ring
--- pulses). nil when the client hides the health.
+-- How good a moment to throw is, for the icon ring: 0 at MINIMUM_CHANCE (red), 1 at CHANCE_AT_BEST (green). Second
+-- value: the best moment (the ring pulses). nil when the client hides the health.
 ---@param healthFraction number|nil
 ---@param classification string|nil
 ---@return number|nil quality
@@ -290,7 +285,7 @@ function AzeCaught.QualityColor(quality)
     return 1 - 0.8 * (quality - 0.5) * 2, 0.85 + 0.15 * (quality - 0.5) * 2, 0.1 + 0.2 * (quality - 0.5) * 2
 end
 
--- Copper paid for a catch, by the risk (user 2026-11-20): CATCH_REWARD at CHANCE_AT_BEST, more the lower the chance was
+-- Copper paid for a catch, by the risk: CATCH_REWARD at CHANCE_AT_BEST, more the lower the chance was
 -- (CATCH_REWARD x CHANCE_AT_BEST / chance), at most MAXIMUM_REWARD.
 ---@param chance number
 ---@return integer
@@ -299,7 +294,7 @@ function AzeCaught.Reward(chance)
     return math.min(AzeCaught.MAXIMUM_REWARD, math.floor(AzeCaught.CATCH_REWARD * risk + 0.5))
 end
 
------------------------------------------------------------------- collection (R1, R6)
+------------------------------------------------------------------ collection
 
 ---@class NpcStats what the client told about an NPC (any field may be missing: hidden or never seen)
 ---@field type? integer creature type id
@@ -377,8 +372,8 @@ end
 ---@return integer
 local function bump(value) return math.min(AzeCaught.MAXIMUM_ID, (value or 0) + 1) end
 
--- An NPC's history for the Seen tab (user 2026-11-21: how often seen, first/last seen, killed, caught x/y). Old
--- entries without the counters read as seen once, never killed.
+-- An NPC's history for the Seen tab (how often seen, first/last seen, killed, caught x/y). Old entries without the
+-- counters read as seen once, never killed.
 ---@param entry CollectionEntry
 ---@return { seen: integer, first: integer, last: integer, kills: integer, caught: integer, throws: integer }
 function AzeCaught.History(entry)
@@ -444,7 +439,7 @@ function AzeCaught.NoteFound(npcInformation, now)
     for otherID, other in pairs(collection) do
         if (other.caught or 0) < 1 then
             seenOnly = seenOnly + 1
-            local lastSeen = other.last or other.seen   -- the one not seen for the longest time
+            local lastSeen = other.last or other.seen
             if lastSeen < oldestSeen then oldestID, oldestSeen = otherID, lastSeen end
         end
     end
@@ -465,7 +460,7 @@ function AzeCaught.NoteFound(npcInformation, now)
     return entry, true
 end
 
--- How many NPCs are caught (duplicates count). No limit (user 2026-11-20: "remove the limit on caught").
+-- How many NPCs are caught (duplicates count).
 ---@return integer
 function AzeCaught.CaughtCount()
     local count = 0
@@ -473,14 +468,14 @@ function AzeCaught.CaughtCount()
     return count
 end
 
------------------------------------------------------------------- throwing and rolling (R2, R3, R5)
+------------------------------------------------------------------ throwing and rolling
 
 ---@class ThrowTarget : NpcInformation
 ---@field guid string
 ---@field health number fraction 0..1
 
--- Arms a throw at a unit. Returns true, or nil and why: "unknown" (no NPC), "health" (above THROW_HEALTH),
--- "cooldown", "dead", "rolled" (this GUID already had its roll).
+-- Arms a throw at a unit. Returns true, or nil and why: "unknown" (no NPC), "rolled" (this GUID already had its roll),
+-- "thrown" (one throw per enemy), "dead", "health" (above THROW_HEALTH), "cooldown".
 ---@param target ThrowTarget
 ---@param playerLevel integer
 ---@param clockSeconds number GetTime()
@@ -521,8 +516,7 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
     return true
 end
 
--- Armed throws whose CATCH_WINDOW has passed without a death (user 2026-11-20: "killed too slow" ends the throw at the
--- window's end, the icon disappears with a burst). Each is disarmed, counts as rolled (no second throw at that NPC) and
+-- Armed throws whose CATCH_WINDOW has passed without a death (the icon disappears with a burst). Each is disarmed, counts as rolled (no second throw at that NPC) and
 -- is journaled. Returns them oldest first: { guid, npc, name }.
 ---@param clockSeconds number GetTime()
 ---@return { guid: string, npc: integer, name: string|nil }[]
@@ -543,7 +537,7 @@ function AzeCaught.EndLateThrows(clockSeconds)
     return ended
 end
 
--- The red arrow at the rope icon (user 2026-11-20): shown until the character throws for the first time. A character
+-- The red arrow at the rope icon: shown until the character throws for the first time. A character
 -- that already caught something before this hint existed does not need it.
 ---@return boolean
 function AzeCaught.NeedsThrowHint()
@@ -551,7 +545,7 @@ function AzeCaught.NeedsThrowHint()
     return not caught.throwHintDone and not caught.firstCatchDone
 end
 
--- Forgets armed throws and rolled GUIDs older than a minute (bounded memory).
+-- Forgets armed throws and rolled GUIDs after a minute, thrown GUIDs after ten minutes (bounded memory).
 ---@param clockSeconds number
 function AzeCaught.ExpireThrows(clockSeconds)
     for guid, throw in pairs(AzeCaught.throws) do
@@ -572,9 +566,9 @@ end
 ---@field roll number
 ---@field reward integer copper paid (0 when not caught)
 ---@field forced boolean
----@field first boolean the guaranteed first catch (user 2026-11-20)
+---@field first boolean the guaranteed first catch
 
--- A unit died. Rolls ONCE when it was thrown at within CATCH_WINDOW (RF1). Returns the roll, or nil and why:
+-- A unit died. Rolls ONCE when it was thrown at within CATCH_WINDOW. Returns the roll, or nil and why:
 -- "nothrow", "late", "rolled".
 ---@param guid string
 ---@param myName string|nil
@@ -621,8 +615,7 @@ function AzeCaught.OnDeath(guid, myName, clockSeconds, now, randomFunction)
         AzeCaught.Journal("INFORMATION", "catch", "an NPC was caught",
             { npc = throw.npc, name = entry.n, timesCaught = entry.caught, reward = result.reward })
         if result.reward > 0 then addon.Wallet.Earn(myName, result.reward, "catch", now, entry.n) end
-        -- user 2026-11-21 "make the first animal instantly a companion": without an active companion the catch becomes
-        -- it at once (also after one died or ran away), so the guild sees it without a trip to the collection
+        -- without an active companion the catch becomes it at once (also after one died or ran away), so the guild sees it without a trip to the collection
         if not AzeCaught.State().active and AzeCaught.Select(throw.npc, now) then
             result.companion = true
             AzeCaught.Journal("INFORMATION", "companion.auto", "the catch became the companion (none was active)",
@@ -634,7 +627,7 @@ function AzeCaught.OnDeath(guid, myName, clockSeconds, now, randomFunction)
     return result
 end
 
------------------------------------------------------------------- companion (R7-R13)
+------------------------------------------------------------------ companion
 
 ---@param value number
 ---@return "ok"|"needy"|"critical"|"empty"
@@ -657,7 +650,7 @@ end
 
 local NEED_INTERVAL = { hunger = "FOOD_INTERVAL", thirst = "WATER_INTERVAL", affection = "PET_INTERVAL", energy = "AWAKE_INTERVAL" }
 
--- The needs of an NPC from its stats (user 2026-11-20). No stats: the base schedule and thresholds.
+-- The needs of an NPC from its stats. No stats: the base schedule and thresholds.
 ---@param entry { cls: string, st?: NpcStats }|nil
 ---@return NeedProfile
 function AzeCaught.Profile(entry)
@@ -722,7 +715,7 @@ function AzeCaught.ZoneOf(companion, need)
     return AzeCaught.Zone(companion[need], profile.ok, profile.critical)
 end
 
------------------------------------------------------------------- combat stats (display only, user 2026-11-20)
+------------------------------------------------------------------ combat stats (display only)
 -- Attack / Defense / Speed are calculated, never stored or sent: the same NPC shows the same numbers to everyone, and a
 -- formula change applies to every NPC at once. value = (10 + 2 x level) x rarity x type weight x NPC spread (+-15%).
 
@@ -735,7 +728,7 @@ AzeCaught.COMBAT_TYPES = {
     [6] = { 1.0, 1.3, 0.7 },   -- undead: tough and slow
     [9] = { 0.9, 1.4, 0.8 },   -- mechanical: armoured
 }
-AzeCaught.COMBAT_REFERENCE_LEVEL = 60   -- the base of a normal NPC of this level is a full bar (user 2026-11-20)
+AzeCaught.COMBAT_REFERENCE_LEVEL = 60   -- the base of a normal NPC of this level is a full bar
 local COMBAT_KEYS = { "attack", "defense", "speed" }
 
 -- The value of a full stat bar: the base of a normal NPC at COMBAT_REFERENCE_LEVEL.
@@ -816,7 +809,7 @@ function AzeCaught.SecondsUntilNeedy(companion, need)
     return (value - profile.ok) / perSecond
 end
 
--- The companion's ranking value (R16): NPC level + rarity bonus + hearts.
+-- The companion's ranking value: NPC level + rarity bonus + hearts.
 ---@param companion { lvl: integer, cls: string, hearts: integer }|nil
 ---@return integer|nil
 function AzeCaught.CompanionLevel(companion)
@@ -853,7 +846,7 @@ local function changeHearts(companion, delta, reason)
     AzeCaught.NotePeak(companion)
 end
 
--- Remembers my best companion level of this week (the weekly ranking, R17).
+-- Remembers my best companion level of this week (the weekly ranking).
 ---@param companion CompanionState
 ---@param now? integer
 function AzeCaught.NotePeak(companion, now)
@@ -876,7 +869,7 @@ end
 
 ---@alias SelectRefusal "unknown"|"notcaught"|"same"|"readonly"
 
--- Makes a caught NPC the active companion, fresh (R7). A previous companion with negative hearts runs away.
+-- Makes a caught NPC the active companion, fresh. A previous companion with negative hearts runs away.
 ---@param npcID any
 ---@param now integer server time
 ---@return CompanionState|nil
@@ -916,7 +909,7 @@ function AzeCaught.Select(npcID, now)
     return companion, nil, ranAway
 end
 
--- The companion dies (R13): it loses its catch and the active slot is emptied.
+-- The companion dies: it loses its catch and the active slot is emptied.
 ---@param companion CompanionState
 ---@param cause string
 local function die(companion, cause)
@@ -932,7 +925,7 @@ end
 ---@field died boolean
 ---@field changed boolean a zone or the hearts changed (the UI and the published record should refresh)
 
--- Advances active time by `elapsedSeconds` (R10). Clamped to MAXIMUM_TICK (RF2).
+-- Advances active time by `elapsedSeconds`, clamped to MAXIMUM_TICK.
 ---@param elapsedSeconds number
 ---@param now? integer server time (for the weekly peak)
 ---@return TickResult
@@ -1046,7 +1039,7 @@ AzeCaught.CARE = {
 ---@field cost integer copper spent
 ---@field balance? integer after a paid action
 
--- Whether a care action can be done now, without doing it (the panel greys out the buttons with it, user 2026-11-20).
+-- Whether a care action can be done now, without doing it (the panel greys out the buttons with it).
 -- Returns true, or false and the refusal Care would give.
 ---@param action any
 ---@param myName string|nil
@@ -1067,7 +1060,7 @@ function AzeCaught.CareAvailability(action, myName)
     return true, nil
 end
 
--- One care action (R11, R12). Returns the result, or nil and the refusal.
+-- One care action. Returns the result, or nil and the refusal.
 ---@param action any
 ---@param myName string|nil
 ---@param now integer server time
@@ -1111,7 +1104,7 @@ function AzeCaught.Care(action, myName, now)
     end
     local streakCounted = false
     if zone ~= "critical" and zone ~= "empty" then
-        -- the care streak: at most one action per CARE_STREAK_GAP of play time (user 2026-11-20)
+        -- the care streak: at most one action per CARE_STREAK_GAP of play time
         local activeSeconds = AzeCaught.State().activeSeconds
         if companion.streakAt == nil or activeSeconds - companion.streakAt >= AzeCaught.CARE_STREAK_GAP then
             companion.careStreak = companion.careStreak + 1
@@ -1131,7 +1124,7 @@ function AzeCaught.Care(action, myName, now)
     return { action = action, hearts = hearts, cost = cost, balance = balance }
 end
 
------------------------------------------------------------------- guild record section (R16) and sanitizing
+------------------------------------------------------------------ guild record section and sanitizing
 
 -- The `caught` section of my game record: my current companion (or none) and my weekly peaks.
 ---@return table section
@@ -1197,7 +1190,7 @@ function AzeCaught.Publish(myName, now)
     return stored
 end
 
------------------------------------------------------------------- weekly payout (R17)
+------------------------------------------------------------------ weekly payout
 
 -- The ranking of `periodKey`: { name, peak } sorted by peak (desc), then name. My own entry comes from db.caught.peaks.
 ---@param records table<string, GameRecord>
@@ -1222,7 +1215,7 @@ function AzeCaught.WeekRanking(records, periodKey, myName)
     return ranking
 end
 
--- Pays last week's place once (R17, RF5). Returns the amount paid (0 when nothing), and why nothing: "paid", "nopeak",
+-- Pays last week's place once. Returns the amount paid (0 when nothing), and why nothing: "paid", "nopeak",
 -- "readonly".
 ---@param myName string|nil
 ---@param records table<string, GameRecord>
@@ -1289,7 +1282,8 @@ local function sanitizeCompanion(companion, collection)
     return clean
 end
 
--- Re-validates db.caught on load. Logs what was dropped. Returns the number of dropped items.
+-- Re-validates db.caught on load (also the wallet and the arena in it). Returns the number of dropped items; the caller
+-- logs them.
 ---@param savedVariables table
 ---@return integer dropped
 function AzeCaught.SanitizePersisted(savedVariables)
@@ -1307,7 +1301,7 @@ function AzeCaught.SanitizePersisted(savedVariables)
             and SafeInteger(entry.caught, 0, AzeCaught.MAXIMUM_ID) and Utility.Count(collection) < AzeCaught.MAXIMUM_COLLECTION then
             collection[id] = { n = entry.n, lvl = entry.lvl, cls = entry.cls, disp = entry.disp, seen = entry.seen, caught = entry.caught,
                 st = AzeCaught.CleanStats(entry.st),
-                -- the history (user 2026-11-21), optional: a bad value is dropped alone, the entry stays
+                -- the history, optional: a bad value is dropped alone, the entry stays
                 cnt = SafeInteger(entry.cnt, 1, AzeCaught.MAXIMUM_ID), last = SafeInteger(entry.last, 0),
                 kills = SafeInteger(entry.kills, 0, AzeCaught.MAXIMUM_ID), thr = SafeInteger(entry.thr, 0, AzeCaught.MAXIMUM_ID),
                 got = SafeInteger(entry.got, 0, AzeCaught.MAXIMUM_ID) }
@@ -1350,7 +1344,7 @@ function AzeCaught.SanitizePersisted(savedVariables)
     return dropped
 end
 
------------------------------------------------------------------- rope icon settings (user 2026-11-20)
+------------------------------------------------------------------ rope icon settings
 
 AzeCaught.ICON_DEFAULTS = { shown = true, x = 0, y = 2, size = 26 }
 -- lowest, highest per numeric setting (pixels: offset from the top centre of the nameplate, icon size)
@@ -1400,10 +1394,10 @@ function AzeCaught.ResetIconSettings()
     AzeCaught.Journal("INFORMATION", "icon.setting", "the icon settings were reset")
 end
 
------------------------------------------------------------------- reset (dev build, user 2026-11-20)
+------------------------------------------------------------------ reset (dev build)
 
--- Starts AZEcaught over: collection, companion, active time, weekly peaks/payout and the guaranteed first catch are
--- cleared, and so are the runtime throw tables. Kept: settings (icon, notify, verbose) and the journal (the reset line
+-- Starts AZEcaught over: collection, companion, active time, weekly peaks/payout, the arena and the guaranteed first
+-- catch are cleared, and so are the runtime throw tables. Kept: settings (icon, notify, verbose) and the journal (the reset line
 -- marks the cut). `withWallet` also clears the ledger; casino results live in the guild's game records and stay.
 ---@param withWallet boolean|nil
 ---@return { found: integer, caught: integer, companion: boolean, wallet: boolean }
@@ -1412,7 +1406,7 @@ function AzeCaught.Reset(withWallet)
     local summary = { found = addon.Utility.Count(caught.collection), caught = AzeCaught.CaughtCount(),
         companion = caught.active ~= nil, wallet = withWallet == true }
     caught.collection, caught.active, caught.activeSeconds, caught.peaks = {}, nil, 0, {}
-    caught.arena = nil   -- the arena progress, fights and bets (feature 020)
+    caught.arena = nil   -- the arena progress, fights and bets
     caught.paidWeek, caught.firstCatchDone, caught.throwHintDone = nil, nil, nil
     if withWallet then caught.ledger = nil end
     AzeCaught.throws, AzeCaught.rolled, AzeCaught.thrown = {}, {}, {}
@@ -1422,9 +1416,9 @@ function AzeCaught.Reset(withWallet)
     return summary
 end
 
------------------------------------------------------------------- export (manual debugging, R20)
+------------------------------------------------------------------ export (manual debugging)
 
--- The whole local state as one line: "AZE1 key=value ..." (paste into a bug report; tests replay it).
+-- The whole local state as one line: "AZE1 key=value ..." (pasted into a bug report).
 ---@param myName string|nil
 ---@return string
 function AzeCaught.Export(myName)
