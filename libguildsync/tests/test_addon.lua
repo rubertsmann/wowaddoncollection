@@ -104,7 +104,7 @@ return {
         harness.equal(printed[6], "two"); harness.equal(printed[7], "three")
     end,
 
-    ["addon: a MINOR 1 copy without Addon.lua is upgraded by a MINOR 2 copy that brings it"] = function(harness)
+    ["addon: a MINOR 1 copy without Addon.lua is upgraded by the current copy that brings it"] = function(harness)
         harness.unloadLibrary()
         harness.loadLibrary(function(source, path)
             source = source:gsub('local MAJOR, MINOR = "LibGuildSync%-1%.0", %d+', 'local MAJOR, MINOR = "LibGuildSync-1.0", 1')
