@@ -21,3 +21,15 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Evidence: libguildsync 37 passed, 0 failed; guildgames 137 passed, 0 failed; professionshare 234 passed, 0 failed;
   comment-audit libguildsync: 19 files, 965 comments, 0 findings
 - Next: T4 guildgames pass, starting with Core/Minigames/AzeCaught.lua
+
+## 2026-11-22 13:12 | BUILD | T4 guildgames pass (pilot + every file)
+- Did: read every comment of guildgames Core/, UI/, tools/coinflip.lua and tests/ against its code (UI files through a
+  comment-plus-context listing). Pilot refactor: AzeCaught.Tick's commented sections and NoteFound's eviction block
+  became named local functions (e9ec3da). Dead HOSTILE_FLAG removed in its own commit (f4882c1).
+- Result: about 40 wrong or stale comments fixed (see commits 15f78e0, 707627d, f1ed871, fb0c5cb, d6a91a0), e.g. the
+  combat log named as a source on a client that forbids it, ProfessionShare's minimap angles in GuildGames' Window,
+  the coin flip axis, Survivor's weapon list and factors, misplaced doc blocks (UnitDump, UI.Widgets, pool, iconFor,
+  Care), stale state/record class fields, the test clock's date. Provenance gone from non-test code.
+- Evidence: luajit tests/run.lua -> 137 passed, 0 failed; comment-audit --code-only on every comment commit -> 0 file(s)
+  with code changes; comment-audit guildgames -> 0 findings outside tests
+- Next: T5 professionshare pass (Core/Base, Net, Debug, Data, Game, View, UI, tests)

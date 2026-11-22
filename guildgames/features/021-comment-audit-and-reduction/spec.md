@@ -35,7 +35,7 @@ pruned, and the policy plus an audit tool keep it that way.
 - [x] T1 (S): policy. Verify: file exists, linked from conventions docs.
 - [x] T2 (M): audit tool. Verify: runs on all five addons; findings reviewed by hand (false positives removed).
 - [x] T3 (L): libguildsync pass. Verify: its suite + every consumer's suite.
-- [ ] T4 (L): guildgames pass (pilot: Core/Minigames/AzeCaught.lua first). Verify: `luajit tests/run.lua`.
+- [x] T4 (L): guildgames pass (pilot: Core/Minigames/AzeCaught.lua first). Verify: `luajit tests/run.lua`.
 - [ ] T5 (L): professionshare pass. Verify: `luajit tests/run.lua`.
 - [ ] T6 (S): fpvcigarette + foreverbetteruiplus pass. Verify: their suites.
 - [ ] T7 (S): audit `--strict` lint in each suite. Verify: suites fail on a planted provenance comment.
