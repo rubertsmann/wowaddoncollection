@@ -27,7 +27,8 @@ do
     Events.On, Events.Fire = bus.On, bus.Fire
 end
 
--- /ps clean: deletes everything cached locally (guild characters, recipes, orders, learned names, log).
+-- /ps clean: deletes everything cached locally (guild characters, recipes, orders, offers, learned names, item texts,
+-- the log and the trace).
 -- Two steps because it cannot be undone; your own data comes back when your professions are scanned again and
 -- online guild members are asked to send theirs.
 addon.SlashCommands.clean = function(arguments)

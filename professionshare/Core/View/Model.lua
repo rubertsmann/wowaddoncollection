@@ -54,7 +54,7 @@ end
 ---@field key integer|string canonical profession key
 ---@field name string escaped display name
 
--- unique professions across all cached characters, sorted by name.
+-- Unique professions (that hold at least one recipe) across all cached characters, sorted by name.
 -- 0.1.0 peers send name keys without an id; Names.ProfessionKey merges them with id-based entries ("Cooking" == "Kochkunst").
 ---@param store StoreModule
 ---@return ProfessionChoice[]

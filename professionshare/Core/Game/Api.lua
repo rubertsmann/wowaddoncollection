@@ -720,7 +720,8 @@ function Api.OpenProfessionName()
     return nil
 end
 
--- Select a recipe in the open profession window (so the game's own Create button crafts it). true if a call was made.
+-- Select a recipe in the open profession window (so the game's own Create button crafts it). true when the call (or the
+-- filter fallback) raised no error; false when it failed or no API was there.
 ---@param recipeID integer
 ---@return boolean
 function Api.SelectRecipe(recipeID)

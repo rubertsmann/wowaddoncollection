@@ -23,9 +23,9 @@ local Table, RecipeTable = addon.Table, addon.RecipeTable
 local createScrollList = Table.CreateResizableList
 ---@return table|nil the SavedVariables ui table (column, sort and window size settings)
 local function interfaceSettings() return addon.db and addon.db.ui end
+-- the four templates Widgets.TimeAgo reads from Text: Text["just now"], Text["{n}m ago"], Text["{n}h ago"], Text["{n}d ago"]
 ---@param timestamp integer|nil
 ---@return string
--- the four templates Widgets.TimeAgo reads from Text: Text["just now"], Text["{n}m ago"], Text["{n}h ago"], Text["{n}d ago"]
 local function timeAgo(timestamp) return Widgets.TimeAgo(timestamp, Text) end
 ---@param frameName string
 ---@return table
@@ -510,8 +510,8 @@ end
 ---@field label string display text
 ---@field width number minimum button width
 
--- The window's tabs, in button order. A function, so the
--- labels are read in the language active when the window is built.
+-- The window's tabs, in button order. A function, so the labels are read in the language active when the window is
+-- built.
 ---@return TabDefinition[]
 local function tabDefinitions()
     return {
@@ -1313,7 +1313,7 @@ local function createTabFrame()
     return tabFrame
 end
 
--- The window is resizable from a grip at its bottom right, between today's size (minimum) and the screen.
+-- The window is resizable from a grip at its bottom right, between RecipeTable.MINIMUM_WIDTH x MINIMUM_HEIGHT and the screen.
 -- The size is saved in the ui settings and restored when the window is built. Every tab's list follows (anchored).
 local function buildResizeGrip()
     local function screenSize()
