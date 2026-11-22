@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- Feature 010: what is new on the order board for this player (pure; the UI plays the sound, sets the badge etc.).
+-- What is new on the order board for this player (pure; the UI plays the sound, sets the badge etc.).
 --   seen[orderID] = the order's state when the player last looked at the Orders tab (see Notify.StateKey)
 --   An order is unseen when
 --     * someone else's OPEN order is relevant to me (scope, see Notify.Relevant) and I never saw it, or

@@ -1,11 +1,11 @@
 local addonName, addon = ...
 
--- DEV BUILD ONLY (feature 011 T1): records what this client can tell about the items our recipes make, so the
+-- DEV BUILD ONLY: records what this client can tell about the items our recipes make, so the
 -- category filter and the effect-text search are built on facts instead of guesses. Button "Item probe" on the Debug tab,
 -- or /psd itemprobe [itemID ...]. Writes addon.db.devProbe (ProfessionShareDevDB); /reload flushes it to
 -- WTF\Account\<ACCOUNT>\SavedVariables\ProfessionShare-Dev.lua. The live build never runs it (no button, no command).
 -- Plain English strings on purpose: dev-only, not localized. The keys of the recorded tables are the file format the
--- feature 011 analysis reads; they stay as they are.
+-- item analysis reads; they stay as they are.
 ---@class DevProbeModule
 local DevProbe = {}
 addon.DevProbe = DevProbe
@@ -331,7 +331,7 @@ function DevProbe.Run(extraItemIDs)
     end)
 end
 
------------------------------------------------------------------- fake enchanter (feature 017 test, dev build only)
+------------------------------------------------------------------ fake enchanter (dev build only)
 
 -- Enchant recipe ids seen in a live guild's data (the recipe id of an enchant looks like its classic spell id).
 local FAKE_ENCHANTS = {
@@ -344,8 +344,7 @@ local FAKE_ENCHANTS = {
 -- roster prune, so the Recipes tab shows enchants without a real enchanter. Gone after a version change or /psd clean.
 function DevProbe.AddFakeEnchanter()
     -- the same name form as everyone else's: "Fake Enchanter-<my realm>", or "Fake Enchanter" when the client knows no
-    -- realm (WoW Forever names are realm-free; GetNormalizedRealmName can return nothing there). Before 1.0.0 this
-    -- refused with "my own name is not known yet" whenever my stored name had no realm part.
+    -- realm (WoW Forever names are realm-free; GetNormalizedRealmName can return nothing there).
     local fakeName = addon.Utility.CanonicalName("Fake Enchanter") or "Fake Enchanter"
     local knownRecipes, catalogEntries = {}, {}
     for recipeID, recipeName in pairs(FAKE_ENCHANTS) do
@@ -363,16 +362,16 @@ function DevProbe.AddFakeEnchanter()
         :format(addon.Utility.Count(knownRecipes)))
 end
 
------------------------------------------------------------------- fake request (dev build only, name fix 2026-11-21)
+------------------------------------------------------------------ fake request (dev build only)
 
--- The realms a member whose client still reports realms appended to my name in the live log of 2026-11-21.
+-- The realms a member whose client still reports realms appended to my name in a live log.
 local FAKE_REQUEST_REALMS = { "CAMWOWEU4Realm3PvE", "CAMWOWEU4Realm5PvE" }
 local FAKE_REQUESTER = "Fake Requester"
 
 -- Replays the request that member sent (WANTO and WANT naming me as "Name-Realm" and "FirstName-Realm") against MY real
 -- data, on a separate Sync whose sends are captured and never leave the client (no whisper to a player who does not
 -- exist, no change to the real sync's state). Prints and traces whether I would answer, and under which name.
--- Before the fix a client without a realm answered nothing: "asked for ... but I am ... (name mismatch)".
+-- A client without a realm once answered nothing here: "asked for ... but I am ... (name mismatch)".
 ---@return { type: string, status: string, reason: string, answer: string|nil, answerName: string|nil, items: integer|nil }[]
 function DevProbe.SimulateRealmRequest()
     local myName = addon.Store.db and addon.Store.db.me

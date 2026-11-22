@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- Feature 016: the Recipes tab as a table. Pure (no frames): which columns exist and which are shown, where each column
+-- The Recipes tab as a table. Pure (no frames): which columns exist and which are shown, where each column
 -- sits for a given width, how rows are sorted, the item-quality colour of a name and the saved window size.
 -- Settings live in the SavedVariables `ui` table (local to this account, never sent): every read is validated and falls
 -- back to the default, so a corrupted or future value can never break the window.

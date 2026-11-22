@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- Effect/tooltip text of the items recipes make, for the free-text search (feature 011): "Intelligenz" finds the elixir
+-- Effect/tooltip text of the items recipes make, for the free-text search: "Intelligenz" finds the elixir
 -- and the buff food. Read from THIS client's tooltips (its own language) through Api.ItemTooltipLines, cached in
 -- db.itemText = { locale = "deDE", items = { [itemID] = text } } and never sent to anyone. The cache starts over when
 -- the client language changes. Items the client has not loaded yet are requested and tried again later (MAXIMUM_TRIES).

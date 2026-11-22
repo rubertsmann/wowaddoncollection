@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- Combat fix (2026-11-18). A frame with protected (secure) children is protected itself: during combat lockdown insecure
+-- A frame with protected (secure) children is protected itself: during combat lockdown insecure
 -- code may not Show()/Hide() it, so the main window (it holds the secure profession scan buttons and the Craft button)
 -- could not be opened, closed or switched to another tab in a fight.
 -- This dock keeps those secure buttons out of the window while in combat: PLAYER_REGEN_DISABLED (fired before the

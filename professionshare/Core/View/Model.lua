@@ -141,7 +141,7 @@ function Model.CastMacro(professionRow)
     return table.concat(macroLines, "\n")
 end
 
------------------------------------------------------------------- item categories + free-text search (feature 011)
+------------------------------------------------------------------ item categories + free-text search
 -- A recipe's category comes from the item it makes (catalog `produces`) and the CLIENT's item data (class, subclass,
 -- equip slot); nothing about it is sent or stored. Recipes without an item (enchants, old catalog entries) are "none".
 Model.CATEGORY_NONE = "none"
@@ -249,7 +249,8 @@ end
 ---@field requiredLevel integer|nil
 ---@field skill integer|nil profession skill the recipe needs
 
--- Search is free text: every word must appear somewhere in name, profession, reagents, category or the item's text.
+-- Search is free text: every word must appear somewhere in name, profession, reagents, category, the item's text or an
+-- enchant's effect text.
 ---@param store StoreModule
 ---@param state RecipeFilterState
 ---@param itemNameFunction? fun(itemID: integer): string|nil cached item name (reagent search)
@@ -298,7 +299,7 @@ function Model.BuildRecipeRows(store, state, itemNameFunction, lookups)
             end
             if recipeRow.categoryLabel ~= "" then searchableTexts[#searchableTexts + 1] = recipeRow.categoryLabel end
             if lookups.text and catalogEntry and catalogEntry.produces then searchableTexts[#searchableTexts + 1] = lookups.text(catalogEntry.produces) end
-            -- feature 017: a recipe without an item (enchant) is searched by its spell's effect text
+            -- a recipe without an item (enchant) is searched by its spell's effect text
             if lookups.effect and not (catalogEntry and catalogEntry.produces) then searchableTexts[#searchableTexts + 1] = lookups.effect(recipeRow.recipeID) end
             local searchKeys = {}
             for _, searchableText in ipairs(searchableTexts) do
@@ -473,7 +474,7 @@ function Model.BuildOrderRows(store, orderBoard, filterKey, showClosed, myName)
     return orderRows
 end
 
------------------------------------------------------------------- recipe items board (feature 007)
+------------------------------------------------------------------ recipe items board
 
 -- "Bags x2", "Guild bank tab 3 x1": location label for the viewer's language (stored data holds only the location key)
 ---@param location string
@@ -568,7 +569,7 @@ function Model.BuildOfferRows(store, state, itemClassFunction, itemNameFunction)
     return offerRows
 end
 
------------------------------------------------------------------- craft and whisper from lists (feature 009)
+------------------------------------------------------------------ craft and whisper from lists
 
 ---@alias CraftRefusal "unknown"|"noprof"
 

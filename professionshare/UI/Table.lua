@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- Feature 016: a scroll list that follows its own size (the main window is resizable), plus the column header and
+-- A scroll list that follows its own size (the main window is resizable), plus the column header and
 -- table rows of the Recipes tab. Same interface as LibGuildSync's Widgets.CreateScrollList (SetData, Refresh, .offset),
 -- which stays fixed-size and untouched (GuildGames uses it). Rows are created on demand when the list grows and hidden
 -- when it shrinks. Column positions come from RecipeTable.Layout (pure).

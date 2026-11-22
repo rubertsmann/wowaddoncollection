@@ -18,7 +18,7 @@ local Widgets = LibStub("LibGuildSync-1.0").Widgets
 local ROW_HEIGHT = Widgets.ROW_HEIGHT
 local createFontString, createButton, setButtonLabel = Widgets.CreateFontString, Widgets.CreateButton, Widgets.SetButtonLabel
 local createSelectableRow = Widgets.CreateSelectableRow
--- feature 016: lists that follow the (resizable) window, the Recipes table
+-- lists that follow the (resizable) window, the Recipes table
 local Table, RecipeTable = addon.Table, addon.RecipeTable
 local createScrollList = Table.CreateResizableList
 ---@return table|nil the SavedVariables ui table (column, sort and window size settings)
@@ -40,7 +40,7 @@ local windowState = {
     professionIndex = 0,           -- 0 = all, else index into the professions list ({ key, name })
     text = "",
     mineOnly = false,
-    categories = {},               -- feature 011: checked category keys (Model.CategoryKey); empty = all
+    categories = {},               -- checked category keys (Model.CategoryKey); empty = all
     selectedRecipe = nil,
     orderFilterIndex = 1,
     showClosed = false,
@@ -102,8 +102,8 @@ local detailPanel = {}
 ---@return ProfessionChoice[]
 local function professionChoices() return addon.Model.Professions(addon.Store) end
 
--- feature 011: client item data for categories and the free-text search (looked up when called; Api loads before UI)
----@type fun(recipeID: integer): string|nil feature 017: effect text of a recipe without an item, defined with the recipe tooltip below
+-- client item data for categories and the free-text search (looked up when called; Api loads before UI)
+---@type fun(recipeID: integer): string|nil effect text of a recipe without an item, defined with the recipe tooltip below
 local recipeEffectText
 ---@type RecipeLookups
 local itemLookups = {
@@ -111,10 +111,10 @@ local itemLookups = {
     label = function(categoryKey) return addon.Api.CategoryLabel(categoryKey) end,
     groupLabel = function(groupID) return addon.Api.CategoryGroupLabel(groupID) end,
     text = function(itemID) return addon.ItemText.Get(itemID) end,
-    itemDetails = function(itemID) return addon.Api.ItemDetails(itemID) end,   -- feature 016: quality, item level, required level
-    effect = function(recipeID) return recipeEffectText(recipeID) end,          -- feature 017: enchant effect text (search)
+    itemDetails = function(itemID) return addon.Api.ItemDetails(itemID) end,   -- quality, item level, required level
+    effect = function(recipeID) return recipeEffectText(recipeID) end,          -- enchant effect text (search)
 }
----@type RecipeCell[] the Recipes table's current column positions (feature 016)
+---@type RecipeCell[] the Recipes table's current column positions
 local recipeCells = {}
 ---@type boolean item data arrived since the last Recipes redraw (redrawn debounced by the tab's OnUpdate)
 local itemInfoArrived = false
@@ -285,7 +285,7 @@ local function refreshProfessionBar()
     end
 end
 
--- the current Recipes tab filter (feature 011 adds categories); also used to build the category menu
+-- the current Recipes tab filter; also used to build the category menu
 ---@return RecipeFilterState filter
 ---@return ProfessionChoice|nil selectedProfession
 ---@return ProfessionChoice[] choices
@@ -320,7 +320,7 @@ local function refreshDetail()
     local recipeDetail = recipeID and addon.Model.RecipeDetail(addon.Store, recipeID, addon.Api.ItemCount, addon.Api.ItemName)
     detailPanel.title:SetText(recipeDetail and recipeDetail.name or Text["Select a recipe"])
     detailPanel.icon:SetTexture(recipeDetail and recipeDetail.icon or nil)
-    -- feature 017: the effect of a recipe without an item (enchant), one line under the title; full text in the tooltip
+    -- the effect of a recipe without an item (enchant), one line under the title; full text in the tooltip
     local catalogEntry = recipeID and addon.Store.GetRecipe(recipeID)
     local effectText = recipeID and not (catalogEntry and catalogEntry.produces) and recipeEffectText(recipeID)
     detailPanel.effectText:SetText(effectText and addon.Utility.Escape(effectText) or "")
@@ -358,8 +358,8 @@ local function refreshDetail()
     end
 end
 
------------------------------------------------------------------- Craft button (feature 009)
--- Crafting needs the profession window open, and only a real click on a secure button may open it (feature 005). So the
+------------------------------------------------------------------ Craft button
+-- Crafting needs the profession window open, and only a real click on a secure button may open it. So the
 -- button has two modes, set out of combat: "open" = macro "/cast <profession>" (the window opens, then the ordered recipe
 -- is selected), "craft" = no secure action, PostClick calls C_TradeSkillUI.CraftRecipe for the order's quantity.
 local refreshOrders   -- defined below; the craft helpers call it
@@ -454,7 +454,7 @@ end
 
 refreshOrders = function()
     if not mainFrame or windowState.tab ~= "orders" then return end
-    addon.Alerts.Seen()   -- feature 010: looking at the board clears the badge
+    addon.Alerts.Seen()   -- looking at the board clears the badge
     local orderFilter = orderFilters()[windowState.orderFilterIndex]
     mainFrame.orderFilterButton:SetLabel(Format(Text["Show: {filter}"], { filter = orderFilter[2] }))
     mainFrame.showClosedButton:SetLabel(windowState.showClosed and Text["Hide finished"] or Text["Show finished"])
@@ -510,7 +510,7 @@ end
 ---@field label string display text
 ---@field width number minimum button width
 
--- The window's tabs, in button order (feature 014: one list instead of hand-placed buttons). A function, so the
+-- The window's tabs, in button order. A function, so the
 -- labels are read in the language active when the window is built.
 ---@return TabDefinition[]
 local function tabDefinitions()
@@ -588,10 +588,10 @@ local function recipeChatText(recipeID, quantity)
         addon.Names.Recipe(recipeID, catalogEntry), quantity)
 end
 
--- Feature 017: the effect text of a recipe that makes no item (enchants), read on this client by its recipe id as a
+-- The effect text of a recipe that makes no item (enchants), read on this client by its recipe id as a
 -- spell id: the spell DESCRIPTION only. It is empty until the client has loaded the spell (Api.SpellDescription requests
 -- the load; SPELL_INFO redraws). The "spell:"/"enchant:" tooltips are not used: before the load they hold only the name,
--- tools and reagents (0.7.2 showed those as the effect). Found texts are cached for the session, misses are not.
+-- tools and reagents. Found texts are cached for the session, misses are not.
 -- One log line per recipe when its text is first found (/ps debug, /ps export).
 ---@type table<integer, string>
 local effectTextCache = {}
@@ -620,7 +620,7 @@ local function showRecipeTooltip(owner, recipeID, clickHint)
         GameTooltip:AddLine(addon.Model.RecipeName(addon.Store, recipeID), 1, 0.82, 0)
     else
         GameTooltip:SetText(addon.Model.RecipeName(addon.Store, recipeID), 1, 0.82, 0)
-        local effectText = recipeEffectText(recipeID)   -- feature 017: enchants
+        local effectText = recipeEffectText(recipeID)   -- enchants
         if effectText then GameTooltip:AddLine(addon.Utility.Escape(effectText), 0.2, 1, 0.2, true) end
     end
     local recipeDetail = addon.Model.RecipeDetail(addon.Store, recipeID, addon.Api.ItemCount, addon.Api.ItemName)
@@ -641,7 +641,7 @@ local function afterOrderChange(order)
     UI.Refresh()
 end
 
------------------------------------------------------------------- Debug tab (feature 008): network trace + export
+------------------------------------------------------------------ Debug tab: network trace + export
 
 ---@type string[]
 local DEBUG_FILTERS = { "all", "in", "out", "sys", "problems" }
@@ -672,7 +672,7 @@ local function traceLine(traceEntry)
     return table.concat(parts, " ")
 end
 
--- name check table: column widths (the list is 736 wide, 16 of it for the slider); Location and the full behaviour are in the tooltip
+-- name check table: column widths (716 in all, inside the 720 wide header); Location and the full behaviour are in the tooltip
 ---@type { key: string, width: number }[]
 local NAME_CHECK_COLUMNS = { { key = "status", width = 82 }, { key = "method", width = 196 }, { key = "value", width = 168 },
     { key = "expected", width = 150 }, { key = "behaviour", width = 120 } }
@@ -854,14 +854,14 @@ local function buildDebugTab()
     mainFrame.nameCheckButton:SetPoint("LEFT", clearButton, "RIGHT", 8, 0)
     local exportButton = createButton(debugTab, Text["Export report"], 120, 22, function() addon.SlashCommands.export() end)
     exportButton:SetPoint("TOPRIGHT", 0, 0)
-    if addon.IS_DEVELOPMENT_BUILD and addon.DevProbe then   -- dev build only (feature 011): records item/category/tooltip data to SavedVariables
+    if addon.IS_DEVELOPMENT_BUILD and addon.DevProbe then   -- dev build only: records item/category/tooltip data to SavedVariables
         local probeButton = createButton(debugTab, Text["Item probe"], 100, 22, function() addon.DevProbe.Run() end)
         probeButton:SetPoint("RIGHT", exportButton, "LEFT", -8, 0)
-        -- feature 017 test: an enchanter in the dev data, so enchants appear in the Recipes tab
+        -- an enchanter in the dev data, so enchants appear in the Recipes tab
         local fakeEnchanterButton = createButton(debugTab, Text["Fake enchanter"], 110, 18, function() addon.DevProbe.AddFakeEnchanter() end)
         fakeEnchanterButton:SetPoint("TOPRIGHT", debugTab, "TOPRIGHT", 0, -26)   -- second row: the first is full at the minimum width
         mainFrame.fakeEnchanterButton = fakeEnchanterButton
-        -- name fix 2026-11-21: replays a request that names me with a realm, answers are captured, not sent
+        -- replays a request that names me with a realm, answers are captured, not sent
         local fakeRequestButton = createButton(debugTab, Text["Fake request"], 100, 18, function() addon.DevProbe.SimulateRealmRequest() end)
         fakeRequestButton:SetPoint("RIGHT", fakeEnchanterButton, "LEFT", -8, 0)
         mainFrame.fakeRequestButton = fakeRequestButton
@@ -892,7 +892,7 @@ end
 
 ---@param recipesTab table
 local function buildRecipesTab(recipesTab)
-    -- profession: dropdown with one entry per profession (feature 011); old cycle button if the client has no menus
+    -- profession: dropdown with one entry per profession; old cycle button if the client has no menus
     local function chooseProfession(professionIndex)
         if windowState.professionIndex ~= professionIndex then windowState.categories = {} end   -- categories differ per profession
         windowState.professionIndex = professionIndex
@@ -918,7 +918,7 @@ local function buildRecipesTab(recipesTab)
     end
     mainFrame.professionButton:SetPoint("TOPLEFT", 0, 0)
 
-    -- category: checkbox menu built from the items the recipes of this profession make (feature 011)
+    -- category: checkbox menu built from the items the recipes of this profession make
     local function toggleCategory(categoryKey)
         windowState.categories[categoryKey] = (not windowState.categories[categoryKey]) or nil
         refreshRecipes()
@@ -959,7 +959,7 @@ local function buildRecipesTab(recipesTab)
     end
     mainFrame.categoryButton:SetPoint("LEFT", mainFrame.professionButton, "RIGHT", 8, 0)
 
-    -- free-text search: words in any order over name, reagents, category and the item's effect text (feature 011)
+    -- free-text search: words in any order over name, profession, reagents, category and the effect text (Model.BuildRecipeRows)
     local searchTemplateOk, searchBox = pcall(CreateFrame, "EditBox", nil, recipesTab, "SearchBoxTemplate")
     if not searchTemplateOk or type(searchBox) ~= "table" then searchBox = CreateFrame("EditBox", nil, recipesTab, "InputBoxTemplate") end
     searchBox:SetSize(170, 20); searchBox:SetPoint("LEFT", mainFrame.categoryButton, "RIGHT", 14, 0); searchBox:SetAutoFocus(false)
@@ -988,7 +988,7 @@ local function buildRecipesTab(recipesTab)
             secondsSinceRefresh, newTextArrived = 0, false
             if tostring(windowState.text):find("%S") then refreshRecipes() end
         end
-        -- feature 016: item data arrived (quality, levels): one redraw per second at most, however many items load
+        -- item data arrived (quality, levels): one redraw per second at most, however many items load
         if itemInfoArrived and secondsSinceRefresh >= 1 then
             secondsSinceRefresh = 0
             refreshRecipes()
@@ -1003,7 +1003,7 @@ local function buildRecipesTab(recipesTab)
     mainFrame.recipeCountText = createFontString(recipesTab, "GameFontNormalSmall", "LEFT")
     mainFrame.recipeCountText:SetPoint("LEFT", mainFrame.mineOnlyButton, "RIGHT", 10, 0)
 
-    -- feature 016: a table (header + columns from the options, name in item-quality colour); it fills the space left of
+    -- a table (header + columns from the options, name in item-quality colour); it fills the space left of
     -- the detail panel, which keeps a fixed width at the right
     local detailFrame = CreateFrame("Frame", nil, recipesTab)
     detailFrame:SetPoint("TOPRIGHT", recipesTab, "TOPRIGHT", 0, -34); detailFrame:SetPoint("BOTTOMRIGHT", recipesTab, "BOTTOMRIGHT", 0, 0)
@@ -1313,7 +1313,7 @@ local function createTabFrame()
     return tabFrame
 end
 
--- feature 016: the window is resizable from a grip at its bottom right, between today's size (minimum) and the screen.
+-- The window is resizable from a grip at its bottom right, between today's size (minimum) and the screen.
 -- The size is saved in the ui settings and restored when the window is built. Every tab's list follows (anchored).
 local function buildResizeGrip()
     local function screenSize()
@@ -1348,7 +1348,7 @@ local function buildResizeGrip()
 end
 
 -- Bottom left: a small button for one maintainer character (Model.IsBuildViewer) whose tooltip lists who sent me addon
--- messages and the build each announced in its HELLO (LibGuildSync MINOR 3).
+-- messages and the build each announced in its HELLO.
 local MEMBER_BUILDS_TOOLTIP_ROWS = 25
 local function buildMemberBuildsButton()
     local buildsButton = CreateFrame("Button", nil, mainFrame)
@@ -1432,7 +1432,7 @@ local function buildMainFrame()
         itemInfoArrived = true   -- the Recipes table redraws debounced (its OnUpdate)
         if mainFrame:IsShown() then refreshDetail(); refreshOffers() end
     end)
-    addon.Events.On("SPELL_INFO", function()   -- feature 017: an enchant's effect text is readable now
+    addon.Events.On("SPELL_INFO", function()   -- an enchant's effect text is readable now
         itemInfoArrived = true   -- the search sees it on the debounced redraw
         if mainFrame:IsShown() then refreshDetail() end
     end)
@@ -1452,7 +1452,7 @@ end
 
 ------------------------------------------------------------------ minimap button
 
--- Feature 010: unseen orders as a number on the minimap button and the Orders tab, a letter icon while count > 0.
+-- Unseen orders as a number on the minimap button and the Orders tab, a letter icon while count > 0.
 local DEFAULT_ICON, NEWS_ICON = "Interface\\Icons\\INV_Misc_Note_01", "Interface\\Icons\\INV_Letter_15"
 ---@type table|nil
 local minimapButton

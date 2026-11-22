@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- Feature 010: tell the player about new orders (and news on their own orders) while the window is closed:
+-- Tells the player about new orders (and news on their own orders) while the window is closed:
 -- number on the minimap button and the Orders tab, letter icon, sound, chat line, screen message, taskbar flash.
 -- What counts as new is decided in Core/View/Notify.lua (pure); this file only shows it and holds the options panel.
 ---@class AlertsModule
@@ -270,7 +270,7 @@ local function buildOptionsPanel()
     end)
     testAllButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- feature 016: Recipes table columns (several can be on) and its sort; the window redraws at once
+    -- Recipes table columns (several can be on) and its sort; the window redraws at once
     local RecipeTable = addon.RecipeTable
     local recipeTitleText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     recipeTitleText:SetPoint("TOPLEFT", testAllButton, "BOTTOMLEFT", -4, -24); recipeTitleText:SetText(Text["Recipe list"])
