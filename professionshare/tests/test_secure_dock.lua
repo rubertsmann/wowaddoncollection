@@ -1,4 +1,4 @@
--- Combat bug (2026-11-18): the main window could not be opened or closed in combat. Root cause: it contained secure
+-- Combat bug: the main window could not be opened or closed in combat. Root cause: it contained secure
 -- buttons (profession scan buttons, Craft), and a frame with protected children is protected itself, so insecure
 -- Show()/Hide() on it is blocked during combat lockdown. UI/SecureDock.lua parks the secure buttons outside the window
 -- when combat starts and puts them back afterwards. These tests drive it with recording frame stubs.

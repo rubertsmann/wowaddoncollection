@@ -204,7 +204,7 @@ return {
         end)
     end,
 
-    -- live log 2026-11-21: this client knows no realm (GetNormalizedRealmName and GetRealmName empty), a member whose client
+    -- a live log: this client knows no realm (GetNormalizedRealmName and GetRealmName empty), a member whose client
     -- still reports realms asked WANTO {"Drakk Nuk-CAMWOWEU4Realm3PvE", "Drakk-...Realm3PvE", "Drakk-...Realm5PvE"} and got
     -- "asked for ... but I am Drakk Nuk (name mismatch)": that member never saw my recipe items or my recipes.
     ["forever: a client without a realm answers requests that name it with a realm"] = function(harness)

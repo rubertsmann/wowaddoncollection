@@ -1,4 +1,4 @@
--- Feature 011: item categories, free-text search, tooltip text cache.
+-- item categories, free-text search, tooltip text cache.
 -- Client item data is stubbed with what the dev probe recorded on Forever (deDE, docs/api-findings.md).
 local ITEMS = {   -- itemID -> classID, subClassID, equipLoc
     [2302] = { 4, 2, "INVTYPE_FEET" },          -- leather boots

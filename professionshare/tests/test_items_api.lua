@@ -1,4 +1,4 @@
--- Api.ScanItems against stubbed WoW globals (feature 007): which items count, which locations are read, missing APIs.
+-- Api.ScanItems against stubbed WoW globals: which items count, which locations are read, missing APIs.
 local GLOBALS = { "C_Container", "C_Item", "GetContainerNumSlots", "GetContainerItemInfo", "GetItemInfoInstant", "GetInboxNumItems",
     "GetInboxItem", "GetInboxItemLink", "GetCurrentGuildBankTab", "GetGuildBankItemLink", "GetGuildBankItemInfo", "C_AuctionHouse",
     "GetNumAuctionItems", "GetAuctionItemLink", "GetAuctionItemInfo", "NUM_BAG_SLOTS", "NUM_BANKBAGSLOTS", "MAX_GUILDBANKSLOTS_PER_TAB" }

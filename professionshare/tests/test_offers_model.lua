@@ -1,4 +1,4 @@
--- View model of the "Available" tab (feature 007): what is shown, what is hidden, what is escaped.
+-- View model of the "Available" tab: what is shown, what is hidden, what is escaped.
 local BIG = 1700000000
 
 local function setup(harness)

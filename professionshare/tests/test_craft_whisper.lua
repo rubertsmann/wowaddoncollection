@@ -1,4 +1,4 @@
--- Feature 009: craft from the Orders tab, whisper with the recipe link from the list icons (pure parts).
+-- craft from the Orders tab, whisper with the recipe link from the list icons (pure parts).
 local ME = "Me Holt"
 
 local function setup(harness)

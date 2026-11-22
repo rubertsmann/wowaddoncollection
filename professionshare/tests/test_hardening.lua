@@ -1,4 +1,4 @@
--- Feature 006: hardening and version compatibility. Adversarial cases RF1-RF7 (features/006-*/spec.md).
+-- hardening and version compatibility. Adversarial cases RF1-RF7 (features/006-*/spec.md).
 
 local function slurp(path)
     local f = assert(io.open(path, "rb"), path)
@@ -460,7 +460,7 @@ return {
         harness.truthy(not top:find("CF_API_TOKEN"), "CF_API_TOKEN must be scoped to the packager step, not the whole workflow")
         harness.truthy(wf:find("CF_API_TOKEN"), "packager step lost its token")
     end,
-    ---------------------------------------------------------------- feature 015: games moved to GuildGames; schema 5
+    ---------------------------------------------------------------- games moved to GuildGames; schema 5
     ["015: protocol 2.3 and schema 5 are pinned; migration 4 -> 5 drops games and the games settings, keeps everything else"] = function(harness)
         local addon = harness.addon({ now = 1.8e9 })
         harness.equal(addon.PROTOCOL_MAJOR, 2); harness.equal(addon.PROTOCOL_MINOR, 3); harness.equal(addon.Store.SCHEMA, 5)

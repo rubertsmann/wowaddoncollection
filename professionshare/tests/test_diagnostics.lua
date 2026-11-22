@@ -1,4 +1,4 @@
--- Feature 008: sync diagnostics (network trace, decision reasons, identity checks, export report).
+-- sync diagnostics (network trace, decision reasons, identity checks, export report).
 
 local function commNs(harness, me, roster)
     local addon = harness.addon()
@@ -232,7 +232,7 @@ return {
             harness.equal(rows["guild roster contains me"].status, "bad")
             harness.equal(rows["CHAT_MSG_ADDON sender (others)"].status, "bad")
             harness.equal(rows["CHAT_MSG_ADDON sender (my own echo)"].status, "unknown")
-            -- Forever (2026-11-21): no realm at all, but names are realm-free (surname known): handled, not a problem
+            -- Forever: no realm at all, but names are realm-free (surname known): handled, not a problem
             addon.Utility.NoteMyFullName("Thalia Moor")
             info.normalizedRealm = nil
             rows = byMethod(D.IdentityRows({ identity = info, me = "Thalia Moor", roster = {} }))

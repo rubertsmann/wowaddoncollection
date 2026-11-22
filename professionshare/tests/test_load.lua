@@ -90,7 +90,7 @@ return {
                 addon.Offers.Put({ name = "B-R", rev = 5, items = { [6661] = { bag = 1 } }, dibs = {} })
                 harness.truthy(pcall(addon.UI.SelectTab, "available"), "switching to the available tab failed")
                 harness.truthy(pcall(addon.UI.Refresh), "refreshing the available tab failed")
-                -- feature 015: the games moved to the GuildGames addon; no tab, no dev commands, no game module
+                -- the games moved to the GuildGames addon; no tab, no dev commands, no game module
                 harness.equal(addon.Games, nil); harness.equal(addon.GamesTab, nil)
                 harness.truthy(not slurp("UI/Window.lua"):find('key = "games"', 1, true), "the window still defines a games tab")
                 harness.equal(addon.SlashCommands.anim, nil); harness.equal(addon.SlashCommands.game, nil)
@@ -102,7 +102,7 @@ return {
                 local okE, errE = pcall(addon.UI.ShowExport, addon.Diagnostics.Report({ communication = addon.Communication }))
                 harness.truthy(okE, "the export window failed: " .. tostring(errE))
                 harness.truthy(addon.SlashCommands.offers, "/ps offers missing")
-                -- dev fake enchanter (user 2026-11-21): works when the client knows no realm (no "name not known yet")
+                -- dev fake enchanter: works when the client knows no realm (no "name not known yet")
                 do
                     local savedRealm = GetNormalizedRealmName
                     GetNormalizedRealmName = function() return nil end
@@ -111,7 +111,7 @@ return {
                     harness.truthy(okF, "fake enchanter failed: " .. tostring(errF))
                     harness.truthy(addon.Store.db.chars["Fake Enchanter"], "the realm-free fake enchanter was added")
                     harness.truthy(addon.Store.keptNames["Fake Enchanter"], "and kept from the prune")
-                    -- dev fake request (name fix 2026-11-21): the realm-named request is answered under the asked name
+                    -- dev fake request: the realm-named request is answered under the asked name
                     addon.Utility.NoteMyFullName("First Surname")
                     addon.Store.PutCharacter({ name = "First Surname", class = "MAGE", level = 30, rev = 5, professions = {
                         Kochkunst = { name = "Kochkunst", id = 185, loc = "deDE", rank = 10, max = 75, recipes = { [1] = true } } } })
@@ -176,7 +176,7 @@ return {
     end,
 
     -- A helper removed from a file but still called in it compiles fine and only fails in the game ("attempt to call a nil
-    -- value", feature 015: Window.lua's setButtonLabel). The stubbed load test cannot see it (stub widgets answer every
+    -- value": Window.lua's setButtonLabel). The stubbed load test cannot see it (stub widgets answer every
     -- method), so read the bytecode instead: every lowercase global a file reads must be a known Lua/WoW function.
     ["load: no file reads an unknown lowercase global (a removed local helper)"] = function(harness)
         local known = {}

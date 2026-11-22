@@ -1,4 +1,4 @@
--- Feature 010: notifications about new orders (pure part: relevance, unseen, seen, fresh, settings).
+-- notifications about new orders (pure part: relevance, unseen, seen, fresh, settings).
 local ME = "Me Holt"
 
 local function prof(name, id, recipes)

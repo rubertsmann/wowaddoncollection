@@ -1,4 +1,4 @@
--- Feature 008 follow-up (analysis R1, R2, R3, R5, R6): canonical names, retry with GUILD fallback, order name snapshot.
+-- Canonical names, retry with GUILD fallback, order name snapshot (analysis R1, R2, R3, R5, R6).
 
 -- runs fn with GetNormalizedRealmName returning `realm` (and no Ambiguate / GetRealmName), restoring the globals after
 local function withRealm(realm, fn)

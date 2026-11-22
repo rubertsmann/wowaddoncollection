@@ -1,4 +1,4 @@
--- Recipe items board (feature 007): offers records, dibs, local hide, validation, persistence, sync over the codec.
+-- Recipe items board: offers records, dibs, local hide, validation, persistence, sync over the codec.
 local BIG = 1700000000   -- a realistic server time, so "timestamp from the future" is decidable
 
 local function fresh(harness, me, now)

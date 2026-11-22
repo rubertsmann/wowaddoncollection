@@ -1,4 +1,4 @@
--- Feature 017 (probe): the dev "Fake enchanter" record must survive the guild-roster prune, and the exemption list is
+-- the dev "Fake enchanter" record must survive the guild-roster prune, and the exemption list is
 -- empty unless something fills it (the live build never does).
 return {
     ["search: an enchant is found by its effect text; recipes with an item are not asked"] = function(harness)

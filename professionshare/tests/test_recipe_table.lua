@@ -1,4 +1,4 @@
--- Feature 016: Recipes table columns, sort, quality colour, window size (Core/View/RecipeTable.lua) and the item
+-- Recipes table columns, sort, quality colour, window size (Core/View/RecipeTable.lua) and the item
 -- details BuildRecipeRows adds (Core/View/Model.lua).
 
 local function keys(columns)
@@ -99,7 +99,7 @@ return {
         for _, key in ipairs(RecipeTable.OPTIONAL_KEYS) do RecipeTable.SetColumn(ui, key, true) end
         layout = RecipeTable.Layout(RecipeTable.VisibleColumns(ui), 100)
         harness.equal(layout[1].width, RecipeTable.NAME_MINIMUM_WIDTH)
-        -- too narrow: the table is wider than it was given (the window scrolls it sideways; bug 2026-11-22: it ran under
+        -- too narrow: the table is wider than it was given (the window scrolls it sideways instead of running under
         -- the detail panel); wide enough: exactly the width it was given
         local minimumWidth = RecipeTable.TableWidth(layout)
         harness.truthy(minimumWidth > 100, "overflow is reported: " .. minimumWidth)

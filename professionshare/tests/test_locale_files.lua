@@ -1,4 +1,4 @@
--- Feature 002: locale files stay complete and consistent with the code (RF4), and the UI has no hardcoded text
+-- locale files stay complete and consistent with the code (RF4), and the UI has no hardcoded text
 local function slurp(path)
     local f = assert(io.open(path, "rb"), path)
     local s = f:read("*a"); f:close()
