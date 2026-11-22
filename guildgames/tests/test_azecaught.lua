@@ -482,7 +482,7 @@ return {
         companion.affection = 80
         assert(AzeCaught.Care("pet", "Me-R", NOW))
         harness.equal(companion.careStreak, 2, "a full hour after the counted action")
-        -- a fresh companion starts its own hour
+        -- the gap the timings above rely on
         harness.equal(AzeCaught.CARE_STREAK_GAP, 3600)
     end,
 

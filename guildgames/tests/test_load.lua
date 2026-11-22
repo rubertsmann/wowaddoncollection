@@ -116,7 +116,8 @@ return {
                 harness.truthy(addon.UI.parts.sidebar and addon.UI.parts.stage, "the overlay window has a stage and a sidebar")
                 harness.truthy(addon.UI.parts.grip and addon.UI.parts.mover, "the scale grip or move handle was not built (see Log: window.grip)")
                 harness.truthy(type(addon.GamesTab.widgets.gameButtons.coin.gameIcon) == "table", "the game switch has icons")
-                -- the corner follows the cursor: twice the window's size away is scale 2, clamped to the maximum
+                -- the corner follows the cursor: 1.5 times the window's width away is scale 1.5, clamped to the minimum
+                -- and the maximum
                 harness.equal(addon.UI.ScaleForCorner(100, 800, 100 + 300 * 1.5, 800 - 10), 1.5)
                 harness.equal(addon.UI.ScaleForCorner(100, 800, 100 + 300 * 5, 800), addon.UI.MAXIMUM_SCALE)
                 harness.equal(addon.UI.ScaleForCorner(100, 800, 90, 810), addon.UI.MINIMUM_SCALE)
@@ -259,7 +260,7 @@ return {
                 -- The client rules: nameplates are restricted regions. Measuring one ("GetCenter():
                 -- Can't measure restricted regions ... Lua Taint") and drawing a line to one ("Line:SetEndPoint(): Not
                 -- allowed to depend on NamePlate1") are refused; a plain frame with ONE anchor on it works (the rope icon).
-                -- The game also hides where the enemy is (UnitPosition: hidden "position hidden"), so
+                -- The game also hides where the enemy is (UnitPosition is hidden: "position hidden"), so
                 -- a wind-up plays on the player, then the lasso in a pin frame anchored to the target's plate.
                 local savedNamePlate, savedCreateFrame = C_NamePlate, CreateFrame
                 local plate, lockedPlate, refused, anchoredToPlate = stub(), stub(), {}, {}

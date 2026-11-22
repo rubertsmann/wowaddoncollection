@@ -10,7 +10,7 @@ end
 
 local function constant(value) return function() return value end end
 
--- a valid record of `name` with `count` flips of `stake` gold each (alternating win/loss), built through Games.Flip
+-- a valid record of `name` with `count` flips of `stake` copper each (alternating win/loss), built through Games.Flip
 local function record(harness, name, count, stake)
     local addon = fresh(harness)
     for index = 1, count do addon.Games.Flip(name, stake or 10, "H", NOW + index, constant(index % 2 == 1 and 0.1 or 0.9)) end
