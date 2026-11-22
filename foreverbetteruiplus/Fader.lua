@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- Applies the opacity to the UI elements. One OnUpdate drives everything:
---   * hover is polled with MouseIsOver (no OnEnter/OnLeave hooks, so action buttons keep their own scripts and no
+--   * hover is polled with IsMouseOver (no OnEnter/OnLeave hooks, so action buttons keep their own scripts and no
 --     taint is added; it also counts the mouse over child buttons, which OnEnter on the bar would not),
 --   * each element fades towards its target with Logic.Step,
 --   * SetAlpha is only called when the frame's alpha differs, which also re-applies it when Blizzard code resets it.

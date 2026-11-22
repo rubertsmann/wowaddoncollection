@@ -1,4 +1,4 @@
--- Offline tests for the pure parts:  luajit tests/run.lua   (from the repo root)
+-- Offline tests for the pure parts:  luajit tests/run.lua   (from the foreverbetteruiplus folder)
 local addon = {}
 for _, path in ipairs({ "Logic.lua", "Elements.lua" }) do
     local chunk = assert(loadfile(path))

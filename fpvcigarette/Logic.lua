@@ -41,6 +41,7 @@ end
 ---@field lightTime number|nil clock time it was lit
 ---@field dragTime number|nil clock time of the last drag
 ---@field visibleUntil number|nil after going out: shown until this time
+---@field exhaled boolean|nil the current drag's exhale was started (Logic.ExhaleDue)
 ---@field burnSeconds number
 
 ---@param saved? { lit: boolean, progress: number, burnSeconds: number }
