@@ -1,4 +1,4 @@
-# Links this repo into the WoW Forever AddOns folder as AddOns\ForeverBetterUIPlus (a junction: edit files, /reload in game).
+# Links this addon folder into the WoW Forever AddOns folder as AddOns\ForeverBetterUIPlus (a junction: edit files, /reload in game).
 # New files and TOC changes need a full game restart; edits to existing Lua files only need /reload.
 # Usage: powershell tools/deploy.ps1 [-WowDir "C:\Program Files (x86)\World of Warcraft"]
 param([string]$WowDir = "C:\Program Files (x86)\World of Warcraft")

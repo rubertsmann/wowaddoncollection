@@ -16,7 +16,7 @@ $zip = Join-Path $dist "ProfessionShare-$version.zip"
 if (Test-Path $zip) { Remove-Item $zip }
 
 # Files that ship (keep in sync with .pkgmeta ignore list).
-# Directory junctions (Libs\LibGuildSync -> ..\libguildsync\LibGuildSync, feature 015) are not followed by -Recurse in
+# Directory junctions (Libs\LibGuildSync -> ..\libguildsync\LibGuildSync) are not followed by -Recurse in
 # Windows PowerShell 5.1, so every junction below an item is listed on its own: the zip gets the real files.
 function Get-ShippedFiles($path) {
     Get-ChildItem $path -File
@@ -57,7 +57,7 @@ if ($names -notcontains "ProfessionShare/ProfessionShare.toc") { throw "Professi
 if ($names -contains "ProfessionShare/ProfessionShare-Dev.toc") { throw "the dev TOC must not ship" }
 if ($tocText -match '(?m)^## X-Build:') { throw "ProfessionShare.toc carries a build flag; the shipped TOC must be the live build" }
 if ($tocText -notmatch '(?m)^## SavedVariables:\s*ProfessionShareDB\s*$') { throw "ProfessionShare.toc must declare '## SavedVariables: ProfessionShareDB'" }
-# the embedded LibGuildSync (feature 015) must ship as real files: the xml and every file it loads
+# the embedded LibGuildSync must ship as real files: the xml and every file it loads
 $libraryXml = Join-Path $repo "Libs\LibGuildSync\LibGuildSync.xml"
 $libraryFiles = @("LibGuildSync.xml") + @([regex]::Matches((Get-Content $libraryXml -Raw), '<Script\s+file="([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
 foreach ($libraryFile in $libraryFiles) {

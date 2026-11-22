@@ -42,7 +42,7 @@ $lines = Get-Content $liveToc -Encoding UTF8 | ForEach-Object {
     if ($_ -match '^## Title:') { '## Title: ProfessionShare (dev)' }
     elseif ($_ -match '^## Notes:') { '## Notes: [DEV BUILD] ' + ($_ -replace '^## Notes:\s*', '') }
     elseif ($_ -match '^## Version:\s*(.+)$') { '## Version: ' + $Matches[1].Trim() + '-dev' }
-    elseif ($_ -match '^## SavedVariables:') { '## SavedVariables: ProfessionShareDevDB'; '## X-Build: dev' }   # X-Build = the build flag Core/Base/Init.lua reads (ns.BUILD); the live TOC has no such line
+    elseif ($_ -match '^## SavedVariables:') { '## SavedVariables: ProfessionShareDevDB'; '## X-Build: dev' }   # X-Build = the build flag Core/Base/Init.lua reads (addon.BUILD); the live TOC has no such line
     elseif ($_ -match '^## X-Website:') { $null }
     else { $_ }
 } | Where-Object { $null -ne $_ }
@@ -55,8 +55,8 @@ if (@($lines | Where-Object { $_ -match 'ProfessionShareDB' }).Count -gt 0) { th
 Write-Host "generated $devToc"
 
 # 2. links left from older setups, removed (the junction only, never the files): AddOns\ProfessionShare linked to this repo,
-#    and the TalentShare-era dev links (the addon was called TalentShare until 2026-11-21; those junctions point to the
-#    old repo folder). A real AddOns\TalentShare folder (the old live addon) is never touched: remove it by hand.
+#    and the TalentShare-era dev links (the addon was called TalentShare before; those junctions point to the old
+#    repo folder). A real AddOns\TalentShare folder (the old live addon) is never touched: remove it by hand.
 foreach ($name in "ProfessionShare", "TalentShare", "TalentShare-Dev", "TalentShareProbe") {
     $old = Join-Path $addons $name
     if (-not (Test-Path $old) -and -not (Get-Item $old -Force -ErrorAction SilentlyContinue)) { continue }
@@ -67,7 +67,7 @@ foreach ($name in "ProfessionShare", "TalentShare", "TalentShare-Dev", "TalentSh
 }
 if (-not (Test-Path (Join-Path $repo "ProfessionShare.toc"))) { throw "repo files vanished - stop" }
 
-# 2b. the embedded LibGuildSync (feature 015): Libs\LibGuildSync is a junction to the library repo next to this one
+# 2b. the embedded LibGuildSync: Libs\LibGuildSync is a junction to the libguildsync folder next to this one
 #     (git-ignored here; tools/package.ps1 copies the real files into the zip)
 $libraryLink = Join-Path $repo "Libs\LibGuildSync"
 $librarySource = Join-Path (Split-Path -Parent $repo) "libguildsync\LibGuildSync"

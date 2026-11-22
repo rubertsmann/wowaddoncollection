@@ -1,4 +1,4 @@
-# Links this repo into the WoW Forever AddOns folder as AddOns\FpvCigarette (a junction: edit files, /reload in game).
+# Links this addon folder into the WoW Forever AddOns folder as AddOns\FpvCigarette (a junction: edit files, /reload in game).
 # New or changed TEXTURE files and TOC changes need a full game restart; Lua changes only need /reload.
 # Usage: powershell tools/deploy.ps1 [-WowDir "C:\Program Files (x86)\World of Warcraft"]
 param([string]$WowDir = "C:\Program Files (x86)\World of Warcraft")

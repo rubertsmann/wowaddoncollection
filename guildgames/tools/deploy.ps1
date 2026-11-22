@@ -56,7 +56,7 @@ if (@($lines | Where-Object { $_ -match 'GuildGamesDB' }).Count -gt 0) { throw "
 [IO.File]::WriteAllText($devToc, (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding($false)))
 Write-Host "generated $devToc"
 
-# 2b. the embedded LibGuildSync (feature 015): Libs\LibGuildSync is a junction to the library repo next to this one
+# 2. the embedded LibGuildSync: Libs\LibGuildSync is a junction to the libguildsync folder next to this one
 #     (git-ignored here; tools/package.ps1 copies the real files into the zip)
 $libraryLink = Join-Path $repo "Libs\LibGuildSync"
 $librarySource = Join-Path (Split-Path -Parent $repo) "libguildsync\LibGuildSync"
@@ -67,7 +67,7 @@ if (-not (Test-Path $libraryLink)) {
 }
 
 # 3. the dev addon folder: junctions to the code folders, the generated TOC and Bindings.xml.
-#    An old dev junction to the whole repo (before 2026-11-21) is replaced; rmdir removes only the junction itself.
+#    An old dev junction to the whole addon folder (older setups) is replaced; rmdir removes only the junction itself.
 $devFolder = Join-Path $addons "GuildGames-Dev"
 if ((Test-Path $devFolder) -and (IsJunction $devFolder)) {
     cmd /c rmdir "$devFolder" | Out-Null
