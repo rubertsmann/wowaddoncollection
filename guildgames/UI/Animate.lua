@@ -1,11 +1,11 @@
 local addonName, addon = ...
 
--- Animation helpers (feature 014). Hybrid, per features/014-guild-game-base/evidence/animations-research.md:
+-- Animation helpers. Hybrid, per features/014-guild-game-base/evidence/animations-research.md (pitfalls K1..K7):
 --   * AnimationGroup for effects that end where they started (fade in, pulse, shake, glow);
 --   * one shared OnUpdate driver (Animate.Tween) for motion that changes real layout, so the anchor and the hit rect move
 --     with the region (pitfalls K1/K2 do not apply).
 -- Every effect is safe: an unsupported animation type or any error applies the final state at once and calls onDone
--- exactly once, so game logic never waits on an animation that cannot play (RF6).
+-- exactly once, so game logic never waits on an animation that cannot play.
 ---@class AnimateModule
 ---@field speed number time multiplier for every animation (debug slow motion: /ggd anim speed 0.25)
 local Animate = {}
@@ -266,13 +266,14 @@ local function texturedOrColor(texture, path, red, green, blue)
     pcall(texture.SetBlendMode, texture, "ADD")
 end
 
+local poolsByLayer = setmetatable({}, { __mode = "k" })
+
 -- `count` pooled textures of `layer` (created on first use, hidden).
 ---@param layer table
 ---@param poolName string
 ---@param count integer
 ---@param path string
 ---@return table[]
-local poolsByLayer = setmetatable({}, { __mode = "k" })
 local function pool(layer, poolName, count, path)
     local pools = poolsByLayer[layer] or {}
     poolsByLayer[layer] = pools

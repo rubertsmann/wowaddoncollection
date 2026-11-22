@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- AZEcaught options (user 2026-11-20): the rope icon on nameplates can be turned off, moved and resized. The page is
+-- AZEcaught options: the rope icon on nameplates can be turned off, moved and resized. The page is
 -- registered in the game's options (Options > AddOns > <title> AZEcaught); /gg caught icon does the same from chat.
 -- Settings live in db.caught.icon (AzeCaught.IconSettings, clamped); every change is journaled and applied at once.
 ---@class AzeCaughtOptionsModule
@@ -19,7 +19,7 @@ local function apply()
     Options.Refresh()
 end
 
--- toggles or steps one setting (the buttons and /gg caught icon use it)
+-- toggles or steps one setting (the page's buttons; /gg caught icon sets values directly in Options.Command)
 ---@param key "shown"|"x"|"y"|"size"
 ---@param direction? integer -1 or 1 (numbers)
 function Options.Change(key, direction)

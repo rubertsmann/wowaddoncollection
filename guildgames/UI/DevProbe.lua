@@ -8,7 +8,7 @@ addon.DevProbe = DevProbe
 
 -- /ggd anim: answers the probe questions P1-P8 of features/014-guild-game-base/evidence/animations-research.md on this
 -- client. Prints one chat line per question ("anim P3: ..."); P5 and P8 also need a screenshot of the squares it shows
--- in the middle of the screen for ~10 s. Plain English on purpose (dev only).
+-- in the middle of the screen for ~10 s.
 local animationProbeRunning = false
 
 ---@param questionID string

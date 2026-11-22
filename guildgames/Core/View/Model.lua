@@ -75,8 +75,8 @@ end
 ---@class FlipFeedRow
 ---@field name string escaped
 ---@field nameRaw string
----@field net integer +stake or -stake
----@field t integer server time of the flip
+---@field net integer signed net copper of the play
+---@field t integer server time of the play
 ---@field mine boolean
 
 -- The newest plays of one game (default "coin") by every player, merged (newest first; same second: by name).
@@ -116,7 +116,7 @@ function Model.PreviousWinner(records, previousPeriodKey, gameKey)
     return nil
 end
 
------------------------------------------------------------------- AZEcaught (feature 018)
+------------------------------------------------------------------ AZEcaught
 
 ---@class CompanionRow
 ---@field rank integer
@@ -137,7 +137,7 @@ end
 ---@field fedStreak integer
 ---@field mine boolean
 
--- The guild's current companions as a leaderboard (R16): by companion level, then owner name. My own row is built from
+-- The guild's current companions as a leaderboard: by companion level, then owner name. My own row is built from
 -- my live state (fresher than my published record). Names come from peers and are escaped.
 ---@param records table<string, GameRecord>
 ---@param myName string|nil
@@ -174,9 +174,10 @@ end
 ---@field caught integer
 ---@field active boolean
 ---@field seen integer
----@field history table AzeCaught.History (user 2026-11-21)
+---@field nameKey string lower-case name (sorting)
+---@field history table AzeCaught.History
 
--- My collection (R6): the active companion first, then caught NPCs, then only-found ones; each group by name.
+-- My collection: the active companion first, then caught NPCs, then only-found ones; each group by name.
 ---@param collection table<integer, CollectionEntry>
 ---@param activeNpc integer|nil
 ---@return CollectionRow[]
@@ -196,7 +197,7 @@ function Model.BuildCollectionRows(collection, activeNpc)
     return rows
 end
 
--- The collection's two sections (user 2026-11-20): caught (the active companion first, then by name) and seen (every
+-- The collection's two sections: caught (the active companion first, then by name) and seen (every
 -- found NPC with its highest level, highest first).
 ---@param collection table<integer, CollectionEntry>
 ---@param activeNpc integer|nil
@@ -230,8 +231,8 @@ function Model.ShortAge(timestamp, now)
     return Format(Text["{n}d"], { n = math.floor(seconds / 86400) })
 end
 
--- The history as icon badges (user 2026-11-21: "optimize the simple text based ui to an icon based ui with
--- animations"): key, the number to count up to (nil: text only), the badge text, whether it is "empty" (shown dimmed).
+-- The history as icon badges: key, the number to count up to (nil: text only), the badge text, whether it is "empty"
+-- (shown dimmed).
 ---@param history table AzeCaught.History
 ---@param now integer server time
 ---@return { key: string, value: integer|nil, text: string, empty: boolean }[]
@@ -255,7 +256,7 @@ function Model.CompanionWinner(records, previousPeriodKey, myName)
     return { name = escape(first.name), peak = first.peak }
 end
 
------------------------------------------------------------------- AZEcaught: NPC info (hover overlay, user 2026-11-20)
+------------------------------------------------------------------ AZEcaught: NPC info (hover overlay)
 
 ---@param classification string|nil
 ---@return string
@@ -268,7 +269,7 @@ function Model.RarityText(classification)
     return Text["Normal"]
 end
 
--- "1h 30m" / "45m" / "-" (never)
+-- "1h 30m" / "2h" / "45m" / "-" (never)
 ---@param seconds number|nil
 ---@return string
 function Model.Duration(seconds)
@@ -345,11 +346,13 @@ end
 ---@field needs NpcInfoNeed[]
 ---@field thresholds string
 ---@field traits string[]
+---@field history table AzeCaught.History
+---@field combat { key: string, label: string, value: string, fill: number, over: boolean }[] attack, defense, speed
 
 local RARITY_COLOR = { normal = "ffffff", elite = "ffd100", rare = "c0c0c0", rareelite = "a335ee", worldboss = "ff8000" }
 local NEED_BASE = { hunger = "FOOD_INTERVAL", thirst = "WATER_INTERVAL", affection = "PET_INTERVAL", energy = "AWAKE_INTERVAL" }
 
--- Everything known about a found NPC, grouped for the hover panel (user 2026-11-20: clear and short). Unknown values
+-- Everything known about a found NPC, grouped for the hover panel. Unknown values
 -- are not listed one by one, only counted. Peer/client text is escaped.
 ---@param npcID integer
 ---@param entry CollectionEntry
@@ -388,7 +391,7 @@ function Model.BuildNpcInfo(npcID, entry)
     end
     npcView.thresholds = Format(Text["Needy below {ok}%, critical below {critical}%"], { ok = profile.ok, critical = profile.critical })
     for _, trait in ipairs(profile.traits) do npcView.traits[#npcView.traits + 1] = Model.TraitText(trait) end
-    -- calculated, so always known (user 2026-11-20); fill = share of a full bar (capped), over = stronger than full
+    -- calculated, so always known; fill = share of a full bar (capped), over = stronger than full
     local combat, scale = AzeCaught.CombatStats(npcID, entry), AzeCaught.CombatScale()
     npcView.combat = {}
     for _, stat in ipairs({ { "attack", Text["Attack"] }, { "defense", Text["Defense"] }, { "speed", Text["Speed"] } }) do

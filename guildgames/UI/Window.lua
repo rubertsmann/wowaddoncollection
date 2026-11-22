@@ -73,15 +73,14 @@ local function createFlatButton(parent, label, minimumWidth, height, onClick)
     return button
 end
 
--- A yes/no decision as an icon (user 2026-11-21: "replace annehmen oder ablehnen with X or tick icons on the whole
--- addon"): "accept" is a green tick, "decline" a red X, on a dark plate tinted green/red on hover; the word stays in
+-- A yes/no decision as an icon: "accept" is a green tick, "decline" a red X, on a dark plate tinted green/red on hover; the word stays in
 -- the tooltip. Disabled: grey. :SetLabel only changes the tooltip (callers that relabel buttons keep working).
 local ICON_BUTTON = {
     accept = { texture = "Interface\\RaidFrame\\ReadyCheck-Ready", color = { 0.25, 0.85, 0.3 } },
     decline = { texture = "Interface\\RaidFrame\\ReadyCheck-NotReady", color = { 0.95, 0.3, 0.25 } },
-    -- train a stat (Arena > Fighter, user 2026-11-21: an icon instead of the "Train" button)
+    -- train a stat (Arena > Fighter)
     train = { texture = "Interface\\Icons\\Spell_Nature_Strength", color = { 1, 0.75, 0.2 }, crop = true },
-    -- dev build tools (user 2026-11-21): add a debug thing / make a timer run out
+    -- dev build tools: add a debug thing / make a timer run out
     debug = { texture = "Interface\\Icons\\Trade_Engineering", color = { 1, 0.55, 0.15 }, crop = true, dev = true },
     skip = { texture = "Interface\\Icons\\INV_Misc_PocketWatch_01", color = { 0.35, 0.75, 1 }, crop = true, dev = true },
 }
@@ -169,15 +168,14 @@ local function createFlatEditBox(parent, width)
     return box
 end
 
--- The widget helpers GamesTab and SlotMachine use: LibGuildSync's lists and texts plus the flat buttons and boxes
--- above. TimeAgo uses this addon's texts (Text["just now"], Text["{n}m ago"], Text["{n}h ago"], Text["{n}d ago"]).
--- One line of text that fits its font string's width (user 2026-11-21: long pet names broke the layout): the font
+local fitFonts = setmetatable({}, { __mode = "k" })   -- font string -> its own font { file, size, flags }
+
+-- One line of text that fits its font string's width (long names break the layout): the font
 -- shrinks down to `minimumScale` (default 0.75) of its size, and what still does not fit ends in "..." (no wrapping).
 -- The font string needs a width. Clients without GetFont/SetFont just get the text, cut by the width.
 ---@param fontString table
 ---@param text string
 ---@param minimumScale? number
-local fitFonts = setmetatable({}, { __mode = "k" })   -- font string -> its own font { file, size, flags }
 local function fitText(fontString, text, minimumScale)
     if fontString.SetWordWrap then fontString:SetWordWrap(false) end
     if fontString.SetMaxLines then pcall(fontString.SetMaxLines, fontString, 1) end
@@ -199,6 +197,8 @@ local function fitText(fontString, text, minimumScale)
     end
 end
 
+-- The widget helpers the UI files use: LibGuildSync's lists and texts plus the flat buttons and boxes above. TimeAgo
+-- uses this addon's texts (Text["just now"], Text["{n}m ago"], Text["{n}h ago"], Text["{n}d ago"]).
 UI.Widgets = { ROW_HEIGHT = Widgets.ROW_HEIGHT, FitText = fitText, CreateButton = createFlatButton, MakePrimary = makePrimary, CreateIconButton = createIconButton,
     CreateEditBox = createFlatEditBox, CreateFontString = Widgets.CreateFontString,
     CreateScrollList = Widgets.CreateScrollList, CreateSelectableRow = Widgets.CreateSelectableRow,
@@ -535,7 +535,7 @@ end
 UI.minimapButton = nil
 
 -- A coin on the minimap (LibGuildSync's button, shared with ProfessionShare): click opens the window, right-drag moves it.
--- Its default spot is away from ProfessionShare's (215 degrees; dev builds 245) so the two never cover each other.
+-- Its default spot (185 degrees; dev builds 165) is away from ProfessionShare's (215, 245) so the two never cover each other.
 function UI.BuildMinimapButton()
     if UI.minimapButton or not Minimap then return end
     UI.minimapButton = Widgets.CreateMinimapButton({
@@ -555,7 +555,7 @@ function UI.BuildMinimapButton()
     UI.RefreshMinimapBadge()
 end
 
------------------------------------------------------------------- AZEcaught on the minimap button (feature 018, R14)
+------------------------------------------------------------------ AZEcaught on the minimap button
 
 local ZONE_RANK = { ok = 0, needy = 1, critical = 2, empty = 2 }
 

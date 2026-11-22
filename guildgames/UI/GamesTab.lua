@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- The games (feature 014): the coin flip, the slot machine, survivor (UI/SurvivorArena.lua) and their guild leaderboards. Built lazily by UI/Window.lua (first open).
+-- The games: the coin flip, the slot machine, survivor (UI/SurvivorArena.lua) and their guild leaderboards. Built lazily by UI/Window.lua (first open).
 -- Rules and records: Core/Data/Games.lua; coin motion: Core/Minigames/CoinFlip.lua; effects: UI/Animate.lua; rows: Model.
 -- The flip is decided and STORED before the coin moves (Games.Flip); the animation only reveals it. While the coin is in
 -- the air the Flip button is disabled and the leaderboard is not refreshed, so my new row does not spoil the result.
@@ -29,8 +29,8 @@ local GAME_ICONS = { coin = "Interface\\Icons\\INV_Misc_Coin_01",
     survivor = "Interface\\Icons\\Spell_Holy_DivineIntervention",
     caught = "Interface\\Icons\\Ability_Hunter_BeastTaming" }
 GamesTab.GAME_ICONS = GAME_ICONS
--- the game switch: the casino games (Games.ORDER, each with a casino leaderboard) and AZEcaught (feature 018, its own
--- panel with its own guild view; not a casino game, so not in Games.ORDER)
+-- the game switch: the casino games (Games.ORDER, each with a casino leaderboard) and AZEcaught (its own panel with its
+-- own guild view; not a casino game, so not in Games.ORDER)
 ---@return string[]
 local function switchOrder()
     local order = {}
@@ -55,9 +55,6 @@ GamesTab.widgets = widgets
 
 ------------------------------------------------------------------ formatting
 
--- copper -> "1g 50s 25c" in coin colours
----@param copper integer
----@return string
 local money = addon.Model.MoneyText
 
 -- "+1g 50s" with a green "+", "-25c" with a red "-", "0c" plain
@@ -470,7 +467,7 @@ local function boardLabels(gameKey)
     return { feed = Text["Recent flips"], empty = Text["No flips yet"], plays = Text["Flips"] }
 end
 
--- The money pool (feature 018) in the header, next to the game switch.
+-- The money pool in the header, next to the game switch.
 function GamesTab.RefreshBalance()
     if not widgets.balanceText then return end
     local balance = addon.Wallet.Balance(addon.Utility.Me())
@@ -707,7 +704,7 @@ function GamesTab.Build(stage, sidebar, header)
     addon.Log.Protected("games.slots", "building the slot machine failed", addon.SlotMachine.Build, widgets.panels.slots)
     addon.Log.Protected("games.survivor", "building the survivor arena failed", addon.SurvivorArena.Build, widgets.panels.survivor)
     addon.Log.Protected("caught.ui", "building the AZEcaught panel failed", addon.AzeCaughtPanel.Build, widgets.panels.caught)
-    -- the money pool (feature 018), right of the game switch
+    -- the money pool, right of the game switch
     widgets.balanceText = Widgets.CreateFontString(header, "GameFontHighlightSmall", "LEFT")
     widgets.balanceText:SetPoint("LEFT", previousButton, "RIGHT", 8, 0)
     widgets.balanceText:SetWidth(110)
@@ -748,5 +745,5 @@ function GamesTab.Build(stage, sidebar, header)
     GamesTab.Refresh()
 end
 
--- the money pool changes with catches, care and payouts (feature 018)
+-- the money pool changes with catches, care, payouts and the arena
 addon.Events.On("CAUGHT_CHANGED", function() GamesTab.RefreshBalance() end)

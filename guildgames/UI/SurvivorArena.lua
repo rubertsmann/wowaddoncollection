@@ -2,10 +2,10 @@ local addonName, addon = ...
 
 -- Survivor panel (third game). Rules and simulation: Core/Minigames/Survivor.lua. Everything here is presentation:
 --   arena (an almost clear overlay): the tower in the middle with its health bar and a glow, monsters drawn from a pool,
---     bolts with a short trail, the cleave as a sword sweeping round the tower plus a shockwave, the nova as a frost ring,
---     death puffs, a red flash when the tower is hurt
+--     projectiles (item icons or sparks with a short trail), the cleave as a sword sweeping round the tower plus a
+--     shockwave, the nova as a frost ring, blast rings, lightning, death puffs, a red flash when the tower is hurt
 --   HUD: timer against the bet target, a progress line, experience bar, level, the owned items with their levels
---   level-up: three item cards over the arena (the run is paused until one is picked)
+--   level-up: up to three item cards over the arena (the run is paused until one is picked)
 --   end: survived = burst, ring, glow and the payout floating up; fallen = shake, red text
 -- The stake is booked as pending when the run starts (Survivor.Begin) and settled when it ends (Survivor.Settle).
 -- While a run is open the game switch is locked (GamesTab.IsBusy). Closing the window pauses the run (no OnUpdate).
@@ -496,7 +496,8 @@ function SurvivorArena.Choose(index)
     drawHud(run)
 end
 
--- The Start button: book the stake as pending and open a run; during a run the same button gives up (a loss).
+-- The Start button: book the stake as pending and open a run; during a run the same button gives up (a loss; an endless
+-- run cashes out the minute it reached).
 ---@return SurvivorRun|nil
 function SurvivorArena.Start()
     local state = SurvivorArena.state

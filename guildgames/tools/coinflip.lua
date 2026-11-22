@@ -1,5 +1,5 @@
--- Console view of the coin flip (feature 014), for tuning without the game:
---   luajit tools/coinflip.lua [H|T] [flips]      (run from the repo root)
+-- Console view of the coin flip, for tuning without the game:
+--   luajit tools/coinflip.lua [H|T] [flips]      (run from the guildgames folder)
 -- Prints the pose curve (height bar, coin width, face) the UI plays, then the outcome distribution of simulated flips.
 GetServerTime = os.time   -- the client's server clock; Utility.Now() needs it outside the game
 dofile("Libs/LibStub/LibStub.lua")

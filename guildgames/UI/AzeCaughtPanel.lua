@@ -1,11 +1,12 @@
 local addonName, addon = ...
 
--- The AZEcaught game panel (feature 018, R6-R9, R11, R12, R16): three views in the 300 x 336 game stage.
+-- The AZEcaught game panel: three views in the 300 x 336 game stage.
 --   Companion   the 3D model, hearts, need bars with threshold marks, the care buttons and their effects
 --   Collection  every found NPC (caught ones first), a model preview, click a caught one to make it the companion
---   Guild       (a page of the Arena since 2026-11-21) every member's current companion as a leaderboard (companion level), with a preview of the selected one
--- Logic lives in Core/Minigames/AzeCaught.lua; this file only shows it and calls it. Model loading and emotes are journaled
--- (spikes S1/S2), so a white or missing model can be traced with /gg caught log model.
+--   Arena       built by UI/ArenaView.lua; its Guild page (built here) lists every member's current companion by companion
+--               level, with a preview of the selected one
+-- Logic lives in Core/Minigames/AzeCaught.lua; this file only shows it and calls it. Model loading and emotes are journaled,
+-- so a white or missing model can be traced with /gg caught log model.
 ---@class AzeCaughtPanelModule
 local Panel = {}
 addon.AzeCaughtPanel = Panel
@@ -16,18 +17,18 @@ local Text, Format = addon.Text, addon.Locale.Format
 local HEART_ICON = "Interface\\Icons\\INV_ValentinesCandy"
 local ZONE_COLOR = { ok = { 0.3, 0.85, 0.35 }, needy = { 1, 0.75, 0.15 }, critical = { 1, 0.25, 0.2 }, empty = { 0.6, 0.1, 0.1 } }
 local ACTION_COLOR = { feed = { 1, 0.6, 0.2 }, water = { 0.3, 0.65, 1 }, pet = { 1, 0.45, 0.75 }, sleep = { 0.65, 0.5, 1 }, wake = { 1, 1, 0.6 } }
--- emote animation candidates per action; the first the model has is played (spike S2: /gg caught probe lists them)
+-- emote animation candidates per action; the first the model has is played (/gg caught probe lists what it has)
 local EMOTES = { feed = { 61, 74, 0 }, water = { 61, 0 }, pet = { 68, 67, 70, 74, 0 }, sleep = { 71, 100, 0 }, wake = { 4, 74, 0 },
     idle = { 0 }, asleep = { 71, 100, 0 } }
 local RARITY_COLOR = { normal = "ffffff", elite = "ffd100", rare = "c0c0c0", rareelite = "a335ee", worldboss = "ff8000" }
 local NEED_ORDER = AzeCaught.NEEDS
-local CARE_COOLDOWN = 1.5    -- seconds the care buttons stay locked after a click (user 2026-11-20)
+local CARE_COOLDOWN = 1.5    -- seconds the care buttons stay locked after a click
 local CARE_ICON_SIZE = 34
 local CARE_ICONS = { feed = "Interface\\Icons\\INV_Misc_Food_15", water = "Interface\\Icons\\INV_Drink_07",
     pet = "Interface\\Icons\\Ability_Hunter_BeastSoothe", sleep = "Interface\\Icons\\Spell_Nature_Sleep",
     wake = "Interface\\Icons\\Ability_Warrior_BattleShout" }
 -- the history badges under the preview model and their icons (rows and hover panel use the same ones)
-local FIGHT_ICON = "Interface\\Icons\\Ability_Warrior_Challange"   -- the guild view's fight icon (user 2026-11-21)
+local FIGHT_ICON = "Interface\\Icons\\Ability_Warrior_Challange"   -- the guild view's fight icon
 local HISTORY_ICONS = { seen = "Interface\\Icons\\INV_Misc_Spyglass_03", kills = "Interface\\Icons\\Ability_DualWield",
     caught = "Interface\\Icons\\Ability_Ensnare", last = "Interface\\Icons\\INV_Misc_PocketWatch_01",
     first = "Interface\\Icons\\INV_Misc_Map_01" }
@@ -43,9 +44,8 @@ local function inlineIcon(key, size)
     return ("|T%s:%d:%d:0:0:64:64:5:59:5:59|t"):format(HISTORY_ICONS[key], size, size)
 end
 Panel.InlineIcon = inlineIcon
-local EMOTE_SECONDS = 2.5   -- an action's emote plays this long, then the model goes back to idle (user 2026-11-20)
--- the camera (user 2026-11-20: "the zoom level is sometimes too far in and the complete 3D model is not visible"):
--- full body (portrait zoom 0), then the camera this much farther away than the client's own fit; the mouse wheel
+local EMOTE_SECONDS = 2.5   -- an action's emote plays this long, then the model goes back to idle
+-- the camera: full body (portrait zoom 0), then the camera this much farther away than the client's own fit; the mouse wheel
 -- changes it per NPC for the session
 local MODEL_CAMERA_DISTANCE = 1.35
 local MODEL_ZOOM_LIMITS = { 0.6, 4 }
@@ -59,14 +59,19 @@ local function nextEmoteToken(model)
     emoteTokens[model] = (emoteTokens[model] or 0) + 1
     return emoteTokens[model]
 end
-local BAR_WIDTH = 210   -- the label is an icon now (user 2026-11-21), the bar got its room
+local BAR_WIDTH = 210   -- the label is an icon, so the bar takes the room
 
 ---@class AzeCaughtPanelState
 ---@field view "companion"|"collection"|"arena"
+---@field section "caught"|"seen" the collection's section
 ---@field previewNpc integer|nil collection preview
+---@field selectedNpc integer|nil the collection row the switch button acts on
 ---@field guildRow CompanionRow|nil guild preview
----@field confirmNpc integer|nil a switch that makes the old companion run away waits for a second click
----@field confirmUntil number
+---@field confirmNpc integer|nil the switch waiting in the confirm dialog
+---@field careReadyAt number|nil clock until the care buttons unlock (CARE_COOLDOWN)
+---@field badgeNpc integer|nil whose history badges are shown
+---@field badgeValues table|nil their values (a rise pulses the badge)
+---@field guildBadgeOwner string|nil whose stat badges are shown in the guild preview
 Panel.state = { view = "companion", section = "caught" }
 
 local widgets = {}
@@ -108,7 +113,7 @@ end
 
 local duration = addon.Model.Duration
 
------------------------------------------------------------------- 3D model (fpvcigarette's method, feature 018 design)
+------------------------------------------------------------------ 3D model (fpvcigarette's method)
 
 ---@param model table DressUpModel
 ---@param companion { npc: integer, disp: integer }|nil
@@ -242,7 +247,7 @@ local function createModel(parent, width, height, idleFunction)
     end)
     return model
 end
-Panel.CreateModel, Panel.ShowModel = createModel, showModel   -- the arena view (feature 020) uses the same models
+Panel.CreateModel, Panel.ShowModel = createModel, showModel   -- the arena view uses the same models
 
 ------------------------------------------------------------------ need bars
 
@@ -253,7 +258,7 @@ local function createBar(parent, y)
     local Widgets = addon.UI.Widgets
     local bar = CreateFrame("Frame", nil, parent)
     bar:SetSize(286, 14); bar:SetPoint("TOPLEFT", 8, y)
-    -- the need as an icon instead of its name (user 2026-11-21); the name stays in the tooltip
+    -- the need as an icon instead of its name; the name stays in the tooltip
     bar.icon = bar:CreateTexture(nil, "ARTWORK")
     bar.icon:SetSize(16, 16); bar.icon:SetPoint("LEFT", 0, 0)
     if bar.icon.SetTexCoord then bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
@@ -322,7 +327,7 @@ end
 ---@param view "companion"|"collection"|"guild"|"arena" "guild": the arena's Guild page
 function Panel.SelectView(view)
     settings().caughtView = view
-    if view == "guild" then   -- the guild list lives in the arena (user 2026-11-21)
+    if view == "guild" then   -- the guild list lives in the arena
         view = "arena"
         addon.ArenaView.state.page = "guild"
         if addon.ArenaView.widgets.panel then addon.ArenaView.SelectPage("guild") end
@@ -481,7 +486,7 @@ function Panel.ShowNpcInfo(tooltip, owner, npcID, entry)
                 0.5, 0.5, 0.5)
         end
     end
-    -- the history (user 2026-11-21): how often seen, killed, caught x/y, first and last seen
+    -- the history: how often seen, killed, caught x/y, first and last seen
     local history, timeAgo = npcView.history, addon.UI.Widgets.TimeAgo
     line(" ")
     line(Text["History"], 1, 0.82, 0)
@@ -566,7 +571,7 @@ local function buildCompanionView(panel)
     widgets.bars = {}
     for index, need in ipairs(NEED_ORDER) do widgets.bars[need] = createBar(panel, -204 - (index - 1) * 18) end
 
-    -- care buttons: icons (user 2026-11-20), greyed out while unusable (AzeCaught.CareAvailability, the reason is in the
+    -- care buttons: icons, greyed out while unusable (AzeCaught.CareAvailability, the reason is in the
     -- tooltip) and locked for CARE_COOLDOWN after a click (a cooldown sweep shows it)
     widgets.careButtons = {}
     for index, action in ipairs({ "feed", "water", "pet", "sleep" }) do
@@ -635,7 +640,7 @@ local function fillCollectionRow(row, entry)
     row.selected:SetShown(entry.npc == Panel.state.selectedNpc)
     local color = entry.caught > 0 and (RARITY_COLOR[entry.cls] or "ffffff") or "777777"
     addon.UI.Widgets.FitText(row.name, "|cff" .. color .. entry.name .. "|r", 0.85)
-    if Panel.state.section == "seen" then   -- how often seen (user 2026-11-21), then the level
+    if Panel.state.section == "seen" then   -- how often seen, then the level
         row.info:SetText(inlineIcon("seen", 11) .. "|cff88bbff" .. entry.history.seen .. "|r |cffaaaaaa" .. entry.lvl .. "|r")
     else
         row.info:SetText((entry.caught > 1 and ("x" .. entry.caught .. " ") or "") .. "|cffaaaaaa" .. entry.lvl .. "|r")
@@ -719,7 +724,7 @@ local function buildConfirmDialog(panel)
     line:SetColorTexture(1, 0.82, 0.2, 0.8)
     widgets.confirmText = Widgets.CreateFontString(box, "GameFontHighlight", "CENTER")
     widgets.confirmText:SetPoint("TOP", 0, -14); widgets.confirmText:SetWidth(240)
-    -- tick / X (user 2026-11-21: icons instead of the words, the word in the tooltip)
+    -- tick / X (the word is in the tooltip)
     local yes = Widgets.CreateIconButton(box, "accept", 28, Text["Yes"], function() Panel.ConfirmSwitch() end)
     yes:SetPoint("BOTTOMRIGHT", box, "BOTTOM", -8, 12)
     local no = Widgets.CreateIconButton(box, "decline", 28, Text["No"], function() Panel.CancelSwitch() end)
@@ -769,7 +774,7 @@ local function createGuildRow(list)
     row.level = Widgets.CreateFontString(row, "GameFontNormalSmall", "RIGHT"); row.level:SetPoint("RIGHT", -2, 0); row.level:SetWidth(76)
     row.selected = row:CreateTexture(nil, "BACKGROUND", nil, 2); row.selected:SetAllPoints(); row.selected:SetColorTexture(0.3, 0.6, 1, 0.22)
     row.selected:Hide()
-    -- a click selects the pet (user 2026-11-21: hovering no longer switches it, so the mouse can reach the fight icon)
+    -- a click selects the pet (hovering does not, so the mouse can reach the fight icon)
     row:SetScript("OnEnter", function(self) self.hover:Show() end)
     row:SetScript("OnLeave", function(self) self.hover:Hide() end)
     row:SetScript("OnClick", function(self) if self.entry then Panel.SelectGuildRow(self.entry) end end)
@@ -800,15 +805,15 @@ local function buildGuildView(panel)
     local preview = createModel(panel, 104, 116)
     preview:SetPoint("TOPRIGHT", -2, -78)
     widgets.guildModel = preview
-    -- the selected pet's name above the model, its stats as icon badges with numbers below (user 2026-11-21: like
-    -- the collection's caught view, no text block)
+    -- the selected pet's name above the model, its stats as icon badges with numbers below (like the collection's caught
+    -- view)
     widgets.guildPreviewName = Widgets.CreateFontString(panel, "GameFontNormal", "CENTER")
     widgets.guildPreviewName:SetPoint("BOTTOM", preview, "TOP", 0, 3); widgets.guildPreviewName:SetWidth(108)
     widgets.guildBadges = Panel.BuildStatBadges(panel, preview)
-    -- the arena challenge (feature 020, reworked user 2026-11-21): one fight icon on another member's pet opens the
+    -- the arena challenge: one fight icon on another member's pet opens the
     -- challenge modal (ArenaView.OpenChallenge: matchup, wager, confirm)
     local fight = CreateFrame("Button", nil, panel)
-    fight:SetSize(30, 30); fight:SetPoint("TOP", preview, "BOTTOM", 0, -4 - 2 * (BADGE_SIZE + 4) - 4)   -- centered below the stat badges (user 2026-11-21)
+    fight:SetSize(30, 30); fight:SetPoint("TOP", preview, "BOTTOM", 0, -4 - 2 * (BADGE_SIZE + 4) - 4)   -- centred below the stat badges
     fight:SetFrameLevel(preview:GetFrameLevel() + 5)
     fight.border = fight:CreateTexture(nil, "BACKGROUND"); fight.border:SetPoint("TOPLEFT", -2, 2); fight.border:SetPoint("BOTTOMRIGHT", 2, -2)
     fight.border:SetColorTexture(0.8, 0.2, 0.15, 0.95)
@@ -835,7 +840,7 @@ local function buildGuildView(panel)
     addon.ArenaView.BuildChallenge(panel)
 end
 
------------------------------------------------------------------- guild pet stats as badges (user 2026-11-21)
+------------------------------------------------------------------ guild pet stats as badges
 
 local RARITY_RGB = {}
 for rarity, hex in pairs(RARITY_COLOR) do
@@ -914,7 +919,7 @@ function Panel.GuildStats(row)
     return stats
 end
 
------------------------------------------------------------------- the arena guide arrow (user 2026-11-21)
+------------------------------------------------------------------ the arena guide arrow
 
 -- Like the first-throw arrow: a bobbing red arrow shows the way to the first fight, once: the Arena tab, then the first
 -- pet that is not mine (Arena > Guild), then the fight icon. Each step ends when it is done; after the fight icon was
@@ -1010,7 +1015,7 @@ function Panel.Build(panel)
     local Widgets = addon.UI.Widgets
     widgets.panel = panel
     widgets.views, widgets.viewButtons = {}, {}
-    -- the guild list is a page of the arena (user 2026-11-21: "move the gilde tab into arena next to fights")
+    -- the guild list is a page of the arena
     local labels = { companion = Text["Companion"], collection = Text["Collection"], arena = Text["Arena"] }
     for index, view in ipairs({ "companion", "collection", "arena" }) do
         local key = view
@@ -1080,7 +1085,7 @@ function Panel.RefreshCompanion()
     end
 end
 
------------------------------------------------------------------- history badges (user 2026-11-21)
+------------------------------------------------------------------ history badges
 
 -- Four icon badges under the preview model: seen, killed, caught x/y, last seen. Each has its number in the corner,
 -- a glow for pulses, a "+n" that floats up, and a tooltip with the label and the full value.
@@ -1236,7 +1241,7 @@ function Panel.RefreshGuildPreview()
     end
 end
 
--- Selects a guild row (a click; user 2026-11-21).
+-- Selects a guild row (a click).
 ---@param row CompanionRow
 function Panel.SelectGuildRow(row)
     Panel.state.guildRow = row
@@ -1244,7 +1249,7 @@ function Panel.SelectGuildRow(row)
     Panel.Refresh()
 end
 
--- The fight icon: opens the challenge modal for the selected pet (feature 020). Returns true when it opened.
+-- The fight icon: opens the challenge modal for the selected pet. Returns true when it opened.
 ---@return boolean
 function Panel.Challenge()
     local opened = addon.ArenaView.OpenChallenge(Panel.state.guildRow)

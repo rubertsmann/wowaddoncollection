@@ -1,8 +1,8 @@
 local _, addon = ...
 
--- The AZEcaught "Arena" view (feature 020, R10): my fighter (arena level, XP, wins/losses, the four stats with their
--- training) and the fights (incoming challenges to answer, open fights to bet on, finished fights to watch), plus the
--- replay: both models, health bars, floating damage, a shake on every hit and a burst for the winner. Hands-off: the
+-- The AZEcaught "Arena" view: the guild list (built by AzeCaughtPanel), my fighter (arena level, XP, wins/losses, the
+-- four stats with their training) and the fights (incoming challenges to answer, open fights to bet on, finished fights
+-- to watch), plus the replay: both models, health bars, floating damage, a shake on every hit and a burst for the winner. Hands-off: the
 -- fight is already decided (Arena.Fight); the replay only shows it.
 local ArenaView = {}
 addon.ArenaView = ArenaView
@@ -140,7 +140,7 @@ function ArenaView.RefreshFighter()
         widgets.fighterModel.shownNpc = companion.npc
     end
     addon.UI.Widgets.FitText(widgets.fighterName, addon.Utility.Escape(fighter.n), 0.7)
-    -- level and XP on one line: the font shrinks to fit (user 2026-11-21)
+    -- level and XP on one line: the font shrinks to fit
     addon.UI.Widgets.FitText(widgets.fighterLevel, Format(Text["Arena level {level}"], { level = level })
         .. (needed > 0 and ("  |cff999999" .. into .. "/" .. needed .. " XP|r") or ""), 0.65)
     widgets.xpBar:SetValue(needed > 0 and into / needed or 1)
@@ -208,7 +208,7 @@ local function createFightRow(list)
     row.selected = row:CreateTexture(nil, "BACKGROUND", nil, 1); row.selected:SetAllPoints(); row.selected:SetColorTexture(0.3, 0.6, 1, 0.22); row.selected:Hide()
     row.names = Widgets.CreateFontString(row, "GameFontHighlightSmall", "LEFT"); row.names:SetPoint("LEFT", 4, 0); row.names:SetWidth(170)
     row.info = Widgets.CreateFontString(row, "GameFontHighlightSmall", "RIGHT"); row.info:SetPoint("RIGHT", -4, 0); row.info:SetWidth(110)
-    -- the actions right in the row (user 2026-11-21): Accept / Decline an incoming challenge, Stop my own waiting one
+    -- the actions right in the row: Accept / Decline an incoming challenge, Stop my own waiting one
     local height = math.max(14, (Widgets.ROW_HEIGHT or 18) - 2)
     row.accept = Widgets.CreateIconButton(row, "accept", height, Text["Accept"], function() if row.entry then ArenaView.Answer(true, row.entry.id) end end)
     row.decline = Widgets.CreateIconButton(row, "decline", height, Text["Decline"], function() if row.entry then ArenaView.Answer(false, row.entry.id) end end)
@@ -227,7 +227,7 @@ local function fillFightRow(row, entry)
     local incoming = entry.state == "incoming"
     local stoppable = (entry.state == "pending" or entry.state == "lapsed") and entry.fight.a == me()
     row.accept:SetShown(incoming); row.decline:SetShown(incoming); row.stop:SetShown(stoppable)
-    -- my own fight is planned or waiting: accepting is refused, so the tick is greyed out (user 2026-11-21)
+    -- my own fight is planned or waiting: accepting is refused, so the tick is greyed out
     row.accept:SetEnabled(not ArenaView.state.busy)
     row.accept:SetLabel(ArenaView.state.busy and ArenaView.RefusalText("busy") or Text["Accept"])
     row.info:SetShown(not incoming and not stoppable)
@@ -245,7 +245,7 @@ local function buildFightsPage(panel)
     widgets.detail = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "LEFT")
     widgets.detail:SetPoint("TOPLEFT", 8, -46 - Widgets.ROW_HEIGHT * 6 - 8); widgets.detail:SetWidth(284)
     local y = -46 - Widgets.ROW_HEIGHT * 6 - 78
-    -- Accept / Decline only in the fight's row (user 2026-11-21: not again below the details)
+    -- Accept / Decline are only in the fight's row, not repeated below the details
     widgets.betBox = Widgets.CreateEditBox(panel, 44)
     widgets.betBox:SetPoint("TOPLEFT", 8, y - 2)
     widgets.betBox:SetText("1")
@@ -257,7 +257,7 @@ local function buildFightsPage(panel)
     widgets.betB:SetPoint("LEFT", widgets.betA, "RIGHT", 4, 0)
     widgets.stopButton = Widgets.CreateButton(panel, Text["Stop"], 90, 22, function() ArenaView.Withdraw(ArenaView.state.selected) end)
     widgets.stopButton:SetPoint("TOPLEFT", 8, y)
-    -- dev build (user 2026-11-21): icon tools: the arena dummy challenges me (= /ggd arena request); its fights run now
+    -- dev build: icon tools: the arena dummy challenges me (= /ggd arena request); its fights run now
     if addon.IS_DEVELOPMENT_BUILD then
         widgets.dummyButton = Widgets.CreateIconButton(panel, "debug", 24, "[dev] Add a challenge from the arena dummy to me",
             function() addon.Catcher.DevArenaRequest(0) end)
@@ -305,7 +305,7 @@ function ArenaView.Answer(accept, id)
     ArenaView.Refresh()
 end
 
--- Stops my waiting challenge (user 2026-11-21); the stake comes back right after.
+-- Stops my waiting challenge; the arena check runs at once, so the stake comes back right after.
 ---@param id? string
 function ArenaView.Withdraw(id)
     id = id or ArenaView.state.selected
@@ -375,7 +375,7 @@ end
 
 local function sideWidgets(side) return side == "a" and widgets.replayLeft or widgets.replayRight end
 
--- Model animations in the replay (user 2026-11-21: attack / getting hurt on each damage, the death once at 0 health).
+-- Model animations in the replay: attack / getting hurt on each damage, the death once at 0 health.
 -- AnimationData ids, first one the model has wins (no HasAnimation on the client: the first is tried).
 local ANIMATION = {
     attack = { 16, 17, 18, 19 },          -- AttackUnarmed, Attack1H, Attack2H, Attack2HL
@@ -462,7 +462,7 @@ local function buildReplay(parent)
     local Widgets = addon.UI.Widgets
     local replay = CreateFrame("Frame", nil, parent)
     replay:SetAllPoints(); replay:SetFrameLevel(parent:GetFrameLevel() + 30); replay:EnableMouse(true); replay:Hide()
-    local back = replay:CreateTexture(nil, "BACKGROUND"); back:SetAllPoints(); back:SetColorTexture(0.03, 0.02, 0.05, 1)   -- fully opaque (user 2026-11-21)
+    local back = replay:CreateTexture(nil, "BACKGROUND"); back:SetAllPoints(); back:SetColorTexture(0.03, 0.02, 0.05, 1)   -- fully opaque
     local floor = replay:CreateTexture(nil, "BORDER"); floor:SetPoint("BOTTOMLEFT", 0, 70); floor:SetPoint("BOTTOMRIGHT", 0, 70); floor:SetHeight(2)
     floor:SetColorTexture(1, 0.82, 0.2, 0.5)
     for _, side in ipairs({ "a", "b" }) do
@@ -474,7 +474,7 @@ local function buildReplay(parent)
         part.bar = createBar(replay, 140, 10, side == "a" and { 0.3, 0.85, 0.35 } or { 0.9, 0.35, 0.3 })
         part.bar:SetPoint(side == "a" and "TOPLEFT" or "TOPRIGHT", side == "a" and 8 or -8, -30)
         part.health = Widgets.CreateFontString(replay, "GameFontHighlightSmall", "CENTER"); part.health:SetPoint("CENTER", part.bar, "CENTER", 0, 0)
-        -- the owner at the bottom of its side, above the floor line (user 2026-11-21: not behind the pet's name)
+        -- the owner at the bottom of its side, above the floor line (not behind the pet's name)
         part.owner = Widgets.CreateFontString(replay, "GameFontHighlightSmall", side == "a" and "LEFT" or "RIGHT")
         part.owner:SetPoint(side == "a" and "BOTTOMLEFT" or "BOTTOMRIGHT", side == "a" and 8 or -8, 76); part.owner:SetWidth(140)
         part.float = Widgets.CreateFontString(replay, "GameFontNormalLarge", "CENTER"); part.float:Hide()
@@ -484,7 +484,7 @@ local function buildReplay(parent)
     widgets.replayVersus:SetPoint("TOP", 0, -120); widgets.replayVersus:SetText("VS")
     widgets.replayLine = Widgets.CreateFontString(replay, "GameFontHighlight", "CENTER")
     widgets.replayLine:SetPoint("BOTTOM", 0, 44); widgets.replayLine:SetWidth(290)
-    -- only Close, centered (user 2026-11-21: the Skip button is gone)
+    -- only Close, centred
     local close = Widgets.CreateButton(replay, Text["Close"], 80, 20, function() ArenaView.StopReplay() end)
     close:SetPoint("BOTTOM", 0, 8)
     widgets.replay = replay
@@ -606,7 +606,7 @@ function ArenaView.StopReplay()
     if widgets.replay then widgets.replay:Hide() end
 end
 
------------------------------------------------------------------- the challenge modal (user 2026-11-21)
+------------------------------------------------------------------ the challenge modal
 
 -- Opened by the one fight icon on another member's pet in the Guild view. Steps: 1 matchup (both companions), 2 wager
 -- (presets or a custom amount, checked against my pool), 3 confirm (sends), then "sent". Back / Next at the bottom.
@@ -863,7 +863,7 @@ function ArenaView.Build(panel)
     local Widgets = addon.UI.Widgets
     widgets.panel = panel
     widgets.pageButtons = {}
-    -- Guild, Fighter, Fights (the guild list moved here and comes first, user 2026-11-21; AzeCaughtPanel builds it into guildPage)
+    -- Guild, Fighter, Fights (AzeCaughtPanel builds the guild list into guildPage)
     local labels = { fighter = Text["Fighter"], fights = Text["Fights"], guild = Text["Guild"] }
     for index, page in ipairs({ "guild", "fighter", "fights" }) do
         local key = page
