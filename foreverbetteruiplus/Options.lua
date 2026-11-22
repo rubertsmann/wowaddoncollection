@@ -1,9 +1,9 @@
 local addonName, addon = ...
 
 -- Options window (/fbui): a global opacity slider, fade time, "full opacity in combat", and one row per element with
--- a mode button (Global -> Custom -> Off) and its own slider. Built from plain frames (own slider widget), so it does
--- not depend on Blizzard option templates that change between clients. A small page in the game's AddOns settings
--- opens it too.
+-- a mode button (Global -> Custom -> Off), its own slider and a combat button (Global -> Full -> Faded). Built from plain
+-- frames (own slider widget), so it does not depend on Blizzard option templates that change between clients. A small
+-- page in the game's AddOns settings opens it too.
 local Logic, Elements = addon.Logic, addon.Elements
 local Options = {}
 addon.Options = Options
