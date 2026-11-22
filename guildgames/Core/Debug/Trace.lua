@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- Network trace: a LibGuildSync-1.0 Trace (entry fields and statuses: LibGuildSync/Trace.lua). One entry per addon
--- message in or out, plus "sys" entries for identity checks and roster prunes. Persisted in addon.db.trace (bounded ring)
+-- message in or out, plus "sys" entries (identity, roster, sync start, prunes). Persisted in addon.db.trace (bounded ring)
 -- so a /reload keeps the evidence; read it with /gg trace. What is GuildGames' own here: the one-line summary of each of
 -- its message types.
 

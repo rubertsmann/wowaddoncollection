@@ -2,13 +2,8 @@ local addonName, addon = ...
 
 -- Identity. The ONLY place that knows whether this is the live addon ("GuildGames") or the side-by-side development copy
 -- ("GuildGames-Dev"); everything else reads these fields so both can run in one client without sharing state.
--- BUILD FLAG and the names derived from it come from LibGuildSync-1.0 Addon.Setup (LibGuildSync/Addon.lua), shared with
--- ProfessionShare: "dev" when the generated GuildGames-Dev.toc says "## X-Build: dev" (tools/deploy.ps1) OR the folder name
--- contains "dev"; either signal is enough, so a mismatch fails toward isolation. It sets addon.BUILD,
--- IS_DEVELOPMENT_BUILD, BASE_VERSION, VERSION, TITLE, PREFIX ("GGames"/"GGamesDev"), SAVED_VARIABLES_NAME, FRAME_PREFIX,
--- SLASH_COMMANDS (/gg /guildgames or /ggd /guildgamesdev), SlashCommands (handlers by word) and Print, warns when the TOC
--- saves another global than this build uses, and registers the slash commands.
--- The fallback version only matters for the offline tests.
+-- The build flag and every name derived from it (PREFIX "GGames"/"GGamesDev", /gg or /ggd, SavedVariables, frames) come
+-- from LibGuildSync-1.0 Addon.Setup (LibGuildSync/Addon.lua). The fallback version only matters for the offline tests.
 LibStub("LibGuildSync-1.0").Addon.Setup(addon, addonName,
     { name = "GuildGames", prefix = "GGames", command = "gg", fallbackVersion = "0.3.1", color = "ffcc33" })
 
@@ -16,7 +11,7 @@ LibStub("LibGuildSync-1.0").Addon.Setup(addon, addonName,
 ---@type integer
 addon.PROTOCOL_MAJOR = 1
 ---@type integer
-addon.PROTOCOL_MINOR = 2   -- 1.1: the optional "caught" record section (feature 018); 1.2: "arena" (feature 020)
+addon.PROTOCOL_MINOR = 2   -- 1.1: the optional "caught" record section; 1.2: "arena"
 ---@type integer alias: the major is what the payload "v" field carries
 addon.PROTOCOL = addon.PROTOCOL_MAJOR
 

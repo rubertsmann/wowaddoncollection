@@ -1,19 +1,19 @@
 local addonName, addon = ...
 
--- Guild games (feature 014), first game: the coin flip. Pure Lua: the WoW side is UI/GamesTab.lua, the UI side Model.
+-- Game records shared with the guild: coin flip, slots and survivor results plus the AZEcaught and arena sections. Pure
+-- Lua: the UI is UI/GamesTab.lua with Core/View/Model.lua.
 --
--- One record per character (GameRecord), authored ONLY by that character and replaced as a whole by the newer `rev`
--- (the Offers pattern). Results are self-reported: peers check shape, bounds and internal consistency, not truth.
+-- One record per character (GameRecord), authored ONLY by that character and replaced as a whole by the newer `rev`.
+-- Results are self-reported: peers check shape, bounds and internal consistency, not truth.
 -- Gold is bookkeeping only: nothing here (or anywhere in the addon) reads or moves real gold.
 -- Every amount is in COPPER (1g = 100s = 10000c), so stakes can be small ("2s 50c").
--- The field names are the wire and saved-data format and stay as they are (GuildGames protocol 1, same shape as in
--- TalentShare 0.6.0 protocol 2.3).
+-- The field names are the wire and saved-data format and stay as they are.
 
 ---@class GameTotals
 ---@field won integer copper won in the scope (sum of winning stakes)
 ---@field lost integer copper lost in the scope
----@field wins integer number of won flips
----@field losses integer number of lost flips
+---@field wins integer number of won plays
+---@field losses integer number of lost plays
 
 ---@class GameFlip
 ---@field c integer stake in copper, 1..MAXIMUM_STAKE
@@ -28,14 +28,15 @@ local addonName, addon = ...
 
 ---@class GameRecord
 ---@field name string owner, canonical "Name-Realm"
----@field rev integer newer wins (commit rule as Offers: max(now, previous + 1))
+---@field rev integer newer wins (commit rule: max(now, previous + 1))
 ---@field total GameTotals all time
 ---@field weeks table<string, GameTotals> "YYYY-Www" -> totals; at most MAXIMUM_WEEKS newest keys
 ---@field recent GameFlip[] newest first, at most MAXIMUM_RECENT
----@field slots? GameSection slot machine results (feature 014)
----@field survivor? GameSection survivor results (feature 016)
----@field caught? table AZEcaught: { c = current companion | nil, weeks = { [periodKey] = peak level } } (feature 018,
----  protocol 1.1; 1.0 peers drop it). Not a GameSection: not in Games.ORDER, sanitized by AzeCaught.SanitizeSection.
+---@field slots? GameSection slot machine results
+---@field survivor? GameSection survivor results
+---@field caught? table AZEcaught: { c = current companion | nil, weeks = { [periodKey] = peak level } } (protocol 1.1;
+---  1.0 peers drop it). Not a GameSection: not in Games.ORDER, sanitized by AzeCaught.SanitizeSection.
+---@field arena? table companion arena (protocol 1.2), sanitized by Arena.SanitizeSection.
 
 ---@class FlipResult
 ---@field outcome "H"|"T"
@@ -106,7 +107,7 @@ function Games.PeriodKey(serverTime)
     return ("%04d-W%02d"):format(isoYear, week)
 end
 
--- The ISO week before `periodKey`'s week, for a server time inside it.
+-- The ISO week before the week of `serverTime`.
 ---@param serverTime number
 ---@return string
 function Games.PreviousPeriodKey(serverTime)
@@ -114,8 +115,7 @@ function Games.PreviousPeriodKey(serverTime)
 end
 
 ------------------------------------------------------------------ games and their sections of the record
--- One record holds every game: the coin flip's section is the record itself (total, weeks, recent: the 0.6 draft shape),
--- every later game has its own optional sub-table with the same shape (record.slots). Each section feeds its own
+-- One record holds every game: the coin flip's section is the record itself (total, weeks, recent), every later game has its own optional sub-table with the same shape (record.slots). Each section feeds its own
 -- leaderboard. A play is binary for the leaderboard: a loss costs exactly the stake, a win nets 1..maximumWinFactor x stake.
 
 ---@alias GameKey "coin"|"slots"|"survivor"
@@ -234,7 +234,7 @@ local function sanitizeSection(section, gameKey, horizon)
 end
 
 -- Returns a CLEAN COPY of a game record or nil. A single bad entry rejects the whole record. Unknown fields (a game a
--- newer 2.x minor added) are dropped, not fatal.
+-- newer protocol minor added) are dropped, not fatal.
 ---@param gameRecord any
 ---@return GameRecord|nil
 function Games.Sanitize(gameRecord)
@@ -253,7 +253,7 @@ function Games.Sanitize(gameRecord)
             clean[gameKey] = section
         end
     end
-    -- AZEcaught (feature 018): a bad companion section is dropped alone; the casino results stay
+    -- AZEcaught: a bad companion section is dropped alone; the casino results stay
     if gameRecord.caught ~= nil and addon.AzeCaught then
         local section = addon.AzeCaught.SanitizeSection(gameRecord.caught, horizon)
         if section then
@@ -262,7 +262,7 @@ function Games.Sanitize(gameRecord)
             addon.AzeCaught.Journal("WARNING", "sanitize", "a companion section was invalid and dropped", { owner = gameRecord.name })
         end
     end
-    -- companion arena (feature 020, protocol 1.2): a bad arena section is dropped alone too
+    -- companion arena: a bad arena section is dropped alone too
     if gameRecord.arena ~= nil and addon.Arena then
         local section = addon.Arena.SanitizeSection(gameRecord.arena, gameRecord.name, horizon)
         if section then
@@ -305,7 +305,7 @@ end
 ---@return GameRecord|nil
 function Games.Get(playerName) return database().games[playerName] end
 
--- My record (nil when I never flipped).
+-- My record (nil when I never played).
 ---@param myName string|nil
 ---@return GameRecord|nil
 function Games.Mine(myName) return myName and database().games[myName] or nil end
@@ -372,7 +372,7 @@ local function applyPlay(section, entry)
 end
 
 -- Checks the common preconditions of a play. Returns nil when it may go ahead, else the refusal. `checkFunds`: the
--- stake must not be more than the money pool holds (feature 018 R18). Only where a play STARTS; a settle never checks.
+-- stake must not be more than the money pool holds. Only where a play STARTS; a settle never checks.
 ---@param myName any
 ---@param stake any
 ---@param checkFunds? boolean
@@ -420,7 +420,7 @@ function Games.Flip(myName, stake, pick, now, randomFunction)
     return { outcome = outcome, won = won, stake = stake, net = won and stake or -stake }
 end
 
--- Stores a play of another game whose outcome the caller decided (Slots.Spin). net: -stake, or stake..factor*stake.
+-- Stores a play of another game whose outcome the caller decided (Slots.Spin, Survivor). net: -stake, or stake..factor*stake.
 ---@param myName string|nil
 ---@param gameKey GameKey
 ---@param stake any copper
@@ -437,7 +437,7 @@ function Games.RecordPlay(myName, gameKey, stake, net, now)
     return true
 end
 
--- Replaces one non-play section of my record (AZEcaught's "caught") and commits a new rev. Returns true when stored.
+-- Replaces one non-play section of my record ("caught" or "arena") and commits a new rev. Returns true when stored.
 ---@param myName string
 ---@param key "caught"|"arena"
 ---@param section table

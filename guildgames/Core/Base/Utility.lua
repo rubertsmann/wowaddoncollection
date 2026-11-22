@@ -28,8 +28,8 @@ function Utility.Clamp(value, lowest, highest)
     return value
 end
 
--- `text` cut to at most `maximumCharacters` UTF-8 characters, with "…" at the end when it was cut (user 2026-11-21:
--- long pet names broke the layout). Use it before Escape. Not a string: "".
+-- `text` cut to at most `maximumCharacters` UTF-8 characters, with "…" at the end when it was cut (long names break the
+-- layout). Use it before Escape. Not a string: "".
 ---@param text any
 ---@param maximumCharacters integer
 ---@return string

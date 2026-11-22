@@ -50,11 +50,11 @@ end
 ---@param soundNames string[]
 function Api.PlaySoundNamed(soundNames) Api.PlaySound(Api.SoundKitFor(soundNames)) end
 
------------------------------------------------------------------- AZEcaught (feature 018): units
+------------------------------------------------------------------ AZEcaught: units
 -- This client (Retail-based Forever, build 70959) FORBIDS addons the combat log (registering it shows the "reserved for
 -- the Blizzard UI" dialog) and hands out SECRET values in combat and instances (health, name, GUID, ...): comparing,
 -- indexing or doing arithmetic on one raises an error. So AZEcaught only reads units, and every value read goes through
--- Api.NotSecret: a secret reads as nil (unknown). Same rule as the Spoken addons on this client.
+-- Api.NotSecret: a secret reads as nil (unknown).
 
 -- `value`, or nil when the client hides it (a secret). Clients without secrets have no issecretvalue.
 ---@param value any
@@ -184,7 +184,7 @@ function Api.NamePlateFor(unit)
     return ok and NotSecret(plate) or nil
 end
 
------------------------------------------------------------------- the catch dump (feature 018, debugging)
+------------------------------------------------------------------ the catch dump (debugging)
 
 -- One value for the dump: the value as text, "secret" (hidden by the client), "missing" (no such function on this
 -- client), "error" (it raised), "nil". Several return values are joined with "/".
@@ -208,13 +208,8 @@ end
 
 local STAT_NAMES = { "strength", "agility", "stamina", "intellect", "spirit" }
 
--- Everything an addon can read about `unit`, as text, for the journal (`/gg caught dump`, and logged on every catch).
--- Player-only functions (UnitStat, UnitArmor) are tried too, so the log shows what this client gives for an NPC.
----@param unit string
----@return table<string, string>
--- Every other way this client might tell WHO a unit is (user 2026-11-20: dungeons hide UnitGUID, UnitName and the
--- health, "are there maybe other functions that could expose that information"). Each value as dumpValue text
--- ("secret", "missing", "error", "nil" or the value). Read-only; nothing here is stored.
+-- Every other way this client might tell WHO a unit is (dungeons hide UnitGUID, UnitName and the health). Each value as
+-- dumpValue text ("secret", "missing", "error", "nil" or the value). Read-only; nothing here is stored.
 ---@param unit string
 ---@return table<string, string>
 function Api.IdentityProbe(unit)
@@ -272,6 +267,10 @@ function Api.IdentityProbe(unit)
     return probe
 end
 
+-- Everything an addon can read about `unit`, as text, for the journal (`/gg caught dump`, and logged on every catch).
+-- Player-only functions (UnitStat, UnitArmor) are tried too, so the log shows what this client gives for an NPC.
+---@param unit string
+---@return table<string, string>
 function Api.UnitDump(unit)
     local G = _G
     local dump = { unit = unit }
@@ -300,7 +299,7 @@ function Api.UnitDump(unit)
     return dump
 end
 
--- The stats AZEcaught keeps for an NPC (user 2026-11-20): creature type (id or localized name), beast family, maximum
+-- The stats AZEcaught keeps for an NPC: creature type (id or localized name), beast family, maximum
 -- health, power type and maximum, gender. Hidden (secret) or missing values are left out; never raises.
 ---@param unit string
 ---@return NpcStats

@@ -3,8 +3,7 @@ local addonName, addon = ...
 -- GuildGames' protocol on the LibGuildSync-1.0 record-pull engine (LibGuildSync/Sync.lua: HELLO revisions, pulls by
 -- whisper with GUILD retries, give-up reset, GUILD answer dedup, asked-name answers, login replies). Pure: all I/O goes
 -- through `environment`, so it is testable offline.
--- Messages (prefix addon.PREFIX, every message carries v = addon.PROTOCOL and a type t). The names are the WIRE FORMAT
--- (kept from TalentShare 0.6.0, where the games started):
+-- Messages (prefix addon.PREFIX, every message carries v = addon.PROTOCOL and a type t). The names are the WIRE FORMAT:
 --   HELLO {grev?, login?}   broadcast (GUILD) or reply (WHISPER): the revision of my game record (left out while I have none)
 --   WANTG {names, via?}     "send me your game record"; only the sender's own name is honoured
 --   GAMES {games}           a character's game record (Core/Data/Games.lua); only its author may send it

@@ -4,6 +4,7 @@ local addonName, addon = ...
 --   games[playerName] = GameRecord: that character's game results (Core/Data/Games.lua; the field names are the wire format)
 --   ui                = window settings (stakes, scope, selected game, UI language override)
 --   me                = my canonical "Name-Realm"
+--   caught            = AZEcaught's local state: collection, companion, journal, ledger, arena (never sent)
 --   debug, trace      = the log and the network trace rings
 ---@class StoreModule
 ---@field db table the SavedVariables table this session uses
@@ -11,8 +12,8 @@ local Store = {}
 addon.Store = Store
 
 -- Schema history:
---   1  0.1.0   games (moved from TalentShare 0.6.0, feature 015 there; nothing imported)
-Store.SCHEMA = 2   -- 2  0.2.0   db.caught (AZEcaught, feature 018)
+--   1  0.1.0   games (moved from TalentShare 0.6.0; nothing imported)
+Store.SCHEMA = 2   -- 2  0.2.0   db.caught (AZEcaught)
 
 local SECONDS_PER_DAY = 86400
 Store.TIME_SLACK = SECONDS_PER_DAY        -- timestamps further than this into the future are rejected (clock skew is seconds)
@@ -43,7 +44,7 @@ end
 -- schema n -> n+1
 ---@type table<integer, fun(savedVariables: table)>
 local MIGRATIONS = {
-    -- 1 -> 2 (feature 018): AZEcaught's local state starts empty; game records are unchanged
+    -- 1 -> 2: AZEcaught's local state starts empty; game records are unchanged
     [1] = function(savedVariables) savedVariables.caught = {} end,
 }
 

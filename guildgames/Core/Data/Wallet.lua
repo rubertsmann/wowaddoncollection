@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- The money pool (feature 018, R15/R18): ONE balance shared by every GuildGames game. Pure Lua.
+-- The money pool: ONE balance shared by every GuildGames game. Pure Lua.
 --
 --   balance = STARTING_GRANT + net of every casino game in my record (coin, slots, survivor)
 --           - a survivor stake still pending (booked at the start of a run)
@@ -8,7 +8,7 @@ local addonName, addon = ...
 --
 -- The casino net is read from my game record (it is already stored there), so nothing is counted twice. The ledger lives
 -- in db.caught.ledger (local only, never sent). Every movement is a ledger entry with the balance after it, and a journal
--- line (AzeCaught journal, R19), so any balance can be explained line by line (/gg caught wallet).
+-- line (AzeCaught journal), so any balance can be explained line by line (/gg caught wallet).
 -- Still bookkeeping only: no real gold is read or moved.
 ---@class WalletModule
 local Wallet = {}
@@ -93,8 +93,8 @@ end
 ---@return integer copper (can be below 0 after past losses)
 function Wallet.Balance(myName) return Wallet.Breakdown(myName).balance end
 
--- "funds" when `stake` is more than my balance (R18), else nil. Used where a play STARTS (Flip, Slots.Spin,
--- Survivor.Begin), never where a play is settled (a run that started must always be booked).
+-- "funds" when `stake` is more than my balance, else nil. Used where a play or a wager STARTS (Flip, Slots.Spin,
+-- Survivor.Begin, the arena wager), never where a play is settled (a run that started must always be booked).
 ---@param myName string|nil
 ---@param stake integer
 ---@return "funds"|nil
