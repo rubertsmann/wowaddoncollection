@@ -57,3 +57,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Evidence: guildgames 138 passed, professionshare 235 passed, libguildsync 38 passed (all 0 failed); fpvcigarette 13
   tests, foreverbetteruiplus 8 tests, 0 failed; comment-audit --code-only HEAD: 0 file(s) with code changes.
 - Next: user decision on the volume target; in-game check of the AzeCaught.Tick refactor; then status done.
+
+## 2026-11-22 13:28 | NOTE | Correction to the previous entry
+- Did: the previous entry's "b3/tests" is a typo; read it as "the test files of both addons".
+- Result: n/a
+- Evidence: n/a
+- Next: unchanged (user decision on the volume target; in-game check of the AzeCaught.Tick refactor)
