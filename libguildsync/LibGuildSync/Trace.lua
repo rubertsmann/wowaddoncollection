@@ -1,5 +1,5 @@
--- LibGuildSync: network trace, one instance per addon (Trace.New). One entry per addon message in or out, plus "sys"
--- entries for identity checks, roster prunes and incomplete transfers. Pure Lua. Persisted in the table options.entries()
+-- LibGuildSync: network trace, one instance per addon (Trace.New). One entry per addon message in or out (an incomplete
+-- transfer is a dropped "in" entry), plus "sys" entries for identity, roster, sync start and prunes. Pure Lua. Persisted in the table options.entries()
 -- returns (a bounded ring in the addon's SavedVariables) so a /reload keeps the evidence.
 -- The trace is about MESSAGES (what went over the wire and what became of it); everything else goes to the Log.
 -- Status values: out: queued -> sent | failed | dropped;  in: ok | ignored | dropped | rejected | error;  sys: info | warn

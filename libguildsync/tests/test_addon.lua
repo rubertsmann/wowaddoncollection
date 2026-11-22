@@ -1,4 +1,4 @@
--- Addon (MINOR 2): identity, build flag, slash dispatcher and diagnostic commands shared by ProfessionShare and GuildGames.
+-- Addon: identity, build flag, slash dispatcher and diagnostic commands shared by ProfessionShare and GuildGames.
 local MAJOR = "LibGuildSync-1.0"
 
 -- Runs `body(lib)` with the client globals Setup reads replaced: TOC metadata `tableOfContents`, a recording print and
@@ -97,7 +97,7 @@ return {
             addon.SlashCommands.trace("5")
         end)
         harness.truthy(printed[1]:find("comm: active=false protocol=2.3 sent=0 received=0 dropped=0 rejected=1 queue=1 chunks out/in=4/5 send failures=0 roster=1 incompatible peers=2", 1, true), printed[1])
-        harness.truthy(printed[2]:find("comm: my build ?/" .. LibStub(MAJOR).MINOR, 1, true), printed[2])   -- MINOR 3: builds
+        harness.truthy(printed[2]:find("comm: my build ?/" .. LibStub(MAJOR).MINOR, 1, true), printed[2])   -- my build
         harness.truthy(printed[3]:find("member builds seen: none yet", 1, true), printed[3])
         harness.truthy(printed[4]:find("not active", 1, true))
         harness.truthy(printed[5]:find("hello sent", 1, true))

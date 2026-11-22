@@ -172,7 +172,7 @@ return {
         harness.equal(a.sync.pending[1].message.note.rev, 3)
     end,
 
-    -- live 2026-11-21: a client without any realm ignored "Drakk Nuk-SomeRealm" from a member whose client reports realms
+    -- regression: a client without any realm ignored "Drakk Nuk-SomeRealm" from a member whose client reports realms
     ["sync: a client without a realm takes a request for 'me-AnyRealm' as a request for me"] = function(harness)
         local lib = harness.library()
         local savedNormalized, savedRealm = GetNormalizedRealmName, GetRealmName

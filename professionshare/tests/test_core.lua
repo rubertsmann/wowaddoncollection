@@ -77,7 +77,7 @@ return {
         harness.equal(byName["Spiced Wolf"].crafterCount, 2)
         harness.equal(#addon.Model.BuildRecipeRows(addon.Store, { text = "boar" }), 1)
         harness.equal(#addon.Model.BuildRecipeRows(addon.Store, { text = "wolf meat" }), 1)   -- reagent search
-        -- profession filters use the canonical key (Names.ProfKey), not the raw name
+        -- profession filters use the canonical key (Names.ProfessionKey), not the raw name
         harness.equal(#addon.Model.BuildRecipeRows(addon.Store, { profession = addon.Names.ProfessionKey("Tailoring"), text = "" }), 0)
         harness.equal(#addon.Model.BuildRecipeRows(addon.Store, { profession = addon.Names.ProfessionKey("Cooking"), text = "" }), 2)
         harness.equal(#addon.Model.BuildRecipeRows(addon.Store, { text = "", mineOnly = true, me = "B-R" }), 1)

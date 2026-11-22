@@ -2,7 +2,7 @@
 --   locale.Text[<english text>]   -> text in the UI language; missing translation -> the English key itself (never nil)
 --   Locale.Format("{count} recipes", { count = 3 })   named placeholders (Lua string.format has no positional %1$s)
 --   Locale.Plural(count, Text["{n} recipe"], Text["{n} recipes"])
---   locale.Register(code, { english key = translation, ... })
+--   locale.RegisterStrings(code, { [english key] = translation, ... })
 -- clientCode = the game client's language; code = the UI language, normally the same, overridable for testing.
 local lib = LibStub("LibGuildSync-1.0")
 local Locale = lib:Module("Locale", 3)

@@ -64,7 +64,7 @@ if not Sync then return end
 ---@type integer[] seconds to wait after attempt n before the next one; after the last: give up
 Sync.RETRY_SECONDS = Sync.RETRY_SECONDS or { 45, 90, 180 }
 -- A HELLO is fresh proof that the peer is online: it restarts a pull that gave up once this long has passed. A longer
--- lock (TalentShare 0.4.1 draft: 10 min) left members without a record for minutes after a few lost messages.
+-- lock (10 min was tried) left members without a record for minutes after a few lost messages.
 Sync.GIVE_UP_RESET_SECONDS = 60
 -- an answer on GUILD for the same revision is sent at most once per this many seconds
 Sync.GUILD_DEDUPLICATION_SECONDS = 60

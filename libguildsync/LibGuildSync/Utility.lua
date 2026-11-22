@@ -30,7 +30,7 @@ function Utility.FullName(characterName, realmName)
     return characterName .. "-" .. realmName
 end
 
------------------------------------------------------------------- canonical player names (feature 008, analysis R1)
+------------------------------------------------------------------ canonical player names
 -- A player name reaches the addon from three client sources that need not agree on the realm spelling: my own name
 -- (UnitName + GetNormalizedRealmName), the CHAT_MSG_ADDON sender, and GetGuildRosterInfo. Every comparison and every
 -- stored key uses Utility.CanonicalName, so one character has ONE key: realm spellings that mean MY realm (any case,
@@ -40,18 +40,17 @@ end
 ---@type integer bumped when an alias is learned: stored keys must then be canonicalized again
 Utility.realmAliasVersion = Utility.realmAliasVersion or 0
 
------------------------------------------------------------------- realm-free identity (WoW Forever; verified 2026-11-16)
--- One Forever guild spans several realms ("CAMWOW EU4 Realm 1/3/5 PvE", "CAMWOW EU5 Realm 3 PvE" in one guild), yet the
--- roster and every chat sender give names WITHOUT a realm ("Drakk Nuk"), and whispers to the bare name arrive. Each
--- client appended its OWN realm to those bare names, so the same member was "Drakk Nuk-...Realm5" on one client and
--- "Drakk Nuk-...Realm3" on the next: requests never matched and records were refused. Where the realm is not part of a
--- name (surnames, or a roster without realm suffixes), every realm counts as mine: one member, one key on every client.
+------------------------------------------------------------------ realm-free identity (WoW Forever)
+-- One Forever guild spans several realms, yet the roster and every chat sender give names WITHOUT a realm ("Mira Holt"),
+-- and whispers to the bare name arrive. Appending each client's OWN realm would give the same member a different key on
+-- every client. So where the realm is not part of a name (surnames, or a roster without realm suffixes), every realm
+-- counts as mine: one member, one key on every client.
 
------------------------------------------------------------------- surnames (WoW Forever; verified from a user export 2026-11-16)
--- On Forever a character has a first name AND a surname. UnitName("player") returns ("Drakk", "Nuk") (the surname in the
--- slot retail uses for the realm), while the guild roster and every chat sender use "Drakk Nuk" (space, no realm). The
+------------------------------------------------------------------ surnames (WoW Forever)
+-- On Forever a character has a first name AND a surname. UnitName("player") returns ("Mira", "Holt") (the surname in the
+-- slot retail uses for the realm), while the guild roster and every chat sender use "Mira Holt" (space, no realm). The
 -- character's identity is the full "First Surname". Data written by 0.4.0 and by the first 0.4.1 builds keyed players by
--- the first name only ("Drakk-Realm"); a first name that is unique in the guild roster is mapped to that member's full name.
+-- the first name only ("Mira-Realm"); a first name that is unique in the guild roster is mapped to that member's full name.
 
 -- "Drakk-Realm" -> "drakkrealm": the realm spelling with case, spaces, apostrophes and hyphens removed.
 ---@param realmName string
@@ -213,8 +212,9 @@ function Utility.LegacyName(playerName)
     return realmName and (firstName .. "-" .. realmName) or firstName
 end
 
--- The one key of a player: "Name-MyRealm" for my realm in any spelling, "Name-OtherRealm" otherwise. A bare "Name" gets
--- my realm (bare names are what same-realm sources give). nil for non-strings and empty names.
+-- The one key of a player: my realm in any spelling becomes "Name-MyRealm", another realm stays "Name-OtherRealm" (spaces
+-- removed). A bare "Name" counts as my realm; a bare first name gets its surname when that is unambiguous. On a client
+-- that knows no realm (MyRealm() == ""), my realm's names stay bare. nil for non-strings and empty names.
 ---@param playerName string|nil
 ---@return string|nil
 function Utility.CanonicalName(playerName)
@@ -230,7 +230,7 @@ function Utility.CanonicalName(playerName)
         end
         local myRealm = Utility.MyRealm()
         if myRealm == "" then
-            -- a client without any realm (Forever, 2026-11-21) keys everyone realm-free: "Name-AnyRealm" from a member whose
+            -- a client without any realm (Forever) keys everyone realm-free: "Name-AnyRealm" from a member whose
             -- client still reports realms is the same player, or requests for me are refused as "name mismatch"
             if realmName == "" or Utility.RealmFree() then return characterName end
             return characterName .. "-" .. realmName:gsub("%s", "")
@@ -263,7 +263,7 @@ end
 -- lists show the same form: "Name" on my realm, "Name-Realm" elsewhere
 Utility.ShortName = Utility.WhisperTarget
 
------------------------------------------------------------------- table helpers (the ONE copy of each; see feature 012)
+------------------------------------------------------------------ table helpers (the ONE copy of each)
 
 ---@generic T
 ---@param value T
@@ -284,8 +284,6 @@ function Utility.Count(map)
     return count
 end
 
--- keys of `map` in a stable order: numbers before strings, each in natural order (1 < 2 < 10, "a" < "b"); any other key
--- type after those, by tostring. Never errors on mixed key types. Not a table -> {}.
 ---@type table<string, integer>
 local KEY_TYPE_RANK = { number = 1, string = 2 }
 ---@param left any
@@ -298,6 +296,9 @@ local function keyComesFirst(left, right)
     if leftRank ~= rightRank then return leftRank < rightRank end
     return tostring(left) < tostring(right)
 end
+
+-- keys of `map` in a stable order: numbers before strings, each in natural order (1 < 2 < 10, "a" < "b"); any other key
+-- type after those, by tostring. Never errors on mixed key types. Not a table -> {}.
 ---@param map any
 ---@return any[]
 function Utility.SortedKeys(map)
@@ -491,7 +492,7 @@ local function lowerCaseCodePoint(codePoint)
     return codePoint
 end
 
--- accent-free replacement for lower-case Latin-1 / Cyrillic letters, by code point
+-- accent-free replacement for lower-case Latin-1 / Latin Extended-A letters, by code point (Cyrillic: see SearchKey)
 ---@type table<integer, string>
 local ACCENT_FREE = {}
 ---@param codePoints integer[]

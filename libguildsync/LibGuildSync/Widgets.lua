@@ -157,7 +157,7 @@ end
 ---@field onClick fun(button: table, mouseButton: string)
 ---@field onTooltip? fun(tooltip: table) fills GameTooltip (already owned by the button)
 
--- Gap between the minimap's edge and a button's centre, as LibDBIcon (Spoken and most addons) uses, so our buttons line
+-- Gap between the minimap's edge and a button's centre, as LibDBIcon (used by most addons) uses, so our buttons line
 -- up with theirs on the ring OUTSIDE the map.
 Widgets.MINIMAP_BUTTON_GAP = 5
 -- Used when the client cannot tell the minimap size: the classic 140 px minimap.

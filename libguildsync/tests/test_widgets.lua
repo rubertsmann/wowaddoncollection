@@ -1,4 +1,4 @@
--- Widgets: where the minimap button sits (bug 2026-11-22: it sat INSIDE the larger Forever minimap at a fixed 80 px).
+-- Widgets: where the minimap button sits (it once sat INSIDE the larger Forever minimap at a fixed 80 px).
 
 local function near(harness, actual, expected, message)
     harness.truthy(math.abs(actual - expected) < 0.001, (message or "") .. ": expected " .. expected .. ", got " .. actual)
@@ -29,7 +29,7 @@ return {
         local Widgets = harness.library().Widgets
         local half = 198 / 2 + Widgets.MINIMAP_BUTTON_GAP
         local x, y = Widgets.MinimapButtonOffset(45, 198, 198, "SQUARE")
-        -- LibDBIcon's corner rule (so we line up with Spoken's button): on the diagonal, 10 px in from the corner
+        -- LibDBIcon's corner rule (so we line up with other addons' buttons): on the diagonal, 10 px in from the corner
         local corner = math.cos(math.rad(45)) * (math.sqrt(2 * half ^ 2) - 10)
         near(harness, x, corner, "corner x"); near(harness, y, corner, "corner y")        x, y = Widgets.MinimapButtonOffset(0, 198, 198, "SQUARE")
         near(harness, x, half, "side"); near(harness, y, 0, "side level")

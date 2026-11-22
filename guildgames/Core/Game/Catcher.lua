@@ -316,8 +316,6 @@ _G["BINDING_NAME_" .. BINDING.name] = Text["AZEcaught: throw rope at target"]
 
 ------------------------------------------------------------------ rope icon on nameplates (spike S3)
 
----@param unit string
----@return table button
 -- How hard the armed icon shakes with `remaining` seconds of the catch window left: 0 until SHAKE_SECONDS before the
 -- end, then rising to SHAKE_MAXIMUM pixels (user 2026-11-20: "shake violently shortly before breaking").
 ---@param remaining number
@@ -345,6 +343,8 @@ function Catcher.ShakeIcon(button, amplitude)
     button.glow:ClearAllPoints(); button.glow:SetPoint("CENTER", x, y)
 end
 
+---@param unit string
+---@return table button
 local function iconFor(unit)
     local button = Catcher.icons[unit]
     if button then return button end

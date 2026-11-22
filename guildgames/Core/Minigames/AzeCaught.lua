@@ -1046,12 +1046,6 @@ AzeCaught.CARE = {
 ---@field cost integer copper spent
 ---@field balance? integer after a paid action
 
--- One care action (R11, R12). Returns the result, or nil and the refusal.
----@param action any
----@param myName string|nil
----@param now integer server time
----@return CareResult|nil
----@return CareRefusal|nil
 -- Whether a care action can be done now, without doing it (the panel greys out the buttons with it, user 2026-11-20).
 -- Returns true, or false and the refusal Care would give.
 ---@param action any
@@ -1073,6 +1067,12 @@ function AzeCaught.CareAvailability(action, myName)
     return true, nil
 end
 
+-- One care action (R11, R12). Returns the result, or nil and the refusal.
+---@param action any
+---@param myName string|nil
+---@param now integer server time
+---@return CareResult|nil
+---@return CareRefusal|nil
 function AzeCaught.Care(action, myName, now)
     local companion = AzeCaught.Active()
     local function refuse(reason)

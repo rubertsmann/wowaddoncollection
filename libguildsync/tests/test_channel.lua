@@ -142,7 +142,7 @@ return {
         if not ok then error(errorMessage, 0) end
     end,
 
-    -- MINOR 3: every HELLO names the sender's build, the receiver keeps it per member and notes it in the trace
+    -- every HELLO names the sender's build, the receiver keeps it per member and notes it in the trace
     ["channel: HELLO carries the build ('<addon version>/<MINOR>'), the receiver records it per member"] = function(harness)
         local lib = harness.library()
         withChat(0, function(calls)

@@ -224,7 +224,6 @@ local function approach(current, target, elapsedSeconds)
 end
 
 -- Darkens the backdrops and brightens the header while the mouse is over the window or the sidebar.
----@param elapsedSeconds number
 ---@param frame table
 ---@return boolean
 local function mouseOver(frame)

@@ -4,7 +4,7 @@
 -- SHARED by every channel (every addon that embeds the library): ONE send token bucket and ONE driver frame, because the
 -- server throttles addon messages per player, not per addon.
 -- Every message in and out is recorded in the addon's trace: one entry per message, whose status is updated as it moves
--- (out: queued -> sent | failed; in: the decision Sync took, or why it never got there). Failures are also logged.
+-- (out: queued -> sent | failed | dropped; in: the decision Sync took, or why it never got there). Failures are also logged.
 -- The channel's functions are called with a dot (channel.Send(message, "GUILD")), and its state is plain fields
 -- (channel.queue, channel.roster, channel.sync, ...), so an addon can expose the channel as its own module.
 local lib = LibStub("LibGuildSync-1.0")
@@ -507,12 +507,10 @@ function Channel.SendDueHello(channel, now)
     end
 end
 
------------------------------------------------------------------- control
-
------------------------------------------------------------------- build versions in HELLO (MINOR 3)
+------------------------------------------------------------------ build versions in HELLO
 
 -- Nothing else on the wire says which build a member runs: the chunk header carries only the protocol version, and a fix
--- that changes no message (the realm-free name fix, 2026-11-21) looks the same from both builds. Every HELLO therefore
+-- that changes no message looks the same from both builds. Every HELLO therefore
 -- carries `ver` = "<addon version>/<active LibGuildSync MINOR>" ("1.0.1/3"), an optional field older clients of the same
 -- protocol major ignore. Received tags are kept per sender for this session and noted in the HELLO's trace line.
 Channel.MAXIMUM_VERSION_LENGTH = 32
@@ -560,6 +558,8 @@ function Channel.PeerVersions(channel)
     table.sort(rows, function(left, right) return left.name < right.name end)
     return rows
 end
+
+------------------------------------------------------------------ control
 
 -- Idempotent; called at login and whenever guild membership may have changed. Never before the addon set `ready`
 -- (until PLAYER_LOGIN the stored name can still be the previously played character).

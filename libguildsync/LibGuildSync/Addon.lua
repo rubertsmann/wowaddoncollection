@@ -1,6 +1,6 @@
 -- LibGuildSync: what every addon that embeds the library sets up the same way: its identity (live or development build,
 -- version, prefix, SavedVariables, frame names, slash commands), the slash command dispatcher, and the diagnostic slash
--- commands (comm, hello, debug, trace). ProfessionShare and GuildGames used to carry a copy each.
+-- commands (comm, hello, debug, trace).
 -- Identity names follow one pattern from three words, so the live and the development build never share state:
 --   name "ProfessionShare", prefix "PShare", command "ps"  ->
 --   live: title "ProfessionShare", prefix "PShare", SavedVariables "ProfessionShareDB", frames "ProfessionShare", /ps /professionshare
@@ -100,7 +100,7 @@ end
 --   comm                 transport state and counters
 --   hello                sends a HELLO now
 --   debug [count]        the last log lines (default 15)
---   trace [count] [problems]   the last network trace entries (default 20), newest first
+--   trace [count] [problems]   the last network trace entries (default 20), the newest at the bottom
 -- They read addon.Communication (a Channel), addon.Trace, addon.db.debug and addon.PROTOCOL_* at use time.
 ---@param addon table
 function Addon.AddDiagnosticCommands(addon)
@@ -112,7 +112,7 @@ function Addon.AddDiagnosticCommands(addon)
             tostring(Communication.active), addon.PROTOCOL_MAJOR, addon.PROTOCOL_MINOR, statistics.sent, statistics.received,
             statistics.dropped, Communication.rejected, #Communication.queue, Communication.chunksSent,
             Communication.chunksReceived, Communication.sendFailures, Utility.Count(Communication.roster), Communication.hints.count))
-        -- MINOR 3: my build and the builds guild members announced in their HELLOs this session
+        -- my build and the builds guild members announced in their HELLOs this session
         local channelModule = lib.Channel
         addon.Print(("comm: my build %s"):format(channelModule.VersionTag(Communication)))
         local versionTexts = {}

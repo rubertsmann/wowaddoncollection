@@ -323,7 +323,7 @@ function ArenaView.Bet(side)
     showResult(odds, reason, odds and Format(Text["Bet placed at {odds}x."], { odds = ("%.2f"):format(odds / 100) }))
 end
 
----@param fight ArenaFight
+---@param fighter Fighter|nil
 ---@return string
 local function fighterLine(fighter)
     if not fighter then return "?" end
