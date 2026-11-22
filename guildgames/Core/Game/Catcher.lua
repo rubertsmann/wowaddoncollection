@@ -34,7 +34,6 @@ local ARROW_SIZE = 30
 local SNAP_SOUNDS = { "IG_QUEST_LOG_ABANDON_QUEST", "IG_MAINMENU_OPTION_CHECKBOX_OFF" }
 local BEST_SOUNDS = { "MAP_PING", "IG_MAINMENU_OPTION_CHECKBOX_ON" }
 local MAXIMUM_PINGED = 200
-local HOSTILE_FLAG = 0x40          -- COMBATLOG_OBJECT_REACTION_HOSTILE
 local PUBLISH_MINIMUM_GAP = 30     -- seconds between published updates of my companion
 local PUBLISH_EVERY = 300          -- and at least this often while a companion is active
 local MAXIMUM_NOTED = 500
