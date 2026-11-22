@@ -149,6 +149,14 @@ tests["dancer scale clamps and survives bad input"] = function()
     assert(Logic.DANCE_ANIMATION == 69)
 end
 
+-- docs/comment-policy.md: this addon's comments pass tools/comment-audit.lua --strict
+tests["comments: the comment audit of fpvcigarette finds nothing"] = function()
+    local pipe = assert(io.popen("cd .. && luajit tools/comment-audit.lua --strict fpvcigarette 2>&1"))
+    local output = pipe:read("*a")
+    pipe:close()
+    assert(output:find("comment%-audit fpvcigarette: %d+ files, %d+ comments, 0 findings") ~= nil, output)
+end
+
 local names = {}
 for name in pairs(tests) do names[#names + 1] = name end
 table.sort(names)

@@ -33,3 +33,16 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Evidence: luajit tests/run.lua -> 137 passed, 0 failed; comment-audit --code-only on every comment commit -> 0 file(s)
   with code changes; comment-audit guildgames -> 0 findings outside tests
 - Next: T5 professionshare pass (Core/Base, Net, Debug, Data, Game, View, UI, tests)
+
+## 2026-11-22 13:20 | BUILD | T5-T7 professionshare, small addons, scripts, lint
+- Did: read every comment of professionshare (Core, UI, dev probe, tests), fpvcigarette, foreverbetteruiplus and all
+  tools/*.ps1 and make_textures.py against the code; added tests/test_comments.lua (guildgames, professionshare,
+  libguildsync) and inline tests (fpvcigarette, foreverbetteruiplus) that run comment-audit --strict; linked the policy
+  from both coding-conventions.md and both feature-workflow skills.
+- Result: about 30 more wrong or stale comments fixed (2472122, 26b71d6, 3902a18, 3f7326c, d85c5a7); dead Link removed
+  from guildgames/tools/deploy.ps1 (c99e945). Comment volume: text -2.2%, line count flat (see doc.md Limits).
+- Evidence: guildgames 138 passed, 0 failed; professionshare 235 passed, 0 failed; libguildsync 38 passed, 0 failed;
+  fpvcigarette 13 tests, 0 failed; foreverbetteruiplus 8 tests, 0 failed. Planted provenance line ->
+  "guildgames/Core/Base/Log.lua:17: [provenance] user 2026-11-22", 137 passed, 1 failed (reverted).
+- Next: user decision on the volume target (accept, or a second pass of name-instead-of-comment refactors); in-game
+  check of the AzeCaught.Tick refactor (verify.md checklist); then status done.

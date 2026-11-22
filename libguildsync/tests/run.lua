@@ -1,4 +1,4 @@
--- Offline test runner:  luajit tests/run.lua   (run from the repo root)
+-- Offline test runner:  luajit tests/run.lua   (run from the libguildsync folder)
 -- Each tests/test_*.lua returns { ["test name"] = function(harness) ... end }.
 -- harness.library() reloads LibGuildSync from scratch (fresh shared state) and returns it; harness.equal / harness.truthy
 -- assert; harness.clock is the server time GetServerTime returns.

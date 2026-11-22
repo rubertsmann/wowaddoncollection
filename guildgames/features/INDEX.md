@@ -9,4 +9,4 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 019 | Code structure like TalentShare | done | GuildGames 0.2.0 | 32953c8..b2fa241 | [019-code-structure-like-talentshare](019-code-structure-like-talentshare/spec.md) |
 | 020 | Companion arena | planned | - | - | [020-companion-arena](020-companion-arena/spec.md) |
 | 020 | Companion arena (async auto battles, training, wagers, side bets) | verifying | GuildGames 0.3.0 (protocol 1.2, schema 2), unreleased | - | [020-companion-arena](020-companion-arena/spec.md) |
-| 021 | Comment audit and reduction | planned | - | - | [021-comment-audit-and-reduction](021-comment-audit-and-reduction/spec.md) |
+| 021 | Comment audit and reduction (all addons) | verifying | none (tooling) | 14e9558..HEAD | [021-comment-audit-and-reduction](021-comment-audit-and-reduction/spec.md) |

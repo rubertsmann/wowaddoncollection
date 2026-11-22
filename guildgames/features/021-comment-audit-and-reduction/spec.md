@@ -1,6 +1,6 @@
 # 021 Comment audit and reduction: spec
 
-- Status: in-progress
+- Status: verifying
 - Created: 2026-11-22
 - Target version: none (no behaviour change; ships with each addon's next release)
 - Owner: claude
@@ -36,9 +36,9 @@ pruned, and the policy plus an audit tool keep it that way.
 - [x] T2 (M): audit tool. Verify: runs on all five addons; findings reviewed by hand (false positives removed).
 - [x] T3 (L): libguildsync pass. Verify: its suite + every consumer's suite.
 - [x] T4 (L): guildgames pass (pilot: Core/Minigames/AzeCaught.lua first). Verify: `luajit tests/run.lua`.
-- [ ] T5 (L): professionshare pass. Verify: `luajit tests/run.lua`.
-- [ ] T6 (S): fpvcigarette + foreverbetteruiplus pass. Verify: their suites.
-- [ ] T7 (S): audit `--strict` lint in each suite. Verify: suites fail on a planted provenance comment.
+- [x] T5 (L): professionshare pass. Verify: `luajit tests/run.lua`.
+- [x] T6 (S): fpvcigarette + foreverbetteruiplus pass. Verify: their suites.
+- [x] T7 (S): audit `--strict` lint in each suite. Verify: suites fail on a planted provenance comment.
 
 ## Review Focus
 1. RF1: a comment edit that touches code (a trailing comment removed together with code) -> caught by the suites and by
@@ -53,8 +53,8 @@ pruned, and the policy plus an audit tool keep it that way.
 - [x] Localization: n/a (Locales/ excluded; no strings change).
 - [x] Load order: unchanged.
 - [x] Packaging: `tools/` and `docs/` at the repo root are not packaged.
-- [ ] Tests: audit lint per suite (T7).
-- [ ] Docs: policy, conventions links, doc.md.
+- [x] Tests: audit lint per suite (T7): tests/test_comments.lua and the inline tests.
+- [x] Docs: policy, conventions links, workflow skills, doc.md.
 
 ## Decisions
 - 2026-11-22: provenance and feature/requirement ids leave non-test code entirely; tests may keep requirement ids

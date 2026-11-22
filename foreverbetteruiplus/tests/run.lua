@@ -83,6 +83,14 @@ tests["element keys are unique and every element names a frame"] = function()
     assert(Elements.ByKey("minimap") and Elements.ByKey("minimap").label == "Minimap")
 end
 
+-- docs/comment-policy.md: this addon's comments pass tools/comment-audit.lua --strict
+tests["comments: the comment audit of foreverbetteruiplus finds nothing"] = function()
+    local pipe = assert(io.popen("cd .. && luajit tools/comment-audit.lua --strict foreverbetteruiplus 2>&1"))
+    local output = pipe:read("*a")
+    pipe:close()
+    assert(output:find("comment%-audit foreverbetteruiplus: %d+ files, %d+ comments, 0 findings") ~= nil, output)
+end
+
 local names = {}
 for name in pairs(tests) do names[#names + 1] = name end
 table.sort(names)

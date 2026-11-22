@@ -83,6 +83,8 @@ Read `features/INDEX.md`, then the feature's `log.md` (last 3 entries), `spec.md
 - One source of truth per fact: requirements in spec.md, evidence in verify.md, history in log.md, final text in doc.md. Link, do not copy.
 - No secrets, tokens, real character or realm names in any file or evidence (blur or replace them). `features/` is dev-only; it must stay in `.pkgmeta` ignore.
 - Be exact and short; tables over prose; paths as `file:line` where useful.
+- Code comments never carry feature / requirement / task ids, dates or "user said" notes (docs/comment-policy.md at the
+  monorepo root); spec.md, log.md and git hold that history. Each suite's `tests/test_comments.lua` enforces it.
 - Report outcomes faithfully: failing tests, skipped steps and unverified rows are written down, not smoothed over.
 
 ## Project quick reference

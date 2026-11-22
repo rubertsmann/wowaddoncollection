@@ -1,24 +1,43 @@
 # Comment audit and reduction
 
-Status: draft | Since version: <x.y.z> | Spec: [spec](spec.md) | Verification: [verify](verify.md)
+Status: verifying | Since version: none (developer tooling; ships with nothing) | Spec: [spec](spec.md) | Verification: [verify](verify.md)
 
 ## What it does
-<player-facing, 2-4 sentences>
+Every code comment in the monorepo (five addons, their tests and tools) was read against the code it describes. Wrong
+and stale comments were corrected; history (who asked, when, feature and requirement ids) was removed from code. A
+policy and an audit tool keep it that way: each addon's offline suite now fails on a comment the tool can prove wrong.
 
 ## How to use
-- UI: <where to click>
-- Commands: `/ps ...`
+- Policy: [docs/comment-policy.md](../../../docs/comment-policy.md) (keep / remove / prefer a name / never rename).
+- Audit one or more addons from the monorepo root: `luajit tools/comment-audit.lua guildgames professionshare`
+  (`--summary` for counts only, `--strict` to exit 1 on findings).
+- Prove a change touched comments only: `luajit tools/comment-audit.lua --code-only HEAD` (or any revision).
+- The suites run it: `tests/test_comments.lua` (guildgames, professionshare, libguildsync) and an inline test in
+  fpvcigarette and foreverbetteruiplus.
 
 ## How it works
-- Data (SavedVariables): <shape>
-- Messages: <types and fields, or "no change">
-- Modules: <files and responsibilities>
+- `tools/comment-audit.lua` lexes Lua (strings and long brackets are skipped), then checks every comment:
+  provenance patterns (outside tests), `*.lua/*.toc` paths that exist nowhere, `Module.Name` where `Module` is a table
+  of the addon (or LibGuildSync) and `Name` is defined nowhere, and `---@param` names that are not parameters of the
+  function below. `--code-only` blanks every comment, squeezes whitespace and compares with the revision.
+- Data, messages, protocol, SavedVariables: no change.
 
-## Localization
-<which strings are translated, which come from the game client, what is sent on the wire>
+## Results
+| Addon | Comments | Wrong or stale comments fixed (examples) |
+|---|---|---|
+| libguildsync | 965 | Locale header named a non-existent `Register`; `/x trace` order; Trace and Channel status lists; CanonicalName ignored realm-free names |
+| guildgames | 3018 | combat log named on a client that forbids it; ProfessionShare's minimap angles; coin flip axis; Survivor's weapons and factors; five doc blocks above the wrong function; test clock date |
+| professionshare | 1990 | trace header; Store schema list; tryCall; resizable list width; `ns.BUILD` |
+| fpvcigarette, foreverbetteruiplus | 181, 91 | Fader's hover call; a missing class field; runner folders |
+
+Code findings, each in its own commit: dead `HOSTILE_FLAG` (Catcher.lua), dead `Link` (guildgames/tools/deploy.ps1).
+Pilot refactor: `AzeCaught.Tick`'s commented sections and `NoteFound`'s eviction block became named local functions.
 
 ## Limits and known issues
-- <limit>
-
-## Changelog line
-- <one line for CHANGELOG.md>
+- Comment VOLUME barely changed (comment text -2.2%, line count flat): almost every comment here explains a why, a
+  client fact or a data contract, which the policy keeps. Provenance was mostly a clause inside such a comment, so
+  removing it shortened lines rather than deleting them. A further cut needs more "name instead of comment" refactors
+  like the AzeCaught pilot (code changes, one module per commit).
+- The member/path checks are heuristic: a comment naming a field of a non-module table is not checked.
+- lua-language-server is not installed; the audit's own `param` check stands in for `--check` (no type checking).
+- Public constants were not renamed to carry units (decision in spec.md); their unit comments stay.

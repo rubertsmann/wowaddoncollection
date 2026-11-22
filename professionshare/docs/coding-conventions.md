@@ -56,6 +56,13 @@ passed between modules has a `---@class` next to the code that owns it (`Charact
 Orders.lua, `TraceEntry` in Trace.lua, ...). With the "Lua" extension (sumneko / LuaLS) in VS Code these are checked while
 typing.
 
+## Comments
+
+The monorepo's [comment policy](../../docs/comment-policy.md): a comment says WHY (or a client fact, or a data
+contract), never who asked or when, never a feature / requirement / task id (those live in `features/` and git). Names
+carry the WHAT: prefer a named local function or local over a comment. `tests/test_comments.lua` runs
+`tools/comment-audit.lua --strict` on this addon (provenance, dead paths, dead `Module.Name`, `---@param` mismatches).
+
 ## Logging (`Core/Base/Log.lua`)
 
 There is no live debugger in the game client: the log is the evidence. Never `print` diagnostics or build log strings by
