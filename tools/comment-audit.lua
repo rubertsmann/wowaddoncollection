@@ -135,6 +135,10 @@ local function audit(root)
     allCode = table.concat(allCode, "\n")
     local definedNames = {}
     for name in allCode:gmatch("[%.:]([%a_][%w_]*)%s*=") do definedNames[name] = true end
+    -- multiple assignment ("Module.A, Module.B = 1, 2"): every name left of the "="
+    for targets in allCode:gmatch("%f[^\n%z]%s*([%w_%.:]+%s*,[%w_%.:%s,]+)=[^=]") do
+        for name in targets:gmatch("[%.:]([%a_][%w_]*)") do definedNames[name] = true end
+    end
     for name in allCode:gmatch("function%s+[%w_%.:]-([%a_][%w_]*)%s*%(") do definedNames[name] = true end
     for name in allCode:gmatch("local%s+([%a_][%w_]*)") do definedNames[name] = true end
     for name in allCode:gmatch("[{,]%s*([%a_][%w_]*)%s*=") do definedNames[name] = true end
