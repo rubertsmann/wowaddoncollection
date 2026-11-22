@@ -84,7 +84,7 @@ return {
         o:Close(old.id, "Bob-R", "done")
         local fresh = o:Create("Bob-R", 2, 1)
         harness.equal(o:Prune(harness.clock + 8 * 86400), 1)
-        harness.truthy(o:Get(fresh.id) == nil or o:Get(fresh.id) ~= nil) -- fresh survives only within 30 days
+        harness.truthy(o:Get(fresh.id), "an open order survives 8 days (only orders older than 30 days go)")
         harness.equal(o:Get(old.id), nil)
     end,
 }
