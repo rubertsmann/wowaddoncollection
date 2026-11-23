@@ -52,7 +52,7 @@ Utility.realmAliasVersion = Utility.realmAliasVersion or 0
 -- character's identity is the full "First Surname". Data written by 0.4.0 and by the first 0.4.1 builds keyed players by
 -- the first name only ("Mira-Realm"); a first name that is unique in the guild roster is mapped to that member's full name.
 
--- "Drakk-Realm" -> "drakkrealm": the realm spelling with case, spaces, apostrophes and hyphens removed.
+-- "Dorn-Realm" -> "dornrealm": the realm spelling with case, spaces, apostrophes and hyphens removed.
 ---@param realmName string
 ---@return string
 local function foldRealm(realmName)

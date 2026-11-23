@@ -1,11 +1,11 @@
 -- WoW Forever names, reproduced from a real /ps export: characters have a first name AND a surname.
---   UnitName("player") -> "Drakk", "Nuk"      GetRealmName() -> "CAMWOW EU4 Realm 5 PvE"
---   GetNormalizedRealmName() -> "CAMWOWEU4Realm5PvE"      roster and chat senders -> "Drakk Nuk" (space, no realm)
--- 0.4.0 keyed me as "Drakk-CAMWOWEU4Realm5PvE" while everyone else saw "Drakk Nuk": requests for me were never answered,
+--   UnitName("player") -> "Dorn", "Vask"      GetRealmName() -> "CAMWOW EU4 Realm 5 PvE"
+--   GetNormalizedRealmName() -> "CAMWOWEU4Realm5PvE"      roster and chat senders -> "Dorn Vask" (space, no realm)
+-- 0.4.0 keyed me as "Dorn-CAMWOWEU4Realm5PvE" while everyone else saw "Dorn Vask": requests for me were never answered,
 -- records from me were refused, and my own GUILD echo was taken for another player.
 
 local REALM, REALM_N = "CAMWOW EU4 Realm 5 PvE", "CAMWOWEU4Realm5PvE"
-local ROSTER = { "Drakk Nuk", "Bren Fall", "Mira Holt", "Tam Reed", "Tam Ash", "Lio Brand" }
+local ROSTER = { "Dorn Vask", "Bren Fall", "Mira Holt", "Tam Reed", "Tam Ash", "Lio Brand" }
 
 local function withForever(harness, fn, realmFree)
     local names = { "GetNormalizedRealmName", "GetRealmName", "UnitName", "UnitClass", "UnitLevel", "IsInGuild",
@@ -14,14 +14,14 @@ local function withForever(harness, fn, realmFree)
     for _, n in ipairs(names) do saved[n] = _G[n] end
     GetNormalizedRealmName = function() if not realmFree then return REALM_N end end
     GetRealmName = function() if not realmFree then return REALM end end
-    UnitName = function() return "Drakk", "Nuk" end
-    UnitFullName = function() return "Drakk", "Nuk" end
+    UnitName = function() return "Dorn", "Vask" end
+    UnitFullName = function() return "Dorn", "Vask" end
     UnitClass = function() return "Hunter", "HUNTER" end
     UnitLevel = function() return 29 end
     IsInGuild = function() return true end
     GetNumGuildMembers = function() return #ROSTER end
     GetGuildRosterInfo = function(i) return ROSTER[i] end
-    Ambiguate = function(n) return (n:match("^([^-]+)")) end   -- what the export showed: "Drakk-Realm" -> "Drakk"
+    Ambiguate = function(n) return (n:match("^([^-]+)")) end   -- what the export showed: "Dorn-Realm" -> "Dorn"
     local ok, err = pcall(function()
         local addon = harness.addon()
         assert(loadfile("Core/Game/Api.lua"))("ProfessionShare", addon)
@@ -31,7 +31,7 @@ local function withForever(harness, fn, realmFree)
     if not ok then error(err, 0) end
 end
 
-local ME = "Drakk Nuk-" .. REALM_N
+local ME = "Dorn Vask-" .. REALM_N
 
 return {
     ["forever: my identity is first name + surname, as the roster and chat spell it"] = function(harness)
@@ -40,7 +40,7 @@ return {
             local roster = addon.Api.GetGuildRoster()
             harness.truthy(roster[ME], "me not in the canonical roster")
             harness.truthy(roster["Mira Holt-" .. REALM_N])
-            harness.equal(addon.Utility.CanonicalName("Drakk Nuk"), ME)                         -- chat sender form
+            harness.equal(addon.Utility.CanonicalName("Dorn Vask"), ME)                         -- chat sender form
             harness.equal(addon.Utility.WhisperTarget("Mira Holt-" .. REALM_N), "Mira Holt")
         end)
     end,
@@ -48,7 +48,7 @@ return {
     ["forever: 0.4.0 first-name keys map to the full name when unambiguous"] = function(harness)
         withForever(harness, function(addon)
             addon.Api.GetGuildRoster()
-            harness.equal(addon.Utility.CanonicalName("Drakk-" .. REALM_N), ME)                  -- my own old key
+            harness.equal(addon.Utility.CanonicalName("Dorn-" .. REALM_N), ME)                  -- my own old key
             harness.equal(addon.Utility.CanonicalName("Mira-" .. REALM_N), "Mira Holt-" .. REALM_N)
             harness.equal(addon.Utility.CanonicalName("Tam-" .. REALM_N), "Tam-" .. REALM_N)     -- "Tam Reed" and "Tam Ash": ambiguous, left alone
             -- one Forever guild spans several realms and names carry none: another realm is the same member
@@ -59,7 +59,7 @@ return {
     ["forever: stored 0.4.0 data is moved to the full-name keys"] = function(harness)
         withForever(harness, function(addon)
             local S = addon.Store
-            local old = "Drakk-" .. REALM_N
+            local old = "Dorn-" .. REALM_N
             S.db.me = old
             S.db.chars[old] = harness.character(old, 100, { 6499 })
             S.db.offers[old] = { name = old, rev = 5, items = { [777] = { bag = 1 } }, dibs = { ["Mira-" .. REALM_N .. ":12"] = { on = true, t = 1 } } }
@@ -84,12 +84,12 @@ return {
             local handled = 0
             C.sync = { OnMessage = function() handled = handled + 1 return "ok" end, statistics = { sent = 0, received = 0, dropped = 0 } }
             local mine = addon.Codec.Header(("%04x%x"):format(C.salt, 3), 1, 1) .. addon.Codec.Encode({ t = "HELLO", rev = 1 })
-            C.OnAddonMessage(addon.PREFIX, mine, "GUILD", "Drakk Nuk")
+            C.OnAddonMessage(addon.PREFIX, mine, "GUILD", "Dorn Vask")
             harness.equal(handled, 0)
-            harness.equal(C.lastEcho, "Drakk Nuk")
+            harness.equal(C.lastEcho, "Dorn Vask")
             -- even without the salt (an echo from a previous session) it is dropped as my own message
             local other = addon.Codec.Header("ffff1", 1, 1) .. addon.Codec.Encode({ t = "HELLO", rev = 1 })
-            C.OnAddonMessage(addon.PREFIX, other, "GUILD", "Drakk Nuk")
+            C.OnAddonMessage(addon.PREFIX, other, "GUILD", "Dorn Vask")
             harness.equal(handled, 0)
         end)
     end,
@@ -104,7 +104,7 @@ return {
                 store = addon.Store, orders = addon.orders, me = function() return addon.Store.db.me end, onChange = function() end })
             local FLEXI = "Mira Holt-" .. REALM_N
             harness.equal((sync:OnMessage({ v = 2, t = "WANT", names = { ME } }, FLEXI)), "ok")
-            harness.equal((sync:OnMessage({ v = 2, t = "WANT", names = { "Drakk-" .. REALM_N } }, FLEXI)), "ok")   -- a 0.4.0 peer asks this way
+            harness.equal((sync:OnMessage({ v = 2, t = "WANT", names = { "Dorn-" .. REALM_N } }, FLEXI)), "ok")   -- a 0.4.0 peer asks this way
             local st = sync:OnMessage({ v = 2, t = "SNAP", char = harness.character("Mira-" .. REALM_N, 7, { 1 }), catalog = {} }, FLEXI)
             harness.equal(st, "ok"); harness.truthy(addon.Store.GetCharacter(FLEXI))
         end)
@@ -137,20 +137,20 @@ return {
             -- a 0.4.1 member receiving both forms answers once
             addon.Store.PutCharacter(harness.character(ME, 60, { 1 }))
             local before = #sync.pending
-            harness.equal((sync:OnMessage({ v = 2, t = "WANT", names = { ME, "Drakk-" .. REALM_N } }, FLEXI)), "ok")
+            harness.equal((sync:OnMessage({ v = 2, t = "WANT", names = { ME, "Dorn-" .. REALM_N } }, FLEXI)), "ok")
             harness.equal(#sync.pending, before + 1)
         end)
     end,
 
     -- a second export (live 0.4.1): the guild spans "CAMWOW EU4 Realm 1/3/5 PvE" and "CAMWOW EU5 Realm 3 PvE";
-    -- every client appended its own realm, so "Drakk Nuk-...Realm3" (asked by Mira) never matched "Drakk Nuk-...Realm5"
+    -- every client appended its own realm, so "Dorn Vask-...Realm3" (asked by Mira) never matched "Dorn Vask-...Realm5"
     ["forever: members on other realms of the guild are the same members (realm is not part of the name)"] = function(harness)
         withForever(harness, function(addon)
             addon.Store.db.me = addon.Api.GetPlayerInformation().name
             addon.Api.GetGuildRoster()
             local U = addon.Utility
-            harness.equal(U.CanonicalName("Drakk Nuk-CAMWOWEU4Realm3PvE"), ME)
-            harness.equal(U.CanonicalName("Drakk Nuk-CAMWOWEU5Realm3PvE"), ME)
+            harness.equal(U.CanonicalName("Dorn Vask-CAMWOWEU4Realm3PvE"), ME)
+            harness.equal(U.CanonicalName("Dorn Vask-CAMWOWEU5Realm3PvE"), ME)
             harness.equal(U.CanonicalName("Mira-CAMWOWEU4Realm3PvE"), "Mira Holt-" .. REALM_N)   -- a 0.4.0 key from another realm
             harness.equal(U.CanonicalName("Tam-CAMWOWEU4Realm1PvE"), "Tam-" .. REALM_N)             -- ambiguous first name: realm only
             harness.equal(U.WhisperTarget("Mira Holt-CAMWOWEU4Realm3PvE"), "Mira Holt")
@@ -174,10 +174,10 @@ return {
                 orders = addon.Orders.New(function() return harness.clock end, {}), me = function() return addon.Store.db.me end, onChange = function() end })
             local FLEXI = "Mira Holt-" .. REALM_N
             -- 0.4.0 member on Realm3 (exactly what the export showed)
-            harness.equal((sync:OnMessage({ v = 2, t = "WANT", names = { "Drakk Nuk-CAMWOWEU4Realm3PvE" } }, FLEXI)), "ok")
-            harness.equal((sync:OnMessage({ v = 2, t = "WANTO", names = { "Drakk Nuk-CAMWOWEU4Realm3PvE" } }, FLEXI)), "ok")
+            harness.equal((sync:OnMessage({ v = 2, t = "WANT", names = { "Dorn Vask-CAMWOWEU4Realm3PvE" } }, FLEXI)), "ok")
+            harness.equal((sync:OnMessage({ v = 2, t = "WANTO", names = { "Dorn Vask-CAMWOWEU4Realm3PvE" } }, FLEXI)), "ok")
             -- 0.4.1 member on EU5 Realm3 (full name + first-name form)
-            harness.equal((sync:OnMessage({ v = 2, t = "WANT", names = { "Drakk Nuk-CAMWOWEU5Realm3PvE", "Drakk-CAMWOWEU5Realm3PvE" } },
+            harness.equal((sync:OnMessage({ v = 2, t = "WANT", names = { "Dorn Vask-CAMWOWEU5Realm3PvE", "Dorn-CAMWOWEU5Realm3PvE" } },
                 "Kael Stone-" .. REALM_N)), "ok")
             sync:Tick(harness.clock + 5)
             local snap, offers, snap2
@@ -187,9 +187,9 @@ return {
                 if s.msg.t == "SNAP" and s.to ~= FLEXI then snap2 = s.msg end
             end
             harness.truthy(snap and offers and snap2, "not every request was answered")
-            -- a 0.4.0 member compares the record name with the sender as IT spells it: "Drakk Nuk-<its realm>"
-            harness.equal(snap.char.name, "Drakk Nuk-CAMWOWEU4Realm3PvE")
-            harness.equal(offers.offers.name, "Drakk Nuk-CAMWOWEU4Realm3PvE")
+            -- a 0.4.0 member compares the record name with the sender as IT spells it: "Dorn Vask-<its realm>"
+            harness.equal(snap.char.name, "Dorn Vask-CAMWOWEU4Realm3PvE")
+            harness.equal(offers.offers.name, "Dorn Vask-CAMWOWEU4Realm3PvE")
             harness.equal(addon.Store.GetCharacter(ME).name, ME)   -- my stored record keeps its own key
             -- requests to that member now also carry the first name in its realm (the only name a 0.4.0 client answers)
             sync:OnMessage({ v = 2, t = "HELLO", rev = 99, orev = 9 }, FLEXI)
@@ -205,26 +205,26 @@ return {
     end,
 
     -- a live log: this client knows no realm (GetNormalizedRealmName and GetRealmName empty), a member whose client
-    -- still reports realms asked WANTO {"Drakk Nuk-CAMWOWEU4Realm3PvE", "Drakk-...Realm3PvE", "Drakk-...Realm5PvE"} and got
-    -- "asked for ... but I am Drakk Nuk (name mismatch)": that member never saw my recipe items or my recipes.
+    -- still reports realms asked WANTO {"Dorn Vask-CAMWOWEU4Realm3PvE", "Dorn-...Realm3PvE", "Dorn-...Realm5PvE"} and got
+    -- "asked for ... but I am Dorn Vask (name mismatch)": that member never saw my recipe items or my recipes.
     ["forever: a client without a realm answers requests that name it with a realm"] = function(harness)
         withForever(harness, function(addon)
             addon.Store.db.me = addon.Api.GetPlayerInformation().name
             addon.Api.GetGuildRoster()
             local U = addon.Utility
-            harness.equal(addon.Store.db.me, "Drakk Nuk")
-            harness.equal(U.CanonicalName("Drakk Nuk-CAMWOWEU4Realm3PvE"), "Drakk Nuk")
-            harness.equal(U.CanonicalName("Drakk-CAMWOWEU4Realm5PvE"), "Drakk Nuk")
+            harness.equal(addon.Store.db.me, "Dorn Vask")
+            harness.equal(U.CanonicalName("Dorn Vask-CAMWOWEU4Realm3PvE"), "Dorn Vask")
+            harness.equal(U.CanonicalName("Dorn-CAMWOWEU4Realm5PvE"), "Dorn Vask")
             harness.equal(U.CanonicalName("Mira Holt-CAMWOWEU4Realm3PvE"), "Mira Holt")
             harness.equal(U.CanonicalName("Mira-CAMWOWEU4Realm3PvE"), "Mira Holt")
-            harness.equal(U.CanonicalName("Drakk Nuk"), "Drakk Nuk")
-            addon.Store.PutCharacter(harness.character("Drakk Nuk", 50, { 6499 }))
-            addon.Offers.Put({ name = "Drakk Nuk", rev = 7, items = { [777] = { bag = 1 } }, dibs = {} })
+            harness.equal(U.CanonicalName("Dorn Vask"), "Dorn Vask")
+            addon.Store.PutCharacter(harness.character("Dorn Vask", 50, { 6499 }))
+            addon.Offers.Put({ name = "Dorn Vask", rev = 7, items = { [777] = { bag = 1 } }, dibs = {} })
             local sent = {}
             local sync = addon.Sync.New({ send = function(msg, dist, target) sent[#sent + 1] = { msg = msg, dist = dist, to = target } end,
                 now = function() return harness.clock end, random = function() return 0 end, store = addon.Store,
                 orders = addon.Orders.New(function() return harness.clock end, {}), me = function() return addon.Store.db.me end, onChange = function() end })
-            local asked = { "Drakk Nuk-CAMWOWEU4Realm3PvE", "Drakk-CAMWOWEU4Realm3PvE", "Drakk-CAMWOWEU4Realm5PvE" }
+            local asked = { "Dorn Vask-CAMWOWEU4Realm3PvE", "Dorn-CAMWOWEU4Realm3PvE", "Dorn-CAMWOWEU4Realm5PvE" }
             local status, reason = sync:OnMessage({ v = 2, t = "WANTO", names = asked }, "Mira Holt")
             harness.equal(status, "ok", reason)
             status, reason = sync:OnMessage({ v = 2, t = "WANT", names = asked }, "Mira Holt")
@@ -237,8 +237,8 @@ return {
             end
             harness.truthy(snap and offers, "the request was not answered")
             -- that member accepts a record only under the name it asked with
-            harness.equal(offers.offers.name, "Drakk Nuk-CAMWOWEU4Realm3PvE")
-            harness.equal(snap.char.name, "Drakk Nuk-CAMWOWEU4Realm3PvE")
+            harness.equal(offers.offers.name, "Dorn Vask-CAMWOWEU4Realm3PvE")
+            harness.equal(snap.char.name, "Dorn Vask-CAMWOWEU4Realm3PvE")
             harness.truthy(offers.offers.items[777], "my recipe item is in the answer")
             -- its records, named with its realm, are stored under the realm-free key
             harness.equal((sync:OnMessage({ v = 2, t = "SNAP", char = harness.character("Mira Holt-CAMWOWEU4Realm3PvE", 99, { 1 }), catalog = {} },
@@ -252,8 +252,8 @@ return {
             addon.Store.db.me = addon.Api.GetPlayerInformation().name
             local roster = addon.Api.GetGuildRoster()
             local info = addon.Api.IdentityInformation()
-            harness.equal(info.rosterMe, "Drakk Nuk")
-            for _, r in ipairs(addon.Diagnostics.IdentityRows({ identity = info, me = addon.db.me, roster = roster, echo = "Drakk Nuk",
+            harness.equal(info.rosterMe, "Dorn Vask")
+            for _, r in ipairs(addon.Diagnostics.IdentityRows({ identity = info, me = addon.db.me, roster = roster, echo = "Dorn Vask",
                 seen = { ["Mira Holt-" .. REALM_N] = "Mira Holt" } })) do
                 harness.truthy(r.status == "ok" or r.status == "info" or r.status == "fixed", r.method .. " = " .. r.status .. " (" .. r.value .. ")")
             end

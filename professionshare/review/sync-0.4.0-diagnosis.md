@@ -111,23 +111,23 @@ R1 is the most likely fix; R2/R3 depend on what the export shows about delivery.
 ## 8. ROOT CAUSE CONFIRMED (first export, 2026-11-16)
 
 The first `/ts export` (one member, dev build) settled it, and it was none of the guessed realm spellings: **characters on
-Forever have surnames**. `UnitName("player")` returns `"Drakk", "Nuk"` (surname in the slot retail uses for the realm); the
-roster and every chat sender say `"Drakk Nuk"`; the realm is `"CAMWOW EU4 Realm 5 PvE"` for everyone.
+Forever have surnames**. `UnitName("player")` returns `"Dorn", "Vask"` (surname in the slot retail uses for the realm); the
+roster and every chat sender say `"Dorn Vask"`; the realm is `"CAMWOW EU4 Realm 5 PvE"` for everyone.
 
 | Source | 0.4.0 made of it | Result |
 |---|---|---|
-| me (`UnitName` + realm) | `Drakk-CAMWOWEU4Realm5PvE` | surname dropped |
-| roster `"Drakk Nuk"` | `Drakk Nuk-CAMWOWEU4Realm5PvE` | |
-| sender `"Drakk Nuk"` | `Drakk Nuk-CAMWOWEU4Realm5PvE` | |
+| me (`UnitName` + realm) | `Dorn-CAMWOWEU4Realm5PvE` | surname dropped |
+| roster `"Dorn Vask"` | `Dorn Vask-CAMWOWEU4Realm5PvE` | |
+| sender `"Dorn Vask"` | `Dorn Vask-CAMWOWEU4Realm5PvE` | |
 
 So roster and senders agreed with each other (the whisper gate, point 2, passed), but **my own name disagreed with both**:
-point 3 (`WANT` for "Drakk Nuk" never answered by "Drakk"), point 4 (`SNAP` record "Drakk" from sender "Drakk Nuk" refused),
+point 3 (`WANT` for "Dorn Vask" never answered by "Dorn"), point 4 (`SNAP` record "Dorn" from sender "Dorn Vask" refused),
 and my own GUILD echo was taken for a second player, so the client tried to pull records from itself (visible in the export:
-`pulled record of Drakk Nuk-...`). Orders worked because nobody compares names on that path; they showed the first name only.
+`pulled record of Dorn Vask-...`). Orders worked because nobody compares names on that path; they showed the first name only.
 
 Fix (feature 008): `Api.MyBaseName` builds `"First Surname"` from the two `UnitName` values; `Util.Canon` completes a bare
 first name with the surname when the roster has exactly one member with that first name, so records and keys written by
-0.4.0 (`"Drakk-Realm"`, `"Mira-Realm"`) move to the full names on load. Pinned by `tests/test_forever_names.lua`, built
+0.4.0 (`"Dorn-Realm"`, `"Mira-Realm"`) move to the full names on load. Pinned by `tests/test_forever_names.lua`, built
 from the export's values; mutation check (surname detection off) -> 4 FAIL.
 
 ## 9. Implemented (feature 008, protocol 2.2) and what is still open

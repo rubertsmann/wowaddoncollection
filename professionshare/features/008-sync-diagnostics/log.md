@@ -41,26 +41,26 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 
 ## 2026-11-16 16:42 | VERIFY | First in-game export: root cause found (surnames)
 - Did: read the user's /ts export (dev build, one member, 58-member guild)
-- Result: UnitName("player") = "Drakk", "Nuk"; roster and chat sender = "Drakk Nuk"; realm "CAMWOW EU4 Realm 5 PvE". The surname is part of the identity; my key "Drakk-<realm>" matched no other source; my own echo was treated as another player
-- Evidence: export lines "UnitName: Drakk realm=Nuk", "roster sample (raw): Drakk Nuk, ...", "<- GUILD Drakk Nuk-... (raw Drakk Nuk) HELLO", "me in cached roster: NO"; recorded in docs/api-findings.md
+- Result: UnitName("player") = "Dorn", "Vask"; roster and chat sender = "Dorn Vask"; realm "CAMWOW EU4 Realm 5 PvE". The surname is part of the identity; my key "Dorn-<realm>" matched no other source; my own echo was treated as another player
+- Evidence: export lines "UnitName: Dorn realm=Vask", "roster sample (raw): Dorn Vask, ...", "<- GUILD Dorn Vask-... (raw Dorn Vask) HELLO", "me in cached roster: NO"; recorded in docs/api-findings.md
 - Next: fix identity
 
 ## 2026-11-16 16:42 | BUILD | Surname identity
 - Did: Api.MyBaseName ("First Surname" from UnitName's 2nd value), Util.NoteMyFullName / SetRosterNames / Canon completes unambiguous bare first names; roster index refresh triggers Recanon; IdentityInfo finds my roster entry by full name; name check rows updated; VERSION no longer "-dev-dev"; tests/test_forever_names.lua (6) from the export values
-- Result: me = "Drakk Nuk-CAMWOWEU4Realm5PvE"; in roster; echo recognised; 0.4.0 keys migrate
+- Result: me = "Dorn Vask-CAMWOWEU4Realm5PvE"; in roster; echo recognised; 0.4.0 keys migrate
 - Evidence: `luajit tests/run.lua` -> 166 passed, 0 failed; mutation (surname detection off) -> 4 FAIL, restored -> pass
 - Next: user /reload (no TOC change), Debug tab -> Name check: expect no PROBLEM rows; then a second member on the same build: /ts hello, both export
 
 ## 2026-11-16 16:44 | VERIFY | Second export: identity fixed in game; mixed 0.4.0/0.4.1 guild
 - Did: read the second export; added Util.LegacyName + Sync.AskNames (requests carry "First-Realm" too); test `forever: requests also carry the 0.4.0 first-name form ...`; ran the real 0.4.0 Sync (git 7c0a09b) against 0.4.1 offline with Forever names
 - Result: in game all name-check rows OK, me in roster, echo recognised, old keys migrated (char, offers, order requester). No peer traffic: the dev build uses prefix TShareDev, the guild runs live TShare. Offline interop: 0.4.1 holds the 0.4.0 member's record, 0.4.0 holds the 0.4.1 member's record
-- Evidence: export "me in cached roster: yes (cached roster 58 names)", all [OK]; interop script output "0.4.1 holds Mira: 200", "0.4.0 holds Drakk: 100"; `luajit tests/run.lua` -> 167 passed, 0 failed
+- Evidence: export "me in cached roster: yes (cached roster 58 names)", all [OK]; interop script output "0.4.1 holds Mira: 200", "0.4.0 holds Dorn: 100"; `luajit tests/run.lua` -> 167 passed, 0 failed
 - Next: bump TOC to 0.4.1, package, install as live for 2+ members (or two members on the dev build), /ts hello, check Recipes/Available tabs; exports if not
 
 ## 2026-11-16 21:27 | VERIFY | Live 0.4.1 export: guild spans several realms
 - Did: read the user's /ts export (live build, 4 updated/old members online)
-- Result: peers ask for "Drakk Nuk-CAMWOWEU4Realm3PvE", "...Realm1PvE", "Drakk Nuk-CAMWOWEU5Realm3PvE"; I am "...Realm5PvE": 41 WANT + 33 WANTO ignored as name mismatch; characters held 1. Orders arrive (no name compare). Roster/senders carry no realm, whispers to bare names arrive
-- Evidence: trace lines "asked for Drakk Nuk-CAMWOWEU4Realm3PvE but I am Drakk Nuk-CAMWOWEU4Realm5PvE (name mismatch)"; order keys Tam-CAMWOWEU4Realm1PvE, Orin-CAMWOWEU4Realm3PvE
+- Result: peers ask for "Dorn Vask-CAMWOWEU4Realm3PvE", "...Realm1PvE", "Dorn Vask-CAMWOWEU5Realm3PvE"; I am "...Realm5PvE": 41 WANT + 33 WANTO ignored as name mismatch; characters held 1. Orders arrive (no name compare). Roster/senders carry no realm, whispers to bare names arrive
+- Evidence: trace lines "asked for Dorn Vask-CAMWOWEU4Realm3PvE but I am Dorn Vask-CAMWOWEU4Realm5PvE (name mismatch)"; order keys Tam-CAMWOWEU4Realm1PvE, Orin-CAMWOWEU4Realm3PvE
 - Next: realm-free identity
 
 ## 2026-11-16 21:27 | BUILD | Realm-free identity, 0.4.2

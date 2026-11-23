@@ -39,15 +39,15 @@ Characters on Forever have a **first name and a surname**. Values from one clien
 
 | Call | Returned |
 |---|---|
-| `UnitName("player")` | `"Drakk"`, `"Nuk"`: the surname comes in the 2nd value (retail: realm, nil for the player) |
-| `UnitFullName("player")` | `"Drakk"`, `"Nuk"` |
+| `UnitName("player")` | `"Dorn"`, `"Vask"`: the surname comes in the 2nd value (retail: realm, nil for the player) |
+| `UnitFullName("player")` | `"Dorn"`, `"Vask"` |
 | `GetRealmName()` / `GetNormalizedRealmName()` | `"CAMWOW EU4 Realm 5 PvE"` / `"CAMWOWEU4Realm5PvE"` (one realm for the whole guild); **since 2026-11-21 both return nothing** (`/run print(GetNormalizedRealmName(), "\|", GetRealmName())` printed only the bar). Names are then realm-free; the name check shows it as "normalized" |
-| `GetGuildRosterInfo(i)` | `"Drakk Nuk"`, `"Mira Holt"`, ...: **first name + space + surname, no realm suffix** |
-| `CHAT_MSG_ADDON` sender (own GUILD echo) | `"Drakk Nuk"` |
-| `Ambiguate("Drakk-CAMWOWEU4Realm5PvE", "none")` | `"Drakk"` |
+| `GetGuildRosterInfo(i)` | `"Dorn Vask"`, `"Mira Holt"`, ...: **first name + space + surname, no realm suffix** |
+| `CHAT_MSG_ADDON` sender (own GUILD echo) | `"Dorn Vask"` |
+| `Ambiguate("Dorn-CAMWOWEU4Realm5PvE", "none")` | `"Dorn"` |
 
 Consequence: a player's identity is `"First Surname"`. Building it as `UnitName() .. "-" .. GetNormalizedRealmName()` (what
-0.4.0 did) gives `"Drakk-<realm>"`, which no other source ever uses. Handled in `Api.MyBaseName` / `Utility.CanonicalName` (feature 008).
+0.4.0 did) gives `"Dorn-<realm>"`, which no other source ever uses. Handled in `Api.MyBaseName` / `Utility.CanonicalName` (feature 008).
 Not yet verified: whether a whisper addressed to `"First Surname"` is delivered (the trace shows it as `(to Mira Holt)`;
 pulls fall back to the guild channel if not).
 

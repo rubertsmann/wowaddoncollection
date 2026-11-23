@@ -31,7 +31,7 @@
 - Every HELLO carries `ver` = "<addon version>/<MINOR>" (Channel); receivers keep it per member for the session
   (`Channel.PeerVersions`), note it in the HELLO trace line and `/<cmd> comm` prints both. Optional field, no protocol change.
 - `Utility.CanonicalName`: on a client that reports no realm at all (WoW Forever), "Name-AnyRealm" now folds to the
-  realm-free "Name". Before, a request from a member whose client still reports realms ("Drakk Nuk-SomeRealm") was
+  realm-free "Name". Before, a request from a member whose client still reports realms ("Dorn Vask-SomeRealm") was
   ignored as "name mismatch", so that member never received the record. MINOR bump so this copy replaces an older
   MINOR 2 copy embedded by another addon, whatever the load order.
 - `Widgets.CreateMinimapButton`: the button sat at a fixed 80 px from the centre, INSIDE the larger Forever minimap. It
