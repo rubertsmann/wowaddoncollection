@@ -2,13 +2,16 @@
 ## Title: GuildGames
 ## Notes: Coin flip, slot machine and survivor with guild leaderboards. For fun only: no gold changes hands.
 ## Author: rubertsmann
-## Version: 0.3.1
+## Version: 0.4.0
 ## SavedVariables: GuildGamesDB
 ## IconTexture: Interface\Icons\INV_Misc_Coin_01
 ## X-Category: Minigames
 
 Libs\LibStub\LibStub.lua
 Libs\LibDeflate\LibDeflate.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 Libs\LibGuildSync\LibGuildSync.xml
 
 Core\Base\Init.lua

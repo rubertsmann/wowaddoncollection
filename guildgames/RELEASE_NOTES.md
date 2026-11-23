@@ -1,3 +1,14 @@
+# GuildGames 0.4.0
+
+**English:** The minimap button is now a standard addon button, so minimap button collectors such as Leatrix Plus
+("Combine addon buttons") and data bars such as Titan Panel now list GuildGames. Drag it with the left mouse button.
+It starts at a new default spot once, so move it back where you like it. Members on older versions keep playing with you.
+
+**Deutsch:** Der Minimap-Knopf ist jetzt ein Standard-Addon-Knopf, daher führen Minimap-Knopf-Sammler wie Leatrix Plus
+("Addon-Knöpfe zusammenfassen") und Datenleisten wie Titan Panel GuildGames jetzt auf. Verschieben mit der linken
+Maustaste. Er startet einmalig an einer neuen Standardposition; zieh ihn einfach wieder an deinen Wunschplatz.
+Mitglieder mit älteren Versionen spielen weiter mit dir.
+
 # GuildGames 0.3.1
 
 **English:** Fixes: the minimap button now sits on the ring outside the minimap, like other addons' buttons. Guild
