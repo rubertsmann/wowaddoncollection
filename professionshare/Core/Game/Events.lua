@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- Internal pub/sub + WoW event wiring. Scans are debounced; the guild gets a HELLO when my data changes.
--- Internal events: DATA_CHANGED(kind), LOCAL_CHANGED, OFFERS_CHANGED, WINDOW_OPENED, TRADESKILL(isOpen), ITEM_INFO, SPELL_INFO.
+-- Internal events: DATA_CHANGED(kind), LOCAL_CHANGED, OFFERS_CHANGED, ACCESS_CHANGED, WINDOW_OPENED, TRADESKILL(isOpen), ITEM_INFO, SPELL_INFO.
 -- Every handler runs protected: an error in one handler is logged (Log.Exception, with stack) and the others still run.
 ---@class EventsModule
 local Events = {}
@@ -13,7 +13,7 @@ addon.Events = Events
 do
     local missingModules = {}
     for _, moduleName in ipairs({ "Utility", "Log", "Locale", "Store", "Names", "Api", "Scanner", "Codec", "Guard", "Orders",
-        "Offers", "Sync", "Model", "Communication", "Trace", "Diagnostics" }) do
+        "Offers", "Access", "Sync", "Model", "Communication", "Trace", "Diagnostics" }) do
         if not addon[moduleName] then missingModules[#missingModules + 1] = moduleName end
     end
     if #missingModules > 0 then
@@ -88,12 +88,21 @@ local function scheduleItemScan(delaySeconds)
             { recipeItems = addon.Api.scanStatistics.recipes })
         if changed then Events.Fire("OFFERS_CHANGED") end
         Events.Fire("DATA_CHANGED", "offers-local")
+        -- keys and attunements ride on the same debounced scan (the same bag events); a change is rare
+        local accessScanned, accessScan = addon.Log.Protected("events.accessScan", "the key and attunement scan failed",
+            addon.Api.ScanAccess)
+        if accessScanned and addon.Access.Update(myName, accessScan, addon.Utility.Now()) then
+            addon.Log.Information("events.accessScan", "my keys or attunements changed", { keys = addon.Api.accessStatistics.keys })
+            Events.Fire("ACCESS_CHANGED")
+            Events.Fire("DATA_CHANGED", "access-local")
+        end
     end)
 end
 Events.ScanItems = scheduleItemScan
 
 Events.On("LOCAL_CHANGED", function() addon.Communication.RequestHello(false, true) end)
 Events.On("OFFERS_CHANGED", function() addon.Communication.RequestHello(false, true) end)
+Events.On("ACCESS_CHANGED", function() addon.Communication.RequestHello(false, true) end)
 -- a record from a peer arrived: drop MY dibs on items that are gone (the new record may have removed them)
 Events.On("DATA_CHANGED", function(kind)
     if kind ~= "offers" or not addon.db or addon.db.readonly then return end
@@ -250,6 +259,8 @@ function onGameEvent.MAIL_INBOX_UPDATE() scheduleItemScan(1.5) end
 function onGameEvent.GUILDBANKBAGSLOTS_CHANGED() scheduleItemScan(1.5) end
 function onGameEvent.AUCTION_OWNED_LIST_UPDATE() scheduleItemScan(1.5) end
 function onGameEvent.OWNED_AUCTIONS_UPDATED() scheduleItemScan(1.5) end
+-- an attunement quest was handed in (the completed-quest flag is set a moment later)
+function onGameEvent.QUEST_TURNED_IN() scheduleItemScan(3) end
 
 -- /ps offers [scan]: what the item scan can see on this client and what my offers record holds (also the in-game probe)
 addon.SlashCommands.offers = function(arguments)
@@ -289,6 +300,42 @@ addon.SlashCommands.offers = function(arguments)
     for _, dib in pairs(myOffers.dibs) do if dib.on then activeDibs = activeDibs + 1 end end
     addon.Print(("record rev %s, %d active dibs; %d offers known from the guild"):format(tostring(myOffers.rev), activeDibs,
         select(2, addon.Offers.Counts())))
+end
+
+-- /ps access [scan]: which keys and attunements the scan sees on this client and what my access record holds (also the
+-- in-game probe for the key ring, the quest API and the item and quest ids)
+addon.SlashCommands.access = function(arguments)
+    local Api, Access = addon.Api, addon.Access
+    local myName = addon.Utility.Me()
+    local ok, accessScan = addon.Log.Protected("events.accessCommand", "the key and attunement scan failed", Api.ScanAccess)
+    if not ok then addon.Print("scan failed: " .. tostring(accessScan)) return end
+    if (arguments or ""):match("^%s*scan") and myName then
+        local changed = Access.Update(myName, accessScan, addon.Utility.Now())
+        if changed then Events.Fire("ACCESS_CHANGED") end
+        Events.Fire("DATA_CHANGED", "access-local")
+        addon.Print("scan: " .. (changed and "updated" or "unchanged"))
+    end
+    local statistics = Api.accessStatistics
+    addon.Print(("APIs: key ring %s (KEYRING_CONTAINER %s), quest API %s; last scan: %d keys, %d items with unknown class"):format(
+        statistics.keyring and "yes" or "NO", tostring(KEYRING_CONTAINER), statistics.questApi and "yes" or "NO", statistics.keys,
+        statistics.unknownClass))
+    for location, heldKeys in pairs(accessScan.keys) do
+        local keyTexts = {}
+        for itemID in pairs(heldKeys) do keyTexts[#keyTexts + 1] = ("%s (%d)"):format(Api.ItemName(itemID) or "?", itemID) end
+        table.sort(keyTexts)
+        addon.Print(("%s: %s"):format(location, #keyTexts > 0 and table.concat(keyTexts, ", ") or "-"))
+    end
+    for _, attunement in ipairs(Access.ATTUNEMENTS) do
+        local questTexts = {}
+        for _, questID in ipairs(attunement.quests) do questTexts[#questTexts + 1] = questID .. "=" .. tostring(Api.QuestDone(questID)) end
+        local itemText = attunement.item and (" item " .. attunement.item .. "=" .. tostring(Api.ItemCount(attunement.item))) or ""
+        addon.Print(("%s: %s (quests %s%s)"):format(Access.InstanceName(attunement.instance) or attunement.key,
+            tostring(accessScan.att[attunement.key]), table.concat(questTexts, " "), itemText))
+    end
+    local myRecord = myName and Access.Get(myName)
+    local recordCount, keyCount = Access.Counts()
+    addon.Print(("record rev %s; %d access records (%d keys) known from the guild"):format(
+        tostring(myRecord and myRecord.rev), recordCount, keyCount))
 end
 
 for gameEvent in pairs(onGameEvent) do registerGameEvent(gameEvent) end

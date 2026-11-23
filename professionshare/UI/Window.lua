@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- Standalone window: "Recipes" tab (filter, search, reagents, crafters, request), "Orders" tab (shared board),
--- "Available" tab (recipe items guild members hold, with dibs) and "Debug" tab
+-- "Misc Items" tab (recipe items with dibs, dungeon keys, raid attunements of guild members) and "Debug" tab
 -- (network trace, diagnostic export). The tabs are one ordered list (tabDefinitions).
 -- Plain frames only, except the secure profession and Craft buttons. Those live in UI/SecureDock.lua's holder while in
 -- combat (a window with secure children is protected and could not be shown or hidden in combat), so the window can be
@@ -48,6 +48,8 @@ local windowState = {
     offerText = "",
     offerMyProfessionsOnly = false,
     selectedOffer = nil,
+    selectedKey = nil,             -- Misc Items, Keys mode: item id
+    selectedAttunement = nil,      -- Misc Items, Attunements mode: attunement key
     debugFilterIndex = 1,
     debugView = "trace",           -- "trace" (message log) | "names" (name check table)
 }
@@ -92,10 +94,14 @@ end
 
 ---@type table|nil the main window
 local mainFrame
-local recipeList, orderList, offerList
+local recipeList, orderList, miscList
 local refreshDebug   -- Debug tab (defined with the tab below)
----@type OfferViewRow[]
-local currentOfferRows = {}
+---@type table[] rows of the Misc Items table (OfferViewRow, KeyViewRow or AttunementViewRow, by currentMiscMode)
+local currentMiscRows = {}
+---@type MiscMode the mode currentMiscRows were built for
+local currentMiscMode = "offers"
+---@type TableCell[] the Misc Items table's current column positions
+local miscCells = {}
 ---@type table recipe detail panel widgets
 local detailPanel = {}
 
@@ -470,37 +476,124 @@ refreshOrders = function()
     mainFrame.ordersEmptyText:SetShown(#orderRows == 0)
 end
 
+---@param mode MiscMode
+---@return any the selected row key of that mode
+local function selectedMiscKey(mode)
+    if mode == "keys" then return windowState.selectedKey end
+    if mode == "attunements" then return windowState.selectedAttunement end
+    return windowState.selectedOffer
+end
+
+---@param mode MiscMode
+---@param rowKey any
+local function selectMiscRow(mode, rowKey)
+    if mode == "keys" then windowState.selectedKey = rowKey
+    elseif mode == "attunements" then windowState.selectedAttunement = rowKey
+    else windowState.selectedOffer = rowKey end
+end
+
+---@return table|nil the selected row of the shown mode
+local function selectedMiscRow()
+    local selectedKey = selectedMiscKey(currentMiscMode)
+    for _, miscRow in ipairs(currentMiscRows) do if miscRow.key == selectedKey then return miscRow end end
+end
+
 ---@return OfferViewRow|nil
 local function selectedOfferRow()
-    for _, offerRow in ipairs(currentOfferRows) do if offerRow.key == windowState.selectedOffer then return offerRow end end
+    if currentMiscMode ~= "offers" then return nil end
+    return selectedMiscRow()
+end
+
+---@param location string
+---@return string
+local function keyLocationLabel(location)
+    if location == "keyring" then return Text["Key ring"] end
+    if location == "bank" then return Text["Bank"] end
+    return Text["Bags"]
+end
+
+-- the text under the list: dibs of an offer, holders of a key, who is attuned to a raid
+---@param mode MiscMode
+---@param selectedRow table|nil
+---@return string
+local function miscDetailText(mode, selectedRow)
+    if mode == "keys" then
+        if not selectedRow then return Text["Select a key to see who holds it and where."] end
+        local holderTexts = {}
+        for index, holder in ipairs(selectedRow.holders) do
+            local locationLabels = {}
+            for position, location in ipairs(holder.locations) do locationLabels[position] = keyLocationLabel(location) end
+            local holderName = holder.mine and ("|cff33ff99" .. holder.whoName .. "|r") or holder.whoName
+            holderTexts[index] = ("%s |cffaaaaaa(%s)|r"):format(holderName, table.concat(locationLabels, ", "))
+        end
+        return Format(Text["{name}: {list}"], { name = selectedRow.name, list = table.concat(holderTexts, "   ") })
+    end
+    if mode == "attunements" then
+        if not selectedRow then return Text["Select a raid to see who is attuned."] end
+        local myState = selectedRow.mine == true and Text["you are attuned"]
+            or selectedRow.mine == false and Text["you are not attuned yet"] or Text["your attunement is not known yet"]
+        return Format(Text["{name} ({state}). Attuned: {yes}. Not attuned yet: {no}."], { name = selectedRow.name, state = myState,
+            yes = selectedRow.attuned ~= "" and selectedRow.attuned or "-", no = selectedRow.missing ~= "" and selectedRow.missing or "-" })
+    end
+    if not selectedRow then return Text["Select an offer to see who called dibs."] end
+    if #selectedRow.dibs == 0 then return Text["No dibs yet."] end
+    local dibTexts = {}
+    for position, dibRow in ipairs(selectedRow.dibs) do
+        local holderName = dibRow.mine and ("|cff33ff99" .. shortName(dibRow.who) .. "|r") or shortName(dibRow.who)
+        dibTexts[position] = ("%d. %s |cffaaaaaa%s|r"):format(position, holderName, timeAgo(dibRow.t))
+    end
+    return Format(Text["Dibs: {list}"], { list = table.concat(dibTexts, "   ") })
+end
+
+---@param mode MiscMode
+---@return string
+local function miscEmptyText(mode)
+    if mode == "keys" then
+        return Text["No dungeon keys known yet. They are listed automatically from the bags, key ring and bank of every guild member."]
+    end
+    if mode == "attunements" then return Text["Nothing to show."] end
+    return Text["No recipe items on offer yet. They are listed automatically from the bags, bank, mail, guild bank and auctions of every guild member."]
 end
 
 local function refreshOffers()
     if not mainFrame or windowState.tab ~= "available" then return end
-    local offerRows = addon.Model.BuildOfferRows(addon.Store,
-        { text = windowState.offerText, myProfessionsOnly = windowState.offerMyProfessionsOnly, me = me() },
-        addon.Api.ItemClass, addon.Api.ItemName)
-    currentOfferRows = offerRows
-    offerList:SetData(offerRows)
-    mainFrame.offerCountText:SetText(Plural(#offerRows, Text["{n} offer"], Text["{n} offers"]))
-    local selectedRow = selectedOfferRow()
-    mainFrame.dibsButton:SetLabel(selectedRow and selectedRow.mine and Text["Remove dibs"] or Text["Dibs"])
-    mainFrame.dibsButton:SetEnabled(selectedRow ~= nil and selectedRow.canDib)
-    mainFrame.hideOfferButton:SetEnabled(selectedRow ~= nil)
-    mainFrame.whisperOwnerButton:SetEnabled(selectedRow ~= nil and selectedRow.canDib)
-    if not selectedRow then
-        mainFrame.offerDetailText:SetText(Text["Select an offer to see who called dibs."])
-    elseif #selectedRow.dibs == 0 then
-        mainFrame.offerDetailText:SetText(Text["No dibs yet."])
-    else
-        local dibTexts = {}
-        for position, dibRow in ipairs(selectedRow.dibs) do
-            local holderName = dibRow.mine and ("|cff33ff99" .. shortName(dibRow.who) .. "|r") or shortName(dibRow.who)
-            dibTexts[position] = ("%d. %s |cffaaaaaa%s|r"):format(position, holderName, timeAgo(dibRow.t))
-        end
-        mainFrame.offerDetailText:SetText(Format(Text["Dibs: {list}"], { list = table.concat(dibTexts, "   ") }))
+    local settings = interfaceSettings()
+    local mode = addon.MiscTables.GetMode(settings)
+    local columnTable = addon.MiscTables.Table(mode)
+    local filterState = { text = windowState.offerText, myProfessionsOnly = windowState.offerMyProfessionsOnly, me = me() }
+    local miscRows
+    if mode == "keys" then miscRows = addon.Model.BuildKeyRows(filterState, addon.Api.ItemClass, addon.Api.ItemName)
+    elseif mode == "attunements" then miscRows = addon.Model.BuildAttunementRows(filterState, addon.Api.ItemClass)
+    else miscRows = addon.Model.BuildOfferRows(addon.Store, filterState, addon.Api.ItemClass, addon.Api.ItemName) end
+    columnTable.Sort(miscRows, columnTable.GetSort(settings))
+    -- each row knows its mode: the relayout below may still redraw the previous mode's rows once
+    for _, miscRow in ipairs(miscRows) do miscRow.miscMode = mode end
+    currentMiscMode, currentMiscRows = mode, miscRows
+    setDropdownText(mainFrame.miscModeButton, addon.MiscTables.ModeLabel(mode))
+    local isOffers = mode == "offers"
+    mainFrame.myProfessionsOnlyButton:SetShown(isOffers)
+    mainFrame.offerSearchHint:SetText(isOffers and Text["search item, owner or profession"]
+        or mode == "keys" and Text["search key, dungeon or member"] or Text["search raid or member"])
+    miscList:UpdateLayout()   -- another mode has other columns
+    miscList:SetData(miscRows)
+    if mode == "keys" then mainFrame.offerCountText:SetText(Plural(#miscRows, Text["{n} key"], Text["{n} keys"]))
+    elseif mode == "attunements" then mainFrame.offerCountText:SetText("")
+    else mainFrame.offerCountText:SetText(Plural(#miscRows, Text["{n} offer"], Text["{n} offers"])) end
+    local selectedRow = selectedMiscRow()
+    for _, offerButton in ipairs({ mainFrame.dibsButton, mainFrame.hideOfferButton, mainFrame.whisperOwnerButton }) do
+        offerButton:SetShown(isOffers)
     end
-    mainFrame.offersEmptyText:SetShown(#offerRows == 0)
+    mainFrame.whisperHolderButton:SetShown(mode == "keys")
+    if isOffers then
+        mainFrame.dibsButton:SetLabel(selectedRow and selectedRow.mine and Text["Remove dibs"] or Text["Dibs"])
+        mainFrame.dibsButton:SetEnabled(selectedRow ~= nil and selectedRow.canDib)
+        mainFrame.hideOfferButton:SetEnabled(selectedRow ~= nil)
+        mainFrame.whisperOwnerButton:SetEnabled(selectedRow ~= nil and selectedRow.canDib)
+    end
+    mainFrame.whisperHolderButton:SetEnabled(mode == "keys" and selectedRow ~= nil and addon.Model.KeyContact(selectedRow, me()) ~= nil)
+    mainFrame.offerDetailText:SetText(miscDetailText(mode, selectedRow))
+    mainFrame.offersEmptyText:SetText(miscEmptyText(mode))
+    mainFrame.offersEmptyText:SetShown(#miscRows == 0)
 end
 
 ---@alias TabName "recipes"|"orders"|"available"|"debug"
@@ -517,7 +610,7 @@ local function tabDefinitions()
     return {
         { key = "recipes", label = Text["Recipes"], width = 90 },
         { key = "orders", label = Text["Orders"], width = 90 },
-        { key = "available", label = Text["Available"], width = 90 },
+        { key = "available", label = Text["Misc Items"], width = 100 },
         { key = "debug", label = Text["Debug"], width = 70 },
     }
 end
@@ -865,10 +958,16 @@ local function buildDebugTab()
         local fakeRequestButton = createButton(debugTab, Text["Fake request"], 100, 18, function() addon.DevProbe.SimulateRealmRequest() end)
         fakeRequestButton:SetPoint("RIGHT", fakeEnchanterButton, "LEFT", -8, 0)
         mainFrame.fakeRequestButton = fakeRequestButton
+        -- a fake member with dungeon keys / a Naxxramas attunement, for the Misc Items Keys and Attunements modes
+        local fakeKeysButton = createButton(debugTab, Text["Fake keys"], 90, 18, function() addon.DevProbe.AddFakeKeys() end)
+        fakeKeysButton:SetPoint("RIGHT", fakeRequestButton, "LEFT", -8, 0)
+        local fakeNaxxramasButton = createButton(debugTab, Text["Fake Naxxramas"], 110, 18, function() addon.DevProbe.AddFakeNaxxramas() end)
+        fakeNaxxramasButton:SetPoint("RIGHT", fakeKeysButton, "LEFT", -8, 0)
+        mainFrame.fakeKeysButton, mainFrame.fakeNaxxramasButton = fakeKeysButton, fakeNaxxramasButton
     end
     mainFrame.debugStatusText = createFontString(debugTab, "GameFontHighlightSmall")
     mainFrame.debugStatusText:SetPoint("TOPLEFT", 0, -28)
-    if mainFrame.fakeRequestButton then mainFrame.debugStatusText:SetPoint("RIGHT", mainFrame.fakeRequestButton, "LEFT", -8, 0)
+    if mainFrame.fakeNaxxramasButton then mainFrame.debugStatusText:SetPoint("RIGHT", mainFrame.fakeNaxxramasButton, "LEFT", -8, 0)
     else mainFrame.debugStatusText:SetPoint("RIGHT", 0, 0) end
     -- column headings of the name check (shown only in that view)
     local nameCheckHeader = CreateFrame("Frame", nil, debugTab); nameCheckHeader:SetSize(720, 16); nameCheckHeader:SetPoint("TOPLEFT", 0, -44)
@@ -1226,14 +1325,40 @@ local function buildOrdersTab(ordersTab)
     end
 end
 
+-- The Misc Items tab: a mode dropdown (Recipe items, Keys, Attunements) over one table whose columns, sort and column
+-- choice belong to the shown mode (MiscTables). The search box serves every mode; the buttons under the list depend on it.
 ---@param availableTab table
 local function buildAvailableTab(availableTab)
+    local MiscTables = addon.MiscTables
+    local function chooseMode(mode)
+        MiscTables.SetMode(interfaceSettings(), mode)
+        refreshOffers()
+    end
+    local modeDropdown = createMenuDropdown(availableTab, "WowStyle1DropdownTemplate", 150)
+    if modeDropdown then
+        modeDropdown:SetupMenu(function(_, rootMenu)
+            local function isSelectedMode(mode) return MiscTables.GetMode(interfaceSettings()) == mode end
+            for _, mode in ipairs(MiscTables.MODES) do rootMenu:CreateRadio(MiscTables.ModeLabel(mode), isSelectedMode, chooseMode, mode) end
+        end)
+    else   -- no menus: cycle through the modes
+        modeDropdown = createButton(availableTab, MiscTables.ModeLabel(MiscTables.DEFAULT_MODE), 150, 22, function()
+            local currentMode, nextMode = MiscTables.GetMode(interfaceSettings()), MiscTables.MODES[1]
+            for position, mode in ipairs(MiscTables.MODES) do
+                if mode == currentMode then nextMode = MiscTables.MODES[position % #MiscTables.MODES + 1] end
+            end
+            chooseMode(nextMode)
+        end)
+    end
+    mainFrame.miscModeButton = modeDropdown
+    modeDropdown:SetPoint("TOPLEFT", 0, -10)
+
     local offerSearchBox = CreateFrame("EditBox", nil, availableTab, "InputBoxTemplate")
-    offerSearchBox:SetSize(200, 20); offerSearchBox:SetPoint("TOPLEFT", 6, -14); offerSearchBox:SetAutoFocus(false)
+    offerSearchBox:SetSize(200, 20); offerSearchBox:SetPoint("LEFT", modeDropdown, "RIGHT", 14, 0); offerSearchBox:SetAutoFocus(false)
     offerSearchBox:SetScript("OnTextChanged", function(self) windowState.offerText = self:GetText(); refreshOffers() end)
     offerSearchBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    local offerSearchHint = createFontString(availableTab, "GameFontDisableSmall"); offerSearchHint:SetPoint("BOTTOMLEFT", offerSearchBox, "TOPLEFT", 0, 0)
-    offerSearchHint:SetText(Text["search item, owner or profession"])
+    mainFrame.offerSearchHint = createFontString(availableTab, "GameFontDisableSmall")
+    mainFrame.offerSearchHint:SetPoint("BOTTOMLEFT", offerSearchBox, "TOPLEFT", 0, 0)
+    mainFrame.offerSearchHint:SetText(Text["search item, owner or profession"])
     mainFrame.myProfessionsOnlyButton = createButton(availableTab, Text["Only my professions"], 150, 22, function()
         windowState.offerMyProfessionsOnly = not windowState.offerMyProfessionsOnly
         mainFrame.myProfessionsOnlyButton:SetLabel(windowState.offerMyProfessionsOnly and (Text["Only my professions"] .. " *")
@@ -1241,17 +1366,40 @@ local function buildAvailableTab(availableTab)
         refreshOffers()
     end)
     mainFrame.myProfessionsOnlyButton:SetPoint("LEFT", offerSearchBox, "RIGHT", 8, 0)
+
+    -- columns of the shown mode: a checkbox menu (the name column is always shown)
+    local columnsDropdown = createMenuDropdown(availableTab, "WowStyle1FilterDropdownTemplate", 100)
+    if columnsDropdown then
+        columnsDropdown:SetupMenu(function(_, rootMenu)
+            local columnTable = MiscTables.Table(MiscTables.GetMode(interfaceSettings()))
+            local function isShown(columnKey) return columnTable.ColumnShown(interfaceSettings(), columnKey) end
+            local function toggle(columnKey)
+                columnTable.SetColumn(interfaceSettings(), columnKey, not columnTable.ColumnShown(interfaceSettings(), columnKey))
+                refreshOffers()
+            end
+            for _, columnKey in ipairs(columnTable.OPTIONAL_KEYS) do
+                rootMenu:CreateCheckbox(columnTable.ColumnLabel(columnKey), isShown, toggle, columnKey)
+            end
+        end)
+        setDropdownText(columnsDropdown, Text["Columns"])
+        columnsDropdown:SetPoint("TOPRIGHT", availableTab, "TOPRIGHT", -80, -10)
+    end
     mainFrame.offerCountText = createFontString(availableTab, "GameFontNormalSmall", "RIGHT")
-    mainFrame.offerCountText:SetPoint("TOPRIGHT", availableTab, "TOPRIGHT", -4, -6)
-    offerList = createScrollList(availableTab, createSelectableRow, function(row, offerRow)
-        row.icon:SetTexture(offerRow.icon or QUESTION_MARK_ICON)
-        local professionText = offerRow.profession and ("  |cff888888" .. offerRow.profession .. "|r") or ""
-        row.label:SetText(("%s%s  |cffaaaaaa%s|r  |cff999999%s|r"):format(offerRow.name, professionText, shortName(offerRow.ownerName),
-            offerRow.locations))
-        row.rightText:SetText((offerRow.mine and "|cff33ff99* |r" or "") .. Plural(offerRow.dibCount, Text["{n} dib"], Text["{n} dibs"]))
-        row.label:SetPoint("RIGHT", -100, 0)
-        row.selectionHighlight:SetShown(offerRow.key == windowState.selectedOffer)
-        row:SetScript("OnClick", function() windowState.selectedOffer = offerRow.key; refreshOffers() end)
+    mainFrame.offerCountText:SetPoint("TOPRIGHT", availableTab, "TOPRIGHT", -4, -14)
+
+    local miscHeader = Table.CreateHeader(availableTab, function(columnKey)
+        MiscTables.Table(MiscTables.GetMode(interfaceSettings())).ClickHeader(interfaceSettings(), columnKey)
+        refreshOffers()
+    end)
+    ---@param row table
+    ---@param offerRow OfferViewRow
+    local function fillOfferRow(row, offerRow)
+        row.label:SetText(offerRow.name)
+        Table.SetCell(row, "profession", "|cff888888" .. (offerRow.profession or "") .. "|r")
+        Table.SetCell(row, "owner", "|cffaaaaaa" .. (shortName(offerRow.ownerName) or "") .. "|r")
+        Table.SetCell(row, "locations", "|cff999999" .. offerRow.locations .. "|r")
+        Table.SetCell(row, "total", tostring(offerRow.total))
+        Table.SetCell(row, "dibs", (offerRow.mine and "|cff33ff99* |r" or "") .. tostring(offerRow.dibCount))
         local function showItemTooltip(owner)
             GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
             GameTooltip:SetHyperlink("item:" .. offerRow.itemID)
@@ -1261,7 +1409,6 @@ local function buildAvailableTab(availableTab)
             GameTooltip:Show()
         end
         row:SetScript("OnEnter", showItemTooltip)
-        row:SetScript("OnLeave", function() GameTooltip:Hide() end)
         row.onIconEnter = showItemTooltip
         row.onIconClick = function()
             if offerRow.canDib then
@@ -1270,13 +1417,80 @@ local function buildAvailableTab(availableTab)
                 end)
             end
         end
+    end
+    ---@param row table
+    ---@param keyRow KeyViewRow
+    local function fillKeyRow(row, keyRow)
+        row.label:SetText(keyRow.mine and (keyRow.name .. " |cff33ff99*|r") or keyRow.name)
+        Table.SetCell(row, "instance", "|cffaaaaaa" .. keyRow.instance .. "|r")
+        Table.SetCell(row, "holderCount", tostring(keyRow.holderCount))
+        Table.SetCell(row, "holderNames", "|cff999999" .. keyRow.holderNames .. "|r")
+        local contactName = addon.Model.KeyContact(keyRow, me())
+        local function showKeyTooltip(owner)
+            GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+            GameTooltip:SetHyperlink("item:" .. keyRow.itemID)
+            if contactName then
+                GameTooltip:AddLine(Format(Text["Click the icon: whisper {name} about this key"], { name = shortName(contactName) }),
+                    0.6, 0.8, 1, true)
+            end
+            GameTooltip:Show()
+        end
+        row:SetScript("OnEnter", showKeyTooltip)
+        row.onIconEnter = showKeyTooltip
+        row.onIconClick = function()
+            whisper(contactName, function()
+                return addon.Model.ChatText(addon.Api.ItemLink(keyRow.itemID), addon.Api.ItemName(keyRow.itemID))
+            end)
+        end
+    end
+    ---@param row table
+    ---@param attunementRow AttunementViewRow
+    local function fillAttunementRow(row, attunementRow)
+        local marker = attunementRow.mine == true and " |cff33ff99*|r" or ""
+        row.label:SetText(attunementRow.name .. marker)
+        Table.SetCell(row, "attunedCount", tostring(attunementRow.attunedCount))
+        Table.SetCell(row, "attuned", "|cff33ff99" .. attunementRow.attuned .. "|r")
+        Table.SetCell(row, "missingCount", tostring(attunementRow.missingCount))
+        Table.SetCell(row, "missing", "|cffaaaaaa" .. attunementRow.missing .. "|r")
+        local function showAttunementTooltip(owner)
+            GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+            GameTooltip:SetText(attunementRow.name, 1, 0.82, 0)
+            GameTooltip:AddLine(Format(Text["Attuned: {list}"], { list = attunementRow.attuned ~= "" and attunementRow.attuned or "-" }),
+                0.2, 1, 0.6, true)
+            GameTooltip:AddLine(Format(Text["Not attuned yet: {list}"], { list = attunementRow.missing ~= "" and attunementRow.missing or "-" }),
+                0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end
+        row:SetScript("OnEnter", showAttunementTooltip)
+        row.onIconEnter = showAttunementTooltip
+        row.onIconClick = nil
+    end
+    miscList = createScrollList(availableTab, Table.CreateTableRow, function(row, miscRow)
+        local mode = miscRow.miscMode or currentMiscMode
+        Table.LayoutRow(row, miscCells)
+        row.icon:SetTexture(miscRow.icon or QUESTION_MARK_ICON)
+        row.selectionHighlight:SetShown(miscRow.key == selectedMiscKey(mode))
+        row:SetScript("OnClick", function() selectMiscRow(mode, miscRow.key); refreshOffers() end)
+        row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        if mode == "keys" then fillKeyRow(row, miscRow)
+        elseif mode == "attunements" then fillAttunementRow(row, miscRow)
+        else fillOfferRow(row, miscRow) end
     end)
-    offerList:SetPoint("TOPLEFT", 0, -38); offerList:SetPoint("BOTTOMRIGHT", 0, 112)
+    miscList:SetPoint("TOPLEFT", 0, -58); miscList:SetPoint("BOTTOMRIGHT", 0, 112)
+    miscHeader:SetPoint("TOPLEFT", availableTab, "TOPLEFT", 0, -38)
+    miscHeader:SetPoint("RIGHT", miscList, "RIGHT", -Table.SLIDER_SPACE, 0)
+    miscList.onLayout = function(list)
+        local settings = interfaceSettings()
+        local columnTable = MiscTables.Table(MiscTables.GetMode(settings))
+        miscCells = columnTable.Layout(columnTable.VisibleColumns(settings), list:ContentWidth())
+        miscHeader:SetColumns(miscCells, columnTable.GetSort(settings), columnTable.ColumnLabel)
+        return columnTable.TableWidth(miscCells)
+    end
+    miscList.onHorizontalScroll = function(offset) miscHeader:SetHorizontalOffset(offset) end
     mainFrame.offersEmptyText = createFontString(availableTab, "GameFontDisable", "CENTER")
-    mainFrame.offersEmptyText:SetPoint("CENTER", offerList, "CENTER", 0, 0); mainFrame.offersEmptyText:SetWidth(520)
-    mainFrame.offersEmptyText:SetText(Text["No recipe items on offer yet. They are listed automatically from the bags, bank, mail, guild bank and auctions of every guild member."])
+    mainFrame.offersEmptyText:SetPoint("CENTER", miscList, "CENTER", 0, 0); mainFrame.offersEmptyText:SetWidth(520)
     mainFrame.offerDetailText = createFontString(availableTab, "GameFontHighlightSmall")
-    mainFrame.offerDetailText:SetPoint("TOPLEFT", offerList, "BOTTOMLEFT", 4, -8); mainFrame.offerDetailText:SetPoint("RIGHT", availableTab, "RIGHT", -8, 0)
+    mainFrame.offerDetailText:SetPoint("TOPLEFT", miscList, "BOTTOMLEFT", 4, -8); mainFrame.offerDetailText:SetPoint("RIGHT", availableTab, "RIGHT", -8, 0)
     mainFrame.offerDetailText:SetHeight(44)
     mainFrame.offerDetailText:SetJustifyV("TOP"); mainFrame.offerDetailText:SetWordWrap(true)
     mainFrame.dibsButton = createButton(availableTab, Text["Dibs"], 140, 24, function()
@@ -1304,6 +1518,15 @@ local function buildAvailableTab(availableTab)
     mainFrame.dibsButton:SetPoint("BOTTOMLEFT", 0, 0)
     mainFrame.hideOfferButton:SetPoint("LEFT", mainFrame.dibsButton, "RIGHT", 6, 0)
     mainFrame.whisperOwnerButton:SetPoint("LEFT", mainFrame.hideOfferButton, "RIGHT", 6, 0)
+    -- Keys mode: whisper somebody who holds the selected key
+    mainFrame.whisperHolderButton = createButton(availableTab, Text["Whisper a holder"], 140, 24, function()
+        local selectedRow = currentMiscMode == "keys" and selectedMiscRow()
+        if not selectedRow then return end
+        whisper(addon.Model.KeyContact(selectedRow, me()), function()
+            return addon.Model.ChatText(addon.Api.ItemLink(selectedRow.itemID), addon.Api.ItemName(selectedRow.itemID))
+        end)
+    end)
+    mainFrame.whisperHolderButton:SetPoint("BOTTOMLEFT", 0, 0)
 end
 
 ---@return table tabFrame

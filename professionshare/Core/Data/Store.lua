@@ -8,6 +8,7 @@ local addonName, addon = ...
 --   orders[orderID]    = Order (see Orders.lua)
 --   offers[playerName] = OfferRecord: recipe items on offer + that character's dibs (see Offers.lua)
 --   hidden[offerKey]   = owner's revision when the viewer hid that offer
+--   access[playerName] = AccessRecord: dungeon keys and raid attunements of that character (see Access.lua)
 --   profNames, itemText = profession names and item tooltip texts this client reported (this client only)
 --   debug, trace        = the log and the network trace rings; ui = window settings; me = my canonical name
 
@@ -60,7 +61,8 @@ addon.Store = Store
 --   3  0.4.0           + offers, hidden (recipe items board); additive, schema 2 data is kept
 --   4  0.6.0           + games (guild games); additive, schema 3 data is kept
 --   5  0.7.0           - games and the games UI settings (moved to the GuildGames addon; fresh start)
-Store.SCHEMA = 5
+--   6  1.2.0           + access (dungeon keys and raid attunements); additive, schema 5 data is kept
+Store.SCHEMA = 6
 
 local SECONDS_PER_DAY = 86400
 local MAXIMUM_ID = 2147483647              -- recipe / item / spell ids fit a signed 32-bit integer
@@ -81,7 +83,7 @@ end
 local function withAllTables(savedVariables)
     savedVariables = savedVariables or {}
     savedVariables.schema = Store.SCHEMA
-    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "debug", "ui" }) do
+    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "access", "debug", "ui" }) do
         if type(savedVariables[key]) ~= "table" then savedVariables[key] = {} end
     end
     -- network trace ring (Core/Debug/Trace.lua)
@@ -100,14 +102,16 @@ end
 ---@field catalog integer
 ---@field names integer
 ---@field offers integer
+---@field access integer held keys over all access records
 
 -- Sizes of everything held locally (for /ps clean).
 ---@return StoreCounts
 function Store.Counts()
     local Count = addon.Utility.Count
     local counts = { chars = Count(Store.db.chars), recipes = 0, orders = Count(Store.db.orders), catalog = Count(Store.db.catalog),
-        names = 0, offers = 0 }
+        names = 0, offers = 0, access = 0 }
     for _, offerRecord in pairs(Store.db.offers) do counts.offers = counts.offers + Count(offerRecord.items) end
+    for _, accessRecord in pairs(Store.db.access) do counts.access = counts.access + Count(accessRecord.keys) end
     for _, namesBySkillLine in pairs(Store.db.profNames) do counts.names = counts.names + Count(namesBySkillLine) end
     for _, characterRecord in pairs(Store.db.chars) do counts.recipes = counts.recipes + Store.RecipeCount(characterRecord) end
     return counts
@@ -142,7 +146,7 @@ end
 ---@return StoreCounts
 function Store.Clean()
     local removed = Store.Counts()
-    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "profNames", "debug", "trace", "itemText" }) do
+    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "access", "profNames", "debug", "trace", "itemText" }) do
         addon.Utility.Wipe(Store.db[key])
     end
     addon.Log.Reset()
@@ -155,10 +159,10 @@ end
 -- recipes, the orders (the only copy of an order may be mine; CanonicalizeStoredNames has given them the current keys),
 -- UI settings. Everything dropped is fetched again from online members. Tables are emptied IN PLACE.
 ---@param myName string|nil
----@return { chars: integer, offers: integer, catalog: integer } removed
+---@return { chars: integer, offers: integer, access: integer, catalog: integer } removed
 function Store.ResetPeerData(myName)
     local database = Store.db
-    local removed = { chars = 0, offers = 0, catalog = 0 }
+    local removed = { chars = 0, offers = 0, access = 0, catalog = 0 }
     local myRecipeIDs = {}
     local myRecord = myName and database.chars[myName]
     for _, profession in pairs(myRecord and myRecord.professions or {}) do
@@ -169,6 +173,9 @@ function Store.ResetPeerData(myName)
     end
     for playerName in pairs(database.offers) do
         if playerName ~= myName then database.offers[playerName] = nil removed.offers = removed.offers + 1 end
+    end
+    for playerName in pairs(database.access) do
+        if playerName ~= myName then database.access[playerName] = nil removed.access = removed.access + 1 end
     end
     for recipeID in pairs(database.catalog) do
         if not myRecipeIDs[recipeID] then database.catalog[recipeID] = nil removed.catalog = removed.catalog + 1 end
@@ -196,6 +203,7 @@ function Store.SanitizePersisted(savedVariables)
         function(orderID, clean) return clean.id == orderID end)
     droppedCount = droppedCount + droppedHere
     droppedCount = droppedCount + addon.Offers.SanitizePersisted(savedVariables)
+    droppedCount = droppedCount + addon.Access.SanitizePersisted(savedVariables)
     local professionNamesByLanguage = {}
     if type(savedVariables.profNames) == "table" then
         for languageCode, namesBySkillLine in pairs(savedVariables.profNames) do
@@ -236,6 +244,9 @@ local MIGRATIONS = {
         if type(savedVariables.ui) == "table" then
             for _, key in ipairs({ "lastStakeCopper", "lastSlotStakeCopper", "gamesScope", "gameKey" }) do savedVariables.ui[key] = nil end
         end
+    end,
+    [5] = function(savedVariables)   -- additive: dungeon keys and raid attunements
+        if type(savedVariables.access) ~= "table" then savedVariables.access = {} end
     end,
 }
 
@@ -416,6 +427,14 @@ function Store.CanonicalizeStoredNames()
         if not keptRecord or (keptRecord.rev or 0) < (offerRecord.rev or 0) then offerRecords[canonicalName] = offerRecord end
     end
     Refill(database.offers, offerRecords)
+    local accessRecords = {}
+    for playerName, accessRecord in pairs(database.access) do
+        local canonicalName = canonical(playerName)
+        accessRecord.name = canonicalName
+        local keptRecord = accessRecords[canonicalName]
+        if not keptRecord or (keptRecord.rev or 0) < (accessRecord.rev or 0) then accessRecords[canonicalName] = accessRecord end
+    end
+    Refill(database.access, accessRecords)
     local hiddenOffers = {}
     for offerKey, ownerRevision in pairs(database.hidden) do hiddenOffers[canonicalOfferKey(offerKey)] = ownerRevision end
     Refill(database.hidden, hiddenOffers)
@@ -437,7 +456,7 @@ end
 ---@type table<string, boolean>
 Store.keptNames = {}
 
--- Drop cached characters (and their offers) that are no longer in the guild roster; never drops `keptName`.
+-- Drop cached characters (and their offers and access records) that are no longer in the guild roster; never drops `keptName`.
 ---@param rosterNames table<string, boolean>
 ---@param keptName string|nil
 ---@return integer removedCount characters removed
@@ -454,6 +473,12 @@ function Store.Prune(rosterNames, keptName)
         if not rosterNames[playerName] and playerName ~= keptName then
             Store.db.offers[playerName] = nil
             removedNames[#removedNames + 1] = playerName .. "(offers)"
+        end
+    end
+    for playerName in pairs(Store.db.access) do
+        if not rosterNames[playerName] and playerName ~= keptName and not Store.keptNames[playerName] then
+            Store.db.access[playerName] = nil
+            removedNames[#removedNames + 1] = playerName .. "(access)"
         end
     end
     -- a prune that removes records right after they arrived means the sender's name and the roster's form of it differ

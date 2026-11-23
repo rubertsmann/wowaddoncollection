@@ -2,6 +2,16 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.2.0 (2026-11-23, protocol 2.4, schema 6, LibGuildSync MINOR 4)
+- The "Available" tab is now **Misc Items** (German "Sonstiges") with a dropdown: Recipe items, Keys, Attunements.
+  Each mode is a sortable table with its own columns, chosen in its "Columns" menu (feature 022).
+- Keys: which guild members hold which dungeon key (bags, key ring, bank). Attunements: who can enter Molten Core,
+  Onyxia, Blackwing Lair, Naxxramas and Upper Blackrock Spire. Synced as a small own record that is only sent after it
+  changes (protocol 2.4 `arev`/`WANTA`/`ACCESS`, additive; 2.3 members keep syncing everything else).
+- `/ps access [scan]` shows what the key and attunement scan sees on this client.
+- Dev build only: Debug tab buttons "Fake keys" and "Fake Naxxramas" (`/ps fakekeys`, `/ps fakenaxx`) add a local fake
+  member with keys / a Naxxramas attunement for testing.
+
 ## 1.1.0 (2026-11-23, protocol 2.3, schema 5, LibGuildSync MINOR 4)
 - The minimap button is now a standard LibDataBroker-1.1 launcher shown by LibDBIcon-1.0 (LibGuildSync MINOR 4,
   `Widgets.CreateMinimapButton`), so button collectors (Leatrix Plus "Combine addon buttons", Minimap Button Bag,

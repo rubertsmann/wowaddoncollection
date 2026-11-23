@@ -1,3 +1,22 @@
+# ProfessionShare 1.2.0
+
+**English:** The "Available" tab is now called **Misc Items** and has a dropdown with three lists. **Recipe items**
+works as before. **Keys** shows which guild members carry which dungeon key (Scarlet Key, Key to the City, Skeleton
+Key, Shadowforge Key, Seal of Ascension and more), so you know whom to bring to open a door. **Attunements** shows who
+can enter Molten Core, Onyxia, Blackwing Lair, Naxxramas and Upper Blackrock Spire. Every list is a sortable table:
+click a column title to sort and pick the columns you want in the "Columns" menu. Keys and attunements are found
+automatically. Members on older versions keep working with you, but only members on 1.2.0 appear in the Keys and
+Attunements lists.
+
+**Deutsch:** Der Reiter "Verfügbar" heißt jetzt **Sonstiges** und hat eine Auswahl mit drei Listen.
+**Rezept-Gegenstände** funktioniert wie bisher. **Schlüssel** zeigt, welche Gildenmitglieder welchen Dungeonschlüssel
+dabeihaben (etwa für das Scharlachrote Kloster, Stratholme, Scholomance, die Schwarzfelstiefen und Düsterbruch),
+damit ihr wisst, wen ihr zum Öffnen einer Tür mitnehmt. **Zugänge** zeigt, wer den Geschmolzenen
+Kern, Onyxias Hort, den Pechschwingenhort, Naxxramas und die Obere Schwarzfelsspitze betreten darf. Jede Liste ist eine
+sortierbare Tabelle: Klick auf einen Spaltentitel sortiert, im Menü "Spalten" wählst du die Spalten aus. Schlüssel und
+Zugänge werden automatisch erkannt. Mitglieder mit älteren Versionen arbeiten weiter mit dir zusammen, in den Listen
+Schlüssel und Zugänge erscheinen aber nur Mitglieder mit 1.2.0.
+
 # ProfessionShare 1.1.0
 
 **English:** The minimap button is now a standard addon button, so minimap button collectors such as Leatrix Plus

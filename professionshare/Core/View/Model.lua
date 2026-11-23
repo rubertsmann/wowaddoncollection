@@ -569,6 +569,126 @@ function Model.BuildOfferRows(store, state, itemClassFunction, itemNameFunction)
     return offerRows
 end
 
+------------------------------------------------------------------ dungeon keys and raid attunements
+
+---@class AccessFilterState
+---@field text? string
+---@field me? string
+
+---@class KeyHolderViewRow
+---@field who string raw
+---@field whoName string escaped short name
+---@field locations string[]
+---@field mine boolean
+
+---@class KeyViewRow
+---@field key integer the item id
+---@field itemID integer
+---@field name string escaped
+---@field icon any
+---@field instance string the instance it opens, viewer's language ("" when not known)
+---@field holderCount integer
+---@field holders KeyHolderViewRow[] sorted by name
+---@field holderNames string escaped short names, comma separated
+---@field mine boolean I hold it
+
+-- escaped short names, comma separated
+---@param playerNames string[]
+---@return string
+local function shortNameList(playerNames)
+    local shortNames = {}
+    for index, playerName in ipairs(playerNames) do shortNames[index] = escape(addon.Utility.ShortName(playerName) or playerName) end
+    return table.concat(shortNames, ", ")
+end
+
+-- One row per key somebody in the guild holds. Holder names come from peers and are escaped; the item name, icon and
+-- class come from THIS client, and an id this client does not take for a key is not shown (a peer cannot list
+-- arbitrary items).
+---@param state AccessFilterState
+---@param itemClassFunction fun(itemID: integer): any, any, any classID, subclassID, icon
+---@param itemNameFunction? fun(itemID: integer): string|nil
+---@return KeyViewRow[]
+function Model.BuildKeyRows(state, itemClassFunction, itemNameFunction)
+    local Access = addon.Access
+    local searchText = sortKey(state.text)
+    local keyRows = {}
+    for itemID, holderRows in pairs(Access.KeyHolders()) do
+        local classID, _, icon = itemClassFunction(itemID)
+        if Access.IsKey(itemID, classID) then
+            local itemName = escape((itemNameFunction and itemNameFunction(itemID))
+                or addon.Locale.Format(addon.Text["Item #{id}"], { id = itemID }))
+            local instanceName = escape(Access.InstanceName(Access.KEYS[itemID]) or "")
+            local holders, holderNames, mine = {}, {}, false
+            for index, holderRow in ipairs(holderRows) do
+                local isMine = holderRow.who == state.me
+                if isMine then mine = true end
+                holders[index] = { who = holderRow.who, whoName = escape(addon.Utility.ShortName(holderRow.who) or holderRow.who),
+                    locations = holderRow.locations, mine = isMine }
+                holderNames[index] = holderRow.who
+            end
+            local holderText = shortNameList(holderNames)
+            local keep = searchText == "" or sortKey(itemName):find(searchText, 1, true) ~= nil
+                or sortKey(instanceName):find(searchText, 1, true) ~= nil or sortKey(holderText):find(searchText, 1, true) ~= nil
+            if keep then
+                keyRows[#keyRows + 1] = { key = itemID, itemID = itemID, name = itemName, icon = icon, instance = instanceName,
+                    holderCount = #holders, holders = holders, holderNames = holderText, mine = mine }
+            end
+        end
+    end
+    return keyRows
+end
+
+-- Whom a key row's whisper goes to: the first holder who is not me (nil when only I hold it).
+---@param keyRow KeyViewRow
+---@param myName string|nil
+---@return string|nil raw player name
+function Model.KeyContact(keyRow, myName)
+    for _, holder in ipairs(keyRow and keyRow.holders or {}) do
+        if holder.who ~= myName then return holder.who end
+    end
+    return nil
+end
+
+---@class AttunementViewRow
+---@field key string attunement key
+---@field name string instance name, viewer's language
+---@field icon any
+---@field attunedCount integer
+---@field attuned string escaped short names of who holds it
+---@field attunedRaw string[]
+---@field missingCount integer
+---@field missing string escaped short names of who is known not to hold it
+---@field mine boolean|nil I hold it (nil: not known)
+
+-- One row per attunement, always all of them (also with nobody attuned yet), so the list shows what can be tracked.
+---@param state AccessFilterState
+---@param itemClassFunction? fun(itemID: integer): any, any, any classID, subclassID, icon
+---@return AttunementViewRow[]
+function Model.BuildAttunementRows(state, itemClassFunction)
+    local Access = addon.Access
+    local searchText = sortKey(state.text)
+    local statusByKey = Access.AttunementStatus()
+    local myRecord = state.me and Access.Get(state.me)
+    local attunementRows = {}
+    for _, attunement in ipairs(Access.ATTUNEMENTS) do
+        local status = statusByKey[attunement.key]
+        local instanceName = escape(Access.InstanceName(attunement.instance) or attunement.key)
+        local attunedText, missingText = shortNameList(status.yes), shortNameList(status.no)
+        local keep = searchText == "" or sortKey(instanceName):find(searchText, 1, true) ~= nil
+            or sortKey(attunedText):find(searchText, 1, true) ~= nil or sortKey(missingText):find(searchText, 1, true) ~= nil
+        if keep then
+            local icon = attunement.icon
+            if attunement.item and itemClassFunction then icon = select(3, itemClassFunction(attunement.item)) or icon end
+            local mine = nil
+            if myRecord and myRecord.att[attunement.key] ~= nil then mine = myRecord.att[attunement.key] end
+            attunementRows[#attunementRows + 1] = { key = attunement.key, name = instanceName, icon = icon,
+                attunedCount = #status.yes, attuned = attunedText, attunedRaw = status.yes, missingCount = #status.no,
+                missing = missingText, mine = mine }
+        end
+    end
+    return attunementRows
+end
+
 ------------------------------------------------------------------ craft and whisper from lists
 
 ---@alias CraftRefusal "unknown"|"noprof"

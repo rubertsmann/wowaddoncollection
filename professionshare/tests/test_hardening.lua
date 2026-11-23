@@ -461,25 +461,25 @@ return {
         harness.truthy(wf:find("CF_API_TOKEN"), "packager step lost its token")
     end,
     ---------------------------------------------------------------- games moved to GuildGames; schema 5
-    ["015: protocol 2.3 and schema 5 are pinned; migration 4 -> 5 drops games and the games settings, keeps everything else"] = function(harness)
+    ["015: migration 4 -> current drops games and the games settings, keeps everything else (protocol 2.3+, schema 5+)"] = function(harness)
         local addon = harness.addon({ now = 1.8e9 })
-        harness.equal(addon.PROTOCOL_MAJOR, 2); harness.equal(addon.PROTOCOL_MINOR, 3); harness.equal(addon.Store.SCHEMA, 5)
+        harness.equal(addon.PROTOCOL_MAJOR, 2); harness.truthy(addon.PROTOCOL_MINOR >= 3); harness.truthy(addon.Store.SCHEMA >= 5)
         harness.equal(addon.Games, nil, "the games left ProfessionShare")
         local sv = { schema = 4, chars = {}, catalog = {}, orders = {}, me = "Me-R",
             ui = { lastStake = 50, lastStakeCopper = 100, lastSlotStakeCopper = 10, gamesScope = "all", gameKey = "slots" },
             games = { ["A-R"] = { name = "A-R", rev = 1, total = {}, weeks = {}, recent = {} } },
             offers = { ["A-R"] = { name = "A-R", rev = 1.79e9, items = { [6661] = { bag = 1 } }, dibs = {} } }, hidden = {} }
         local out, status = addon.Store.Init(sv)
-        harness.equal(status, "migrated"); harness.equal(out.schema, 5)
+        harness.equal(status, "migrated"); harness.equal(out.schema, addon.Store.SCHEMA)
         harness.equal(out.games, nil); harness.truthy(out.offers["A-R"]); harness.equal(out.ui.lastStake, 50)
         for _, key in ipairs({ "lastStakeCopper", "lastSlotStakeCopper", "gamesScope", "gameKey" }) do harness.equal(out.ui[key], nil, key) end
-        -- a schema-3 file walks 3 -> 4 -> 5 and ends without games too
+        -- a schema-3 file walks up to the current schema and ends without games too
         local older = harness.addon({ now = 1.8e9 })
         local olderOut = older.Store.Init({ schema = 3, chars = {}, catalog = {}, orders = {}, offers = {}, hidden = {}, ui = {} })
-        harness.equal(olderOut.schema, 5); harness.equal(olderOut.games, nil)
-        -- a schema-6 file (a later build) stays untouched and this session does not save
+        harness.equal(olderOut.schema, older.Store.SCHEMA); harness.equal(olderOut.games, nil)
+        -- a file of a later schema stays untouched and this session does not save
         local later = harness.addon({ now = 1.8e9 })
-        local saved = { schema = 6, future = { x = true } }
+        local saved = { schema = later.Store.SCHEMA + 1, future = { x = true } }
         local kept, laterStatus = later.Store.Init(saved)
         harness.equal(laterStatus, "newer"); harness.truthy(kept == saved); harness.truthy(saved.future.x)
         harness.truthy(later.db.readonly)

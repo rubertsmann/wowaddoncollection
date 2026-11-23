@@ -1,7 +1,8 @@
 -- Api.ScanItems against stubbed WoW globals: which items count, which locations are read, missing APIs.
 local GLOBALS = { "C_Container", "C_Item", "GetContainerNumSlots", "GetContainerItemInfo", "GetItemInfoInstant", "GetInboxNumItems",
     "GetInboxItem", "GetInboxItemLink", "GetCurrentGuildBankTab", "GetGuildBankItemLink", "GetGuildBankItemInfo", "C_AuctionHouse",
-    "GetNumAuctionItems", "GetAuctionItemLink", "GetAuctionItemInfo", "NUM_BAG_SLOTS", "NUM_BANKBAGSLOTS", "MAX_GUILDBANKSLOTS_PER_TAB" }
+    "GetNumAuctionItems", "GetAuctionItemLink", "GetAuctionItemInfo", "NUM_BAG_SLOTS", "NUM_BANKBAGSLOTS", "MAX_GUILDBANKSLOTS_PER_TAB",
+    "KEYRING_CONTAINER", "C_QuestLog", "IsQuestFlaggedCompleted", "GetItemCount" }
 
 local function withGlobals(harness, setup, fn)
     local saved = {}
@@ -102,6 +103,46 @@ return {
             addon.Api.open.mail, addon.Api.open.gbank, addon.Api.open.auction = false, false, false
             local closed = addon.Api.ScanItems()
             harness.equal(closed.mail, nil); harness.equal(closed.gbank3, nil); harness.equal(closed.auction, nil)
+        end)
+    end,
+
+    ["access api: keys from bags and key ring (class 13 or listed, deny-list skipped); bank only while open"] = function(harness)
+        withGlobals(harness, function()
+            NUM_BAG_SLOTS = 0; NUM_BANKBAGSLOTS = 0; KEYRING_CONTAINER = -2
+            local classes = { [7146] = 13, [11078] = 13, [12344] = 4, [100] = 2, [99001] = 13, [13704] = 13 }
+            C_Item = { GetItemInfoInstant = function(id) local c = classes[id]; if c then return id, "t", "s", "", 1, c, 0 end end,
+                GetItemCount = function() return 0 end }
+            local bags = { [0] = { { itemID = 7146, isBound = true }, { itemID = 100 }, { itemID = 11078 }, { itemID = 12344 } },
+                [-2] = { { itemID = 99001 } }, [-1] = { { itemID = 13704 } } }
+            C_Container = {
+                GetContainerNumSlots = function(b) return bags[b] and #bags[b] or 0 end,
+                GetContainerItemInfo = function(b, s) return bags[b][s] end,
+            }
+        end, function(addon)
+            local out = addon.Api.ScanAccess()
+            harness.truthy(out.keys.bag[7146], "bound class-13 key counts"); harness.truthy(out.keys.bag[12344], "listed entry item counts")
+            harness.equal(out.keys.bag[100], nil); harness.equal(out.keys.bag[11078], nil, "deny-listed")
+            harness.truthy(out.keys.keyring[99001]); harness.equal(out.keys.bank, nil, "bank closed: absent")
+            harness.truthy(addon.Api.accessStatistics.keyring)
+            addon.Api.open.bank = true
+            harness.truthy(addon.Api.ScanAccess().keys.bank[13704])
+        end)
+    end,
+
+    ["access api (RF3): attunements from quests and items; no quest API means unknown, not false"] = function(harness)
+        withGlobals(harness, function()
+            NUM_BAG_SLOTS = 0
+            C_Container = { GetContainerNumSlots = function() return 0 end, GetContainerItemInfo = function() end }
+            C_Item = { GetItemCount = function(id) return id == 16309 and 1 or 0 end }
+        end, function(addon)
+            local out = addon.Api.ScanAccess()
+            harness.equal(out.att.ony, true, "Drakefire Amulet held"); harness.equal(out.att.mc, nil, "no quest API: unknown")
+            harness.equal(addon.Api.accessStatistics.questApi, false)
+            C_QuestLog = { IsQuestFlaggedCompleted = function(q) return q == 7848 end }
+            out = addon.Api.ScanAccess()
+            harness.equal(out.att.mc, true); harness.equal(out.att.bwl, false); harness.equal(out.att.ony, true)
+            C_QuestLog = { IsQuestFlaggedCompleted = function() error("boom") end }
+            harness.equal(addon.Api.ScanAccess().att.bwl, nil, "an erroring API counts as no answer")
         end)
     end,
 }

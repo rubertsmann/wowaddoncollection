@@ -3,7 +3,7 @@ local addonName, addon = ...
 -- A scroll list that follows its own size (the main window is resizable), plus the column header and
 -- table rows of the Recipes tab. Same interface as LibGuildSync's Widgets.CreateScrollList (SetData, Refresh, .offset),
 -- which stays fixed-size and untouched (GuildGames uses it). Rows are created on demand when the list grows and hidden
--- when it shrinks. Column positions come from RecipeTable.Layout (pure).
+-- when it shrinks. Column positions come from a ColumnTable layout (pure).
 ---@class TableModule
 local Table = {}
 addon.Table = Table
@@ -190,16 +190,18 @@ function Table.CreateHeader(parent, onClick)
         return button
     end
 
-    ---@param cells RecipeCell[]
-    ---@param sort RecipeSort
-    function header:SetColumns(cells, sort)
+    ---@param cells TableCell[]
+    ---@param sort TableSort
+    ---@param columnLabel? fun(columnKey: string): string the titles (default: the Recipes table's)
+    function header:SetColumns(cells, sort, columnLabel)
+        columnLabel = columnLabel or addon.RecipeTable.ColumnLabel
         for cellIndex, cell in ipairs(cells) do
             local button = headerButton(cellIndex)
             button.columnKey = cell.key
             button.cellLeft = cell.left
             button:ClearAllPoints(); button:SetPoint("LEFT", self, "LEFT", cell.left - self.horizontalOffset, 0); button:SetWidth(cell.width)
             button.label:ClearAllPoints(); button.arrow:ClearAllPoints()
-            button.label:SetText(addon.RecipeTable.ColumnLabel(cell.key))
+            button.label:SetText(columnLabel(cell.key))
             button.label:SetJustifyH(cell.column.justify)
             local sorted = sort and sort.key == cell.key
             if cell.column.justify == "RIGHT" then
@@ -231,6 +233,7 @@ function Table.CreateHeader(parent, onClick)
 end
 
 -- A selectable row (icon, name label) with one extra font string per optional column, placed by Table.LayoutRow.
+-- A row may be filled by tables with other columns over time (the Misc Items modes): cells are created per column key.
 ---@param list table
 ---@return table row
 function Table.CreateTableRow(list)

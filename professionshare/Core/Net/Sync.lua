@@ -12,6 +12,7 @@ local addonName, addon = ...
 --   ORDER {order}               broadcast: one order changed (order may carry a recipe name snapshot, 2.2+)
 --   WANTO {names, via?}         "send me your offers record" (2.1+)
 --   OFFERS {offers}             a character's offers/dibs record (2.1+)
+--   HELLO.arev, WANTA {names, via?}, ACCESS {access}   a character's dungeon keys and raid attunements (2.4+)
 -- Protocol 2.3 also had HELLO.grev, WANTG and GAMES (guild games, 0.6.0). They moved to the GuildGames addon: a 0.6
 -- peer's grev is ignored, its WANTG/GAMES are dropped as unknown message types.
 -- A peer can only author its OWN record (SNAP char.name / OFFERS name must equal the sender). Every player name from the
@@ -23,7 +24,7 @@ local addonName, addon = ...
 ---@field random fun(): number in [0, 1)
 ---@field store StoreModule
 ---@field orders OrderBoard
----@field onChange fun(kind: "chars"|"offers"|"orders")
+---@field onChange fun(kind: "chars"|"offers"|"orders"|"access")
 ---@field me string|fun(): string|nil my canonical name, or a function returning it
 
 ---@class SyncModule
@@ -130,6 +131,25 @@ local function offersKind()
     }
 end
 
+-- The access record (protocol 2.4): keys and attunements. Registered last, so its pulls queue behind the other records;
+-- it changes once or twice in a character's life, so after the first exchange only `arev` travels.
+---@return RecordKind
+local function accessKind()
+    local Access = addon.Access
+    return {
+        name = "access", label = "access", helloField = "arev", absentNote = "access: peer has none",
+        requestType = "WANTA", answerType = "ACCESS", recordField = "access",
+        noneNote = "asked for my access record but I have none",
+        heldRevision = function(playerName)
+            local accessRecord = Access.Get(playerName)
+            return accessRecord and accessRecord.rev or 0
+        end,
+        myRecord = function(myName) return Access.Get(myName) end,
+        sanitize = Access.Sanitize,
+        store = function(_, accessRecord) return Access.Put(accessRecord) end,
+    }
+end
+
 -- HELLO.odig: the digest of my orders; a peer that lacks some gets them pushed (OPUSH, 10 per message).
 ---@param environment ProfessionShareSyncEnvironment
 ---@return SyncHelloHook
@@ -188,6 +208,7 @@ function Sync.New(environment)
     local sync = library.Sync.New(environment)
     sync.wanted = sync:AddRecordKind(characterKind(environment))
     sync.wantedOffers = sync:AddRecordKind(offersKind())
+    sync.wantedAccess = sync:AddRecordKind(accessKind())
     sync:AddHelloHook(ordersHelloHook(environment))
     sync:AddHandler("OPUSH", onOrderPush)
     sync:AddHandler("ORDER", onOrder)

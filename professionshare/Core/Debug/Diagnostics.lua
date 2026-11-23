@@ -247,6 +247,10 @@ function Diagnostics.Report(options)
                 local pull = communication.sync.wantedOffers[playerName]
                 addLine("pulled offers of %s (rev %s) %ds ago", playerName, tostring(pull.revision), now - (pull.startedAt or now))
             end
+            for _, playerName in ipairs(sortedKeys(communication.sync.wantedAccess or {})) do
+                local pull = communication.sync.wantedAccess[playerName]
+                addLine("pulled access record of %s (rev %s) %ds ago", playerName, tostring(pull.revision), now - (pull.startedAt or now))
+            end
             addLine("scheduled sends: %d", #(communication.sync.pending or {}))
         end
     end
@@ -267,6 +271,19 @@ function Diagnostics.Report(options)
         local offerRecord = database.offers[playerName]
         addLine("%s%s rev=%s items=%d dibs=%d", playerName, playerName == myName and " (me)" or "", tostring(offerRecord.rev),
             count(offerRecord.items), count(offerRecord.dibs))
+    end
+
+    addLine("")
+    addLine("--- access records held (%d) ---", count(database.access or {}))
+    for _, playerName in ipairs(sortedKeys(database.access or {})) do
+        local accessRecord = database.access[playerName]
+        local attunementParts = {}
+        for _, attunement in ipairs(addon.Access.ATTUNEMENTS) do
+            local held = accessRecord.att[attunement.key]
+            if held ~= nil then attunementParts[#attunementParts + 1] = attunement.key .. "=" .. tostring(held) end
+        end
+        addLine("%s%s rev=%s keys=%d att=%s", playerName, playerName == myName and " (me)" or "", tostring(accessRecord.rev),
+            count(accessRecord.keys), table.concat(attunementParts, ","))
     end
 
     addLine("")

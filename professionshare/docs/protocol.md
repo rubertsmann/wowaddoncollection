@@ -1,6 +1,6 @@
 # Wire protocol, compatibility and stored data
 
-Applies from 0.3.0 (protocol 2.0, schema 2); 0.4.0 adds protocol 2.1 and schema 3 (sections 6 and 7); 0.4.1 adds protocol 2.2 (section 8); 0.6.0 adds 2.3 and schema 4 (section 9); 0.7.0 removes the games again (schema 5, section 9) and runs the transport and the pull engine on the embedded LibGuildSync-1.0 with the wire unchanged (feature 015). Source of truth in code: `Core/Base/Init.lua` (versions), `Core/Net/Codec.lua`
+Applies from 0.3.0 (protocol 2.0, schema 2); 0.4.0 adds protocol 2.1 and schema 3 (sections 6 and 7); 0.4.1 adds protocol 2.2 (section 8); 0.6.0 adds 2.3 and schema 4 (section 9); 0.7.0 removes the games again (schema 5, section 9); feature 022 adds protocol 2.4 and schema 6 (section 12) and runs the transport and the pull engine on the embedded LibGuildSync-1.0 with the wire unchanged (feature 015). Source of truth in code: `Core/Base/Init.lua` (versions), `Core/Net/Codec.lua`
 (format), `Core/Net/Guard.lua` (gate), `Core/Net/Communication.lua` (transport), `Core/Net/Sync.lua` (messages), `Core/Data/Store.lua` (schema).
 Tests: `tests/test_hardening.lua`.
 
@@ -64,6 +64,7 @@ Display: every peer-originated string leaves `Core/View/Model.lua` escaped (`|` 
 | 3 | 0.4.0 | + `offers`, `hidden` (section 7) |
 | 4 | 0.6.0 | + `games` (section 9) |
 | 5 | 0.7.0 | - `games` and the games UI settings (moved to GuildGames, feature 015) |
+| 6 | 1.2.0 | + `access` (dungeon keys and raid attunements, section 12) |
 
 - Migrations run stepwise in `Store.Migrate` (`MIGRATIONS[n]` = n -> n+1). Peer-derived caches (`chars`, `catalog`) are
   re-fetchable, so a migration may drop them; `orders` and the viewer's own record deserve care.
@@ -147,3 +148,22 @@ tests and is pinned to the TOC by a test). The release workflow refuses a tag th
 - Receiver: kept per sender for the session (at most 200), only when it is a short plain string (`[%w.-+/_]`, 32 bytes);
   noted in the HELLO's trace line (`ver=1.0.1/3`, `ver=-` from builds before the field) and listed by `/ps comm` and the
   export report ("member builds seen this session"). Never used for decisions, only for diagnosis.
+
+## 12. Dungeon keys and raid attunements (protocol 2.4, schema 6; feature 022)
+Additive minor change: a 2.3 peer ignores `arev` and drops `WANTA`/`ACCESS` as unknown message types.
+- `HELLO` gets optional `arev` = `rev` of my access record (omitted when I have none). A receiver holding an older (or no)
+  record of the sender whispers `WANTA {names={sender}}`; only the sender's own name is honoured. Same pull engine, retry
+  over GUILD and dedup as `WANTO` (LibGuildSync record kind `access`, registered after `chars` and `offers`, so its pulls
+  queue last).
+- `ACCESS {access = rec}`: `rec = { name, rev, keys = { [itemID] = { [loc] = true } }, att = { [attKey] = boolean } }`.
+  `loc` is one of `bag keyring bank`; `attKey` one of `mc ony bwl naxx ubrs` (`Core/Data/Access.lua` `ATTUNEMENTS`).
+  `att[k] = false` means "known not attuned"; a missing `k` means "not known on the author's client". The author is the
+  only writer (`rec.name` must equal the sender); a newer `rev` replaces the whole record.
+- Traffic: the record changes when a key is looted or an attunement quest is handed in, so after the first exchange only
+  the number `arev` rides in each HELLO.
+- `Access.Sanitize` (allow-list, one bad entry rejects the record): <= 60 keys, item ids 1..2^31-1, location values must be
+  `true`, attunement keys from the list only, values boolean, `rev` in `[0, now + 1 day]`.
+- Display safety: key names, icons and classes come from the viewer's client; only ids this client takes for a key
+  (class Key 13 or the curated `Access.KEYS`, minus `Access.DENY`) are shown. Holder names are escaped in `Core/View/Model.lua`.
+- Stored: `access[name]` (schema 6, migration 5 -> 6 creates the table); re-validated on every load, dropped for members
+  who left the guild, emptied by `/ps clean`, dropped for peers by the version reset like `offers`.

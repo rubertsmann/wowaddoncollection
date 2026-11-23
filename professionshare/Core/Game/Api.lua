@@ -669,6 +669,87 @@ function Api.ScanItems()
     return scans
 end
 
+------------------------------------------------------------------ dungeon keys and raid attunements (Access)
+
+-- Whether a quest is completed: true/false, or nil when the client offers no way to ask.
+---@param questID integer
+---@return boolean|nil
+function Api.QuestDone(questID)
+    local isQuestFlaggedCompleted = (C_QuestLog and C_QuestLog.IsQuestFlaggedCompleted) or IsQuestFlaggedCompleted
+    if not isQuestFlaggedCompleted then return nil end
+    local done = tryCall("IsQuestFlaggedCompleted", isQuestFlaggedCompleted, questID)
+    if done == nil then return nil end
+    return done and true or false
+end
+
+---@class AccessScanStatistics
+---@field keyring boolean the client has a key ring container
+---@field questApi boolean completed quests can be asked
+---@field keys integer keys seen
+---@field unknownClass integer items the client could not classify yet
+
+---@type AccessScanStatistics of the last ScanAccess (for /ps access)
+Api.accessStatistics = { keyring = false, questApi = false, keys = 0, unknownClass = 0 }
+
+-- keys in these bags, or nil when none of them is readable
+---@param bagIDs integer[]
+---@return table<integer, true>|nil
+local function scanKeyContainers(bagIDs)
+    local statistics = Api.accessStatistics
+    local heldKeys, anyReadable = {}, false
+    for _, bagID in ipairs(bagIDs) do
+        local slotCount = containerSlotCount(bagID)
+        if slotCount > 0 then anyReadable = true end
+        for slotIndex = 1, slotCount do
+            local itemID = containerItem(bagID, slotIndex)
+            if itemID then
+                local classID = Api.ItemClass(itemID)
+                if classID == nil then statistics.unknownClass = statistics.unknownClass + 1 end
+                if addon.Access.IsKey(itemID, classID) and not heldKeys[itemID] then
+                    heldKeys[itemID] = true
+                    statistics.keys = statistics.keys + 1
+                end
+            end
+        end
+    end
+    return anyReadable and heldKeys or nil
+end
+
+-- Keys by readable location (bags and key ring always, the bank while it is open) and the attunements that can be
+-- judged on this client: held when a quest of it is completed or its item is held (also in a closed bank: the item count
+-- includes it), known not held when the quests can be asked and none is done. Unknown attunements are left out.
+---@return AccessScan
+function Api.ScanAccess()
+    Api.accessStatistics = { keyring = false, questApi = false, keys = 0, unknownClass = 0 }
+    local keysByLocation = {}
+    local bagIDs = {}
+    for bagID = 0, NUM_BAG_SLOTS or 4 do bagIDs[#bagIDs + 1] = bagID end
+    keysByLocation.bag = scanKeyContainers(bagIDs)
+    if KEYRING_CONTAINER then
+        keysByLocation.keyring = scanKeyContainers({ KEYRING_CONTAINER })
+        Api.accessStatistics.keyring = keysByLocation.keyring ~= nil
+    end
+    if Api.open.bank then
+        local bankBagIDs = { BANK_CONTAINER or -1 }
+        local bagSlotCount = NUM_BAG_SLOTS or 4
+        for bagID = bagSlotCount + 1, bagSlotCount + (NUM_BANKBAGSLOTS or 7) do bankBagIDs[#bankBagIDs + 1] = bagID end
+        keysByLocation.bank = scanKeyContainers(bankBagIDs)
+    end
+    local attunements = {}
+    for _, attunement in ipairs(addon.Access.ATTUNEMENTS) do
+        local held, questAnswered = false, false
+        for _, questID in ipairs(attunement.quests) do
+            local done = Api.QuestDone(questID)
+            if done ~= nil then questAnswered = true end
+            if done then held = true end
+        end
+        if attunement.item and Api.ItemCount(attunement.item) > 0 then held = true end
+        if held then attunements[attunement.key] = true elseif questAnswered then attunements[attunement.key] = false end
+        if questAnswered then Api.accessStatistics.questApi = true end
+    end
+    return { keys = keysByLocation, att = attunements }
+end
+
 ------------------------------------------------------------------ craft and whisper from lists
 
 ---@param text any

@@ -96,6 +96,15 @@ return {
                 addon.Offers.Put({ name = "B-R", rev = 5, items = { [6661] = { bag = 1 } }, dibs = {} })
                 harness.truthy(pcall(addon.UI.SelectTab, "available"), "switching to the available tab failed")
                 harness.truthy(pcall(addon.UI.Refresh), "refreshing the available tab failed")
+                -- the Misc Items modes: keys and attunements with a peer's record, then back to recipe items
+                addon.Access.Put({ name = "B-R", rev = 5, keys = { [7146] = { keyring = true } }, att = { mc = true, bwl = false } })
+                for _, mode in ipairs({ "keys", "attunements", "offers" }) do
+                    addon.MiscTables.SetMode(addon.db.ui, mode)
+                    local okM, errM = pcall(addon.UI.Refresh)
+                    harness.truthy(okM, "refreshing the " .. mode .. " mode failed: " .. tostring(errM))
+                end
+                harness.truthy(addon.SlashCommands.access, "/ps access missing")
+                harness.truthy(pcall(addon.SlashCommands.access, ""), "/ps access failed")
                 -- the games moved to the GuildGames addon; no tab, no dev commands, no game module
                 harness.equal(addon.Games, nil); harness.equal(addon.GamesTab, nil)
                 harness.truthy(not slurp("UI/Window.lua"):find('key = "games"', 1, true), "the window still defines a games tab")
@@ -117,6 +126,20 @@ return {
                     harness.truthy(okF, "fake enchanter failed: " .. tostring(errF))
                     harness.truthy(addon.Store.db.chars["Fake Enchanter"], "the realm-free fake enchanter was added")
                     harness.truthy(addon.Store.keptNames["Fake Enchanter"], "and kept from the prune")
+                    -- dev fake key holder: keys, then Naxxramas on the same local-only record
+                    local okK, errK = pcall(addon.DevProbe.AddFakeKeys)
+                    harness.truthy(okK, "fake keys failed: " .. tostring(errK))
+                    local okX, errX = pcall(addon.DevProbe.AddFakeNaxxramas)
+                    harness.truthy(okX, "fake Naxxramas failed: " .. tostring(errX))
+                    local fakeKeyholder = addon.Access.Get("Fake Keyholder")
+                    harness.truthy(fakeKeyholder and fakeKeyholder.keys[7146], "fake keys stored")
+                    harness.equal(fakeKeyholder.att.naxx, true); harness.equal(fakeKeyholder.att.mc, true, "the keys are kept")
+                    harness.truthy(addon.Store.keptNames["Fake Keyholder"], "kept from the prune")
+                    harness.truthy(addon.Access.Sanitize(fakeKeyholder), "the fake record is a valid record")
+                    harness.equal(addon.SlashCommands.fakekeys ~= nil, addon.IS_DEVELOPMENT_BUILD and true or false,
+                        "/ps fakekeys exists only in the dev build")
+                    harness.equal(addon.SlashCommands.fakenaxx ~= nil, addon.IS_DEVELOPMENT_BUILD and true or false,
+                        "/ps fakenaxx exists only in the dev build")
                     -- dev fake request: the realm-named request is answered under the asked name
                     addon.Utility.NoteMyFullName("First Surname")
                     addon.Store.PutCharacter({ name = "First Surname", class = "MAGE", level = 30, rev = 5, professions = {

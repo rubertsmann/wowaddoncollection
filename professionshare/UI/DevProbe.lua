@@ -362,6 +362,56 @@ function DevProbe.AddFakeEnchanter()
         :format(addon.Utility.Count(knownRecipes)))
 end
 
+------------------------------------------------------------------ fake key holder (dev build only)
+
+-- Keys and attunements of a fake guild member, so the Keys and Attunements modes of the Misc Items tab show rows without
+-- a second player. The record lives only in this client (only my own access record is ever sent) and is kept from the
+-- roster prune. Gone after a version change or /ps clean.
+local FAKE_KEYS = { [7146] = { keyring = true }, [12382] = { bag = true }, [13704] = { keyring = true },
+    [18249] = { bank = true }, [11000] = { keyring = true }, [12344] = { bag = true } }
+
+-- the fake member's name in the same form as everyone else's (realm-free on Forever)
+---@return string
+local function fakeKeyholderName() return addon.Utility.CanonicalName("Fake Keyholder") or "Fake Keyholder" end
+
+-- Stores the fake member's access record changed by `change` (a newer rev, so Access.Put takes it).
+---@param change fun(accessRecord: AccessRecord)
+---@return AccessRecord
+local function updateFakeKeyholder(change)
+    local fakeName = fakeKeyholderName()
+    local previousRecord = addon.Access.Get(fakeName)
+    local accessRecord = previousRecord and addon.Utility.DeepCopy(previousRecord) or { name = fakeName, rev = 0, keys = {}, att = {} }
+    change(accessRecord)
+    accessRecord.rev = math.max(addon.Utility.Now(), (previousRecord and previousRecord.rev or 0) + 1)
+    addon.Store.keptNames[fakeName] = true
+    addon.Access.Put(accessRecord)
+    addon.Events.Fire("DATA_CHANGED", "access")
+    return accessRecord
+end
+
+-- Gives the fake member a set of dungeon keys (and Molten Core, known not attuned to Onyxia).
+---@return AccessRecord
+function DevProbe.AddFakeKeys()
+    local accessRecord = updateFakeKeyholder(function(record)
+        for itemID, locations in pairs(FAKE_KEYS) do record.keys[itemID] = addon.Utility.DeepCopy(locations) end
+        record.att.mc, record.att.ony = true, false
+    end)
+    addon.Log.Information("devProbe.fakeKeys", "fake keys were added for the Keys mode test",
+        { name = accessRecord.name, keys = addon.Utility.Count(accessRecord.keys) })
+    addon.Print(("fake keys added: %s holds %d keys. Misc Items -> Keys."):format(accessRecord.name, addon.Utility.Count(accessRecord.keys)))
+    return accessRecord
+end
+
+-- Marks the fake member as attuned to Naxxramas.
+---@return AccessRecord
+function DevProbe.AddFakeNaxxramas()
+    local accessRecord = updateFakeKeyholder(function(record) record.att.naxx = true end)
+    addon.Log.Information("devProbe.fakeNaxxramas", "a fake Naxxramas attunement was added for the Attunements mode test",
+        { name = accessRecord.name })
+    addon.Print(("fake Naxxramas attunement added for %s. Misc Items -> Attunements."):format(accessRecord.name))
+    return accessRecord
+end
+
 ------------------------------------------------------------------ fake request (dev build only)
 
 -- The realms a member whose client still reports realms appended to my name in a live log.
@@ -429,6 +479,8 @@ end
 if addon.IS_DEVELOPMENT_BUILD then
     addon.SlashCommands.fakerequest = function() DevProbe.SimulateRealmRequest() end
     addon.SlashCommands.fakeenchanter = function() DevProbe.AddFakeEnchanter() end
+    addon.SlashCommands.fakekeys = function() DevProbe.AddFakeKeys() end
+    addon.SlashCommands.fakenaxx = function() DevProbe.AddFakeNaxxramas() end
     addon.SlashCommands.itemprobe = function(arguments)
         local extraItemIDs = {}
         for itemIDText in tostring(arguments or ""):gmatch("%d+") do extraItemIDs[#extraItemIDs + 1] = tonumber(itemIDText) end
