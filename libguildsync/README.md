@@ -6,7 +6,9 @@ GuildGames.
 
 ## Embedding
 - The TOC loads, in this order: `Libs\LibStub\LibStub.lua`, `Libs\LibDeflate\LibDeflate.lua`,
-  `Libs\LibGuildSync\LibGuildSync.xml`.
+  `Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua`, `Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua`,
+  `Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua`, `Libs\LibGuildSync\LibGuildSync.xml`. The three in the middle are the
+  standard minimap-button libraries `Widgets.CreateMinimapButton` uses.
 - In a working copy, `Libs\LibGuildSync` is a directory junction to `..\libguildsync\LibGuildSync`, created by each
   addon's `tools/deploy.ps1` and git-ignored. The addon's `tools/package.ps1` copies the real files into its zip and
   checks that every file listed in `LibGuildSync.xml` is there.
@@ -29,7 +31,7 @@ GuildGames.
 | `Sync.New(environment)` | record-pull engine: HELLO revisions -> request by whisper -> record, retries on GUILD (45/90/180 s), give-up reset, GUILD answer dedup, asked-name answers, login reply budget; `AddRecordKind`, `AddHelloHook`, `AddHandler` | per addon |
 | `Channel.New(options)` | transport for one prefix: chunking, reassembly, gate, echo/realm learning, HELLO coalescing, roster/identity check, minute ticker | per addon; **one send token bucket and one driver frame for all channels** |
 | `Guild` | roster, my name (Forever "First Surname"), identity facts | shared |
-| `Widgets` | plain-frame helpers: button, font string, scroll list, selectable row, dialog frame, TimeAgo | shared |
+| `Widgets` | plain-frame helpers: button, font string, scroll list, selectable row, dialog frame, TimeAgo; `CreateMinimapButton` (MINOR 4: a LibDataBroker launcher shown by LibDBIcon, plus a counter badge) | shared |
 | `Addon` (MINOR 2) | `Setup(addon, addonName, options)`: build flag, version, title, prefix, SavedVariables, frame names, slash commands and dispatcher, Print; `AddDiagnosticCommands(addon)`: comm, hello, debug, trace | per addon (functions only) |
 
 Trust model: guild members are trusted, everyone else is not. A peer can only author its own records (checked by

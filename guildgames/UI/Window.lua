@@ -534,22 +534,23 @@ end
 ---@type table|nil
 UI.minimapButton = nil
 
--- A coin on the minimap (LibGuildSync's button, shared with ProfessionShare): click opens the window, right-drag moves it.
--- Its default spot (185 degrees; dev builds 165) is away from ProfessionShare's (215, 245) so the two never cover each other.
+-- A coin on the minimap (LibDBIcon's button via Widgets.CreateMinimapButton, shared with ProfessionShare): click opens
+-- the window, drag moves it.
 function UI.BuildMinimapButton()
     if UI.minimapButton or not Minimap then return end
+    addon.db.ui.minimapIcon = addon.db.ui.minimapIcon or {}
     UI.minimapButton = Widgets.CreateMinimapButton({
-        name = addon.FRAME_PREFIX .. "MinimapButton",
+        name = addon.FRAME_PREFIX,
+        label = addon.TITLE,
         icon = "Interface\\Icons\\INV_Misc_Coin_01",
-        defaultAngle = addon.IS_DEVELOPMENT_BUILD and 165 or 185,
-        getAngle = function() return addon.db and addon.db.ui.minimapAngle end,
-        setAngle = function(degrees) if addon.db then addon.db.ui.minimapAngle = degrees end end,
+        settings = addon.db.ui.minimapIcon,
+        defaultPosition = addon.IS_DEVELOPMENT_BUILD and 165 or 185,   -- away from ProfessionShare's button (215, dev 245)
         onClick = function() UI.Toggle() end,
         onTooltip = function(tooltip)
             tooltip:SetText(addon.TITLE)
             tooltip:AddLine(Text["Coin flip, slots, survivor and AZEcaught"], 1, 1, 1)
             addon.Log.Protected("caught.tooltip", "the AZEcaught tooltip failed", UI.AddCompanionTooltip, tooltip)
-            tooltip:AddLine(Text["Click: open window. Right-drag: move."], 0.7, 0.7, 0.7)
+            tooltip:AddLine(Text["Click: open window. Drag: move."], 0.7, 0.7, 0.7)
         end,
     })
     UI.RefreshMinimapBadge()

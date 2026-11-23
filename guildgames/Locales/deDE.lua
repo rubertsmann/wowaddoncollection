@@ -49,7 +49,7 @@ addon.Locale.Register("deDE", {
         ["Sync problem: your character name does not match the guild roster, so game results cannot be exchanged."] = "Sync-Problem: Dein Charaktername passt nicht zur Gildenliste, daher können keine Spielergebnisse ausgetauscht werden.",
         ["Coin flip, slots, survivor and AZEcaught"] = "Münzwurf, Spielautomat, Überleben und AZEcaught",
         ["Leaderboard"] = "Bestenliste",
-        ["Click: open window. Right-drag: move."] = "Klick: Fenster öffnen. Rechts ziehen: verschieben.",
+        ["Click: open window. Drag: move."] = "Klick: Fenster öffnen. Ziehen: verschieben.",
         ["Survivor"] = "Überleben",
         ["Endless"] = "Endlos",
         ["Cash out"] = "Auszahlen",

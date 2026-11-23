@@ -1468,24 +1468,26 @@ function UI.SetNotice(unseenCount, showIcon, hideNumber)
             and Format(Text["Orders ({n})"], { n = noticeState.count }) or Text["Orders"])
     end
     if not minimapButton then return end
-    minimapButton.icon:SetTexture(noticeState.showIcon and noticeState.count > 0 and NEWS_ICON or DEFAULT_ICON)
+    -- through the LibDataBroker object, so LibDBIcon and data displays (Titan Panel, ...) show the same icon
+    minimapButton.dataObject.icon = noticeState.showIcon and noticeState.count > 0 and NEWS_ICON or DEFAULT_ICON
     minimapButton.badge:SetShown(noticeState.count > 0 and not noticeState.hideNumber)
     minimapButton.badgeText:SetText(noticeState.count > 99 and "99+" or tostring(noticeState.count))
 end
 
--- the round button is LibGuildSync's (Widgets.CreateMinimapButton, shared with GuildGames); its badge shows the count
+-- LibDBIcon's button (Widgets.CreateMinimapButton, shared with GuildGames); its badge shows the count
 local function buildMinimapButton()
+    addon.db.ui.minimapIcon = addon.db.ui.minimapIcon or {}
     minimapButton = Widgets.CreateMinimapButton({
-        name = addon.FRAME_PREFIX .. "MinimapButton",
+        name = addon.FRAME_PREFIX,
+        label = addon.TITLE,
         icon = DEFAULT_ICON,
-        defaultAngle = addon.IS_DEVELOPMENT_BUILD and 245 or 215,
-        getAngle = function() return addon.db and addon.db.ui.minimapAngle end,
-        setAngle = function(degrees) if addon.db then addon.db.ui.minimapAngle = degrees end end,
+        settings = addon.db.ui.minimapIcon,
+        defaultPosition = addon.IS_DEVELOPMENT_BUILD and 245 or 215,   -- away from GuildGames' coin (185, dev 165)
         onClick = function() UI.Toggle() end,
         onTooltip = function(tooltip)
             tooltip:SetText(addon.TITLE)
             if noticeState.count > 0 then tooltip:AddLine(Format(Text["{n} new on the order board"], { n = noticeState.count }), 1, 0.82, 0) end
-            tooltip:AddLine(Text["Click: open window. Right-drag: move."], 1, 1, 1)
+            tooltip:AddLine(Text["Click: open window. Drag: move."], 1, 1, 1)
         end,
     })
     UI.SetNotice(noticeState.count, noticeState.showIcon, noticeState.hideNumber)

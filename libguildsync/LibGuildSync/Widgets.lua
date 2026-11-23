@@ -1,6 +1,6 @@
 -- LibGuildSync: plain-frame window helpers (no secure templates, so they never taint and work in combat).
 local lib = LibStub("LibGuildSync-1.0")
-local Widgets = lib:Module("Widgets", 3)
+local Widgets = lib:Module("Widgets", 4)
 if not Widgets then return end
 
 Widgets.ROW_HEIGHT = 20
@@ -149,106 +149,43 @@ function Widgets.TimeAgo(timestamp, Text)
 end
 
 ---@class MinimapButtonOptions
----@field name? string global frame name
+---@field name string LibDBIcon / LibDataBroker name, unique per addon build ("ProfessionShare", "ProfessionShareDev")
+---@field label? string the name shown by button collectors and data displays (default: name)
 ---@field icon string texture path
----@field defaultAngle number degrees around the minimap (0 = right, 90 = top)
----@field getAngle fun(): number|nil the saved angle (nil: defaultAngle)
----@field setAngle fun(degrees: number) saves the angle while the button is dragged
+---@field settings table saved table LibDBIcon keeps the position and the hide flag in (minimapPos, hide, lock)
+---@field defaultPosition? number degrees around the minimap (0 = right, 90 = top) until the player drags it
 ---@field onClick fun(button: table, mouseButton: string)
----@field onTooltip? fun(tooltip: table) fills GameTooltip (already owned by the button)
+---@field onTooltip? fun(tooltip: table) fills the tooltip LibDBIcon passes in
 
--- Gap between the minimap's edge and a button's centre, as LibDBIcon (used by most addons) uses, so our buttons line
--- up with theirs on the ring OUTSIDE the map.
-Widgets.MINIMAP_BUTTON_GAP = 5
--- Used when the client cannot tell the minimap size: the classic 140 px minimap.
-Widgets.MINIMAP_FALLBACK_SIZE = 140
-
--- Which quadrants (1 = bottom-right, 2 = bottom-left, 3 = top-right, 4 = top-left) are round, per GetMinimapShape().
-local MINIMAP_SHAPES = {
-    ROUND = { true, true, true, true }, SQUARE = { false, false, false, false },
-    ["CORNER-TOPLEFT"] = { false, false, false, true }, ["CORNER-TOPRIGHT"] = { false, false, true, false },
-    ["CORNER-BOTTOMLEFT"] = { false, true, false, false }, ["CORNER-BOTTOMRIGHT"] = { true, false, false, false },
-    ["SIDE-LEFT"] = { false, true, false, true }, ["SIDE-RIGHT"] = { true, false, true, false },
-    ["SIDE-TOP"] = { false, false, true, true }, ["SIDE-BOTTOM"] = { true, true, false, false },
-    ["TRICORNER-TOPLEFT"] = { false, true, true, true }, ["TRICORNER-TOPRIGHT"] = { true, false, true, true },
-    ["TRICORNER-BOTTOMLEFT"] = { true, true, false, true }, ["TRICORNER-BOTTOMRIGHT"] = { true, true, true, false },
-}
-
--- The offset of a minimap button's centre from the minimap's centre at `angleDegrees`: just outside the edge of a minimap
--- `width` x `height` (non-numbers fall back to the classic size) of shape `shape` (GetMinimapShape(), default ROUND).
----@param angleDegrees number
----@param width any
----@param height any
----@param shape any
----@return number x, number y
-function Widgets.MinimapButtonOffset(angleDegrees, width, height, shape)
-    local function size(value)
-        return (type(value) == "number" and value > 0 and value == value) and value or Widgets.MINIMAP_FALLBACK_SIZE
-    end
-    local angleRadians = math.rad(tonumber(angleDegrees) or 225)
-    local x, y = math.cos(angleRadians), math.sin(angleRadians)
-    local quadrant = 1
-    if x < 0 then quadrant = quadrant + 1 end
-    if y > 0 then quadrant = quadrant + 2 end
-    local halfWidth = size(width) / 2 + Widgets.MINIMAP_BUTTON_GAP
-    local halfHeight = size(height) / 2 + Widgets.MINIMAP_BUTTON_GAP
-    if (MINIMAP_SHAPES[shape] or MINIMAP_SHAPES.ROUND)[quadrant] then return x * halfWidth, y * halfHeight end
-    -- a square corner: slide along the edge instead of cutting across the corner
-    local diagonalWidth, diagonalHeight = math.sqrt(2 * halfWidth ^ 2) - 10, math.sqrt(2 * halfHeight ^ 2) - 10
-    return math.max(-halfWidth, math.min(x * diagonalWidth, halfWidth)), math.max(-halfHeight, math.min(y * diagonalHeight, halfHeight))
-end
-
--- A round minimap button: left click runs onClick, right-drag moves it around the minimap (the angle is saved by the
--- caller). It has a hidden red badge (button.badge, button.badgeText) for a counter.
+-- A minimap button made by the standard LibDataBroker-1.1 launcher + LibDBIcon-1.0, so button collectors (Leatrix Plus
+-- "Combine addon buttons", Minimap Button Bag, ElvUI, ...) and data displays (Titan Panel, ChocolateBar) find it. The
+-- addon embeds CallbackHandler-1.0, LibDataBroker-1.1 and LibDBIcon-1.0 before this library. LibDBIcon owns placement
+-- and dragging (left-drag); this adds a hidden red badge (button.badge, button.badgeText) for a counter.
+-- Raises an error when the libraries are missing (a TOC that gained them is only read at a client restart, not /reload).
 ---@param options MinimapButtonOptions
----@return table button with .icon, .badge, .badgeText and :Place()
+---@return table|nil button LibDBIcon's button, with .icon, .dataObject, .badge and .badgeText; nil while hidden
 function Widgets.CreateMinimapButton(options)
-    local arcTangent2 = math.atan2 or math.atan
-    local buttonFrame = CreateFrame("Button", options.name, Minimap)
-    buttonFrame:SetSize(31, 31); buttonFrame:SetFrameStrata("MEDIUM"); buttonFrame:SetFrameLevel(8)
-    local icon = buttonFrame:CreateTexture(nil, "BACKGROUND"); icon:SetSize(20, 20); icon:SetPoint("CENTER")
-    icon:SetTexture(options.icon)
-    buttonFrame.icon = icon
-    local border = buttonFrame:CreateTexture(nil, "OVERLAY"); border:SetSize(53, 53); border:SetPoint("TOPLEFT")
-    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+    local dataBroker = LibStub:GetLibrary("LibDataBroker-1.1", true)
+    local minimapIcons = LibStub:GetLibrary("LibDBIcon-1.0", true)
+    if not dataBroker or not minimapIcons then
+        error("LibDataBroker-1.1 or LibDBIcon-1.0 is not loaded: the TOC must list them (after a TOC change restart the client)", 0)
+    end
+    local dataObject = dataBroker:NewDataObject(options.name, {
+        type = "launcher",
+        label = options.label or options.name,
+        icon = options.icon,
+        OnClick = options.onClick,
+        OnTooltipShow = options.onTooltip,
+    })
+    if options.settings and options.settings.minimapPos == nil then options.settings.minimapPos = options.defaultPosition end
+    minimapIcons:Register(options.name, dataObject, options.settings)
+    local buttonFrame = minimapIcons:GetMinimapButton(options.name)
+    if not buttonFrame then return nil end   -- the player hid it (settings.hide)
     local badge = CreateFrame("Frame", nil, buttonFrame); badge:SetSize(16, 14); badge:SetPoint("TOPRIGHT", 2, 2)
     badge:SetFrameLevel(buttonFrame:GetFrameLevel() + 2)
     local badgeBackground = badge:CreateTexture(nil, "BACKGROUND"); badgeBackground:SetAllPoints(); badgeBackground:SetColorTexture(0.75, 0.05, 0.05, 0.95)
     buttonFrame.badgeText = badge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); buttonFrame.badgeText:SetPoint("CENTER", 0, 0)
     buttonFrame.badge = badge
     badge:Hide()
-    function buttonFrame:Place()
-        local width = type(Minimap.GetWidth) == "function" and Minimap:GetWidth() or nil
-        local height = type(Minimap.GetHeight) == "function" and Minimap:GetHeight() or nil
-        local shape = type(GetMinimapShape) == "function" and GetMinimapShape() or nil
-        local offsetX, offsetY = Widgets.MinimapButtonOffset(options.getAngle() or options.defaultAngle, width, height, shape)
-        self:ClearAllPoints()
-        self:SetPoint("CENTER", Minimap, "CENTER", offsetX, offsetY)
-    end
-    -- the minimap can change size after load (and the Forever minimap is larger than the classic one): follow it
-    if type(Minimap.HookScript) == "function" then
-        pcall(Minimap.HookScript, Minimap, "OnSizeChanged", function() buttonFrame:Place() end)
-    end
-    buttonFrame:RegisterForClicks("LeftButtonUp")
-    buttonFrame:RegisterForDrag("RightButton")
-    buttonFrame:SetScript("OnClick", options.onClick)
-    buttonFrame:SetScript("OnEnter", function(self)
-        if not options.onTooltip then return end
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        options.onTooltip(GameTooltip)
-        GameTooltip:Show()
-    end)
-    buttonFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    buttonFrame:SetScript("OnDragStart", function(self)
-        self:SetScript("OnUpdate", function()
-            local minimapCenterX, minimapCenterY = Minimap:GetCenter()
-            local cursorX, cursorY = GetCursorPosition()
-            local scale = Minimap:GetEffectiveScale()
-            options.setAngle(math.deg(arcTangent2(cursorY / scale - minimapCenterY, cursorX / scale - minimapCenterX)))
-            self:Place()
-        end)
-    end)
-    buttonFrame:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
-    buttonFrame:Place()
     return buttonFrame
 end

@@ -115,7 +115,7 @@ return {
         harness.equal(LibStub(MAJOR).Addon, nil)
         harness.loadLibrary()
         local lib = LibStub(MAJOR)
-        harness.equal(lib.MINOR, 3)
+        harness.equal(lib.MINOR, 4)
         harness.equal(type(lib.Addon.Setup), "function")
     end,
 }

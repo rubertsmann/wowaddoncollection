@@ -1,5 +1,15 @@
 # Changelog
 
+## MINOR 4 (2026-11-23)
+- `Widgets.CreateMinimapButton` is rebuilt on the standard libraries: a LibDataBroker-1.1 `launcher` object registered
+  with LibDBIcon-1.0, so button collectors (Leatrix Plus "Combine addon buttons", Minimap Button Bag, ElvUI, ...) and data
+  displays (Titan Panel, ChocolateBar) find it. They only pick up LibDBIcon buttons, so the hand-made button was missing.
+  New options: `name`, `label`, `icon`, `settings` (LibDBIcon's saved table: minimapPos, hide, lock), `defaultPosition`, `onClick`,
+  `onTooltip`. LibDBIcon owns placement and dragging (left-drag now). The counter badge is kept; the icon changes
+  through `button.dataObject.icon`. Returns nil when the libraries are not loaded. `Widgets.MinimapButtonOffset` and its
+  constants are removed. **Breaking:** the embedding addon must load CallbackHandler-1.0, LibDataBroker-1.1 and
+  LibDBIcon-1.0 before this library; the old saved angle is not carried over.
+
 ## MINOR 3 (2026-11-21)
 - Every HELLO carries `ver` = "<addon version>/<MINOR>" (Channel); receivers keep it per member for the session
   (`Channel.PeerVersions`), note it in the HELLO trace line and `/<cmd> comm` prints both. Optional field, no protocol change.

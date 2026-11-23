@@ -8,7 +8,7 @@
 -- The channel's functions are called with a dot (channel.Send(message, "GUILD")), and its state is plain fields
 -- (channel.queue, channel.roster, channel.sync, ...), so an addon can expose the channel as its own module.
 local lib = LibStub("LibGuildSync-1.0")
-local Channel = lib:Module("Channel", 3)
+local Channel = lib:Module("Channel", 4)
 if not Channel then return end
 
 ---@class QueuedChunk

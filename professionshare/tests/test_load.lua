@@ -32,6 +32,12 @@ local function tocFiles(path)
     return out
 end
 
+-- the standard minimap-button libraries (LibDBIcon and what it needs) run against the stubs too; the other Libs are
+-- loaded by tests/run.lua
+local function isMinimapLibrary(file)
+    return file:match("^Libs/CallbackHandler%-1%.0/") or file:match("^Libs/LibDataBroker%-1%.1/") or file:match("^Libs/LibDBIcon%-1%.0/")
+end
+
 local function listDir(pattern)
     local out = {}
     local top = pattern:match("^([%w_]+)/")
@@ -63,7 +69,7 @@ return {
             for _, addonFolderName in ipairs({ "ProfessionShare", "ProfessionShare-Dev" }) do
                 local addon = {}
                 for _, file in ipairs(tocFiles("ProfessionShare.toc")) do
-                    if not file:match("^Libs/") then
+                    if not file:match("^Libs/") or isMinimapLibrary(file) then
                         local chunk = assert(loadfile(file), file)
                         chunk(addonFolderName, addon)
                     end

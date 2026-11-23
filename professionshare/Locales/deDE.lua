@@ -43,7 +43,7 @@ addon.Locale.Register("deDE", {
         ["{n}m ago"] = "vor {n} Min.",
         ["{n}h ago"] = "vor {n} Std.",
         ["{n}d ago"] = "vor {n} Tg.",
-        ["Click: open window. Right-drag: move."] = "Klick: Fenster öffnen. Rechts ziehen: verschieben.",
+        ["Click: open window. Drag: move."] = "Klick: Fenster öffnen. Ziehen: verschieben.",
         ["Craft"] = "Herstellen",
         ["Craft {qty}x"] = "{qty}x herstellen",
         ["Open profession"] = "Beruf öffnen",

@@ -1,5 +1,5 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
-    <!-- LibGuildSync-1.0. Load AFTER LibStub and LibDeflate. Core first; the order of the rest is the dependency order. -->
+    <!-- LibGuildSync-1.0. Load AFTER LibStub, LibDeflate, CallbackHandler-1.0, LibDataBroker-1.1 and LibDBIcon-1.0. Core first; the order of the rest is the dependency order. -->
     <Script file="Core.lua"/>
     <Script file="Utility.lua"/>
     <Script file="Log.lua"/>

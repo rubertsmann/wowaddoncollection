@@ -39,6 +39,12 @@ local function tocFiles(path)
     return files
 end
 
+-- the standard minimap-button libraries (LibDBIcon and what it needs) run against the stubs too; the other Libs are
+-- loaded by tests/run.lua
+local function isMinimapLibrary(file)
+    return file:match("^Libs/CallbackHandler%-1%.0/") or file:match("^Libs/LibDataBroker%-1%.1/") or file:match("^Libs/LibDBIcon%-1%.0/")
+end
+
 local function withStubs(body)
     local saved = {}
     local globals = { CreateFrame = function() return stub() end, UIParent = stub(), Minimap = stub(), GameTooltip = stub(), UISpecialFrames = {},
@@ -71,7 +77,7 @@ return {
             for _, folderName in ipairs({ "GuildGames", "GuildGames-Dev" }) do
                 local addon = {}
                 for _, file in ipairs(tocFiles("GuildGames.toc")) do
-                    if not file:match("^Libs/") then assert(loadfile(file), file)(folderName, addon) end
+                    if not file:match("^Libs/") or isMinimapLibrary(file) then assert(loadfile(file), file)(folderName, addon) end
                 end
                 local development = folderName:find("Dev", 1, true) ~= nil
                 harness.equal(addon.IS_DEVELOPMENT_BUILD, development)
