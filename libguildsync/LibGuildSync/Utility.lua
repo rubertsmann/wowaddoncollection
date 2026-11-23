@@ -3,7 +3,7 @@
 -- ONE state for every addon that embeds the library: the realm spellings and surnames learned here belong to the player,
 -- not to an addon. Addon-specific identity (who "me" is in that addon's saved data) stays in the addon.
 local lib = LibStub("LibGuildSync-1.0")
-local Utility = lib:Module("Utility", 4)
+local Utility = lib:Module("Utility", 5)
 if not Utility then return end
 
 ---@class UtilityNameState

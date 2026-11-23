@@ -16,6 +16,12 @@ function Api.RequestRoster() return Guild.RequestRoster() end
 ---@return table<string, boolean>
 function Api.GetGuildRoster() return Guild.GetGuildRoster() end
 
+-- Whether the last guild roster showed this canonical name online (nil: not in it). Queued whispers to an offline
+-- member are dropped instead of sent ("no player named ... is online").
+---@param playerName string
+---@return boolean|nil
+function Api.IsOnline(playerName) return Guild.IsOnline(playerName) end
+
 -- A number in [0, 1) for game outcomes (Games.Flip and Slots.Spin take it as their random function; tests inject their own).
 ---@return number
 function Api.Random() return math.random() end

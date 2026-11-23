@@ -6,7 +6,7 @@
 --   live: title "ProfessionShare", prefix "PShare", SavedVariables "ProfessionShareDB", frames "ProfessionShare", /ps /professionshare
 --   dev:  title "ProfessionShare (dev)", prefix "PShareDev", "ProfessionShareDevDB", frames "ProfessionShareDev", /psd /professionsharedev
 local lib = LibStub("LibGuildSync-1.0")
-local Addon = lib:Module("Addon", 4)
+local Addon = lib:Module("Addon", 5)
 if not Addon then return end
 
 -- A field of addon `addonName`'s TOC file ("## <field>: value"), nil when the client cannot tell or the field is empty.

@@ -8,7 +8,7 @@
 -- The channel's functions are called with a dot (channel.Send(message, "GUILD")), and its state is plain fields
 -- (channel.queue, channel.roster, channel.sync, ...), so an addon can expose the channel as its own module.
 local lib = LibStub("LibGuildSync-1.0")
-local Channel = lib:Module("Channel", 4)
+local Channel = lib:Module("Channel", 5)
 if not Channel then return end
 
 ---@class QueuedChunk
@@ -36,6 +36,7 @@ if not Channel then return end
 ---@field IsGuilded fun(): boolean
 ---@field GetGuildRoster fun(): table<string, boolean>
 ---@field RequestRoster fun()
+---@field IsOnline? fun(playerName: string): boolean|nil false = the roster shows the member offline
 
 ---@class ChannelOptions
 ---@field prefix string|fun(): string addon-message prefix (at most 16 bytes)
@@ -45,6 +46,7 @@ if not Channel then return end
 ---@field me fun(): string|nil my canonical name in this addon
 ---@field version? string addon version, for the log
 ---@field priorityTypes? table<string, boolean> small single-chunk messages that jump the queue
+---@field replaceableTypes? table<string, boolean> record answers: a newer one to the same recipient replaces a waiting one
 ---@field guild? GuildAccess|fun(): GuildAccess default lib.Guild
 ---@field newSync fun(channel: table): table builds the Sync engine when the channel starts
 ---@field onIncompatible? fun(kind: HintKind, sender: string) once per kind and session: tell the player
@@ -58,6 +60,8 @@ Channel.MAXIMUM_QUEUED_CHUNKS = 600
 Channel.THROTTLE_RESULT_CODE = 3   -- Enum.SendAddonMessageResult.AddonMessageThrottle
 Channel.HELLO_INTERVAL_SECONDS = 30
 Channel.STALE_BUFFER_SECONDS = 60
+-- a member heard from this recently counts as online even if the (older) roster says otherwise
+Channel.RECENTLY_HEARD_SECONDS = 120
 
 ---@class ChannelShared
 ---@field tokens number send tokens available to every channel together
@@ -145,6 +149,12 @@ function Channel.Send(channel, message, chatChannel, target)
         return
     end
     traceEntry.sentParts = 0
+    if channel.options.replaceableTypes and channel.options.replaceableTypes[message.t] then
+        Channel.RemoveWaiting(channel, function(waitingEntry, queuedChunk)
+            return waitingEntry ~= traceEntry and waitingEntry.mt == message.t and (waitingEntry.sentParts or 0) == 0
+                and queuedChunk.channel == chatChannel and queuedChunk.target == target
+        end, "replaced", ("a newer %s to the same recipient was queued"):format(tostring(message.t)))
+    end
     local isPriority = channel.options.priorityTypes and channel.options.priorityTypes[message.t]
     for partIndex = 1, partCount do
         local payload = encoded:sub((partIndex - 1) * codec.CHUNK_BYTES + 1, partIndex * codec.CHUNK_BYTES)
@@ -158,6 +168,42 @@ function Channel.Send(channel, message, chatChannel, target)
     end
 end
 
+-- Removes every queued chunk whose message matches `matches(traceEntry, queuedChunk)` and marks those messages
+-- `status` / `reason` in the trace. Returns the number of chunks removed.
+---@param channel table
+---@param matches fun(traceEntry: table, queuedChunk: table): boolean
+---@param status string
+---@param reason string
+---@return integer
+function Channel.RemoveWaiting(channel, matches, status, reason)
+    local keptChunks, removedCount, removedEntries = {}, 0, {}
+    for _, queuedChunk in ipairs(channel.queue) do
+        local traceEntry = queuedChunk.traceEntry
+        if traceEntry and (removedEntries[traceEntry] or matches(traceEntry, queuedChunk)) then
+            removedEntries[traceEntry] = true
+            removedCount = removedCount + 1
+        else
+            keptChunks[#keptChunks + 1] = queuedChunk
+        end
+    end
+    if removedCount == 0 then return 0 end
+    channel.queue = keptChunks
+    for traceEntry in pairs(removedEntries) do traceEntry.st, traceEntry.why = status, reason end
+    return removedCount
+end
+
+-- A whisper is not worth sending when the guild roster shows its recipient offline and nothing was heard from them
+-- recently: the game would only answer with "no player named ... is online".
+---@param channel table
+---@param target string|nil
+---@return boolean
+function Channel.RecipientOffline(channel, target)
+    local guild = guildOf(channel)
+    if type(target) ~= "string" or not guild.IsOnline or guild.IsOnline(target) ~= false then return false end
+    local heardAt = channel.lastHeardAt[target]
+    return not (heardAt and lib.Utility.Now() - heardAt < Channel.RECENTLY_HEARD_SECONDS)
+end
+
 -- Refills the shared token bucket for `elapsedSeconds`.
 ---@param elapsedSeconds number
 function Channel.Refill(elapsedSeconds)
@@ -165,42 +211,69 @@ function Channel.Refill(elapsedSeconds)
     shared.tokens = math.min(Channel.BUCKET_CAPACITY, shared.tokens + elapsedSeconds * Channel.REFILL_PER_SECOND)
 end
 
+-- Hands one chunk to the client and records the outcome. Returns false when the client throttled it (not sent).
+---@param channel table
+---@param queuedChunk table
+---@return boolean notThrottled
+function Channel.SendChunk(channel, queuedChunk)
+    local log = channel.options.log
+    -- same realm: name only (Utility.WhisperTarget)
+    local resolvedTarget = queuedChunk.channel == "WHISPER" and lib.Utility.WhisperTarget(queuedChunk.target) or queuedChunk.target
+    local ok, result = pcall(C_ChatInfo.SendAddonMessage, prefixOf(channel), queuedChunk.text, queuedChunk.channel, resolvedTarget)
+    if ok and type(result) == "number" and result == Channel.THROTTLE_RESULT_CODE then return false end
+    local delivered, reason = Channel.InterpretResult(ok, result)
+    local traceEntry = queuedChunk.traceEntry
+    if traceEntry then
+        if resolvedTarget ~= queuedChunk.target then traceEntry.via = resolvedTarget end
+        if delivered then
+            traceEntry.sentParts = (traceEntry.sentParts or 0) + 1
+            if traceEntry.st == "queued" and traceEntry.sentParts >= (traceEntry.parts or 1) then traceEntry.st = "sent" end
+        else
+            traceEntry.st, traceEntry.why = "failed", reason
+        end
+    end
+    if not delivered then
+        channel.sendFailures = channel.sendFailures + 1
+        log.Error("communication.send", "the client refused an addon message",
+            { reason = reason, channel = queuedChunk.channel, target = resolvedTarget, messageType = traceEntry and traceEntry.mt })
+    end
+    channel.chunksSent = channel.chunksSent + 1
+    return true
+end
+
+-- Drops every waiting whisper to `target` (the roster shows them offline).
+---@param channel table
+---@param target string
+function Channel.DropWhispersTo(channel, target)
+    local removedCount = Channel.RemoveWaiting(channel, function(_, waitingChunk)
+        return waitingChunk.channel == "WHISPER" and waitingChunk.target == target
+    end, "dropped", "recipient offline (guild roster)")
+    if removedCount == 0 then table.remove(channel.queue, 1) end   -- a chunk without trace entry: drop it alone
+    channel.options.log.Debug("communication.send", "whispers to a member who went offline were dropped",
+        { target = target, chunks = math.max(1, removedCount) })
+end
+
 -- Sends up to `maximumChunks` queued chunks of one channel while shared tokens last. Returns false when throttled.
+-- Whispers to a member the roster shows offline are dropped on the way (they cost no token).
 ---@param channel table
 ---@param maximumChunks? integer
 ---@return boolean notThrottled
 function Channel.SendQueued(channel, maximumChunks)
-    local shared, log = Channel.shared, channel.options.log
+    local shared = Channel.shared
     local sentCount = 0
     while shared.tokens >= 1 and #channel.queue > 0 and (not maximumChunks or sentCount < maximumChunks) do
-        local queuedChunk = table.remove(channel.queue, 1)
-        -- same realm: name only (Utility.WhisperTarget)
-        local resolvedTarget = queuedChunk.channel == "WHISPER" and lib.Utility.WhisperTarget(queuedChunk.target) or queuedChunk.target
-        local ok, result = pcall(C_ChatInfo.SendAddonMessage, prefixOf(channel), queuedChunk.text, queuedChunk.channel, resolvedTarget)
-        if ok and type(result) == "number" and result == Channel.THROTTLE_RESULT_CODE then   -- throttled: retry later
-            table.insert(channel.queue, 1, queuedChunk)
-            shared.tokens = 0
-            return false
-        end
-        local delivered, reason = Channel.InterpretResult(ok, result)
-        local traceEntry = queuedChunk.traceEntry
-        if traceEntry then
-            if resolvedTarget ~= queuedChunk.target then traceEntry.via = resolvedTarget end
-            if delivered then
-                traceEntry.sentParts = (traceEntry.sentParts or 0) + 1
-                if traceEntry.st == "queued" and traceEntry.sentParts >= (traceEntry.parts or 1) then traceEntry.st = "sent" end
-            else
-                traceEntry.st, traceEntry.why = "failed", reason
+        local queuedChunk = channel.queue[1]
+        if queuedChunk.channel == "WHISPER" and Channel.RecipientOffline(channel, queuedChunk.target) then
+            Channel.DropWhispersTo(channel, queuedChunk.target)
+        else
+            if not Channel.SendChunk(channel, queuedChunk) then   -- throttled: the chunk stays first, retry later
+                shared.tokens = 0
+                return false
             end
+            table.remove(channel.queue, 1)
+            shared.tokens = shared.tokens - 1
+            sentCount = sentCount + 1
         end
-        if not delivered then
-            channel.sendFailures = channel.sendFailures + 1
-            log.Error("communication.send", "the client refused an addon message",
-                { reason = reason, channel = queuedChunk.channel, target = resolvedTarget, messageType = traceEntry and traceEntry.mt })
-        end
-        channel.chunksSent = channel.chunksSent + 1
-        shared.tokens = shared.tokens - 1
-        sentCount = sentCount + 1
     end
     return true
 end
@@ -336,6 +409,7 @@ function Channel.OnAddonMessage(channel, prefix, text, chatChannel, rawSender)
         traceRejection(channel, chatChannel, sender, rawSender, reason)
         return
     end
+    channel.lastHeardAt[sender] = Utility.Now()
     local ok, errorMessage = pcall(Channel.OnChunk, channel, text, sender, chatChannel, rawSender)
     if not ok then
         channel.options.log.Exception("communication.receive", "handling a received chunk failed", errorMessage,
@@ -664,7 +738,7 @@ function Channel.New(options)
     local channel = { options = options, active = false, ready = false, queue = {}, buffers = {}, lastHello = 0, helloDueAt = nil,
         messageCounter = 0, salt = 0, roster = {}, hints = lib.Guard.NewHints(), rejected = 0, chunksSent = 0, chunksReceived = 0,
         sendFailures = 0, identityWarned = false, canonicalNameVersion = nil, lastEcho = nil, sync = nil, seen = {},
-        lastRejectionTraced = {}, peerVersions = {}, InterpretResult = Channel.InterpretResult }
+        lastRejectionTraced = {}, peerVersions = {}, lastHeardAt = {}, InterpretResult = Channel.InterpretResult }
     function channel.VersionTag() return Channel.VersionTag(channel) end
     function channel.PeerVersions() return Channel.PeerVersions(channel) end
     function channel.Me() return options.me() end

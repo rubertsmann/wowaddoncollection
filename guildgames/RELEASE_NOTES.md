@@ -1,3 +1,13 @@
+# GuildGames 0.4.1
+
+**English:** Fixes the chat message "No player named ... is currently playing" that could appear while the addon was
+syncing after a guild member logged out. Nothing is sent to members who have gone offline anymore. Members on older
+versions keep working with you.
+
+**Deutsch:** Behebt die Chatmeldung "Momentan ist kein Spieler mit dem Namen ... online", die beim Abgleich erscheinen
+konnte, nachdem sich ein Gildenmitglied ausgeloggt hatte. An Mitglieder, die offline gegangen sind, wird nichts mehr
+geschickt. Mitglieder mit älteren Versionen arbeiten weiter mit dir zusammen.
+
 # GuildGames 0.4.0
 
 **English:** The minimap button is now a standard addon button, so minimap button collectors such as Leatrix Plus

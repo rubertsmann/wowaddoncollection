@@ -1,5 +1,16 @@
 # Changelog
 
+## MINOR 5 (2026-11-23)
+- Channel option `replaceableTypes`: a newer message of such a type (record answers) to the same recipient on the same
+  channel replaces one still waiting with no chunk sent (trace `replaced`). A live session had 434 chunks waiting, the
+  oldest 12 minutes, 53 of them outdated answers.
+- Whispers to a member the guild roster shows offline (and not heard from in 120 s) are dropped from the queue instead
+  of sent (trace `dropped`, "recipient offline (guild roster)"); the game answered those with "no player named ... is
+  online". `Guild.GetGuildRoster` records the online flag, `Guild.IsOnline(name)` reads it; a channel's guild access may
+  offer `IsOnline` (optional).
+- `Channel.SendChunk` split out of `SendQueued`; new `Channel.RemoveWaiting`, `Channel.RecipientOffline`,
+  `Channel.DropWhispersTo`; `channel.lastHeardAt`.
+
 ## MINOR 4 (2026-11-23)
 - `Widgets.CreateMinimapButton` is rebuilt on the standard libraries: a LibDataBroker-1.1 `launcher` object registered
   with LibDBIcon-1.0, so button collectors (Leatrix Plus "Combine addon buttons", Minimap Button Bag, ElvUI, ...) and data

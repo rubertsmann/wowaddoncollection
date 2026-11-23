@@ -100,9 +100,11 @@ local function scheduleItemScan(delaySeconds)
 end
 Events.ScanItems = scheduleItemScan
 
-Events.On("LOCAL_CHANGED", function() addon.Communication.RequestHello(false, true) end)
-Events.On("OFFERS_CHANGED", function() addon.Communication.RequestHello(false, true) end)
-Events.On("ACCESS_CHANGED", function() addon.Communication.RequestHello(false, true) end)
+-- My own changes are announced coalesced (at most one HELLO per Channel.HELLO_INTERVAL_SECONDS): while crafting, every
+-- skill-up changes my record, and each announcement makes every online member pull the whole record again.
+Events.On("LOCAL_CHANGED", function() addon.Communication.RequestHelloSoon() end)
+Events.On("OFFERS_CHANGED", function() addon.Communication.RequestHelloSoon() end)
+Events.On("ACCESS_CHANGED", function() addon.Communication.RequestHelloSoon() end)
 -- a record from a peer arrived: drop MY dibs on items that are gone (the new record may have removed them)
 Events.On("DATA_CHANGED", function(kind)
     if kind ~= "offers" or not addon.db or addon.db.readonly then return end

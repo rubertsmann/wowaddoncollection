@@ -1,7 +1,7 @@
 -- LibGuildSync: the guild and identity client calls every sync addon needs (roster, my name). Calls that fail on this
 -- client (missing or changed API) return nil instead of breaking the caller.
 local lib = LibStub("LibGuildSync-1.0")
-local Guild = lib:Module("Guild", 4)
+local Guild = lib:Module("Guild", 5)
 if not Guild then return end
 
 -- pcall(func, ...) returning func's results, or nil when it is missing or raised an error.
@@ -51,25 +51,42 @@ function Guild.RequestRoster()
     elseif GuildRoster then GuildRoster() end
 end
 
+---@type table<string, boolean> canonical name -> online, as of the last GetGuildRoster
+Guild.onlineMembers = Guild.onlineMembers or {}
+
 -- Set of canonical "Name-Realm" for everyone in the guild (empty if the roster is not loaded yet). The roster's spelling
 -- of MY character teaches Utility which realm string the server uses for my realm, before any name is canonicalized.
+-- Also records who the roster shows online (Guild.IsOnline).
 ---@return table<string, boolean>
 function Guild.GetGuildRoster()
     local Utility = lib.Utility
-    local rosterSet, rosterNames = {}, {}
+    local rosterSet, rosterNames, onlineByRosterName = {}, {}, {}
     if not Guild.IsGuilded() or not GetNumGuildMembers then return rosterSet end
     for memberIndex = 1, (GetNumGuildMembers()) do
-        local rosterName = GetGuildRosterInfo(memberIndex)
-        if type(rosterName) == "string" and rosterName ~= "" then rosterNames[#rosterNames + 1] = rosterName end
+        local rosterName, _, _, _, _, _, _, _, isOnline = GetGuildRosterInfo(memberIndex)
+        if type(rosterName) == "string" and rosterName ~= "" then
+            rosterNames[#rosterNames + 1] = rosterName
+            onlineByRosterName[rosterName] = isOnline and true or false
+        end
     end
     Utility.LearnFromRoster(rosterNames, Guild.MyBaseName())
     Utility.SetRosterNames(rosterNames)
+    local onlineMembers = {}
     for _, rosterName in ipairs(rosterNames) do
         local canonicalName = Utility.CanonicalName(rosterName)
-        if canonicalName then rosterSet[canonicalName] = true end
+        if canonicalName then
+            rosterSet[canonicalName] = true
+            onlineMembers[canonicalName] = onlineByRosterName[rosterName]
+        end
     end
+    Guild.onlineMembers = onlineMembers
     return rosterSet
 end
+
+-- Whether the last roster showed this canonical name online: true, false, or nil when the name was not in it.
+---@param playerName string
+---@return boolean|nil
+function Guild.IsOnline(playerName) return Guild.onlineMembers[playerName] end
 
 -- Raw identity facts for a diagnostic report: every source of "my name" and of the roster's names, so a mismatch between
 -- them (realm suffix form) can be seen without guessing. Values are what the client returned, untouched.

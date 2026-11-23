@@ -23,3 +23,4 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 016 | Recipe table columns and resizable window | done | 0.7.0 (UI + local settings) | d9e0ea0 | [016-recipe-table-columns-and-resizable-window](016-recipe-table-columns-and-resizable-window/spec.md) |
 | 017 | Enchant effect text | done | 0.7.2, fix 0.7.3 (UI only) | 91a9da0 | [017-enchant-effect-text](017-enchant-effect-text/spec.md) |
 | 022 | Misc items tab with keys | verifying | 1.2.0 (protocol 2.4, schema 6) | release commit 1.2.0 | [022-misc-items-tab-with-keys](022-misc-items-tab-with-keys/spec.md) |
+| 023 | Send backlog and offline whispers | verifying | ProfessionShare 1.2.1, GuildGames 0.4.1, LibGuildSync MINOR 5 | release commit | [023-send-backlog-and-offline-whispers](023-send-backlog-and-offline-whispers/spec.md) |

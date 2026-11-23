@@ -12,7 +12,10 @@ local Text = addon.Text
 local library = LibStub("LibGuildSync-1.0")
 
 ---@type table<string, boolean> small single-chunk control messages that jump the queue
-local PRIORITY_TYPES = { ORDER = true, WANT = true, WANTO = true, HELLO = true }
+local PRIORITY_TYPES = { ORDER = true, WANT = true, WANTO = true, WANTA = true, HELLO = true }
+-- record answers: a newer one to the same recipient replaces one that is still waiting (it would be outdated on arrival)
+---@type table<string, boolean>
+local REPLACEABLE_TYPES = { SNAP = true, OFFERS = true, ACCESS = true }
 
 ---@return string|nil
 local function me() return addon.Utility.Me() end
@@ -26,6 +29,7 @@ local Communication = library.Channel.New({
     me = me,
     version = addon.VERSION,
     priorityTypes = PRIORITY_TYPES,
+    replaceableTypes = REPLACEABLE_TYPES,
     guild = function() return addon.Api end,       -- Api delegates to LibGuildSync's Guild; tests replace it
     newSync = function(channel)
         return addon.Sync.New({

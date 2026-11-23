@@ -18,6 +18,7 @@ local Communication = LibStub("LibGuildSync-1.0").Channel.New({
     me = me,
     version = addon.VERSION,
     priorityTypes = { HELLO = true, WANTG = true },
+    replaceableTypes = { GAMES = true },   -- a newer games record to the same member replaces one still waiting
     guild = function() return addon.Api end,
     newSync = function(channel)
         return addon.Sync.New({

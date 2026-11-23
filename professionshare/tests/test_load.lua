@@ -158,6 +158,16 @@ return {
                     addon.Store.db.me = "A-R"
                 end
                 harness.truthy(addon.Events.ScanItems, "item scan hook missing")
+                -- my own changes are announced coalesced, never with an immediate forced HELLO each
+                do
+                    local hellos = {}
+                    local savedSoon, savedNow = addon.Communication.RequestHelloSoon, addon.Communication.RequestHello
+                    addon.Communication.RequestHelloSoon = function() hellos[#hellos + 1] = "soon" end
+                    addon.Communication.RequestHello = function() hellos[#hellos + 1] = "now" end
+                    for _, eventName in ipairs({ "LOCAL_CHANGED", "OFFERS_CHANGED", "ACCESS_CHANGED" }) do addon.Events.Fire(eventName) end
+                    addon.Communication.RequestHelloSoon, addon.Communication.RequestHello = savedSoon, savedNow
+                    harness.equal(table.concat(hellos, ","), "soon,soon,soon")
+                end
                 harness.truthy(addon.Names.environment.spellName, "Api did not wire Names.env.spellName")
             end
         end)

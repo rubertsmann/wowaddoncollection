@@ -1,3 +1,15 @@
+# ProfessionShare 1.2.1
+
+**English:** Fixes the chat message "No player named ... is currently playing" that could appear while the addon was
+syncing, for example after a guild member logged out while you were crafting. The addon now sends fewer and fresher
+updates while you level a profession and no longer sends anything to members who have gone offline. Please update;
+members on older versions keep working with you.
+
+**Deutsch:** Behebt die Chatmeldung "Momentan ist kein Spieler mit dem Namen ... online", die beim Abgleich erscheinen
+konnte, zum Beispiel wenn sich ein Gildenmitglied ausloggte, während du handwerkst. Das Addon schickt beim Skillen
+eines Berufs jetzt weniger und aktuellere Nachrichten und nichts mehr an Mitglieder, die offline gegangen sind. Bitte
+aktualisieren; Mitglieder mit älteren Versionen arbeiten weiter mit dir zusammen.
+
 # ProfessionShare 1.2.0
 
 **English:** The "Available" tab is now called **Misc Items** and has a dropdown with three lists. **Recipe items**

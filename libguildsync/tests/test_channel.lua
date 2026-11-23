@@ -14,14 +14,16 @@ local function withChat(result, body)
 end
 
 -- A channel for `prefix` with a recording sync; `me` and `roster` as given.
-local function newChannel(harness, lib, prefix, me, roster, major)
+local function newChannel(harness, lib, prefix, me, roster, major, extra)
     local log, trace, db = harness.logAndTrace(lib)
+    extra = extra or {}
     local received = {}
     local codec = lib.Codec.New({ major = major or 1, minor = 0 })
     local channel = lib.Channel.New({
         prefix = prefix, codec = codec, log = log, trace = trace, me = function() return me end,
-        priorityTypes = { HELLO = true },
-        guild = { IsGuilded = function() return true end, GetGuildRoster = function() return roster or {} end, RequestRoster = function() end },
+        priorityTypes = { HELLO = true }, replaceableTypes = extra.replaceableTypes,
+        guild = { IsGuilded = function() return true end, GetGuildRoster = function() return roster or {} end, RequestRoster = function() end,
+            IsOnline = extra.isOnline },
         newSync = function()
             return { statistics = { dropped = 0 }, Hello = function() received.hello = (received.hello or 0) + 1 end, Tick = function() end,
                 OnMessage = function(_, message, sender) received[#received + 1] = { message = message, sender = sender }; return "ok" end }
@@ -225,6 +227,88 @@ return {
             harness.equal(calls[1].target, "Peer", "same realm: the name alone")
         end)
         GetNormalizedRealmName = saved
+        if not ok then error(errorMessage, 0) end
+    end,
+
+    ["channel: a newer record answer to the same recipient replaces the one still waiting (none of it sent)"] = function(harness)
+        local lib = harness.library()
+        withChat(0, function(calls)
+            local sender, _, db = newChannel(harness, lib, "PShare", "A-R", { ["B-R"] = true, ["C-R"] = true }, nil,
+                { replaceableTypes = { SNAP = true } })
+            local function big(rev) local list = {} for index = 1, 300 do list[index] = ("%d-%d"):format(rev, index) end return list end
+            sender.Send({ t = "SNAP", rev = 1, list = big(1) }, "WHISPER", "B-R")
+            local firstChunks = #sender.queue
+            harness.truthy(firstChunks > 1, "several chunks")
+            sender.Send({ t = "SNAP", rev = 1, list = big(1) }, "WHISPER", "C-R")
+            sender.Send({ t = "OPUSH", list = { 1 } }, "WHISPER", "B-R")
+            sender.Send({ t = "SNAP", rev = 2, list = big(2) }, "WHISPER", "B-R")
+            local toB, opush = 0, 0
+            for _, chunk in ipairs(sender.queue) do
+                if chunk.target == "B-R" and chunk.traceEntry.mt == "SNAP" then toB = toB + 1 end
+                if chunk.traceEntry.mt == "OPUSH" then opush = opush + 1 end
+            end
+            harness.equal(toB, firstChunks, "only the newer SNAP to B is queued")
+            harness.equal(opush, 1, "other types are never replaced")
+            harness.equal(#sender.queue, firstChunks * 2 + 1, "C's SNAP stays")
+            local replaced = 0
+            for _, entry in ipairs(db.trace) do if entry.st == "replaced" then replaced = replaced + 1 end end
+            harness.equal(replaced, 1)
+            -- once a chunk of a message went out, it is finished, not replaced (the receiver already buffers it)
+            lib.Channel.shared.tokens = 2
+            sender._pump(0)   -- exactly two chunks go out: the head of the queue is the SNAP to C
+            sender.Send({ t = "SNAP", rev = 3, list = big(3) }, "WHISPER", "C-R")
+            local started = 0
+            for _, chunk in ipairs(sender.queue) do if chunk.target == "C-R" and chunk.traceEntry.mt == "SNAP" then started = started + 1 end end
+            harness.equal(started, firstChunks * 2 - 2, "the partly sent SNAP stays, the new one is added")
+        end)
+    end,
+
+    ["channel: whispers to a member the roster shows offline are dropped, unless heard from recently"] = function(harness)
+        local lib = harness.library()
+        local online = { ["B-R"] = false, ["C-R"] = false, ["D-R"] = true }
+        withChat(0, function(calls)
+            local sender, _, db = newChannel(harness, lib, "PShare", "A-R", { ["B-R"] = true, ["C-R"] = true, ["D-R"] = true }, nil,
+                { isOnline = function(name) return online[name] end })
+            -- C just sent me something: the roster is older than that, so C counts as online
+            local peerC = newChannel(harness, lib, "PShare", "C-R", { ["A-R"] = true })
+            local before = #calls
+            peerC.Send({ t = "HELLO" }, "WHISPER", "A-R"); peerC._pump(10)
+            deliver(sender, calls, "C-R", before + 1)
+            local sentBefore = #calls
+            sender.Send({ t = "SNAP", list = { 1 } }, "WHISPER", "B-R")
+            sender.Send({ t = "SNAP", list = { 2 } }, "WHISPER", "C-R")
+            sender.Send({ t = "SNAP", list = { 3 } }, "WHISPER", "D-R")
+            sender.Send({ t = "SNAP", list = { 4 } }, "WHISPER", "E-R")   -- not known to the roster: sent
+            sender._pump(10)
+            local targets = {}
+            for index = sentBefore + 1, #calls do targets[calls[index].target] = true end
+            harness.equal(targets["B-R"], nil, "offline: not sent"); harness.truthy(targets["C-R"]); harness.truthy(targets["D-R"])
+            harness.truthy(targets["E-R"])
+            harness.equal(#sender.queue, 0, "the dropped message left the queue")
+            local dropped
+            for _, entry in ipairs(db.trace) do if entry.peer == "B-R" and entry.st == "dropped" then dropped = entry end end
+            harness.truthy(dropped and dropped.why:find("offline"), "traced as dropped")
+        end)
+    end,
+
+    ["guild: the roster records who is online; unknown names are nil"] = function(harness)
+        local lib = harness.library()
+        local saved = { IsInGuild, GetNumGuildMembers, GetGuildRosterInfo, UnitName }
+        IsInGuild = function() return true end
+        GetNumGuildMembers = function() return 2 end
+        GetGuildRosterInfo = function(index)
+            if index == 1 then return "Anna Berg", "", 0, 60, "", "", "", "", true end
+            return "Bert Stein", "", 0, 60, "", "", "", "", false
+        end
+        UnitName = function() return "Anna", "Berg" end
+        local ok, errorMessage = pcall(function()
+            lib.Guild.GetGuildRoster()
+            local function canonical(name) return lib.Utility.CanonicalName(name) end
+            harness.equal(lib.Guild.IsOnline(canonical("Anna Berg")), true)
+            harness.equal(lib.Guild.IsOnline(canonical("Bert Stein")), false)
+            harness.equal(lib.Guild.IsOnline("Nobody Here"), nil)
+        end)
+        IsInGuild, GetNumGuildMembers, GetGuildRosterInfo, UnitName = unpack(saved)
         if not ok then error(errorMessage, 0) end
     end,
 }

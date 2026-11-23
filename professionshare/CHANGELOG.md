@@ -2,6 +2,12 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.2.1 (2026-11-23, protocol 2.4, schema 6, LibGuildSync MINOR 5)
+- Fix: "Momentan ist kein Spieler mit dem Namen ... online" while syncing. Own changes (record, offers, keys) are
+  announced at most every 30 s instead of on every skill-up; a newer record answer to the same member replaces one still
+  waiting; whispers to members the roster shows offline are dropped (LibGuildSync MINOR 5, feature 023).
+- `WANTA` requests jump the send queue like `WANT`/`WANTO`.
+
 ## 1.2.0 (2026-11-23, protocol 2.4, schema 6, LibGuildSync MINOR 4)
 - The "Available" tab is now **Misc Items** (German "Sonstiges") with a dropdown: Recipe items, Keys, Attunements.
   Each mode is a sortable table with its own columns, chosen in its "Columns" menu (feature 022).

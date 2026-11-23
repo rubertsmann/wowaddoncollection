@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 (2026-11-23, protocol 1.2, schema 2, LibGuildSync MINOR 5)
+- Fix: no addon whispers to members who went offline ("no player named ... is online"); a newer games record to the
+  same member replaces one still waiting in the send queue (LibGuildSync MINOR 5, ProfessionShare feature 023).
+
 ## 0.4.0 (2026-11-23, protocol 1.2, schema 2, LibGuildSync MINOR 4)
 - The minimap button is now a standard LibDataBroker-1.1 launcher shown by LibDBIcon-1.0 (LibGuildSync MINOR 4,
   `Widgets.CreateMinimapButton`), so button collectors (Leatrix Plus "Combine addon buttons", Minimap Button Bag,
