@@ -104,3 +104,10 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
   numbering recomputed from MinimapButtonOffset; click / drag / badge claims match CreateMinimapButton).
 - Evidence: comment-audit --code-only HEAD: 0 file(s) with code changes; libguildsync suite 0 failed.
 - Next: user decision on the volume target; in-game check of the AzeCaught.Tick refactor.
+
+## 2026-11-23 10:50 | DECISION | Volume target accepted; in-game check deferred
+- Did: asked the user. Answer: accept the current comment volume (~2% fewer lines, policy keeps the rest); the
+  AzeCaught.Tick in-game check will be done later by the user.
+- Result: verify.md R5 ok with the accepted gap; the in-game checklist item stays open.
+- Evidence: user answers 2026-11-23.
+- Next: user's in-game check of AzeCaught.Tick; then status done.
