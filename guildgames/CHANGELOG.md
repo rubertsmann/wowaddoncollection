@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2 (2026-11-23, protocol 1.2, schema 2, LibGuildSync MINOR 6)
+- The minimap button is also listed in the addon compartment where the client has one, so GuildGames stays reachable
+  when Leatrix Plus or another collector hides minimap buttons (LibGuildSync MINOR 6).
+
 ## 0.4.1 (2026-11-23, protocol 1.2, schema 2, LibGuildSync MINOR 5)
 - Fix: no addon whispers to members who went offline ("no player named ... is online"); a newer games record to the
   same member replaces one still waiting in the send queue (LibGuildSync MINOR 5, ProfessionShare feature 023).

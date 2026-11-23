@@ -2,6 +2,11 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.2.2 (2026-11-23, protocol 2.4, schema 6, LibGuildSync MINOR 6)
+- The minimap button is also listed in the addon compartment (the addon button at the minimap) where the client has
+  one, so ProfessionShare stays reachable when Leatrix Plus or another collector hides minimap buttons (LibGuildSync
+  MINOR 6, LibDBIcon `AddButtonToCompartment`).
+
 ## 1.2.1 (2026-11-23, protocol 2.4, schema 6, LibGuildSync MINOR 5)
 - Fix: "Momentan ist kein Spieler mit dem Namen ... online" while syncing. Own changes (record, offers, keys) are
   announced at most every 30 s instead of on every skill-up; a newer record answer to the same member replaces one still

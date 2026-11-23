@@ -1,6 +1,6 @@
 -- LibGuildSync: plain-frame window helpers (no secure templates, so they never taint and work in combat).
 local lib = LibStub("LibGuildSync-1.0")
-local Widgets = lib:Module("Widgets", 5)
+local Widgets = lib:Module("Widgets", 6)
 if not Widgets then return end
 
 Widgets.ROW_HEIGHT = 20
@@ -179,6 +179,9 @@ function Widgets.CreateMinimapButton(options)
     })
     if options.settings and options.settings.minimapPos == nil then options.settings.minimapPos = options.defaultPosition end
     minimapIcons:Register(options.name, dataObject, options.settings)
+    -- also an entry in the addon compartment (the numbered button by the minimap) on clients that have one; LibDBIcon
+    -- remembers it in settings.showInCompartment
+    if minimapIcons.AddButtonToCompartment then minimapIcons:AddButtonToCompartment(options.name) end
     local buttonFrame = minimapIcons:GetMinimapButton(options.name)
     if not buttonFrame then return nil end   -- the player hid it (settings.hide)
     local badge = CreateFrame("Frame", nil, buttonFrame); badge:SetSize(16, 14); badge:SetPoint("TOPRIGHT", 2, 2)

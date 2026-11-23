@@ -1,5 +1,11 @@
 # Changelog
 
+## MINOR 6 (2026-11-23)
+- `Widgets.CreateMinimapButton` also adds the button to the addon compartment (the numbered button at the top right
+  of the minimap) through LibDBIcon's `AddButtonToCompartment`, on clients that have one. LibDBIcon keeps
+  `settings.showInCompartment`, so the entry stays after a reload. With a button collector such as Leatrix Plus that
+  hides or gathers minimap buttons, the window can still be opened from there. Tests: `tests/test_widgets.lua`.
+
 ## MINOR 5 (2026-11-23)
 - Channel option `replaceableTypes`: a newer message of such a type (record answers) to the same recipient on the same
   channel replaces one still waiting with no chunk sent (trace `replaced`). A live session had 434 chunks waiting, the

@@ -1,3 +1,13 @@
+# ProfessionShare 1.2.2
+
+**English:** ProfessionShare is now also listed in the addon menu at the minimap (the button that lists your addons), where your
+game has one. So you can still open it when Leatrix Plus or another minimap button collector hides or gathers the
+minimap buttons. Members on older versions keep working with you.
+
+**Deutsch:** ProfessionShare steht jetzt auch im Addon-Menü an der Minimap (der Knopf, der deine Addons auflistet), sofern dein
+Spiel eins hat. So kannst du es weiterhin öffnen, wenn Leatrix Plus oder ein anderer Minimap-Knopf-Sammler die
+Minimap-Knöpfe ausblendet oder einsammelt. Mitglieder mit älteren Versionen arbeiten weiter mit dir zusammen.
+
 # ProfessionShare 1.2.1
 
 **English:** Fixes the chat message "No player named ... is currently playing" that could appear while the addon was
