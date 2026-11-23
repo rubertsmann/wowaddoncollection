@@ -1,3 +1,15 @@
+# ProfessionShare 1.1.0
+
+**English:** The minimap button is now a standard addon button, so minimap button collectors such as Leatrix Plus
+("Combine addon buttons") and data bars such as Titan Panel now list ProfessionShare. Drag it with the left mouse
+button. It starts at a new default spot once, so move it back where you like it. Members on older versions keep
+working with you.
+
+**Deutsch:** Der Minimap-Knopf ist jetzt ein Standard-Addon-Knopf, daher führen Minimap-Knopf-Sammler wie Leatrix Plus
+("Addon-Knöpfe zusammenfassen") und Datenleisten wie Titan Panel ProfessionShare jetzt auf. Verschieben mit der linken
+Maustaste. Er startet einmalig an einer neuen Standardposition; zieh ihn einfach wieder an deinen Wunschplatz.
+Mitglieder mit älteren Versionen arbeiten weiter mit dir zusammen.
+
 # ProfessionShare 1.0.2
 
 **English:** Maintenance release: a diagnostic for the addon's maintainer that shows which version each guild member

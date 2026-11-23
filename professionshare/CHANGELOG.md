@@ -2,6 +2,16 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.1.0 (2026-11-23, protocol 2.3, schema 5, LibGuildSync MINOR 4)
+- The minimap button is now a standard LibDataBroker-1.1 launcher shown by LibDBIcon-1.0 (LibGuildSync MINOR 4,
+  `Widgets.CreateMinimapButton`), so button collectors (Leatrix Plus "Combine addon buttons", Minimap Button Bag,
+  ElvUI, ...) and data displays (Titan Panel, ChocolateBar) find it. CallbackHandler-1.0, LibDataBroker-1.1 and
+  LibDBIcon-1.0 are embedded under `Libs/` and loaded before LibGuildSync. Drag with the LEFT mouse button now.
+  The position lives in `db.ui.minimapIcon` (LibDBIcon's table); the old `minimapAngle` is not carried over, so the
+  button starts at its default spot (215 degrees, dev 245). The counter badge stays.
+- Tooltip hint is now "Click: open window. Drag: move."
+- Code comments checked against the code across the addon and the library (feature 021, comment audit run by the tests).
+
 ## 1.0.2 (2026-11-22, protocol 2.3, schema 5, LibGuildSync MINOR 3)
 - A small info button at the bottom left of the window, shown for one maintainer character only: its tooltip
   lists who sent this client addon messages (from the trace) and the build each one announced in its HELLO.
