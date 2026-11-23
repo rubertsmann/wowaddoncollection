@@ -94,3 +94,13 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
   ("Skinning has 2 on Forever") is a client fact from the probe, consistent with Model.lua; not checkable offline.
 - Evidence: comment-audit --code-only HEAD: 0 file(s) with code changes; professionshare 235 passed, 0 failed.
 - Next: user decision on the volume target; in-game check of the AzeCaught.Tick refactor.
+
+## 2026-11-23 10:40 | VERIFY | Transcript cross-check: was every file with comments opened?
+- Did: scratchpad readcheck.py matched the 155 files of comment-ledger.csv against every Read / shell read in the
+  session transcript. 147 matched by path; 6 LibGuildSync files were read by bare name inside a `for f in ...` loop
+  (Channel, Codec, Events, Guard, Guild, Locale); Utility.lua and Widgets.lua showed no full read, so both were read
+  whole now (539 + 254 lines), every comment against its code.
+- Result: Utility header omitted GetServerTime from its guarded client lookups (fixed). Widgets: all correct (quadrant
+  numbering recomputed from MinimapButtonOffset; click / drag / badge claims match CreateMinimapButton).
+- Evidence: comment-audit --code-only HEAD: 0 file(s) with code changes; libguildsync suite 0 failed.
+- Next: user decision on the volume target; in-game check of the AzeCaught.Tick refactor.

@@ -1,5 +1,5 @@
 -- LibGuildSync: shared helpers. Player names and realms, tables, untrusted input, UTF-8 text. Pure Lua except for a few
--- guarded client lookups (GetNormalizedRealmName, GetRealmName, Ambiguate), so the offline tests run all of it.
+-- guarded client lookups (GetNormalizedRealmName, GetRealmName, Ambiguate, GetServerTime), so the offline tests run all of it.
 -- ONE state for every addon that embeds the library: the realm spellings and surnames learned here belong to the player,
 -- not to an addon. Addon-specific identity (who "me" is in that addon's saved data) stays in the addon.
 local lib = LibStub("LibGuildSync-1.0")
