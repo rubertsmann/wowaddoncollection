@@ -230,8 +230,8 @@ end
 ---@field label? fun(categoryKey: string): string
 ---@field groupLabel? fun(groupID: integer): string
 ---@field text? fun(itemID: integer): string|nil effect/tooltip text
----@field itemDetails? fun(itemID: integer): integer|nil, integer|nil, integer|nil quality, item level, required level (feature 016)
----@field effect? fun(recipeID: integer): string|nil effect text of a recipe without an item, e.g. an enchant (feature 017)
+---@field itemDetails? fun(itemID: integer): integer|nil, integer|nil, integer|nil quality, item level, required level
+---@field effect? fun(recipeID: integer): string|nil effect text of a recipe without an item, e.g. an enchant
 
 ---@class RecipeRow
 ---@field recipeID integer

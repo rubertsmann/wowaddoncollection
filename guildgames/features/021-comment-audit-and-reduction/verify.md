@@ -30,11 +30,16 @@ the refactor was not exercised in the game client.
 | Whole file read top to bottom | libguildsync/LibGuildSync/*.lua; guildgames Core/Base, Core/Net, Core/Debug, Core/Data, Core/Game (Api, Catcher, Events), Core/Minigames (all), Core/View/Model.lua, UI/Animate.lua, UI/Helpers.lua, UI/AzeCaughtOptions.lua, UI/DevProbe.lua; professionshare Core/Base, Core/Net, Core/Debug/Trace.lua, Core/Data (Orders, Offers, Scanner, Store up to line 300), Core/View (ItemText, Names); fpvcigarette Logic.lua; the ps1/py scripts |
 | Every comment with the code after it, plus every documented function printed whole and compared with its doc | guildgames UI/Window, GamesTab, SlotMachine, SurvivorArena, ArenaView, AzeCaughtPanel; professionshare Core/Data/Store.lua past line 300, Core/View (Model, Notify, RecipeTable), Core/Game (Api, Events), Core/Debug/Diagnostics.lua, UI (Window, Alerts, DevProbe, SecureDock, Table); fpvcigarette Overlay, Dancer, Log, Commands; foreverbetteruiplus (all) |
 | Every comment with the code it describes (test helpers, assertions, fixtures), arithmetic in comments recomputed | every tests/*.lua of all five addons |
+| Type annotations (`---@class/field/type/alias`): every field name searched in code, every description compared with the code that sets the value | all addons |
 
 Builder functions (every `build*` / `*.Build` / `Register` in the UI files of all addons, 97 comments): each comment
 was also checked against every later use of the widget it describes (tooltips, frame levels, show/hide toggles, click
 handlers, refresh flags), found by searching the file for the widget's name. This fixed three more comments
 (SurvivorArena layer comment above the wrong frame, SlotMachine banner parent, ProfessionShare effect-text read rate).
+
+Per-comment record: `evidence/comment-ledger.csv` (one row per comment line: file, line, kind, method), written by
+`evidence/ledger.py`, which fails when a file with comments is covered by no method (last run: 6408 lines, 155 files,
+0 uncovered).
 
 Test defects the comment review exposed (fixed in their own commits): professionshare test_hardening's "different
 minors" case used the same minor (cc80dcc); test_orders' prune assertion could never fail (ef191b6); libguildsync's

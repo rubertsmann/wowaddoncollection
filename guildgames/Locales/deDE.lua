@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- German UI strings. Keys are the English text (Locales/enUS.lua registers none: the key is shown as it is).
--- The placeholder names ({n}, {gold}, ...) must stay exactly as in the key (tests/test_locale_files.lua).
+-- The placeholder names ({n}, {gold}, ...) must stay exactly as in the key (tests/test_store_and_locale.lua).
 addon.Locale.Register("deDE", {
     strings = {
         ["Coin flip"] = "Münzwurf",
@@ -118,7 +118,7 @@ addon.Locale.Register("deDE", {
         ["The tower takes 15% less damage."] = "Der Turm erleidet 15 % weniger Schaden.",
         ["+25 maximum health and heals 25."] = "+25 maximale Gesundheit und heilt 25.",
         ["The tower heals 0.8 health per second."] = "Der Turm heilt 0,8 Gesundheit pro Sekunde.",
-        -- AZEcaught (feature 018)
+        -- AZEcaught
         ["The game hides 1 more value."] = "1 weiteren Wert verrät das Spiel nicht.",
         ["(less often)"] = "(seltener)",
         ["(more often)"] = "(öfter)",
@@ -264,7 +264,7 @@ addon.Locale.Register("deDE", {
         ["{name} ran away."] = "{name} ist weggelaufen.",
         ["{name} slipped out of the rope ({percent}% chance)."] = "{name} ist aus dem Seil geschlüpft ({percent} % Chance).",
         ["{name} wants to be petted."] = "{name} will gestreichelt werden.",
-        -- companion arena (feature 020)
+        -- companion arena
         ["(on points)"] = "(nach Punkten)",
         ["+{percent}% per point, at most {maximum} points."] = "+{percent} % pro Punkt, höchstens {maximum} Punkte.",
         ["Ability"] = "Fähigkeit",
@@ -363,7 +363,7 @@ addon.Locale.Register("deDE", {
         ["{name}: {ability} ({n})"] = "{name}: {ability} ({n})",
         ["{name}: {ability} for {n}"] = "{name}: {ability} für {n}",
         ["{n} side bets"] = "{n} Nebenwetten",
-        -- arena challenge modal (user 2026-11-21)
+        -- arena challenge modal
         ["An arena fight between your companions."] = "Ein Arenakampf zwischen euren Begleitern.",
         ["Back"] = "Zurück",
         ["Both pay the same wager; the winner takes both. A decline or no answer in 24 hours gives it back."] = "Beide zahlen denselben Einsatz; der Sieger bekommt beide. Eine Ablehnung oder keine Antwort in 24 Stunden gibt ihn zurück.",
@@ -381,7 +381,7 @@ addon.Locale.Register("deDE", {
         ["Your stake leaves your pool now."] = "Dein Einsatz verlässt jetzt deine Kasse.",
         ["against {name}"] = "gegen {name}",
         ["{mine} vs {theirs}"] = "{mine} gegen {theirs}",
-        -- one fight at a time, stop a challenge (user 2026-11-21)
+        -- one fight at a time, stop a challenge
         ["Challenge stopped."] = "Herausforderung gestoppt.",
         ["One fight at a time: wait until your current fight is over."] = "Nur ein Kampf gleichzeitig: warte, bis dein laufender Kampf vorbei ist.",
         ["Stop"] = "Stoppen",

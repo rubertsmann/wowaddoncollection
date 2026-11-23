@@ -31,7 +31,7 @@ local function timeAgo(timestamp) return Widgets.TimeAgo(timestamp, Text) end
 ---@return table
 local function createDialogFrame(frameName) return Widgets.CreateDialogFrame(frameName, addon.Log) end
 local QUESTION_MARK_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
----@type { count: integer, showIcon: boolean, hideNumber: boolean } feature 010: unseen orders (UI.SetNotice)
+---@type { count: integer, showIcon: boolean, hideNumber: boolean } unseen orders shown by UI.SetNotice
 local noticeState = { count = 0, showIcon = false, hideNumber = false }
 
 ---@class WindowState

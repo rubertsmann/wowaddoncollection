@@ -1,13 +1,16 @@
 """Generates the FpvCigarette textures (32-bit TGA, power-of-two sizes, straight alpha) and Geometry.lua.
 
-    python tools/make_textures.py            (from the repo root; needs numpy + Pillow)
+    python tools/make_textures.py            (from the fpvcigarette folder; needs numpy + Pillow)
 
 Outputs
   Textures/cigarette.tga  1024x512  flipbook 4x2 cells of 256: frame 1 = unlit, frames 2..8 = burning down
   Textures/smoke.tga      512x512   flipbook 4x4 cells of 128: one smoke puff from birth to gone
   Textures/ember.tga      64x64     radial glow (drawn with ADD blend)
+  Textures/pole.tga       64x512    the dancer's chrome pole
+  Textures/stage.tga      256x64    the dancer's round stage
   Geometry.lua            per cigarette frame: the tip (ember) position inside its cell, 0..1, y down
   tools/preview.png       every frame on a checkerboard plus a mock first-person scene (not shipped)
+  tools/preview_dancer.png  pole and stage as Dancer.lua lays them out (not shipped)
 """
 import math
 import os

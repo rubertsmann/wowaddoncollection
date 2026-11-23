@@ -73,3 +73,16 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
   "a few per frame"). The "Limit" note in verify.md is replaced by this method.
 - Evidence: comment-audit --code-only HEAD: 0 file(s) with code changes; all five suites 0 failed.
 - Next: user decision on the volume target; in-game check of the AzeCaught.Tick refactor; then status done.
+
+## 2026-11-23 10:00 | VERIFY | Locales, tools, type annotations; per-comment ledger
+- Did: read the Locales headers and the tool scripts whole (they were left out of the audit); the audit now also checks
+  Locales files and type annotations (`---@field` / `---@type` text) for provenance, and checks a comment's path
+  against the commenting file's own addon. Every `---@class` / `---@field` / `---@type` / `---@alias` was checked: each
+  field name against its uses (scratchpad fields.py: none unused), each description against the code that sets it.
+  evidence/ledger.py writes comment-ledger.csv (one row per comment line with the method that verified it) and fails
+  when a file with comments is covered by no method.
+- Result: fixed provenance in both deDE.lua headers, three annotations (ProfessionShare RecipeLookups x2, Window
+  noticeState); a wrong test path in guildgames deDE.lua; make_textures.py's run folder and output list.
+- Evidence: `ledger: 6408 comment lines in 155 files, uncovered files: 0`; comment-audit 0 findings on all five addons;
+  `comment-audit --code-only HEAD: 0 file(s) with code changes`; suites 138/235/38/13/8 passed, 0 failed.
+- Next: user decision on the volume target; in-game check of the AzeCaught.Tick refactor; then status done.

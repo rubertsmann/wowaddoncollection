@@ -129,7 +129,7 @@ addon.Locale.Register("deDE", {
         ["Mail"] = "Post",
         ["Auctions"] = "Auktionen",
         ["Guild bank tab {n}"] = "Gildenbank Reiter {n}",
-        -- Debug tab and diagnostic export (feature 008)
+        -- Debug tab and diagnostic export
         ["Debug"] = "Debug",
         ["Incoming"] = "Eingehend",
         ["Outgoing"] = "Ausgehend",
@@ -193,7 +193,7 @@ addon.Locale.Register("deDE", {
         ["members on other realms of the guild keep one name on every client"] = "Mitglieder auf anderen Realms der Gilde haben auf jedem Client denselben Namen",
         ["yes"] = "ja",
         ["NO"] = "NEIN",
-        -- feature 016: Recipes table columns, sort, options section
+        -- Recipes table columns, sort, options section
         ["Name"] = "Name",
         ["Item level"] = "Gegenstandsstufe",
         ["Req. level"] = "Ben. Stufe",

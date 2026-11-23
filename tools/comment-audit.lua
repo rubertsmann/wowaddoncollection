@@ -2,13 +2,14 @@
 --   luajit tools/comment-audit.lua [--strict] [--summary] <addon folder> ...
 -- Checks (see docs/comment-policy.md):
 --   provenance   who asked for it and when ("user 2026-11-20"), feature / requirement ids: history, not code
---   path         a *.lua / *.toc / *.md path that does not exist
---   member       Module.Name where Module is a table of this addon but Name is defined nowhere in it
+--   path         a *.lua / *.toc path (with a "/") that exists neither in the commenting file's addon nor, for
+--                "LibGuildSync/...", in libguildsync
+--   member       Module.Name where Module is a table of this addon or LibGuildSync but Name is defined in neither
 --   param        a ---@param that is not a parameter of the function below it
 -- --strict exits with 1 when anything is found (for tests/run.lua).
 -- --code-only <revision> exits with 1 when a changed Lua file differs from <revision> in more than comments/whitespace.
 
-local VENDORED_FOLDERS = { "/Libs/", "/libs/", "/dist/", "/Locales/", "/eval/", "/features/", "/review/" }
+local VENDORED_FOLDERS = { "/Libs/", "/libs/", "/dist/", "/eval/", "/features/", "/review/" }
 
 local function readFile(path)
     local handle = io.open(path, "rb")
@@ -100,14 +101,10 @@ local PROVENANCE_PATTERNS = {
     "user %d%d%d%d%-%d%d%-%d%d", "[Ss]pike S%d", "%(user[ ,%)]", "[Ff]eature %d%d%d", "%f[%w]RF?%d+%f[%W]", "%f[%w]T%d+%f[%W]",
 }
 
-local ADDON_FOLDERS = { "guildgames", "professionshare", "libguildsync", "libguildsync/LibGuildSync", "fpvcigarette",
-    "foreverbetteruiplus" }
-
 local function pathExists(path, addonRoot)
     if fileExists(path) or fileExists(addonRoot .. "/" .. path) then return true end
-    for _, folder in ipairs(ADDON_FOLDERS) do
-        if fileExists(folder .. "/" .. path) then return true end
-    end
+    -- "LibGuildSync/X.lua" means the library; any other path must exist in the commenting file's own addon
+    if path:match("^LibGuildSync/") then return fileExists("libguildsync/" .. path) end
     return false
 end
 
@@ -158,7 +155,7 @@ local function audit(root)
             if not isTest then
                 for _, pattern in ipairs(PROVENANCE_PATTERNS) do
                     local match = text:match(pattern)
-                    if match and not text:match("^%-@") then add(file, comment.line, "provenance", match) break end
+                    if match then add(file, comment.line, "provenance", match) break end
                 end
             end
             for path in text:gmatch("([%w_%-/%.]+%.[lt][uo][ac])%f[^%w]") do
@@ -192,7 +189,8 @@ local function audit(root)
     return findings, #files, commentCount
 end
 
--- --code-only <git revision>: proves that the Lua files changed since <revision> differ only in comments and whitespace.
+-- --code-only <git revision>: proves that the Lua files changed since <revision> differ only in comments and whitespace
+-- (tools/ is left out: this tool itself changes code).
 local function codeOnly(revision)
     local pipe = assert(io.popen(('git diff --name-only "%s" -- "*.lua" ":!tools"'):format(revision)))
     local changed = 0
