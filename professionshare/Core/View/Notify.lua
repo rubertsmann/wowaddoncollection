@@ -10,7 +10,7 @@ local addonName, addon = ...
 ---@alias NotifyScope "profession"|"known"|"all"
 
 ---@class NotifySettings
----@field badge boolean number on the minimap button
+---@field badge boolean number of unseen orders on the minimap button and the Orders tab
 ---@field icon boolean minimap button shows a letter while something is unseen
 ---@field sound boolean
 ---@field chat boolean one chat line per new order

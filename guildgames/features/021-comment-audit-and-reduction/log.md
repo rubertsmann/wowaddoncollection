@@ -86,3 +86,11 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Evidence: `ledger: 6408 comment lines in 155 files, uncovered files: 0`; comment-audit 0 findings on all five addons;
   `comment-audit --code-only HEAD: 0 file(s) with code changes`; suites 138/235/38/13/8 passed, 0 failed.
 - Next: user decision on the volume target; in-game check of the AzeCaught.Tick refactor; then status done.
+
+## 2026-11-23 10:20 | VERIFY | Described annotations of Model, Notify, RecipeTable, Api, Diagnostics
+- Did: listed every `---@field`/`---@type` with a description in these five files (73 lines) and compared each with the
+  code that sets or reads the value (filters, sort, Notify options, HELLO ver, traceLines default).
+- Result: Notify `badge` also hides the Orders tab number (UI.SetNotice); annotation corrected. Api `spells`
+  ("Skinning has 2 on Forever") is a client fact from the probe, consistent with Model.lua; not checkable offline.
+- Evidence: comment-audit --code-only HEAD: 0 file(s) with code changes; professionshare 235 passed, 0 failed.
+- Next: user decision on the volume target; in-game check of the AzeCaught.Tick refactor.
