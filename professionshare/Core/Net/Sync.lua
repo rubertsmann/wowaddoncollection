@@ -13,6 +13,8 @@ local addonName, addon = ...
 --   WANTO {names, via?}         "send me your offers record" (2.1+)
 --   OFFERS {offers}             a character's offers/dibs record (2.1+)
 --   HELLO.arev, WANTA {names, via?}, ACCESS {access}   a character's dungeon keys and raid attunements (2.4+)
+--   HELLO.frev, WANTF {names, via?}, FEEDBACK {feedback}   a character's messages for the developer (2.5+); only the
+--                               developer's client pulls them (Feedback.IsReader)
 -- Protocol 2.3 also had HELLO.grev, WANTG and GAMES (guild games, 0.6.0). They moved to the GuildGames addon: a 0.6
 -- peer's grev is ignored, its WANTG/GAMES are dropped as unknown message types.
 -- A peer can only author its OWN record (SNAP char.name / OFFERS name must equal the sender). Every player name from the
@@ -24,7 +26,7 @@ local addonName, addon = ...
 ---@field random fun(): number in [0, 1)
 ---@field store StoreModule
 ---@field orders OrderBoard
----@field onChange fun(kind: "chars"|"offers"|"orders"|"access")
+---@field onChange fun(kind: "chars"|"offers"|"orders"|"access"|"feedback")
 ---@field me string|fun(): string|nil my canonical name, or a function returning it
 
 ---@class SyncModule
@@ -150,6 +152,33 @@ local function accessKind()
     }
 end
 
+-- The feedback record (protocol 2.5): messages for the developer. Only a reader (the developer's client) pulls them:
+-- for everyone else every announced revision counts as held, and a record that still arrives (a pull retry answered on
+-- GUILD reaches every member) is not stored.
+---@return RecordKind
+local function feedbackKind()
+    local Feedback = addon.Feedback
+    return {
+        name = "feedback", label = "feedback", helloField = "frev",
+        requestType = "WANTF", answerType = "FEEDBACK", recordField = "feedback",
+        noneNote = "asked for my feedback record but I have none",
+        heldRevision = function(playerName)
+            if not Feedback.IsReader(addon.Utility.Me()) then return math.huge end
+            local feedbackRecord = Feedback.Get(playerName)
+            return feedbackRecord and feedbackRecord.rev or 0
+        end,
+        myRecord = function(myName) return Feedback.Get(myName) end,
+        sanitize = Feedback.Sanitize,
+        store = function(sync, feedbackRecord) return Feedback.Put(feedbackRecord, sync:_me()) end,
+        -- answering means a reader asked: my messages in this record count as delivered (shown to me only)
+        answer = function(_, feedbackRecord)
+            Feedback.MarkDelivered(feedbackRecord)
+            if addon.Events then addon.Events.Fire("DATA_CHANGED", "feedback") end
+            return { t = "FEEDBACK", feedback = feedbackRecord }
+        end,
+    }
+end
+
 -- HELLO.odig: the digest of my orders; a peer that lacks some gets them pushed (OPUSH, 10 per message).
 ---@param environment ProfessionShareSyncEnvironment
 ---@return SyncHelloHook
@@ -209,6 +238,7 @@ function Sync.New(environment)
     sync.wanted = sync:AddRecordKind(characterKind(environment))
     sync.wantedOffers = sync:AddRecordKind(offersKind())
     sync.wantedAccess = sync:AddRecordKind(accessKind())
+    sync.wantedFeedback = sync:AddRecordKind(feedbackKind())
     sync:AddHelloHook(ordersHelloHook(environment))
     sync:AddHandler("OPUSH", onOrderPush)
     sync:AddHandler("ORDER", onOrder)

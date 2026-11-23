@@ -1,3 +1,18 @@
+# ProfessionShare 1.3.0
+
+**English:** New **Feedback** tab: send feedback, a feature request or a bug report straight to the addon developer.
+Pick the type and a short template helps you write it; bug reports can attach some technical details (addon version,
+sync state, recent log lines) so the problem is easier to find. Under the text box you see your messages and how many
+have already reached the developer. The tab only appears in the developer's guild. The Debug tab is now hidden; type
+`/ps debug` to show it. Members on older versions keep working with you, but need this version to send feedback.
+
+**Deutsch:** Neuer Reiter **Feedback**: Schicke Feedback, einen Funktionswunsch oder eine Fehlermeldung direkt an den
+Addon-Entwickler. Wähle die Art, eine kurze Vorlage hilft beim Schreiben; Fehlermeldungen können technische Details
+anhängen (Addon-Version, Sync-Zustand, letzte Protokollzeilen), damit sich das Problem leichter finden lässt. Unter dem
+Textfeld siehst du deine Nachrichten und wie viele schon beim Entwickler angekommen sind. Der Reiter erscheint nur in
+der Gilde des Entwicklers. Der Debug-Reiter ist jetzt ausgeblendet; mit `/ps debug` wird er angezeigt. Mitglieder mit
+älteren Versionen arbeiten weiter mit dir zusammen, brauchen zum Senden von Feedback aber diese Version.
+
 # ProfessionShare 1.2.2
 
 **English:** ProfessionShare is now also listed in the addon menu at the minimap (the button that lists your addons), where your

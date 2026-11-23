@@ -2,6 +2,19 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.3.0 (2026-11-23, protocol 2.5, schema 7, LibGuildSync MINOR 6)
+- New **Feedback** tab (feature 024): send feedback, a feature request or a bug report (type dropdown with a template
+  text per type) to the addon developer. Bug reports attach a diagnostic snapshot (version, sync state, newest
+  error/warning and recent log lines; <= 1200 bytes; opt-out checkbox). Fire and forget. Only the developer's client
+  (name hash, no name in the code) pulls the new feedback record (`HELLO.frev`, `WANTF`/`FEEDBACK`) and lists the
+  messages with Whisper, the snapshot and a local status (declined / answered / fixed). The sender sees a "My messages"
+  menu and icon counters: sent / delivered (the developer's client picked them up) / waiting. The tab is shown only
+  when the developer's character is in the player's guild.
+- The **Debug** tab is hidden in the live build until `/ps debug` (which still prints the log lines) shows it for the
+  session. The development build always shows it and gets a "Fake feedback" button (`/psd fakefeedback`).
+- Protocol 2.5 (additive: 2.4 peers ignore `frev` and drop `WANTF`/`FEEDBACK`), schema 7 (additive: `feedback`,
+  `feedbackState`, `feedbackDelivered`).
+
 ## 1.2.2 (2026-11-23, protocol 2.4, schema 6, LibGuildSync MINOR 6)
 - The minimap button is also listed in the addon compartment (the addon button at the minimap) where the client has
   one, so ProfessionShare stays reachable when Leatrix Plus or another collector hides minimap buttons (LibGuildSync

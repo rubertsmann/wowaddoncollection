@@ -54,9 +54,9 @@ local function countSent(b, messageType)
 end
 
 return {
-    ["access: protocol 2.4 and schema 6 are pinned"] = function(harness)
+    ["access: protocol 2.4+ and schema 6+ (access arrived there)"] = function(harness)
         local addon = fresh(harness)
-        harness.equal(addon.PROTOCOL_MAJOR, 2); harness.equal(addon.PROTOCOL_MINOR, 4); harness.equal(addon.Store.SCHEMA, 6)
+        harness.equal(addon.PROTOCOL_MAJOR, 2); harness.truthy(addon.PROTOCOL_MINOR >= 4); harness.truthy(addon.Store.SCHEMA >= 6)
     end,
 
     ["access: a scan builds my record, the same scan changes nothing, a new key bumps rev"] = function(harness)
@@ -158,7 +158,7 @@ return {
         local sv = { schema = 5, chars = {}, catalog = {}, orders = {}, me = "Me-R",
             offers = { ["A-R"] = { name = "A-R", rev = BIG - 5, items = { [6661] = { bag = 1 } }, dibs = {} } }, hidden = {}, ui = {} }
         local out, status = addon.Store.Init(sv)
-        harness.equal(status, "migrated"); harness.equal(out.schema, 6)
+        harness.equal(status, "migrated"); harness.equal(out.schema, addon.Store.SCHEMA)
         harness.truthy(out.offers["A-R"]); harness.equal(type(out.access), "table")
         local other = fresh(harness)
         local out2 = other.Store.Init({ schema = 6, chars = {}, catalog = {}, orders = {}, offers = {}, hidden = {}, ui = {},

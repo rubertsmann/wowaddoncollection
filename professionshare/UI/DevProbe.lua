@@ -412,6 +412,31 @@ function DevProbe.AddFakeNaxxramas()
     return accessRecord
 end
 
+-- Three messages from a fake member (one bug with a diagnostic snapshot), for the developer list of the Feedback tab.
+-- Local only: stored directly, never announced (a fake member has no HELLO).
+---@return FeedbackRecord|nil
+function DevProbe.AddFakeFeedback()
+    local fakeName = addon.Utility.CanonicalName("Fake Tester") or "Fake Tester"
+    local now = addon.Utility.Now()
+    local previousRecord = addon.Feedback.Get(fakeName)
+    local feedbackRecord = { name = fakeName, rev = math.max(now, (previousRecord and previousRecord.rev or 0) + 1), items = {
+        { t = math.max(1, now - 7200), k = "feature", text = "Please add a filter for recipes I can craft right now." },
+        { t = math.max(2, now - 600), k = "feedback", text = "The Misc Items tab is great / keys are very handy." },
+        { t = math.max(3, now - 30), k = "bug", text = "What I did: opened Orders / What happened: empty list / What I expected: my order",
+            log = table.concat({ "v1.3.0-dev protocol 2.5 schema 7 locale deDE client test", "active=true queue=0 sendFailures=0",
+                "2026-11-23 10:00 WARNING [fake] a test warning" }, "\n") },
+    } }
+    addon.Store.keptNames[fakeName] = true
+    if not addon.Feedback.Put(feedbackRecord, addon.Utility.Me()) then
+        addon.Print("fake feedback not stored: this client does not read feedback")
+        return nil
+    end
+    addon.Events.Fire("DATA_CHANGED", "feedback")
+    addon.Log.Information("devProbe.fakeFeedback", "fake feedback was added for the Feedback tab test", { name = fakeName })
+    addon.Print(("fake feedback added: 3 messages from %s. Feedback tab."):format(fakeName))
+    return feedbackRecord
+end
+
 ------------------------------------------------------------------ fake request (dev build only)
 
 -- The realms a member whose client still reports realms appended to my name in a live log.
@@ -481,6 +506,7 @@ if addon.IS_DEVELOPMENT_BUILD then
     addon.SlashCommands.fakeenchanter = function() DevProbe.AddFakeEnchanter() end
     addon.SlashCommands.fakekeys = function() DevProbe.AddFakeKeys() end
     addon.SlashCommands.fakenaxx = function() DevProbe.AddFakeNaxxramas() end
+    addon.SlashCommands.fakefeedback = function() DevProbe.AddFakeFeedback() end
     addon.SlashCommands.itemprobe = function(arguments)
         local extraItemIDs = {}
         for itemIDText in tostring(arguments or ""):gmatch("%d+") do extraItemIDs[#extraItemIDs + 1] = tonumber(itemIDText) end

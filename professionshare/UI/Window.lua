@@ -1,8 +1,9 @@
 local addonName, addon = ...
 
 -- Standalone window: "Recipes" tab (filter, search, reagents, crafters, request), "Orders" tab (shared board),
--- "Misc Items" tab (recipe items with dibs, dungeon keys, raid attunements of guild members) and "Debug" tab
--- (network trace, diagnostic export). The tabs are one ordered list (tabDefinitions).
+-- "Misc Items" tab (recipe items with dibs, dungeon keys, raid attunements of guild members), "Feedback" tab (messages
+-- for the developer) and "Debug" tab (network trace, diagnostic export; in the live build only after /ps debug). The
+-- tabs are one ordered list (tabDefinitions).
 -- Plain frames only, except the secure profession and Craft buttons. Those live in UI/SecureDock.lua's holder while in
 -- combat (a window with secure children is protected and could not be shown or hidden in combat), so the window can be
 -- opened, closed and switched in a fight. All text goes through Text (Locales/); game names are resolved for this client by Model/Names.
@@ -96,6 +97,11 @@ end
 local mainFrame
 local recipeList, orderList, miscList
 local refreshDebug   -- Debug tab (defined with the tab below)
+local refreshFeedback   -- Feedback tab (defined with the tab below)
+-- the live build shows the Debug tab only after /ps debug (this session); the development build always
+local debugTabUnlocked = false
+---@return boolean
+local function debugTabAvailable() return addon.IS_DEVELOPMENT_BUILD and true or debugTabUnlocked end
 ---@type table[] rows of the Misc Items table (OfferViewRow, KeyViewRow or AttunementViewRow, by currentMiscMode)
 local currentMiscRows = {}
 ---@type MiscMode the mode currentMiscRows were built for
@@ -596,7 +602,7 @@ local function refreshOffers()
     mainFrame.offersEmptyText:SetShown(#miscRows == 0)
 end
 
----@alias TabName "recipes"|"orders"|"available"|"debug"
+---@alias TabName "recipes"|"orders"|"available"|"feedback"|"debug"
 
 ---@class TabDefinition
 ---@field key TabName
@@ -611,19 +617,62 @@ local function tabDefinitions()
         { key = "recipes", label = Text["Recipes"], width = 90 },
         { key = "orders", label = Text["Orders"], width = 90 },
         { key = "available", label = Text["Misc Items"], width = 100 },
+        { key = "feedback", label = Text["Feedback"], width = 90 },
         { key = "debug", label = Text["Debug"], width = 70 },
     }
 end
 UI.TabDefinitions = tabDefinitions
 
+-- The Feedback tab is shown only where a message can arrive: the developer's character is in my guild roster (or I am
+-- the developer, or this is a development build). The roster table is replaced on every roster update, so the answer
+-- is cached per roster table.
+local feedbackRosterCache = { roster = nil, readerInRoster = false }
+---@return boolean
+local function feedbackTabAvailable()
+    if addon.IS_DEVELOPMENT_BUILD or addon.Feedback.IsReader(me()) then return true end
+    local roster = addon.Communication and addon.Communication.roster
+    if roster ~= feedbackRosterCache.roster then
+        feedbackRosterCache.roster, feedbackRosterCache.readerInRoster = roster, addon.Feedback.ReaderInRoster(roster)
+    end
+    return feedbackRosterCache.readerInRoster
+end
+
+---@param tabKey TabName
+---@return boolean
+local function tabAvailable(tabKey)
+    if tabKey == "debug" then return debugTabAvailable() end
+    if tabKey == "feedback" then return feedbackTabAvailable() end
+    return true
+end
+
+-- shows the available tab buttons side by side, in tabDefinitions order (a hidden one leaves no gap)
+local function layoutTabButtons()
+    local previousButton
+    for _, tab in ipairs(tabDefinitions()) do
+        local tabButton = mainFrame.tabButtons[tab.key]
+        tabButton:ClearAllPoints()
+        if tabAvailable(tab.key) then
+            if previousButton then tabButton:SetPoint("LEFT", previousButton, "RIGHT", 4, 0) else tabButton:SetPoint("TOPLEFT", 12, -30) end
+            tabButton:Show()
+            previousButton = tabButton
+        else
+            tabButton:Hide()
+        end
+    end
+end
+
+local selectTab
 
 function UI.Refresh()
     if not mainFrame or not mainFrame:IsShown() then return end
-    refreshRecipes(); refreshDetail(); refreshOrders(); refreshOffers(); refreshDebug(); refreshProfessionBar()
+    layoutTabButtons()
+    if not tabAvailable(windowState.tab) then selectTab("recipes") return end   -- selectTab refreshes again
+    refreshRecipes(); refreshDetail(); refreshOrders(); refreshOffers(); refreshFeedback(); refreshDebug(); refreshProfessionBar()
 end
 
 ---@param tabName TabName
-local function selectTab(tabName)
+selectTab = function(tabName)
+    if not tabAvailable(tabName) then tabName = "recipes" end
     windowState.tab = tabName
     for key, tabFrame in pairs(mainFrame.tabs) do tabFrame:SetShown(key == tabName) end
     for tabKey, tabButton in pairs(mainFrame.tabButtons) do tabButton:SetEnabled(tabName ~= tabKey) end
@@ -964,10 +1013,14 @@ local function buildDebugTab()
         local fakeNaxxramasButton = createButton(debugTab, Text["Fake Naxxramas"], 110, 18, function() addon.DevProbe.AddFakeNaxxramas() end)
         fakeNaxxramasButton:SetPoint("RIGHT", fakeKeysButton, "LEFT", -8, 0)
         mainFrame.fakeKeysButton, mainFrame.fakeNaxxramasButton = fakeKeysButton, fakeNaxxramasButton
+        -- messages from a fake member, for the developer list of the Feedback tab
+        local fakeFeedbackButton = createButton(debugTab, Text["Fake feedback"], 110, 18, function() addon.DevProbe.AddFakeFeedback() end)
+        fakeFeedbackButton:SetPoint("RIGHT", fakeNaxxramasButton, "LEFT", -8, 0)
+        mainFrame.fakeFeedbackButton = fakeFeedbackButton
     end
     mainFrame.debugStatusText = createFontString(debugTab, "GameFontHighlightSmall")
     mainFrame.debugStatusText:SetPoint("TOPLEFT", 0, -28)
-    if mainFrame.fakeNaxxramasButton then mainFrame.debugStatusText:SetPoint("RIGHT", mainFrame.fakeNaxxramasButton, "LEFT", -8, 0)
+    if mainFrame.fakeFeedbackButton then mainFrame.debugStatusText:SetPoint("RIGHT", mainFrame.fakeFeedbackButton, "LEFT", -8, 0)
     else mainFrame.debugStatusText:SetPoint("RIGHT", 0, 0) end
     -- column headings of the name check (shown only in that view)
     local nameCheckHeader = CreateFrame("Frame", nil, debugTab); nameCheckHeader:SetSize(720, 16); nameCheckHeader:SetPoint("TOPLEFT", 0, -44)
@@ -1529,6 +1582,358 @@ local function buildAvailableTab(availableTab)
     mainFrame.whisperHolderButton:SetPoint("BOTTOMLEFT", 0, 0)
 end
 
+------------------------------------------------------------------ Feedback tab: messages for the developer
+-- Everyone: a type dropdown, a text box (filled with the type's template), "Attach diagnostic info" and Send. Fire and
+-- forget: the sender sees no status. The developer's client (Feedback.IsReader) also lists every received message with
+-- Whisper, the diagnostic snapshot and three status buttons; the status stays on that client.
+
+local FEEDBACK_TYPE_ICON = { feedback = "Interface\\Icons\\INV_Letter_01", feature = "Interface\\Icons\\INV_Misc_Gear_01",
+    bug = "Interface\\Icons\\Spell_Nature_InsectSwarm" }
+local FEEDBACK_STATUS_ICON = { declined = "Interface\\RaidFrame\\ReadyCheck-NotReady",
+    answered = "Interface\\GossipFrame\\GossipGossipIcon", fixed = "Interface\\RaidFrame\\ReadyCheck-Ready" }
+-- the sender's own view: sent / delivered (the developer's client asked for them) / waiting
+local FEEDBACK_DELIVERY_ICON = { sent = "Interface\\Icons\\INV_Letter_01", delivered = "Interface\\RaidFrame\\ReadyCheck-Ready",
+    waiting = "Interface\\RaidFrame\\ReadyCheck-Waiting" }
+
+---@param feedbackType string
+---@return string
+local function feedbackTypeLabel(feedbackType)
+    local labels = { feedback = Text["Feedback"], feature = Text["Feature request"], bug = Text["Bug"] }
+    return labels[feedbackType] or tostring(feedbackType)
+end
+
+---@param feedbackType string
+---@return string the text put into the box when that type is chosen
+local function feedbackTemplate(feedbackType)
+    local templates = {
+        feedback = Text["What do you like, what bothers you?"],
+        feature = Text["I would like to ... so that ..."],
+        bug = table.concat({ Text["What I did:"], Text["What happened:"], Text["What I expected:"] }, "\n"),
+    }
+    return templates[feedbackType] or ""
+end
+
+---@param status string
+---@return string
+local function feedbackStatusLabel(status)
+    local labels = { declined = Text["Declined"], answered = Text["Answered"], fixed = Text["Fixed"] }
+    return labels[status] or tostring(status)
+end
+
+---@class FeedbackFormState
+local feedbackState = { type = "feedback", attach = false, selectedKey = nil, sentNotice = nil }
+---@type FeedbackRow[]
+local currentFeedbackRows = {}
+local feedbackList
+
+-- whether the box holds nothing of the player's own: empty or one of the templates unchanged
+---@param text string
+---@return boolean
+local function isUntouchedFeedbackText(text)
+    local Feedback = addon.Feedback
+    local cleanText = Feedback.CleanText(text)
+    if not cleanText then return true end
+    for _, feedbackType in ipairs(Feedback.TYPES) do
+        if cleanText == Feedback.CleanText(feedbackTemplate(feedbackType)) then return true end
+    end
+    return false
+end
+
+-- the diagnostic snapshot of a bug report: versions, sync state, the newest log lines
+---@return string
+local function bugSnapshot()
+    local Communication, database, Count = addon.Communication, addon.db or {}, addon.Utility.Count
+    local identityOk, identity = pcall(function() return addon.Api.IdentityInformation() end)
+    local syncLine = ("active=%s queue=%d sendFailures=%d roster=%d chars=%d orders=%d offers=%d access=%d"):format(
+        tostring(Communication.active), #(Communication.queue or {}), Communication.sendFailures or 0,
+        Count(Communication.roster), Count(database.chars), Count(database.orders), Count(database.offers), Count(database.access))
+    return addon.Feedback.Snapshot({
+        version = addon.VERSION, protocol = addon.PROTOCOL_MAJOR .. "." .. addon.PROTOCOL_MINOR, schema = addon.Store.SCHEMA,
+        locale = addon.Locale.clientCode, client = identityOk and type(identity) == "table" and identity.build or nil,
+        sync = syncLine, logLines = database.debug,
+    })
+end
+
+---@return FeedbackRow|nil
+local function selectedFeedbackRow()
+    for _, feedbackRow in ipairs(currentFeedbackRows) do
+        if feedbackRow.key == feedbackState.selectedKey then return feedbackRow end
+    end
+    return nil
+end
+
+refreshFeedback = function()
+    if not mainFrame or windowState.tab ~= "feedback" then return end
+    local Feedback = addon.Feedback
+    setDropdownText(mainFrame.feedbackTypeButton, feedbackTypeLabel(feedbackState.type))
+    local summary = Feedback.MySummary(me())
+    setDropdownText(mainFrame.myFeedbackButton, Format(Text["My messages ({n})"], { n = summary.sent }))
+    mainFrame.feedbackCounters.sent.count:SetText(tostring(summary.sent))
+    mainFrame.feedbackCounters.delivered.count:SetText(tostring(summary.delivered))
+    mainFrame.feedbackCounters.waiting.count:SetText(tostring(summary.waiting))
+    mainFrame.feedbackNoticeText:SetText(feedbackState.sentNotice or "")
+    local isReader = Feedback.IsReader(me())
+    mainFrame.feedbackReaderFrame:SetShown(isReader)
+    if not isReader then return end
+    currentFeedbackRows = Feedback.List()
+    feedbackList:SetData(currentFeedbackRows)
+    mainFrame.feedbackEmptyText:SetShown(#currentFeedbackRows == 0)
+    local selectedRow = selectedFeedbackRow()
+    if selectedRow then
+        local header = Format(Text["{type} from {name}, {age}"], { type = feedbackTypeLabel(selectedRow.k),
+            name = addon.Utility.Escape(shortName(selectedRow.owner) or "?"), age = timeAgo(selectedRow.t) })
+        mainFrame.feedbackDetailText:SetText("|cffffd100" .. header .. "|r\n" .. addon.Utility.Escape(selectedRow.text))
+    else
+        mainFrame.feedbackDetailText:SetText(Text["Select a message."])
+    end
+    mainFrame.feedbackWhisperButton:SetEnabled(selectedRow ~= nil and selectedRow.owner ~= me())
+    mainFrame.feedbackSnapshotButton:SetEnabled(selectedRow ~= nil and selectedRow.log ~= nil)
+    for status, statusButton in pairs(mainFrame.feedbackStatusButtons) do
+        statusButton:SetEnabled(selectedRow ~= nil)
+        statusButton:SetAlpha((selectedRow and selectedRow.status == status) and 1 or 0.4)
+    end
+end
+
+---@param feedbackType string
+local function chooseFeedbackType(feedbackType)
+    local feedbackBox = mainFrame.feedbackBox
+    if isUntouchedFeedbackText(feedbackBox:GetText() or "") then feedbackBox:SetText(feedbackTemplate(feedbackType)) end
+    feedbackState.type = feedbackType
+    feedbackState.attach = feedbackType == "bug"
+    mainFrame.feedbackAttachCheck:SetChecked(feedbackState.attach)
+    feedbackState.sentNotice = nil
+    refreshFeedback()
+end
+
+local function sendFeedback()
+    local text = mainFrame.feedbackBox:GetText() or ""
+    if isUntouchedFeedbackText(text) then
+        feedbackState.sentNotice = "|cffff9933" .. Text["Write something first."] .. "|r"
+        refreshFeedback()
+        return
+    end
+    local snapshot = feedbackState.attach and bugSnapshot() or nil
+    local added, refusal = addon.Feedback.Add(me(), feedbackState.type, text, addon.Utility.Now(), snapshot)
+    addon.Log.Information("window.feedback", "a feedback message was sent", { type = feedbackState.type, added = added,
+        refusal = refusal, bytes = #text, snapshotBytes = snapshot and #snapshot or 0 })
+    if added then
+        feedbackState.sentNotice = "|cff33ff99" .. Text["Sent. Thank you!"] .. "|r"
+        mainFrame.feedbackBox:SetText(feedbackTemplate(feedbackState.type))
+        mainFrame.feedbackBox:ClearFocus()
+        addon.Events.Fire("FEEDBACK_CHANGED")
+    elseif refusal == "duplicate" then
+        feedbackState.sentNotice = "|cffff9933" .. Text["You already sent this message."] .. "|r"
+    else
+        feedbackState.sentNotice = "|cffff9933" .. Text["Write something first."] .. "|r"
+    end
+    refreshFeedback()
+end
+UI.SendFeedback = sendFeedback
+
+---@param feedbackTab table
+local function buildFeedbackTab(feedbackTab)
+    local Feedback = addon.Feedback
+    local typeDropdown = createMenuDropdown(feedbackTab, "WowStyle1DropdownTemplate", 150)
+    if typeDropdown then
+        typeDropdown:SetupMenu(function(_, rootMenu)
+            local function isSelectedType(feedbackType) return feedbackState.type == feedbackType end
+            for _, feedbackType in ipairs(Feedback.TYPES) do
+                rootMenu:CreateRadio(feedbackTypeLabel(feedbackType), isSelectedType, chooseFeedbackType, feedbackType)
+            end
+        end)
+    else   -- no menus: cycle through the types
+        typeDropdown = createButton(feedbackTab, feedbackTypeLabel(feedbackState.type), 150, 22, function()
+            for position, feedbackType in ipairs(Feedback.TYPES) do
+                if feedbackType == feedbackState.type then
+                    chooseFeedbackType(Feedback.TYPES[position % #Feedback.TYPES + 1])
+                    return
+                end
+            end
+        end)
+    end
+    typeDropdown:SetPoint("TOPLEFT", 0, -4)
+    mainFrame.feedbackTypeButton = typeDropdown
+
+    local attachCheck = CreateFrame("CheckButton", nil, feedbackTab, "UICheckButtonTemplate")
+    attachCheck:SetSize(22, 22); attachCheck:SetPoint("LEFT", typeDropdown, "RIGHT", 14, 0)
+    attachCheck:SetScript("OnClick", function(self) feedbackState.attach = self:GetChecked() and true or false end)
+    attachCheck:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(Text["Attach diagnostic info"], 1, 1, 1)
+        GameTooltip:AddLine(Text["Adds the addon version, the sync state and the newest log lines (they can name guild members), so the developer can find the cause."],
+            0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end)
+    attachCheck:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    local attachLabel = createFontString(feedbackTab, "GameFontHighlightSmall")
+    attachLabel:SetPoint("LEFT", attachCheck, "RIGHT", 2, 0); attachLabel:SetText(Text["Attach diagnostic info"])
+    mainFrame.feedbackAttachCheck = attachCheck
+
+    local sendButton = createButton(feedbackTab, Text["Send"], 90, 22, sendFeedback)
+    sendButton:SetPoint("TOPRIGHT", 0, -4)
+    local hintText = createFontString(feedbackTab, "GameFontDisableSmall", "RIGHT")
+    hintText:SetPoint("RIGHT", sendButton, "LEFT", -10, 0); hintText:SetPoint("LEFT", attachLabel, "RIGHT", 12, 0)
+    hintText:SetText(Text["Goes to the addon developer only."])
+
+    -- the text box: multi-line, limited to what a message keeps
+    local boxFrame = CreateFrame("Button", nil, feedbackTab)
+    boxFrame:SetPoint("TOPLEFT", 0, -32); boxFrame:SetPoint("RIGHT", feedbackTab, "RIGHT", 0, 0); boxFrame:SetHeight(64)
+    local boxBackground = boxFrame:CreateTexture(nil, "BACKGROUND"); boxBackground:SetAllPoints(); boxBackground:SetColorTexture(0, 0, 0, 0.45)
+    local feedbackBox = CreateFrame("EditBox", nil, boxFrame)
+    feedbackBox:SetMultiLine(true); feedbackBox:SetAutoFocus(false)
+    feedbackBox:SetMaxBytes(Feedback.MAXIMUM_TEXT_BYTES + 1)
+    feedbackBox:SetFontObject(ChatFontNormal or GameFontHighlightSmall)
+    feedbackBox:SetPoint("TOPLEFT", 6, -4); feedbackBox:SetPoint("BOTTOMRIGHT", -6, 4)
+    feedbackBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    feedbackBox:SetText(feedbackTemplate(feedbackState.type))
+    boxFrame:SetScript("OnClick", function() feedbackBox:SetFocus() end)
+    mainFrame.feedbackBox = feedbackBox
+
+    -- under the box: "My messages" menu (my own messages with their delivery icon), counters, the last send result
+    local function myMessagesTooltip(owner)
+        GameTooltip:SetOwner(owner, "ANCHOR_BOTTOM")
+        GameTooltip:SetText(Text["Feedback"], 1, 1, 1)
+        GameTooltip:AddLine(Text["Ideas, wishes and bug reports help to improve ProfessionShare. You get no answer inside the addon; the developer may whisper you."],
+            0.8, 0.8, 0.8, true)
+    end
+    ---@param myRow MyFeedbackRow
+    ---@return string
+    local function myMessageLine(myRow)
+        local icon = myRow.delivered and FEEDBACK_DELIVERY_ICON.delivered or FEEDBACK_DELIVERY_ICON.waiting
+        return ("|T%s:14|t %s: %s"):format(icon, feedbackTypeLabel(myRow.k),
+            addon.Utility.Escape(addon.Utility.TruncateUtf8(myRow.text, 60)))
+    end
+    local myFeedbackButton = createMenuDropdown(feedbackTab, "WowStyle1DropdownTemplate", 150)
+    if myFeedbackButton then
+        myFeedbackButton:SetupMenu(function(_, rootMenu)
+            local summary = Feedback.MySummary(me())
+            local function addLine(label)
+                if rootMenu.CreateTitle then rootMenu:CreateTitle(label) else rootMenu:CreateButton(label, function() end) end
+            end
+            if #summary.rows == 0 then addLine(Text["No messages sent yet."]) end
+            for _, myRow in ipairs(summary.rows) do addLine(myMessageLine(myRow)) end
+        end)
+        myFeedbackButton:HookScript("OnEnter", function(self) myMessagesTooltip(self); GameTooltip:Show() end)
+        myFeedbackButton:HookScript("OnLeave", function() GameTooltip:Hide() end)
+    else   -- no menus: the list is the button's tooltip
+        myFeedbackButton = createButton(feedbackTab, Format(Text["My messages ({n})"], { n = 0 }), 150, 22, function() end)
+        myFeedbackButton:SetScript("OnEnter", function(self)
+            myMessagesTooltip(self)
+            local summary = Feedback.MySummary(me())
+            if #summary.rows == 0 then GameTooltip:AddLine(Text["No messages sent yet."], 1, 1, 1) end
+            for _, myRow in ipairs(summary.rows) do GameTooltip:AddLine(myMessageLine(myRow), 1, 1, 1) end
+            GameTooltip:Show()
+        end)
+        myFeedbackButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
+    myFeedbackButton:SetPoint("TOPLEFT", boxFrame, "BOTTOMLEFT", 0, -3)
+    mainFrame.myFeedbackButton = myFeedbackButton
+
+    -- one icon with a number; the tooltip explains it
+    local function createCounter(icon, title, explanation)
+        local counter = CreateFrame("Frame", nil, feedbackTab)
+        counter:SetSize(44, 20)
+        local counterIcon = counter:CreateTexture(nil, "ARTWORK"); counterIcon:SetSize(16, 16); counterIcon:SetPoint("LEFT", 0, 0)
+        counterIcon:SetTexture(icon)
+        counter.count = createFontString(counter, "GameFontHighlight"); counter.count:SetPoint("LEFT", counterIcon, "RIGHT", 4, 0)
+        counter:EnableMouse(true)
+        counter:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+            GameTooltip:SetText(title, 1, 1, 1)
+            GameTooltip:AddLine(explanation, 0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end)
+        counter:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        return counter
+    end
+    mainFrame.feedbackCounters = {
+        sent = createCounter(FEEDBACK_DELIVERY_ICON.sent, Text["Sent"],
+            Format(Text["Messages you sent that are still kept (the newest {max})."], { max = Feedback.MAXIMUM_ITEMS })),
+        delivered = createCounter(FEEDBACK_DELIVERY_ICON.delivered, Text["Delivered"], Text["The developer's client has picked them up."]),
+        waiting = createCounter(FEEDBACK_DELIVERY_ICON.waiting, Text["Waiting"],
+            Text["Not picked up yet: they go out the next time you and the developer are online at the same time."]),
+    }
+    mainFrame.feedbackCounters.sent:SetPoint("LEFT", myFeedbackButton, "RIGHT", 14, 0)
+    mainFrame.feedbackCounters.delivered:SetPoint("LEFT", mainFrame.feedbackCounters.sent, "RIGHT", 6, 0)
+    mainFrame.feedbackCounters.waiting:SetPoint("LEFT", mainFrame.feedbackCounters.delivered, "RIGHT", 6, 0)
+    mainFrame.feedbackNoticeText = createFontString(feedbackTab, "GameFontHighlightSmall", "RIGHT")
+    mainFrame.feedbackNoticeText:SetPoint("LEFT", mainFrame.feedbackCounters.waiting, "RIGHT", 10, 0)
+    mainFrame.feedbackNoticeText:SetPoint("RIGHT", feedbackTab, "RIGHT", 0, 0)
+
+    -- the developer's list (shown only on a reader's client)
+    local readerFrame = CreateFrame("Frame", nil, feedbackTab)
+    readerFrame:SetPoint("TOPLEFT", boxFrame, "BOTTOMLEFT", 0, -26); readerFrame:SetPoint("BOTTOMRIGHT", feedbackTab, "BOTTOMRIGHT", 0, 0)
+    mainFrame.feedbackReaderFrame = readerFrame
+    feedbackList = createScrollList(readerFrame, createSelectableRow, function(row, feedbackRow)
+        row.icon:SetTexture(FEEDBACK_TYPE_ICON[feedbackRow.k] or QUESTION_MARK_ICON)
+        row.label:SetText(("|cffaaaaaa%s:|r %s"):format(addon.Utility.Escape(shortName(feedbackRow.owner) or "?"),
+            addon.Utility.Escape(feedbackRow.text)))
+        local statusIcon = feedbackRow.status and ("|T" .. FEEDBACK_STATUS_ICON[feedbackRow.status] .. ":14|t ") or ""
+        local snapshotMark = feedbackRow.log and "|cff66ccff+|r " or ""
+        row.rightText:SetText(snapshotMark .. statusIcon .. timeAgo(feedbackRow.t))
+        row.label:SetPoint("RIGHT", -90, 0)
+        row.selectionHighlight:SetShown(feedbackRow.key == feedbackState.selectedKey)
+        row:SetScript("OnClick", function() feedbackState.selectedKey = feedbackRow.key; refreshFeedback() end)
+        local function showFeedbackTooltip(owner)
+            GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+            GameTooltip:SetText(feedbackTypeLabel(feedbackRow.k) .. " - " .. addon.Utility.Escape(shortName(feedbackRow.owner) or "?"), 1, 0.82, 0)
+            GameTooltip:AddLine(addon.Utility.Escape(feedbackRow.text), 1, 1, 1, true)
+            if feedbackRow.status then GameTooltip:AddLine(feedbackStatusLabel(feedbackRow.status), 0.6, 0.8, 1) end
+            if feedbackRow.log then GameTooltip:AddLine(Text["With diagnostic info."], 0.4, 0.8, 1) end
+            GameTooltip:Show()
+        end
+        row:SetScript("OnEnter", showFeedbackTooltip)
+        row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        row.onIconEnter = showFeedbackTooltip
+        row.onIconClick = nil
+    end)
+    feedbackList:SetPoint("TOPLEFT", 0, 0); feedbackList:SetPoint("BOTTOMRIGHT", 0, 76)
+    mainFrame.feedbackEmptyText = createFontString(readerFrame, "GameFontDisable", "CENTER")
+    mainFrame.feedbackEmptyText:SetPoint("CENTER", feedbackList, "CENTER", 0, 0)
+    mainFrame.feedbackEmptyText:SetText(Text["No messages received yet."])
+    mainFrame.feedbackDetailText = createFontString(readerFrame, "GameFontHighlightSmall")
+    mainFrame.feedbackDetailText:SetPoint("TOPLEFT", feedbackList, "BOTTOMLEFT", 4, -6)
+    mainFrame.feedbackDetailText:SetPoint("RIGHT", readerFrame, "RIGHT", -4, 0)
+    mainFrame.feedbackDetailText:SetHeight(40); mainFrame.feedbackDetailText:SetJustifyV("TOP"); mainFrame.feedbackDetailText:SetWordWrap(true)
+
+    mainFrame.feedbackWhisperButton = createButton(readerFrame, Text["Whisper"], 90, 24, function()
+        local selectedRow = selectedFeedbackRow()
+        if selectedRow then whisper(selectedRow.owner) end
+    end)
+    mainFrame.feedbackWhisperButton:SetPoint("BOTTOMLEFT", 0, 0)
+    mainFrame.feedbackSnapshotButton = createButton(readerFrame, Text["Diagnostic info"], 120, 24, function()
+        local selectedRow = selectedFeedbackRow()
+        if selectedRow and selectedRow.log then UI.ShowExport(selectedRow.text .. "\n\n" .. selectedRow.log) end
+    end)
+    mainFrame.feedbackSnapshotButton:SetPoint("LEFT", mainFrame.feedbackWhisperButton, "RIGHT", 6, 0)
+    mainFrame.feedbackStatusButtons = {}
+    local previousButton, gap = mainFrame.feedbackSnapshotButton, 14
+    for _, status in ipairs(Feedback.STATUSES) do
+        local statusButton = CreateFrame("Button", nil, readerFrame)
+        statusButton:SetSize(24, 24)
+        statusButton:SetPoint("LEFT", previousButton, "RIGHT", gap, 0)
+        local statusTexture = statusButton:CreateTexture(nil, "ARTWORK"); statusTexture:SetAllPoints()
+        statusTexture:SetTexture(FEEDBACK_STATUS_ICON[status])
+        local hoverTexture = statusButton:CreateTexture(nil, "HIGHLIGHT"); hoverTexture:SetAllPoints(); hoverTexture:SetColorTexture(1, 1, 1, 0.2)
+        statusButton:SetScript("OnClick", function()
+            local selectedRow = selectedFeedbackRow()
+            if not selectedRow then return end
+            local newStatus = Feedback.SetStatus(selectedRow.key, status)
+            addon.Log.Information("window.feedback", "the status of a feedback message changed", { key = selectedRow.key, status = newStatus })
+            refreshFeedback()
+        end)
+        statusButton:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(feedbackStatusLabel(status), 1, 1, 1)
+            GameTooltip:AddLine(Text["Only you see this status. Click again to clear it."], 0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end)
+        statusButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        mainFrame.feedbackStatusButtons[status] = statusButton
+        previousButton, gap = statusButton, 6
+    end
+end
+
 ---@return table tabFrame
 local function createTabFrame()
     local tabFrame = CreateFrame("Frame", nil, mainFrame)
@@ -1628,14 +2033,11 @@ local function buildMainFrame()
     local titleText = createFontString(mainFrame, "GameFontNormalLarge"); titleText:SetPoint("TOP", 0, -6); titleText:SetText(addon.TITLE)
 
     mainFrame.tabButtons = {}
-    local previousButton
     for _, tab in ipairs(tabDefinitions()) do
         local tabKey = tab.key
-        local tabButton = createButton(mainFrame, tab.label, tab.width, 22, function() selectTab(tabKey) end)
-        if previousButton then tabButton:SetPoint("LEFT", previousButton, "RIGHT", 4, 0) else tabButton:SetPoint("TOPLEFT", 12, -30) end
-        mainFrame.tabButtons[tabKey] = tabButton
-        previousButton = tabButton
+        mainFrame.tabButtons[tabKey] = createButton(mainFrame, tab.label, tab.width, 22, function() selectTab(tabKey) end)
     end
+    layoutTabButtons()   -- again on every refresh: Debug after /ps debug, Feedback when the roster changes
     mainFrame.optionsButton = createButton(mainFrame, Text["Options"], 80, 22, function() addon.Alerts.OpenOptions() end)
     mainFrame.optionsButton:SetPoint("TOPRIGHT", -30, -30)
     mainFrame.tabs = {}
@@ -1647,6 +2049,8 @@ local function buildMainFrame()
     buildOrdersTab(mainFrame.tabs.orders)
     mainFrame.tabs.available = createTabFrame()
     buildAvailableTab(mainFrame.tabs.available)
+    mainFrame.tabs.feedback = createTabFrame()
+    buildFeedbackTab(mainFrame.tabs.feedback)
     buildDebugTab()
 
     addon.Events.On("DATA_CHANGED", UI.Refresh)
@@ -1661,6 +2065,23 @@ local function buildMainFrame()
     end)
     selectTab("recipes")
     addon.Log.Debug("window.build", "the main window was built")
+end
+
+-- Shows the Debug tab for this session (the live build hides it) and opens the window on it.
+function UI.ShowDebugTab()
+    debugTabUnlocked = true
+    UI.Show()
+    if mainFrame then
+        layoutTabButtons()
+        selectTab("debug")
+    end
+end
+
+-- /ps debug [count]: the library prints the last log lines; ProfessionShare also shows the Debug tab
+local printLogLines = addon.SlashCommands.debug
+addon.SlashCommands.debug = function(arguments)
+    if printLogLines then printLogLines(arguments) end
+    UI.ShowDebugTab()
 end
 
 function UI.Toggle()

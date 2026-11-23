@@ -167,3 +167,21 @@ Additive minor change: a 2.3 peer ignores `arev` and drops `WANTA`/`ACCESS` as u
   (class Key 13 or the curated `Access.KEYS`, minus `Access.DENY`) are shown. Holder names are escaped in `Core/View/Model.lua`.
 - Stored: `access[name]` (schema 6, migration 5 -> 6 creates the table); re-validated on every load, dropped for members
   who left the guild, emptied by `/ps clean`, dropped for peers by the version reset like `offers`.
+
+## 13. Feedback for the developer (protocol 2.5, schema 7; feature 024)
+Additive minor change: a 2.4 peer ignores `frev` and drops `WANTF`/`FEEDBACK` as unknown message types.
+- `HELLO` gets optional `frev` = `rev` of my feedback record (omitted when I have sent none). Only a **reader** pulls:
+  the developer's client (`Feedback.IsReader`: `Model.IsBuildViewer` name hash) or a development build. Everyone else
+  treats every announced `frev` as held (never sends `WANTF`) and never stores another member's record, even one that
+  arrives on GUILD after a pull retry.
+- `WANTF {names, via?}` / `FEEDBACK {feedback = rec}`: same engine as `WANTA`/`ACCESS` (record kind `feedback`,
+  registered last). `rec = { name, rev, items = { { t, k, text, log? } } }`, oldest first. `t` = send time (unique in
+  the record), `k` one of `feedback feature bug`, `text` <= 300 bytes UTF-8 without control characters, `log` (bug
+  snapshot) <= 1200 bytes, lines joined by a line feed, at most 3 items with a `log`, at most 10 items.
+- No relay: a message reaches the developer when the sender and the developer are online at the same time.
+- Not a secret: the record is a normal addon message, readable by anyone's own code on the wire.
+- Display safety: text and snapshot are escaped (`Utility.Escape`) in the list, tooltip, detail panel and export window.
+- Stored: `feedback[name]` (only mine, except on a reader's client) and `feedbackState["name#t"] = declined|answered|fixed`
+  (the reader's local status), `feedbackDelivered[t] = true` (sender only: my messages a reader has asked for, shown as
+  "delivered"). Schema 7, migration 6 -> 7 creates the tables. Re-validated on every load; not dropped by
+  the roster prune, the version reset or `/ps clean` (the developer keeps messages of members who left).

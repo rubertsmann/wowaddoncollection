@@ -110,8 +110,33 @@ return {
                 harness.truthy(not slurp("UI/Window.lua"):find('key = "games"', 1, true), "the window still defines a games tab")
                 harness.equal(addon.SlashCommands.anim, nil); harness.equal(addon.SlashCommands.game, nil)
                 addon.Trace.Add({ dir = "in", ch = "GUILD", peer = "B-R", mt = "HELLO", st = "ok", why = "char: up to date" })
-                local okD, errD = pcall(addon.UI.SelectTab, "debug")
-                harness.truthy(okD, "switching to the debug tab failed: " .. tostring(errD))
+                -- Feedback tab: the form for everyone, the developer list on a reader's client (the dev build is one)
+                -- live build: hidden while the developer is not in my guild roster (a made-up developer name here)
+                addon.Model.BUILD_VIEWER_HASHES = { [addon.Model.NameHash("test developer")] = true }
+                addon.Communication.roster = { ["A-R"] = true, ["B-R"] = true }
+                harness.truthy(pcall(addon.UI.SelectTab, "feedback"), "switching to the feedback tab failed")
+                harness.equal(addon.UI.CurrentTab(), addon.IS_DEVELOPMENT_BUILD and "feedback" or "recipes",
+                    "the live build hides the Feedback tab when the developer is not in the guild")
+                addon.Communication.roster = { ["A-R"] = true, ["B-R"] = true, ["Test Developer-R"] = true }
+                addon.UI.SelectTab("feedback")
+                harness.equal(addon.UI.CurrentTab(), "feedback", "shown once the developer is in the roster")
+                addon.Communication.roster = { ["A-R"] = true }
+                addon.UI.Refresh()
+                harness.equal(addon.UI.CurrentTab(), addon.IS_DEVELOPMENT_BUILD and "feedback" or "recipes",
+                    "the developer left the guild: the open Feedback tab closes")
+                addon.Communication.roster = { ["A-R"] = true, ["Test Developer-R"] = true }
+                addon.UI.SelectTab("feedback")
+                local okS, errS = pcall(addon.UI.SendFeedback)   -- the stub box holds "": refused, nothing stored
+                harness.truthy(okS, "sending feedback failed: " .. tostring(errS))
+                harness.equal(addon.Feedback.MyCount("A-R"), 0)
+                addon.Feedback.Put({ name = "B-R", rev = 5, items = { { t = 1, k = "bug", text = "x |cffff0000red", log = "v1" } } }, "A-R")
+                harness.truthy(pcall(addon.UI.Refresh), "refreshing the feedback tab failed")
+                -- the Debug tab: live build only after /ps debug, the dev build always
+                addon.UI.SelectTab("debug")
+                harness.equal(addon.UI.CurrentTab(), addon.IS_DEVELOPMENT_BUILD and "debug" or "recipes", "the live build hides the Debug tab")
+                local okD, errD = pcall(addon.SlashCommands.debug, "3")
+                harness.truthy(okD, "/ps debug failed: " .. tostring(errD))
+                harness.equal(addon.UI.CurrentTab(), "debug", "/ps debug shows the Debug tab")
                 local okN, errN = pcall(addon.Diagnostics.IdentityRows, { identity = {}, me = "A-R", roster = {} })
                 harness.truthy(okN, "name check rows failed: " .. tostring(errN))
                 local okE, errE = pcall(addon.UI.ShowExport, addon.Diagnostics.Report({ communication = addon.Communication }))
@@ -140,6 +165,13 @@ return {
                         "/ps fakekeys exists only in the dev build")
                     harness.equal(addon.SlashCommands.fakenaxx ~= nil, addon.IS_DEVELOPMENT_BUILD and true or false,
                         "/ps fakenaxx exists only in the dev build")
+                    harness.equal(addon.SlashCommands.fakefeedback ~= nil, addon.IS_DEVELOPMENT_BUILD and true or false,
+                        "/ps fakefeedback exists only in the dev build")
+                    if addon.IS_DEVELOPMENT_BUILD then
+                        local okB, fakeRecord = pcall(addon.DevProbe.AddFakeFeedback)
+                        harness.truthy(okB and fakeRecord, "fake feedback failed: " .. tostring(fakeRecord))
+                        harness.truthy(addon.Feedback.Sanitize(fakeRecord), "the fake record is a valid record")
+                    end
                     -- dev fake request: the realm-named request is answered under the asked name
                     addon.Utility.NoteMyFullName("First Surname")
                     addon.Store.PutCharacter({ name = "First Surname", class = "MAGE", level = 30, rev = 5, professions = {
@@ -164,9 +196,9 @@ return {
                     local savedSoon, savedNow = addon.Communication.RequestHelloSoon, addon.Communication.RequestHello
                     addon.Communication.RequestHelloSoon = function() hellos[#hellos + 1] = "soon" end
                     addon.Communication.RequestHello = function() hellos[#hellos + 1] = "now" end
-                    for _, eventName in ipairs({ "LOCAL_CHANGED", "OFFERS_CHANGED", "ACCESS_CHANGED" }) do addon.Events.Fire(eventName) end
+                    for _, eventName in ipairs({ "LOCAL_CHANGED", "OFFERS_CHANGED", "ACCESS_CHANGED", "FEEDBACK_CHANGED" }) do addon.Events.Fire(eventName) end
                     addon.Communication.RequestHelloSoon, addon.Communication.RequestHello = savedSoon, savedNow
-                    harness.equal(table.concat(hellos, ","), "soon,soon,soon")
+                    harness.equal(table.concat(hellos, ","), "soon,soon,soon,soon")
                 end
                 harness.truthy(addon.Names.environment.spellName, "Api did not wire Names.env.spellName")
             end

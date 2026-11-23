@@ -16,11 +16,11 @@ return {
     ["send queue: record answers are replaceable, orders and requests are not; requests jump the queue"] = function(harness)
         local addon = harness.addon()
         local options = addon.Communication.options
-        for _, messageType in ipairs({ "SNAP", "OFFERS", "ACCESS" }) do harness.truthy(options.replaceableTypes[messageType], messageType) end
-        for _, messageType in ipairs({ "OPUSH", "ORDER", "HELLO", "WANT", "WANTO", "WANTA" }) do
+        for _, messageType in ipairs({ "SNAP", "OFFERS", "ACCESS", "FEEDBACK" }) do harness.truthy(options.replaceableTypes[messageType], messageType) end
+        for _, messageType in ipairs({ "OPUSH", "ORDER", "HELLO", "WANT", "WANTO", "WANTA", "WANTF" }) do
             harness.equal(options.replaceableTypes[messageType], nil, messageType)
         end
-        for _, messageType in ipairs({ "WANT", "WANTO", "WANTA", "HELLO" }) do harness.truthy(options.priorityTypes[messageType], messageType) end
+        for _, messageType in ipairs({ "WANT", "WANTO", "WANTA", "WANTF", "HELLO" }) do harness.truthy(options.priorityTypes[messageType], messageType) end
     end,
 
     ["send queue: three record changes to one member leave one answer waiting; an offline member gets nothing"] = function(harness)

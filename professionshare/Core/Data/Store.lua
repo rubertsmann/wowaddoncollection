@@ -9,6 +9,9 @@ local addonName, addon = ...
 --   offers[playerName] = OfferRecord: recipe items on offer + that character's dibs (see Offers.lua)
 --   hidden[offerKey]   = owner's revision when the viewer hid that offer
 --   access[playerName] = AccessRecord: dungeon keys and raid attunements of that character (see Access.lua)
+--   feedback[playerName] = FeedbackRecord: messages for the developer (only mine, except on the developer's client)
+--   feedbackState[messageKey] = the developer's status of a message (that client only; see Feedback.lua)
+--   feedbackDelivered[sentAt] = true: one of my messages the developer's client has asked for (this client only)
 --   profNames, itemText = profession names and item tooltip texts this client reported (this client only)
 --   debug, trace        = the log and the network trace rings; ui = window settings; me = my canonical name
 
@@ -62,7 +65,8 @@ addon.Store = Store
 --   4  0.6.0           + games (guild games); additive, schema 3 data is kept
 --   5  0.7.0           - games and the games UI settings (moved to the GuildGames addon; fresh start)
 --   6  1.2.0           + access (dungeon keys and raid attunements); additive, schema 5 data is kept
-Store.SCHEMA = 6
+--   7  1.3.0           + feedback, feedbackState, feedbackDelivered (messages for the developer); additive, schema 6 data is kept
+Store.SCHEMA = 7
 
 local SECONDS_PER_DAY = 86400
 local MAXIMUM_ID = 2147483647              -- recipe / item / spell ids fit a signed 32-bit integer
@@ -83,7 +87,7 @@ end
 local function withAllTables(savedVariables)
     savedVariables = savedVariables or {}
     savedVariables.schema = Store.SCHEMA
-    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "access", "debug", "ui" }) do
+    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "access", "feedback", "feedbackState", "feedbackDelivered", "debug", "ui" }) do
         if type(savedVariables[key]) ~= "table" then savedVariables[key] = {} end
     end
     -- network trace ring (Core/Debug/Trace.lua)
@@ -204,6 +208,7 @@ function Store.SanitizePersisted(savedVariables)
     droppedCount = droppedCount + droppedHere
     droppedCount = droppedCount + addon.Offers.SanitizePersisted(savedVariables)
     droppedCount = droppedCount + addon.Access.SanitizePersisted(savedVariables)
+    droppedCount = droppedCount + addon.Feedback.SanitizePersisted(savedVariables)
     local professionNamesByLanguage = {}
     if type(savedVariables.profNames) == "table" then
         for languageCode, namesBySkillLine in pairs(savedVariables.profNames) do
@@ -247,6 +252,11 @@ local MIGRATIONS = {
     end,
     [5] = function(savedVariables)   -- additive: dungeon keys and raid attunements
         if type(savedVariables.access) ~= "table" then savedVariables.access = {} end
+    end,
+    [6] = function(savedVariables)   -- additive: messages for the developer
+        if type(savedVariables.feedback) ~= "table" then savedVariables.feedback = {} end
+        if type(savedVariables.feedbackState) ~= "table" then savedVariables.feedbackState = {} end
+        if type(savedVariables.feedbackDelivered) ~= "table" then savedVariables.feedbackDelivered = {} end
     end,
 }
 
@@ -435,6 +445,20 @@ function Store.CanonicalizeStoredNames()
         if not keptRecord or (keptRecord.rev or 0) < (accessRecord.rev or 0) then accessRecords[canonicalName] = accessRecord end
     end
     Refill(database.access, accessRecords)
+    local feedbackRecords = {}
+    for playerName, feedbackRecord in pairs(database.feedback) do
+        local canonicalName = canonical(playerName)
+        feedbackRecord.name = canonicalName
+        local keptRecord = feedbackRecords[canonicalName]
+        if not keptRecord or (keptRecord.rev or 0) < (feedbackRecord.rev or 0) then feedbackRecords[canonicalName] = feedbackRecord end
+    end
+    Refill(database.feedback, feedbackRecords)
+    local feedbackStates = {}
+    for messageKey, status in pairs(database.feedbackState) do
+        local owner, sentAt = messageKey:match("^(.*)#(%d+)$")
+        feedbackStates[owner and (canonical(owner) .. "#" .. sentAt) or messageKey] = status
+    end
+    Refill(database.feedbackState, feedbackStates)
     local hiddenOffers = {}
     for offerKey, ownerRevision in pairs(database.hidden) do hiddenOffers[canonicalOfferKey(offerKey)] = ownerRevision end
     Refill(database.hidden, hiddenOffers)

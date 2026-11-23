@@ -12,10 +12,10 @@ local Text = addon.Text
 local library = LibStub("LibGuildSync-1.0")
 
 ---@type table<string, boolean> small single-chunk control messages that jump the queue
-local PRIORITY_TYPES = { ORDER = true, WANT = true, WANTO = true, WANTA = true, HELLO = true }
+local PRIORITY_TYPES = { ORDER = true, WANT = true, WANTO = true, WANTA = true, WANTF = true, HELLO = true }
 -- record answers: a newer one to the same recipient replaces one that is still waiting (it would be outdated on arrival)
 ---@type table<string, boolean>
-local REPLACEABLE_TYPES = { SNAP = true, OFFERS = true, ACCESS = true }
+local REPLACEABLE_TYPES = { SNAP = true, OFFERS = true, ACCESS = true, FEEDBACK = true }
 
 ---@return string|nil
 local function me() return addon.Utility.Me() end

@@ -28,6 +28,9 @@ shared crafting-order board.
     Seal of Ascension, ...), read from bags, key ring and bank. Click the icon to whisper a holder.
   * **Attunements** – who is attuned to Molten Core, Onyxia, Blackwing Lair, Naxxramas and Upper Blackrock Spire, and who
     is known not to be yet.
+* **Feedback tab** – send feedback, a feature request or a bug report to the addon developer (choose the type, a short
+  template appears; bug reports attach version, sync state and recent log lines unless unticked). Only the developer's
+  client fetches the messages; you get no status in the addon. The tab appears only in the developer's guild.
 * No server. Data travels over hidden guild addon messages (prefix `PShare`) and is stored in the `ProfessionShareDB`
   SavedVariable.
 
@@ -52,7 +55,7 @@ after `package.ps1` (settings in `tools/curseforge.json`; token in `$env:CF_API_
 
 `/ps` (or the minimap button) opens the window. Click each profession icon at the top right of the Recipes tab once so the recipes are read.
 `/ps offers` (what the item scan sees; `/ps offers scan` forces a scan), `/ps access` (keys and attunements the scan sees; `/ps access scan` stores them), `/ps scan`, `/ps dump`, `/ps chars`, `/ps comm`, `/ps hello`, `/ps debug [n]`, `/ps version`,
-`/ps export` (diagnostic report to copy for the addon author; also the **Debug** tab), `/ps trace [n] [problems]`, `/ps ident`,
+`/ps export` (diagnostic report to copy for the addon author; also the **Debug** tab, which the live build shows after `/ps debug`), `/ps trace [n] [problems]`, `/ps ident`,
 `/ps locale <code>|auto` (UI language, then `/reload`), `/ps i18n` (what the client reports),
 profession icons at the top right of the Recipes tab (one click opens that profession and reads its recipes),
 `/ps clean` then `/ps clean confirm` (deletes everything stored locally). In the dev build use `/psd`.

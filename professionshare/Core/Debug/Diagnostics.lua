@@ -285,6 +285,14 @@ function Diagnostics.Report(options)
         addLine("%s%s rev=%s keys=%d att=%s", playerName, playerName == myName and " (me)" or "", tostring(accessRecord.rev),
             count(accessRecord.keys), table.concat(attunementParts, ","))
     end
+    -- feedback: only counts (the text is for the developer, not for every exported report)
+    local feedbackRecordCount, feedbackMessageCount = addon.Feedback.Counts()
+    addLine("feedback records held: %d (%d messages), reader: %s", feedbackRecordCount, feedbackMessageCount,
+        tostring(addon.Feedback.IsReader(myName)))
+    for _, playerName in ipairs(sortedKeys(communication and communication.sync and communication.sync.wantedFeedback or {})) do
+        local pull = communication.sync.wantedFeedback[playerName]
+        addLine("pulled feedback of %s (rev %s) %ds ago", playerName, tostring(pull.revision), now - (pull.startedAt or now))
+    end
 
     addLine("")
     addLine("--- orders held (%d) ---", count(database.orders))

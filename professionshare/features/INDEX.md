@@ -24,3 +24,4 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 017 | Enchant effect text | done | 0.7.2, fix 0.7.3 (UI only) | 91a9da0 | [017-enchant-effect-text](017-enchant-effect-text/spec.md) |
 | 022 | Misc items tab with keys | verifying | 1.2.0 (protocol 2.4, schema 6) | release commit 1.2.0 | [022-misc-items-tab-with-keys](022-misc-items-tab-with-keys/spec.md) |
 | 023 | Send backlog and offline whispers | verifying | ProfessionShare 1.2.1, GuildGames 0.4.1, LibGuildSync MINOR 5 | release commit | [023-send-backlog-and-offline-whispers](023-send-backlog-and-offline-whispers/spec.md) |
+| 024 | Feedback tab and hidden debug tab | verifying | 1.3.0 (protocol 2.5, schema 7) | release commit 1.3.0 | [024-feedback-tab-and-hidden-debug-tab](024-feedback-tab-and-hidden-debug-tab/spec.md) |
