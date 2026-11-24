@@ -493,7 +493,7 @@ function Store.CanonicalizeStoredNames()
     return changedCount
 end
 
--- names Prune never drops besides `keptName`; empty in the live build (the dev "Fake enchanter" test record adds one)
+-- names Prune never drops besides `keptName`; empty in the live build (the dev fake members add theirs)
 ---@type table<string, boolean>
 Store.keptNames = {}
 

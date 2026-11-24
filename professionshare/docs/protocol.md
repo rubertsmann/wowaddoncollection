@@ -207,3 +207,19 @@ Additive minor change: a 2.5 peer ignores `rrev` and drops `WANTR`/`REP` as unkn
   viewer's own build and never travel.
 - Stored: `rep[name]` (schema 8, migration 7 -> 8 creates the table); re-validated on every load, dropped for members
   who left the guild, emptied by `/ps clean`, dropped for peers by the version reset like `access`.
+
+## 15. Recipe drop alerts (protocol 2.7, schema unchanged; feature 027)
+Additive minor change: a 2.6 peer drops `DROP`/`DROPA` as unknown message types. Nothing is stored (session memory;
+switches in `ui.drops`).
+- `DROP {item}` on GUILD: a tradeable recipe item (class Recipe, not bind on pickup, its tooltip names a profession
+  requirement) from the sender's own loot line just reached the sender's bags. Sent once per loot line, only when the
+  sender's `share` switch is on.
+- Each receiver reads the item's tooltip on its own client (`Core/Data/RecipeCheck.lua`: the last "Requires
+  <profession> (n)" line, "Already known") and compares with its own stored skill. Learnable -> `DROPA {item, s="g", r}`
+  whispered to the sender and a local alert; skill too low -> `DROPA {s="r", r}`; known, other profession, unreadable,
+  `share` off -> nothing. The same `DROP` from the same sender within 60 s is ignored.
+- `DROPA {item, s, r}`: `item` 1..10 000 000, `s` "g" or "r", `r` 0..1000 (the answerer's current skill). Stored only
+  for one of the receiver's own drops of the last 15 minutes (at most 20); anything else is ignored.
+- Display safety: answerer names are escaped (tooltip) or made chat safe (chat lines); item names come from the
+  viewer's own client.
+- Traffic: one small GUILD message per looted recipe, one whisper per member who can use it or lacks only the skill.

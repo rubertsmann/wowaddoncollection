@@ -12,7 +12,7 @@ local Text = addon.Text
 local library = LibStub("LibGuildSync-1.0")
 
 ---@type table<string, boolean> small single-chunk control messages that jump the queue
-local PRIORITY_TYPES = { ORDER = true, WANT = true, WANTO = true, WANTA = true, WANTF = true, HELLO = true }
+local PRIORITY_TYPES = { ORDER = true, WANT = true, WANTO = true, WANTA = true, WANTF = true, HELLO = true, DROP = true, DROPA = true }
 -- record answers: a newer one to the same recipient replaces one that is still waiting (it would be outdated on arrival)
 ---@type table<string, boolean>
 local REPLACEABLE_TYPES = { SNAP = true, OFFERS = true, ACCESS = true, FEEDBACK = true }
@@ -40,6 +40,7 @@ local Communication = library.Channel.New({
             orders = addon.orders,
             me = me,   -- a function: read at use time
             onChange = function(kind) addon.Events.Fire("DATA_CHANGED", kind) end,
+            onRecipeDrop = function(sender, itemID) if addon.Drops then addon.Drops.OnDrop(sender, itemID) end end,
         })
     end,
     onIncompatible = function(kind)
@@ -64,6 +65,22 @@ addon.Communication = Communication
 ---@param order Order
 function Communication.BroadcastOrder(order)
     if Communication.active then Communication.sync:BroadcastOrder(order) end
+end
+
+---@param itemID integer
+---@return boolean sent
+function Communication.BroadcastDrop(itemID)
+    if not Communication.active then return false end
+    Communication.sync:BroadcastDrop(itemID)
+    return true
+end
+
+---@param target string
+---@param itemID integer
+---@param status "g"|"r"
+---@param rank integer
+function Communication.AnswerDrop(target, itemID, status, rank)
+    if Communication.active then Communication.sync:AnswerDrop(target, itemID, status, rank) end
 end
 
 ------------------------------------------------------------------ slash commands

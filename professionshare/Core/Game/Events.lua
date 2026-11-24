@@ -13,7 +13,7 @@ addon.Events = Events
 do
     local missingModules = {}
     for _, moduleName in ipairs({ "Utility", "Log", "Locale", "Store", "Names", "Api", "Scanner", "Codec", "Guard", "Orders",
-        "Offers", "Access", "FactionHints", "Reputation", "Sync", "Model", "Communication", "Trace", "Diagnostics" }) do
+        "Offers", "Access", "FactionHints", "Reputation", "RecipeCheck", "RecipeDrops", "Sync", "Model", "Communication", "Trace", "Diagnostics" }) do
         if not addon[moduleName] then missingModules[#missingModules + 1] = moduleName end
     end
     if #missingModules > 0 then
@@ -168,6 +168,7 @@ function onGameEvent.ADDON_LOADED(loadedAddonName)
     addon.dbStatus = status
     addon.Locale.SetInterfaceLanguage(addon.db.ui.locale)   -- /ps locale <code> override for testing translations; nil = game client language
     addon.orders = addon.Orders.New(addon.Utility.Now, addon.db.orders)
+    if addon.IS_DEVELOPMENT_BUILD and addon.DevProbe then addon.DevProbe.RestoreFakeMembers() end   -- fake members stay through the prune
     addon.Communication.Init()
     addon.Log.Information("events.load", "addon loaded", { version = addon.VERSION, build = addon.BUILD, store = status })
 end

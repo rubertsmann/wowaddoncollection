@@ -32,6 +32,13 @@ shared crafting-order board.
     Thorium Brotherhood, Timbermaw, Cenarion Circle, Zandalar, Brood of Nozdormu, home cities, goblin towns,
     battlegrounds): one row per member and faction, sortable by standing, filtered by a faction dropdown and the
     search box. Click a name to whisper that member. Hover a row to see what each standing unlocks (static hints, `Core/Data/FactionHints.lua`).
+* **Recipe drop alerts** – when a tradeable recipe drops into your bags, guild members with the addon who can learn it
+  get a chat line and/or the minimap news icon. Hover the recipe (in the bags or the chat line) to see who answered:
+  up to 3 names with their skill, green = can learn it now, red = skill too low, "..." when more. Each client decides
+  from its own item tooltip, so it works for Forever's own recipes and in every client language. Bind-on-pickup recipes
+  are not announced. `/ps drops` shows the switches, `/ps drops share|chat|icon on|off` sets them.
+* **Settings** – Interface -> AddOns -> ProfessionShare (or `/ps options`): every switch grouped by feature (General,
+  Order notifications, Recipe drops, Recipe list).
 * **Feedback tab** – send feedback, a feature request or a bug report to the addon developer (choose the type, a short
   template appears; bug reports attach version, sync state and recent log lines unless unticked). Only the developer's
   client fetches the messages; you get no status in the addon. The tab appears only in the developer's guild.
@@ -58,7 +65,7 @@ after `package.ps1` (settings in `tools/curseforge.json`; token in `$env:CF_API_
 ## Use
 
 `/ps` (or the minimap button) opens the window. Click each profession icon at the top right of the Recipes tab once so the recipes are read.
-`/ps offers` (what the item scan sees; `/ps offers scan` forces a scan), `/ps access` (keys and attunements the scan sees; `/ps access scan` stores them), `/ps rep` (faction standings the scan sees; `/ps rep scan` shares them now), `/ps scan`, `/ps dump`, `/ps chars`, `/ps comm`, `/ps hello`, `/ps debug [n]`, `/ps version`,
+`/ps offers` (what the item scan sees; `/ps offers scan` forces a scan), `/ps access` (keys and attunements the scan sees; `/ps access scan` stores them), `/ps rep` (faction standings the scan sees; `/ps rep scan` shares them now), `/ps drops` (recipe drop alert switches), `/ps scan`, `/ps dump`, `/ps chars`, `/ps comm`, `/ps hello`, `/ps debug [n]`, `/ps version`,
 `/ps export` (diagnostic report to copy for the addon author; also the **Debug** tab, which the live build shows after `/ps debug`), `/ps trace [n] [problems]`, `/ps ident`,
 `/ps locale <code>|auto` (UI language, then `/reload`), `/ps i18n` (what the client reports),
 profession icons at the top right of the Recipes tab (one click opens that profession and reads its recipes),
@@ -79,9 +86,9 @@ The UI is available in English and German; profession and recipe names always fo
   |---|---|---|
   | `Core/Base/` | identity, shared helpers, logging, localization | Init, Utility, Log, Locale (+ `Locales/`) |
   | `Core/Debug/` | network trace, diagnostic report | Trace, Diagnostics |
-  | `Core/Data/` | SavedVariables schema and records | Store, Orders, Offers, Access, Reputation, FactionHints (static hint data), Feedback, Scanner |
+  | `Core/Data/` | SavedVariables schema and records | Store, Orders, Offers, Access, Reputation, FactionHints (static hint data), RecipeCheck, RecipeDrops, Feedback, Scanner |
   | `Core/Net/` | addon-channel communication on LibGuildSync | Codec, Guard, Sync, Communication |
-  | `Core/Game/` | the WoW API boundary | Api, Events |
+  | `Core/Game/` | the WoW API boundary | Api, Events, Drops |
   | `Core/View/` | view-models for the UI (pure) | Model, Names, ItemText, Notify |
   | `UI/` | frames | Window, Alerts, DevProbe (dev build only) |
   | `Libs/LibGuildSync/` | shared with GuildGames: transport, record-pull engine, names, log, trace, widgets | junction to `../libguildsync` in a working copy (`tools/deploy.ps1`), real files in the zip |

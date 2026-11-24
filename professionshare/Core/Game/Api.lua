@@ -411,11 +411,10 @@ function Api.ItemTooltipLines(itemID)
     return Api.HyperlinkTooltipLines("item:" .. itemID)
 end
 
--- the left text of every line a hidden tooltip shows for `hyperlink` ("item:123", "spell:123", "enchant:123");
--- nil when the client has no tooltip for it
+-- the lines a hidden tooltip shows for `hyperlink`, with the left text colour; nil when the client has no tooltip for it
 ---@param hyperlink string
----@return string[]|nil
-function Api.HyperlinkTooltipLines(hyperlink)
+---@return TooltipLine[]|nil
+local function scanTooltip(hyperlink)
     if not CreateFrame then return nil end
     if not scanningTooltip then
         scanningTooltip = tryCall("CreateFrame(GameTooltip)", CreateFrame, "GameTooltip", addon.FRAME_PREFIX .. "ScanTip", UIParent,
@@ -431,10 +430,24 @@ function Api.HyperlinkTooltipLines(hyperlink)
     local tooltipLines = {}
     for lineIndex = 1, scanningTooltip:NumLines() or 0 do
         local leftFontString = _G[addon.FRAME_PREFIX .. "ScanTipTextLeft" .. lineIndex]
-        tooltipLines[#tooltipLines + 1] = leftFontString and leftFontString:GetText() or ""
+        local red, green, blue
+        if leftFontString and leftFontString.GetTextColor then red, green, blue = leftFontString:GetTextColor() end
+        tooltipLines[#tooltipLines + 1] = { text = leftFontString and leftFontString:GetText() or "", r = red, g = green, b = blue }
     end
     scanningTooltip:Hide()
     if #tooltipLines == 0 then return nil end
+    return tooltipLines
+end
+
+-- the left text of every line a hidden tooltip shows for `hyperlink` ("item:123", "spell:123", "enchant:123");
+-- nil when the client has no tooltip for it
+---@param hyperlink string
+---@return string[]|nil
+function Api.HyperlinkTooltipLines(hyperlink)
+    local coloredLines = scanTooltip(hyperlink)
+    if not coloredLines then return nil end
+    local tooltipLines = {}
+    for _, tooltipLine in ipairs(coloredLines) do tooltipLines[#tooltipLines + 1] = tooltipLine.text end
     return tooltipLines
 end
 
@@ -496,6 +509,14 @@ function Api.ItemCount(itemID)
     if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(itemID, true) or 0 end
     if GetItemCount then return GetItemCount(itemID, true) or 0 end
     return 0
+end
+
+-- How many of an item are in my bags (the bank not counted).
+---@param itemID integer
+---@return integer
+function Api.BagCount(itemID)
+    local getItemCount = (C_Item and C_Item.GetItemCount) or GetItemCount
+    return tonumber(getItemCount and tryCall("GetItemCount", getItemCount, itemID, false)) or 0
 end
 
 ------------------------------------------------------------------ recipe items (Offers)
@@ -673,6 +694,88 @@ function Api.ScanItems()
     end
     if Api.open.auction then scans.auction = scanAuctions() end
     return scans
+end
+
+------------------------------------------------------------------ recipe items: own tooltip and loot lines (RecipeCheck)
+
+---@class BagRecipeItem
+---@field itemID integer
+---@field bound boolean
+---@field bag integer
+---@field slot integer
+
+-- Every recipe item in my bags, soulbound ones included (one entry per slot).
+---@return BagRecipeItem[]
+function Api.BagRecipeItems()
+    local recipeItems = {}
+    for bagID = 0, NUM_BAG_SLOTS or 4 do
+        for slotIndex = 1, containerSlotCount(bagID) do
+            local itemID, _, isBound = containerItem(bagID, slotIndex)
+            if itemID and Api.ItemClass(itemID) == addon.Offers.RECIPE_CLASS then
+                recipeItems[#recipeItems + 1] = { itemID = itemID, bound = isBound and true or false, bag = bagID, slot = slotIndex }
+            end
+        end
+    end
+    return recipeItems
+end
+
+-- The client's own format strings RecipeCheck reads tooltips and loot lines with (the MULTIPLE forms first: the
+-- single form would also match "...x2." with a wrong link).
+---@return RecipeCheckStrings
+function Api.RecipeCheckStrings()
+    local function present(...)
+        local formats = {}
+        for argumentIndex = 1, select("#", ...) do   -- not ipairs: a format this client lacks is a nil in the middle
+            local formatString = select(argumentIndex, ...)
+            if type(formatString) == "string" then formats[#formats + 1] = formatString end
+        end
+        return formats
+    end
+    return {
+        minSkill = ITEM_MIN_SKILL, known = ITEM_SPELL_KNOWN, bindOnPickup = ITEM_BIND_ON_PICKUP,
+        loot = {
+            self = present(LOOT_ITEM_SELF_MULTIPLE, LOOT_ITEM_SELF),
+            pushed = present(LOOT_ITEM_PUSHED_SELF_MULTIPLE, LOOT_ITEM_PUSHED_SELF),
+            other = present(LOOT_ITEM_MULTIPLE, LOOT_ITEM),
+        },
+    }
+end
+
+---@param colorObject any
+---@return number|nil, number|nil, number|nil
+local function colorValues(colorObject)
+    if type(colorObject) ~= "table" then return nil end
+    if type(colorObject.GetRGB) == "function" then
+        local ok, red, green, blue = pcall(colorObject.GetRGB, colorObject)
+        if ok then return red, green, blue end
+    end
+    return colorObject.r, colorObject.g, colorObject.b
+end
+
+-- Tooltip lines of an item for THIS character with the left text colour ({ text, r, g, b }), or nil while the client has
+-- not loaded the item (a load is requested; ask again later). Read on this client only; nothing of it is sent.
+---@param itemID any
+---@return TooltipLine[]|nil
+function Api.ItemTooltipLinesWithColor(itemID)
+    if type(itemID) ~= "number" then return nil end
+    local getItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    if not getItemInfo or not tryCall("GetItemInfo", getItemInfo, itemID) then
+        if C_Item and C_Item.RequestLoadItemDataByID then tryCall("C_Item.RequestLoadItemDataByID", C_Item.RequestLoadItemDataByID, itemID) end
+        return nil
+    end
+    local tooltipLines = {}
+    if C_TooltipInfo and C_TooltipInfo.GetItemByID then
+        local tooltipData = tryCall("C_TooltipInfo.GetItemByID", C_TooltipInfo.GetItemByID, itemID)
+        if type(tooltipData) == "table" and type(tooltipData.lines) == "table" then
+            for _, tooltipLine in ipairs(tooltipData.lines) do
+                if tooltipLine.leftText == nil and TooltipUtil and TooltipUtil.SurfaceArgs then pcall(TooltipUtil.SurfaceArgs, tooltipLine) end
+                local red, green, blue = colorValues(tooltipLine.leftColor)
+                tooltipLines[#tooltipLines + 1] = { text = tostring(tooltipLine.leftText or ""), r = red, g = green, b = blue }
+            end
+            if #tooltipLines > 0 then return tooltipLines end
+        end
+    end
+    return scanTooltip("item:" .. itemID)
 end
 
 ------------------------------------------------------------------ dungeon keys and raid attunements (Access)

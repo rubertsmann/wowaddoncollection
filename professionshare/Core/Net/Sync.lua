@@ -245,6 +245,33 @@ local function onOrder(sync, message)
     end
 end
 
+-- DROP {item}: a member's recipe item just dropped into their bags. The client decides from its own tooltip whether to
+-- answer and alert (environment.onRecipeDrop, Core/Game/Drops.lua).
+---@param sync table
+---@param message table
+---@param sender string
+local function onRecipeDrop(sync, message, sender)
+    local itemID = addon.RecipeDrops.SanitizeDrop(message)
+    if not itemID then error("bad item") end
+    local onDrop = sync.environment.onRecipeDrop
+    if onDrop then onDrop(sender, itemID) end
+    sync:_note("ok", "recipe drop " .. itemID)
+end
+
+-- DROPA {item, s, r}: a member's answer to one of MY recipe drops (shown in that item's tooltip).
+---@param sync table
+---@param message table
+---@param sender string
+local function onRecipeDropAnswer(sync, message, sender)
+    if not addon.RecipeDrops.SanitizeAnswer(message) then error("bad answer") end
+    if addon.RecipeDrops.AddAnswer(sender, message, sync.environment.now()) then
+        sync.environment.onChange("drops")
+        sync:_note("ok", "answer " .. tostring(message.s) .. " " .. tostring(message.r))
+    else
+        sync:_note("ignored", "not one of my recent drops")
+    end
+end
+
 -- A Sync engine with ProfessionShare's record kinds, the orders digest and the order messages. The result keeps the names
 -- older code and tests use: sync.wanted (character pulls), sync.wantedOffers, sync.pending, sync.statistics.
 ---@param environment ProfessionShareSyncEnvironment
@@ -263,7 +290,16 @@ function Sync.New(environment)
     sync:AddHelloHook(ordersHelloHook(environment))
     sync:AddHandler("OPUSH", onOrderPush)
     sync:AddHandler("ORDER", onOrder)
+    sync:AddHandler("DROP", onRecipeDrop)
+    sync:AddHandler("DROPA", onRecipeDropAnswer)
     ---@param order Order
     function sync:BroadcastOrder(order) self:_send({ t = "ORDER", order = order }, "GUILD") end
+    ---@param itemID integer
+    function sync:BroadcastDrop(itemID) self:_send({ t = "DROP", item = itemID }, "GUILD") end
+    ---@param target string the looter
+    ---@param itemID integer
+    ---@param status "g"|"r"
+    ---@param rank integer
+    function sync:AnswerDrop(target, itemID, status, rank) self:_send({ t = "DROPA", item = itemID, s = status, r = rank }, "WHISPER", target) end
     return sync
 end

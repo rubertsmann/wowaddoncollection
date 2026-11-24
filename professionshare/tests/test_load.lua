@@ -191,7 +191,132 @@ return {
                         harness.equal(result.answerName, "First Surname-CAMWOWEU4Realm3PvE")
                     end
                     harness.equal(#(addon.Communication.queue or {}), sentBefore, "the simulation must not send anything")
+                    if addon.IS_DEVELOPMENT_BUILD then
+                        local DevProbe = addon.DevProbe
+                        -- the Dev tools menu: unique keys, every entry in a known section, /psd fake runs and lists them
+                        local keys, sections = {}, {}
+                        for _, section in ipairs(DevProbe.SECTIONS) do sections[section] = true end
+                        for _, entry in ipairs(DevProbe.ENTRIES) do
+                            harness.equal(keys[entry.key], nil, "duplicate dev entry " .. entry.key); keys[entry.key] = true
+                            harness.truthy(sections[entry.section], entry.key .. " has an unknown section")
+                        end
+                        harness.equal(DevProbe.RunEntry("nope"), false)
+                        harness.truthy(pcall(addon.SlashCommands.fake, ""), "/psd fake without a key lists the entries")
+                        -- every fake member is remembered (survives /reload) and the checks are written for the WTF file
+                        harness.equal(addon.db.devFake["Fake Enchanter"], "Enchanter")
+                        harness.equal(addon.db.devFake["Fake Keyholder"], "Keyholder")
+                        harness.equal(addon.db.devChecks.keys.ok, true)
+                        addon.Store.keptNames["Fake Enchanter"] = nil
+                        DevProbe.RestoreFakeMembers()
+                        harness.truthy(addon.Store.keptNames["Fake Enchanter"], "restored after a reload")
+                        -- loot lines: mine and another player's, told apart by the client's own formats; the player name is not kept
+                        local savedGlobals = { LOOT_ITEM_SELF = LOOT_ITEM_SELF, LOOT_ITEM = LOOT_ITEM, GetItemInfoInstant = GetItemInfoInstant }
+                        LOOT_ITEM_SELF, LOOT_ITEM = "You receive loot: %s.", "%s receives loot: %s."
+                        GetItemInfoInstant = function(itemID) if itemID == 14468 then return itemID, "", "", "", 1, addon.Offers.RECIPE_CLASS, 2 end end
+                        local okL, mine = pcall(DevProbe.RecordLootLine, "You receive loot: |cff1eff00|Hitem:14468::|h[Pattern]|h|r.", false)
+                        harness.truthy(okL and mine and mine.kind == "self", "own loot line not recorded: " .. tostring(mine))
+                        harness.equal(DevProbe.RecordLootLine("You receive loot: |cff1eff00|Hitem:2589::|h[Linen]|h|r.", false), nil,
+                            "not a recipe: ignored")
+                        local okO, other = pcall(DevProbe.SimulateRecipeLoot, "other", 14468)
+                        harness.truthy(okO and other and other.kind == "other", "other loot line: " .. tostring(other))
+                        harness.equal(other.message:find("Fake Looter", 1, true), nil, "another player's name is not stored")
+                        harness.equal(addon.db.devChecks.lootOther.ok, true)
+                        harness.equal(#addon.db.devChecks.lootLines, 2)
+                        for _, name in ipairs({ "LOOT_ITEM_SELF", "LOOT_ITEM", "GetItemInfoInstant" }) do _G[name] = savedGlobals[name] end   -- pairs would skip nils
+                        harness.truthy(pcall(DevProbe.RecipeProbe, {}), "the recipe probe runs without recipe items")
+                        harness.truthy(addon.db.devChecks.recipes, "recipe probe result written")
+                        -- recipe drops: my loot is announced once in the bags; a member's drop is decided from my own tooltip
+                        do
+                            local names = { "LOOT_ITEM_SELF", "GetItemInfoInstant", "GetItemInfo", "GetItemCount", "C_TooltipInfo",
+                                "ITEM_MIN_SKILL", "ITEM_BIND_ON_PICKUP", "C_Item" }
+                            local savedDrop = {}
+                            for _, name in ipairs(names) do savedDrop[name] = _G[name] end
+                            C_Item = nil
+                            LOOT_ITEM_SELF, ITEM_MIN_SKILL, ITEM_BIND_ON_PICKUP = "You receive loot: %s.", "Requires %s (%d)", "Binds when picked up"
+                            GetItemInfoInstant = function(itemID) return itemID, "", "", "", 1, addon.Offers.RECIPE_CLASS, 2 end
+                            GetItemInfo = function(itemID) return "Pattern " .. itemID end
+                            GetItemCount = function() return 1 end
+                            local bound = {}
+                            C_TooltipInfo = { GetItemByID = function(itemID)
+                                local lines = { { leftText = "Pattern " .. itemID }, { leftText = "Requires Kochkunst (100)", leftColor = { r = 1, g = 1, b = 1 } } }
+                                if bound[itemID] then table.insert(lines, 2, { leftText = "Binds when picked up" }) end
+                                return { lines = lines }
+                            end }
+                            addon.Store.PutCharacter({ name = "First Surname", class = "MAGE", level = 30, rev = 50, professions = {
+                                Kochkunst = { name = "Kochkunst", id = 185, loc = "deDE", rank = 150, max = 150, recipes = { [1] = true } } } })
+                            addon.Store.db.me = "First Surname"
+                            local savedBroadcast, broadcasts = addon.Communication.BroadcastDrop, {}
+                            addon.Communication.BroadcastDrop = function(itemID) broadcasts[#broadcasts + 1] = itemID; return true end
+                            local outcomes = {}
+                            harness.truthy(addon.Drops.OnLootLine("You receive loot: |cff1eff00|Hitem:5001::|h[P]|h|r.", function(outcome) outcomes[#outcomes + 1] = outcome end))
+                            bound[5002] = true
+                            addon.Drops.OnLootLine("You receive loot: |cff1eff00|Hitem:5002::|h[P]|h|r.", function(outcome) outcomes[#outcomes + 1] = outcome end)
+                            harness.equal(table.concat(outcomes, ","), "announced,bound")
+                            harness.equal(#broadcasts, 1); harness.equal(broadcasts[1], 5001, "bind on pickup is not announced")
+                            addon.RecipeDrops.Set(addon.db.ui, "share", false)
+                            harness.equal(addon.Drops.OnLootLine("You receive loot: |cff1eff00|Hitem:5003::|h[P]|h|r."), nil, "share off: nothing (RF5)")
+                            local offResult
+                            addon.Drops.OnDrop("Anna", 5004, { done = function(result) offResult = result end })
+                            harness.equal(offResult.status, "off", "share off: no answer (RF5)")
+                            addon.RecipeDrops.Set(addon.db.ui, "share", true)
+                            -- a member's drop: learnable -> green answer (captured) and an alert
+                            local answered, result
+                            addon.Drops.OnDrop("Anna", 5004, { answer = function(...) answered = { ... } end, done = function(r) result = r end })
+                            harness.equal(result.status, "learnable"); harness.equal(answered[3], "g"); harness.equal(answered[4], 150)
+                            harness.equal(addon.RecipeDrops.alerts[1].from, "Anna")
+                            -- not a recipe (crafted gear with a profession requirement): no answer, no alert
+                            local gearResult, gearAnswered
+                            local savedInstant = GetItemInfoInstant
+                            GetItemInfoInstant = function(itemID) return itemID, "", "", "", 1, 4, 1 end
+                            addon.Drops.OnDrop("Anna", 5099, { answer = function() gearAnswered = true end, done = function(r) gearResult = r end })
+                            GetItemInfoInstant = savedInstant
+                            harness.equal(gearResult.status, "notRecipe"); harness.equal(gearAnswered, nil)
+                            addon.Events.Fire("WINDOW_OPENED")
+                            harness.equal(#addon.RecipeDrops.alerts, 0, "opening the window clears the alerts")
+                            -- the tooltip of my drop lists the answers
+                            addon.RecipeDrops.AddAnswer("Bob", { item = 5001, s = "r", r = 80 }, addon.Utility.Now())
+                            local tooltipLines = {}
+                            addon.Drops.AddTooltipLines({ AddLine = function(_, text) tooltipLines[#tooltipLines + 1] = text end }, 5001)
+                            harness.equal(#tooltipLines, 2); harness.truthy(tooltipLines[2]:find("Bob", 1, true) and tooltipLines[2]:find("80", 1, true))
+                            local otherLines = {}
+                            addon.Drops.AddTooltipLines({ AddLine = function(_, text) otherLines[#otherLines + 1] = text end }, 9999)
+                            harness.equal(#otherLines, 0, "not my drop: no lines")
+                            harness.truthy(pcall(addon.SlashCommands.drops, "chat off")); harness.equal(addon.RecipeDrops.Get(addon.db.ui, "chat"), false)
+                            harness.truthy(pcall(addon.SlashCommands.drops, "nonsense"))
+                            addon.RecipeDrops.Set(addon.db.ui, "chat", true)
+                            -- dev triggers: incoming drop (answer captured, never sent) and fake answers to my drop
+                            DevProbe.RunEntry("dropin", { 5005 })
+                            harness.equal(addon.db.devChecks.dropIn.status, "learnable"); harness.equal(addon.db.devChecks.dropIn.answer.s, "g")
+                            DevProbe.RunEntry("dropmine", { 5006 })
+                            harness.equal(addon.db.devChecks.dropMine.ok, true)
+                            harness.equal(addon.db.devChecks.dropMine.rows[1].name, "Fake Cook")
+                            addon.Communication.BroadcastDrop = savedBroadcast
+                            for _, name in ipairs(names) do _G[name] = savedDrop[name] end
+                        end
+                        -- remove all fake data: only the fake members, not a real member whose name starts with "Fake"
+                        addon.Store.PutCharacter({ name = "Fake Person", class = "MAGE", level = 10, rev = 1, professions = {} })
+                        local okX, removal = pcall(DevProbe.RemoveFakeData)
+                        harness.truthy(okX, "remove failed: " .. tostring(removal))
+                        harness.equal(addon.Store.db.chars["Fake Enchanter"], nil)
+                        harness.equal(addon.Access.Get("Fake Keyholder"), nil)
+                        harness.equal(addon.Feedback.Get("Fake Tester"), nil)
+                        harness.truthy(addon.Store.db.chars["Fake Person"], "a real member is kept")
+                        harness.truthy(addon.Store.db.chars["First Surname"], "my own record is kept")
+                        harness.equal(next(addon.db.devFake), nil)
+                        harness.equal(addon.RecipeDrops.MyDrop(5006).answers["Fake Cook"], nil, "fake drop answers removed")
+                        harness.equal(addon.Store.keptNames["Fake Enchanter"], nil)
+                    end
                     addon.Store.db.me = "A-R"
+                end
+                -- the grouped settings page builds with every section and opens without an error
+                do
+                    local okP, errP = pcall(addon.Alerts.OpenOptions)
+                    harness.truthy(okP, "the settings page failed: " .. tostring(errP))
+                    harness.truthy(pcall(addon.SlashCommands.options), "/ps options failed")
+                    addon.UI.SetMinimapButtonShown(false)
+                    harness.equal(addon.UI.MinimapButtonShown(), false); harness.equal(addon.db.ui.minimapIcon.hide, true)
+                    addon.UI.SetMinimapButtonShown(true)
+                    harness.equal(addon.UI.MinimapButtonShown(), true)
                 end
                 harness.truthy(addon.Events.ScanItems, "item scan hook missing")
                 -- my own changes are announced coalesced, never with an immediate forced HELLO each

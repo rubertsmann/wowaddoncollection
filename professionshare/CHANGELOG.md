@@ -2,7 +2,7 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
-## 1.4.0 (unreleased, protocol 2.6, schema 8)
+## 1.4.0 (unreleased, protocol 2.7, schema 8)
 - New **Reputation** list in the Misc Items tab (feature 025): one row per guild member and faction (raid factions,
   recipe vendors, home cities, goblin towns, battlegrounds) with Faction, Player, Standing, Progress and Updated
   (hidden by default) columns. Every column sorts (Standing by level, then progress), a dropdown filters one faction,
@@ -13,6 +13,17 @@ Until 0.7.3 the addon was called **TalentShare**; the entries below that version
   30 minutes. Only factions the character has met are shared.
 - The Recipes search and the Reputation search share one word matcher (`Model.SearchWords`, `Model.MatchesWords`).
 - Protocol 2.6 (additive: 2.5 peers ignore `rrev` and drop `WANTR`/`REP`), schema 8 (additive: `rep`).
+- New **recipe drop alerts** (feature 027): a tradeable recipe from my own loot that reaches my bags is announced to the
+  guild (`DROP`). Every member's client reads the recipe's tooltip itself: who can learn it now gets a chat line and/or
+  the minimap news icon and answers with their skill (`DROPA`), who lacks the skill answers "too low". Hovering the
+  recipe shows the looter up to 3 answering members (green / red, skill, "..."). Switches: `/ps drops share|chat|icon
+  on|off`. Protocol 2.7 (additive: 2.6 peers drop `DROP`/`DROPA` as unknown types).
+- **Grouped settings page** (feature 029): Interface -> AddOns -> ProfessionShare (or `/ps options`) shows every switch
+  in sections General (minimap button on/off), Order notifications, Recipe drops and Recipe list; the page scrolls.
+- Dev build (feature 026): the six fake buttons on the Debug tab became one **Dev tools** menu (Members, Triggers,
+  Probes, Cleanup; also `/psd fake <key>`). Fake members share one helper, survive `/reload` and are removed by "Remove
+  all fake data". New recipe probe (`/psd recipeprobe`) and loot recorder check what a recipe item's own tooltip and my
+  loot lines say, with results in `ProfessionShareDevDB.devChecks`. New pure module `Core/Data/RecipeCheck.lua`.
 
 ## 1.3.0 (2026-11-23, protocol 2.5, schema 7, LibGuildSync MINOR 6)
 - New **Feedback** tab (feature 024): send feedback, a feature request or a bug report (type dropdown with a template

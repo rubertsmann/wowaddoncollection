@@ -50,9 +50,9 @@ local function bus() return { peers = {}, queue = {}, sent = {} } end
 local THORIUM, ARGENT, TIMBERMAW = 59, 529, 576
 
 return {
-    ["reputation: protocol 2.6 and schema 8 are pinned"] = function(harness)
+    ["reputation: needs protocol 2.6 or newer and schema 8 or newer"] = function(harness)
         local addon = fresh(harness)
-        harness.equal(addon.PROTOCOL_MAJOR, 2); harness.equal(addon.PROTOCOL_MINOR, 6); harness.equal(addon.Store.SCHEMA, 8)
+        harness.equal(addon.PROTOCOL_MAJOR, 2); harness.truthy(addon.PROTOCOL_MINOR >= 6); harness.truthy(addon.Store.SCHEMA >= 8)
     end,
 
     ["faction hints: every faction well formed, unique ids, hints ascending, both languages, known group"] = function(harness)

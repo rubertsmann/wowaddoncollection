@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- DEV BUILD ONLY: records what this client can tell about the items our recipes make, so the
--- category filter and the effect-text search are built on facts instead of guesses. Button "Item probe" on the Debug tab,
+-- category filter and the effect-text search are built on facts instead of guesses. Debug tab menu "Dev tools" -> "Item probe (catalog)",
 -- or /psd itemprobe [itemID ...]. Writes addon.db.devProbe (ProfessionShareDevDB); /reload flushes it to
 -- WTF\Account\<ACCOUNT>\SavedVariables\ProfessionShare-Dev.lua. The live build never runs it (no button, no command).
 -- Plain English strings on purpose: dev-only, not localized. The keys of the recorded tables are the file format the
@@ -331,7 +331,102 @@ function DevProbe.Run(extraItemIDs)
     end)
 end
 
------------------------------------------------------------------- fake enchanter (dev build only)
+------------------------------------------------------------------ fake members and check results (dev build only)
+
+-- Every fake member is made by fakeMember: "Fake <Role>" in the same name form as everyone else's (realm-free on
+-- Forever), remembered in ProfessionShareDevDB.devFake so it survives /reload, and kept from the roster prune. Every fake
+-- action, trigger and probe writes a result to ProfessionShareDevDB.devChecks[key], readable from the WTF file after
+-- /reload. All of it lives only in this client: a fake member is never announced and never sent.
+
+-- names of fake members made before they were remembered in devFake
+local LEGACY_FAKE_ROLES = { "Enchanter", "Keyholder", "Tester", "Requester" }
+-- the tables that hold one record per member
+local MEMBER_TABLES = { "chars", "offers", "access", "rep", "feedback" }
+local MAXIMUM_LOOT_LINES = 20
+local LOOT_RECHECK_SECONDS = { 2, 10 }
+
+-- a dev table in the saved variables (created on first use; a throwaway table before the data is loaded)
+---@param key string
+---@return table
+local function devTable(key)
+    local database = addon.db
+    if type(database) ~= "table" then return {} end
+    if type(database[key]) ~= "table" then database[key] = {} end
+    return database[key]
+end
+
+---@return string|nil
+local function timestamp() return date and date("%Y-%m-%d %H:%M:%S") or nil end
+
+-- The name of the fake member with this role; remembered and kept from the prune.
+---@param role string
+---@return string
+local function fakeMember(role)
+    local fakeName = addon.Utility.CanonicalName("Fake " .. role) or ("Fake " .. role)
+    devTable("devFake")[fakeName] = role
+    addon.Store.keptNames[fakeName] = true
+    return fakeName
+end
+
+-- Stores a check result under `key` (with time and version) and returns it.
+---@param key string
+---@param result table
+---@return table
+local function recordCheck(key, result)
+    result.at, result.version = timestamp(), addon.VERSION
+    devTable("devChecks")[key] = result
+    addon.Log.Information("devProbe.check", "a dev check ran", { key = key, ok = result.ok })
+    return result
+end
+
+-- The fake members remembered from earlier sessions are kept from the prune again (called once the data is loaded).
+function DevProbe.RestoreFakeMembers()
+    for fakeName in pairs(devTable("devFake")) do addon.Store.keptNames[fakeName] = true end
+end
+
+-- Removes every fake member (remembered ones and the legacy names) from every member table, and nothing else.
+---@return table result
+function DevProbe.RemoveFakeData()
+    local fakeNames, myName = {}, addon.Store.db and addon.Store.db.me
+    for fakeName in pairs(devTable("devFake")) do fakeNames[fakeName] = true end
+    for _, role in ipairs(LEGACY_FAKE_ROLES) do
+        fakeNames["Fake " .. role] = true
+        local canonicalName = addon.Utility.CanonicalName("Fake " .. role)
+        if canonicalName then fakeNames[canonicalName] = true end
+    end
+    if myName then fakeNames[myName] = nil end
+    local removed = {}
+    for _, tableKey in ipairs(MEMBER_TABLES) do
+        local recordsByName = addon.Store.db and addon.Store.db[tableKey]
+        if type(recordsByName) == "table" then
+            for fakeName in pairs(fakeNames) do
+                if recordsByName[fakeName] ~= nil then
+                    recordsByName[fakeName] = nil
+                    removed[#removed + 1] = fakeName .. " (" .. tableKey .. ")"
+                end
+            end
+        end
+    end
+    -- answers and alerts of the fake drop triggers (session memory)
+    for _, drop in ipairs(addon.RecipeDrops and addon.RecipeDrops.mine or {}) do
+        for fakeName in pairs(fakeNames) do
+            if drop.answers[fakeName] then drop.answers[fakeName] = nil; removed[#removed + 1] = fakeName .. " (drop answer)" end
+        end
+    end
+    local alerts = addon.RecipeDrops and addon.RecipeDrops.alerts or {}
+    for index = #alerts, 1, -1 do
+        if fakeNames[alerts[index].from] then table.remove(alerts, index); removed[#removed + 1] = "alert" end
+    end
+    if addon.UI and addon.UI.SetDropNotice then addon.UI.SetDropNotice(#alerts) end
+    for fakeName in pairs(fakeNames) do addon.Store.keptNames[fakeName] = nil end
+    addon.Utility.Wipe(devTable("devFake"))
+    table.sort(removed)
+    for _, tableKey in ipairs({ "chars", "offers", "access", "rep", "feedback" }) do addon.Events.Fire("DATA_CHANGED", tableKey) end
+    addon.Print(("fake data removed: %d records%s"):format(#removed, #removed > 0 and (": " .. table.concat(removed, ", ")) or ""))
+    return recordCheck("remove", { ok = true, removed = removed })
+end
+
+------------------------------------------------------------------ fake members (Members section)
 
 -- Enchant recipe ids seen in a live guild's data (the recipe id of an enchant looks like its classic spell id).
 local FAKE_ENCHANTS = {
@@ -340,83 +435,67 @@ local FAKE_ENCHANTS = {
     [7771] = "Enchant Cloak - Minor Protection", [7786] = "Enchant Weapon - Minor Beastslayer",
 }
 
--- Adds "Fake Enchanter-<my realm>" with Enchanting and FAKE_ENCHANTS to the dev data, in memory and kept from the
--- roster prune, so the Recipes tab shows enchants without a real enchanter. Gone after a version change or /psd clean.
+-- A fake enchanter with FAKE_ENCHANTS, so the Recipes tab shows enchants without a real enchanter.
+---@return table result
 function DevProbe.AddFakeEnchanter()
-    -- the same name form as everyone else's: "Fake Enchanter-<my realm>", or "Fake Enchanter" when the client knows no
-    -- realm (WoW Forever names are realm-free; GetNormalizedRealmName can return nothing there).
-    local fakeName = addon.Utility.CanonicalName("Fake Enchanter") or "Fake Enchanter"
+    local fakeName = fakeMember("Enchanter")
     local knownRecipes, catalogEntries = {}, {}
     for recipeID, recipeName in pairs(FAKE_ENCHANTS) do
         knownRecipes[recipeID] = true
         catalogEntries[recipeID] = { name = recipeName, loc = "enUS", icon = 135913, reagents = {} }
     end
     addon.Store.PutCatalog(catalogEntries)
-    addon.Store.keptNames[fakeName] = true
     local added = addon.Store.PutCharacter({ name = fakeName, class = "MAGE", level = 60, rev = addon.Utility.Now(),
         professions = { Enchanting = { id = 333, name = "Enchanting", rank = 150, max = 150, recipes = knownRecipes } } })
-    addon.Log.Information("devProbe.fakeEnchanter", "a fake enchanter was added for the enchant text test",
-        { name = fakeName, recipes = addon.Utility.Count(knownRecipes), added = added })
     addon.Events.Fire("DATA_CHANGED", "chars")
     addon.Print(("fake enchanter added: %d enchants. Recipes tab -> Profession: Enchanting, hover the icons (twice), then /reload to write the log.")
         :format(addon.Utility.Count(knownRecipes)))
+    return recordCheck("enchanter", { ok = added and true or false, name = fakeName, recipes = addon.Utility.Count(knownRecipes) })
 end
 
------------------------------------------------------------------- fake key holder (dev build only)
-
--- Keys and attunements of a fake guild member, so the Keys and Attunements modes of the Misc Items tab show rows without
--- a second player. The record lives only in this client (only my own access record is ever sent) and is kept from the
--- roster prune. Gone after a version change or /ps clean.
+-- Keys and attunements of a fake guild member, for the Keys and Attunements modes of the Misc Items tab.
 local FAKE_KEYS = { [7146] = { keyring = true }, [12382] = { bag = true }, [13704] = { keyring = true },
     [18249] = { bank = true }, [11000] = { keyring = true }, [12344] = { bag = true } }
 
--- the fake member's name in the same form as everyone else's (realm-free on Forever)
----@return string
-local function fakeKeyholderName() return addon.Utility.CanonicalName("Fake Keyholder") or "Fake Keyholder" end
-
--- Stores the fake member's access record changed by `change` (a newer rev, so Access.Put takes it).
+-- Stores the fake key holder's access record changed by `change` (a newer rev, so Access.Put takes it).
 ---@param change fun(accessRecord: AccessRecord)
 ---@return AccessRecord
 local function updateFakeKeyholder(change)
-    local fakeName = fakeKeyholderName()
+    local fakeName = fakeMember("Keyholder")
     local previousRecord = addon.Access.Get(fakeName)
     local accessRecord = previousRecord and addon.Utility.DeepCopy(previousRecord) or { name = fakeName, rev = 0, keys = {}, att = {} }
     change(accessRecord)
     accessRecord.rev = math.max(addon.Utility.Now(), (previousRecord and previousRecord.rev or 0) + 1)
-    addon.Store.keptNames[fakeName] = true
     addon.Access.Put(accessRecord)
     addon.Events.Fire("DATA_CHANGED", "access")
     return accessRecord
 end
 
--- Gives the fake member a set of dungeon keys (and Molten Core, known not attuned to Onyxia).
+-- Gives the fake key holder a set of dungeon keys (and Molten Core, known not attuned to Onyxia).
 ---@return AccessRecord
 function DevProbe.AddFakeKeys()
     local accessRecord = updateFakeKeyholder(function(record)
         for itemID, locations in pairs(FAKE_KEYS) do record.keys[itemID] = addon.Utility.DeepCopy(locations) end
         record.att.mc, record.att.ony = true, false
     end)
-    addon.Log.Information("devProbe.fakeKeys", "fake keys were added for the Keys mode test",
-        { name = accessRecord.name, keys = addon.Utility.Count(accessRecord.keys) })
     addon.Print(("fake keys added: %s holds %d keys. Misc Items -> Keys."):format(accessRecord.name, addon.Utility.Count(accessRecord.keys)))
+    recordCheck("keys", { ok = true, name = accessRecord.name, keys = addon.Utility.Count(accessRecord.keys) })
     return accessRecord
 end
 
--- Marks the fake member as attuned to Naxxramas.
+-- Marks the fake key holder as attuned to Naxxramas.
 ---@return AccessRecord
 function DevProbe.AddFakeNaxxramas()
     local accessRecord = updateFakeKeyholder(function(record) record.att.naxx = true end)
-    addon.Log.Information("devProbe.fakeNaxxramas", "a fake Naxxramas attunement was added for the Attunements mode test",
-        { name = accessRecord.name })
     addon.Print(("fake Naxxramas attunement added for %s. Misc Items -> Attunements."):format(accessRecord.name))
+    recordCheck("naxx", { ok = true, name = accessRecord.name })
     return accessRecord
 end
 
 -- Three messages from a fake member (one bug with a diagnostic snapshot), for the developer list of the Feedback tab.
--- Local only: stored directly, never announced (a fake member has no HELLO).
 ---@return FeedbackRecord|nil
 function DevProbe.AddFakeFeedback()
-    local fakeName = addon.Utility.CanonicalName("Fake Tester") or "Fake Tester"
+    local fakeName = fakeMember("Tester")
     local now = addon.Utility.Now()
     local previousRecord = addon.Feedback.Get(fakeName)
     local feedbackRecord = { name = fakeName, rev = math.max(now, (previousRecord and previousRecord.rev or 0) + 1), items = {
@@ -426,18 +505,18 @@ function DevProbe.AddFakeFeedback()
             log = table.concat({ "v1.3.0-dev protocol 2.5 schema 7 locale deDE client test", "active=true queue=0 sendFailures=0",
                 "2026-11-23 10:00 WARNING [fake] a test warning" }, "\n") },
     } }
-    addon.Store.keptNames[fakeName] = true
     if not addon.Feedback.Put(feedbackRecord, addon.Utility.Me()) then
         addon.Print("fake feedback not stored: this client does not read feedback")
+        recordCheck("feedback", { ok = false, name = fakeName, why = "this client does not read feedback" })
         return nil
     end
     addon.Events.Fire("DATA_CHANGED", "feedback")
-    addon.Log.Information("devProbe.fakeFeedback", "fake feedback was added for the Feedback tab test", { name = fakeName })
     addon.Print(("fake feedback added: 3 messages from %s. Feedback tab."):format(fakeName))
+    recordCheck("feedback", { ok = true, name = fakeName, messages = #feedbackRecord.items })
     return feedbackRecord
 end
 
------------------------------------------------------------------- fake request (dev build only)
+------------------------------------------------------------------ fake realm request (Triggers section)
 
 -- The realms a member whose client still reports realms appended to my name in a live log.
 local FAKE_REQUEST_REALMS = { "CAMWOWEU4Realm3PvE", "CAMWOWEU4Realm5PvE" }
@@ -452,6 +531,7 @@ function DevProbe.SimulateRealmRequest()
     local myName = addon.Store.db and addon.Store.db.me
     if type(myName) ~= "string" or myName == "" then
         addon.Print("fake request: my own name is not known yet")
+        recordCheck("request", { ok = false, why = "my own name is not known yet" })
         return {}
     end
     local bareName = myName:match("^([^-]+)") or myName
@@ -490,26 +570,337 @@ function DevProbe.SimulateRealmRequest()
     local library = LibStub and LibStub("LibGuildSync-1.0", true)
     addon.Print(("fake request as a member whose client reports realms (LibGuildSync MINOR %s active), asking for %s:")
         :format(tostring(library and library.MINOR), table.concat(askedNames, ", ")))
+    local allAnswered = true
     for _, result in ipairs(results) do
         if result.answer then
             addon.Print(("  %s -> |cff33ff99answered|r with %s under the name %s"):format(result.type, result.answer, tostring(result.answerName)))
         else
+            allAnswered = false
             addon.Print(("  %s -> |cffff5555not answered|r: %s %s"):format(result.type, result.status, result.reason))
         end
     end
     addon.Events.Fire("DATA_CHANGED", "trace")
+    recordCheck("request", { ok = allAnswered, results = results })
     return results
 end
 
-if addon.IS_DEVELOPMENT_BUILD then
-    addon.SlashCommands.fakerequest = function() DevProbe.SimulateRealmRequest() end
-    addon.SlashCommands.fakeenchanter = function() DevProbe.AddFakeEnchanter() end
-    addon.SlashCommands.fakekeys = function() DevProbe.AddFakeKeys() end
-    addon.SlashCommands.fakenaxx = function() DevProbe.AddFakeNaxxramas() end
-    addon.SlashCommands.fakefeedback = function() DevProbe.AddFakeFeedback() end
-    addon.SlashCommands.itemprobe = function(arguments)
-        local extraItemIDs = {}
-        for itemIDText in tostring(arguments or ""):gmatch("%d+") do extraItemIDs[#extraItemIDs + 1] = tonumber(itemIDText) end
-        DevProbe.Run(extraItemIDs)
+------------------------------------------------------------------ recipe probe: what my own tooltip says (Probes section)
+
+local STATUS_COLOR = { learnable = "33ff99", low = "ff5555", known = "aaaaaa", noProfession = "aaaaaa", unreadable = "ffaa00" }
+
+-- What this client's tooltip and my stored professions say about one recipe item.
+---@param itemID integer
+---@param bound boolean|nil soulbound in my bags (nil: not in my bags)
+---@return table itemResult
+local function probeRecipeItem(itemID, bound)
+    local tooltipLines = addon.Api.ItemTooltipLinesWithColor(itemID)
+    local reading = addon.RecipeCheck.ReadTooltip(tooltipLines, addon.Api.RecipeCheckStrings())
+    local myRecord = addon.Store.db and addon.Store.GetCharacter(addon.Store.db.me)
+    local decision = addon.RecipeCheck.Decide(reading, myRecord and myRecord.professions)
+    local evidenceLines = {}
+    for _, tooltipLine in ipairs(tooltipLines or {}) do
+        evidenceLines[#evidenceLines + 1] = tooltipLine.text .. (tooltipLine.r and (" {%.2f %.2f %.2f}"):format(tooltipLine.r,
+            tooltipLine.g or 0, tooltipLine.b or 0) or "")
     end
+    return { itemID = itemID, name = addon.Api.ItemName(itemID), bound = bound, cached = tooltipLines ~= nil,
+        profession = reading and reading.profession, required = reading and reading.required,
+        requiredRed = reading and reading.requiredRed, known = reading and reading.known or false,
+        bindOnPickup = reading and reading.bindOnPickup or false,
+        status = decision.status, rank = decision.rank, mismatch = decision.mismatch, lines = evidenceLines }
+end
+
+---@param itemResult table
+---@return string
+local function describeRecipeResult(itemResult)
+    local requirement = itemResult.required and ("%s %d%s"):format(tostring(itemResult.profession), itemResult.required,
+        itemResult.requiredRed == true and " (red)" or itemResult.requiredRed == false and " (not red)" or "") or "no requirement read"
+    return ("  %s %s: %s, known=%s, BoP=%s -> |cff%s%s|r%s%s"):format(tostring(itemResult.itemID), tostring(itemResult.name or "?"),
+        requirement, tostring(itemResult.known), tostring(itemResult.bindOnPickup), STATUS_COLOR[itemResult.status] or "ffffff",
+        itemResult.status, itemResult.rank and (" (my skill " .. itemResult.rank .. ")") or "",
+        itemResult.mismatch and " |cffff5555MISMATCH colour/skill|r" or "")
+end
+
+local recipeProbeRunning = false
+
+-- Every recipe item in my bags (and `extraItemIDs`) through RecipeCheck, with the raw tooltip lines and colours as
+-- evidence. Items the client has not loaded yet are asked for once more after a few seconds.
+---@param extraItemIDs? integer[]
+---@return table|nil result (nil while it waits for item data)
+function DevProbe.RecipeProbe(extraItemIDs)
+    if recipeProbeRunning then addon.Print("recipe probe already running") return nil end
+    local plan, planned = {}, {}
+    for _, bagItem in ipairs(addon.Api.BagRecipeItems()) do
+        if not planned[bagItem.itemID] then planned[bagItem.itemID] = true; plan[#plan + 1] = { itemID = bagItem.itemID, bound = bagItem.bound } end
+    end
+    for _, itemID in ipairs(extraItemIDs or {}) do
+        if not planned[itemID] then planned[itemID] = true; plan[#plan + 1] = { itemID = itemID } end
+    end
+    local strings = addon.Api.RecipeCheckStrings()
+    local myRecord = addon.Store.db and addon.Store.GetCharacter(addon.Store.db.me)
+    local myProfessions = {}
+    for professionKey, profession in pairs(myRecord and myRecord.professions or {}) do
+        myProfessions[professionKey] = { name = profession.name, rank = profession.rank, max = profession.max }
+    end
+    local function finish()
+        local result = { ok = true, locale = GetLocale and GetLocale() or nil, strings = strings, myProfessions = myProfessions,
+            items = {}, counts = {}, mismatches = 0, unreadable = 0 }
+        for _, planEntry in ipairs(plan) do
+            local itemResult = probeRecipeItem(planEntry.itemID, planEntry.bound)
+            result.items[#result.items + 1] = itemResult
+            result.counts[itemResult.status] = (result.counts[itemResult.status] or 0) + 1
+            if itemResult.mismatch then result.mismatches = result.mismatches + 1 end
+            if itemResult.status == "unreadable" then result.unreadable = result.unreadable + 1 end
+        end
+        result.ok = result.mismatches == 0 and result.unreadable == 0 and #plan > 0
+        addon.Print(("recipe probe: %d recipe items, %d mismatches, %d unreadable (/reload writes devChecks.recipes):")
+            :format(#plan, result.mismatches, result.unreadable))
+        for _, itemResult in ipairs(result.items) do addon.Print(describeRecipeResult(itemResult)) end
+        if #plan == 0 then addon.Print("  no recipe item in my bags; /psd recipeprobe <itemID> probes one by id") end
+        return recordCheck("recipes", result)
+    end
+    local notLoaded = 0
+    for _, planEntry in ipairs(plan) do
+        if not addon.Api.ItemTooltipLinesWithColor(planEntry.itemID) then notLoaded = notLoaded + 1 end   -- also asks the server
+    end
+    if notLoaded == 0 or not (C_Timer and C_Timer.After) then return finish() end
+    recipeProbeRunning = true
+    addon.Print(("recipe probe: %d items not loaded yet, reading in 3s"):format(notLoaded))
+    C_Timer.After(3, function()
+        recipeProbeRunning = false
+        addon.Log.Protected("devProbe.recipeProbe", "the recipe probe failed", finish)
+    end)
+    return nil
+end
+
+------------------------------------------------------------------ loot recorder and fake loot (Triggers section)
+
+---@param itemID integer
+---@return integer count in my bags (bank not counted)
+local function bagCount(itemID)
+    local getItemCount = (C_Item and C_Item.GetItemCount) or GetItemCount
+    if not getItemCount then return 0 end
+    local ok, itemCount = pcall(getItemCount, itemID, false)
+    return ok and tonumber(itemCount) or 0
+end
+
+-- Fills a client format string with `arguments` by argument index ("%s"/"%d" in order, or "%2$s").
+---@param formatString string
+---@param arguments any[]
+---@return string
+local function fillFormat(formatString, arguments)
+    local nextArgument = 0
+    return (formatString:gsub("%%(%d*)%$?([sd])", function(argumentText, _)
+        nextArgument = nextArgument + 1
+        return tostring(arguments[tonumber(argumentText) or nextArgument] or "")
+    end))
+end
+
+-- Records a loot chat line with a recipe item: which client format matched, my bag count at the line and a few seconds
+-- later, and what my own tooltip says about the item. Lines without a recipe item are ignored.
+---@param message any
+---@param simulated boolean|nil
+---@return table|nil lootRecord
+function DevProbe.RecordLootLine(message, simulated)
+    local loot = addon.RecipeCheck.ParseLoot(message, addon.Api.RecipeCheckStrings().loot)
+    if not loot or addon.Api.ItemClass(loot.itemID) ~= addon.Offers.RECIPE_CLASS then return nil end
+    local itemResult = probeRecipeItem(loot.itemID, nil)
+    itemResult.lines = nil
+    local lootRecord = { at = timestamp(), simulated = simulated and true or false, kind = loot.kind, itemID = loot.itemID,
+        count = loot.count, bagAtLine = bagCount(loot.itemID), item = itemResult,
+        -- another player's line names that player: keep only the item
+        message = loot.kind == "other" and ("<player> ... " .. loot.link) or tostring(message) }
+    -- the rule a drop alert would follow: my own loot, not bound on pickup, in my bags
+    local function wouldAnnounce()
+        return lootRecord.kind == "self" and not itemResult.bindOnPickup and (lootRecord.bagLater or 0) > 0
+    end
+    local lootLines = devTable("devChecks").lootLines
+    if type(lootLines) ~= "table" then lootLines = {}; devTable("devChecks").lootLines = lootLines end
+    table.insert(lootLines, 1, lootRecord)
+    while #lootLines > MAXIMUM_LOOT_LINES do table.remove(lootLines) end
+    for _, seconds in ipairs(LOOT_RECHECK_SECONDS) do
+        if C_Timer and C_Timer.After then
+            C_Timer.After(seconds, function()
+                lootRecord["bagAfter" .. seconds] = bagCount(loot.itemID)
+                lootRecord.bagLater = lootRecord["bagAfter" .. seconds]
+                lootRecord.wouldAnnounce = wouldAnnounce()
+                if seconds == LOOT_RECHECK_SECONDS[#LOOT_RECHECK_SECONDS] then
+                    addon.Print(("loot line (%s%s): %s, bag %d -> %d, %s -> would announce: %s"):format(lootRecord.kind,
+                        lootRecord.simulated and ", simulated" or "", tostring(itemResult.name or loot.itemID), lootRecord.bagAtLine,
+                        lootRecord.bagLater, itemResult.status, tostring(lootRecord.wouldAnnounce)))
+                end
+            end)
+        end
+    end
+    addon.Log.Information("devProbe.loot", "a loot line with a recipe item was recorded",
+        { kind = loot.kind, itemID = loot.itemID, simulated = lootRecord.simulated })
+    return lootRecord
+end
+
+-- A loot line in the client's own format with a recipe item from my bags (or `itemID`), as mine or as another player's,
+-- through the same recorder as a real line.
+---@param kind "self"|"other"
+---@param itemID? integer
+---@return table|nil lootRecord
+function DevProbe.SimulateRecipeLoot(kind, itemID)
+    if not itemID then
+        local bagItem = addon.Api.BagRecipeItems()[1]
+        itemID = bagItem and bagItem.itemID
+    end
+    if not itemID then
+        addon.Print("fake loot: no recipe item in my bags; /psd fake loot <itemID>")
+        recordCheck("loot", { ok = false, why = "no recipe item in my bags" })
+        return nil
+    end
+    local formats = addon.Api.RecipeCheckStrings().loot[kind == "other" and "other" or "self"]
+    local formatString = formats and formats[#formats]   -- the single-item form
+    if not formatString then
+        recordCheck("loot", { ok = false, why = "the client has no loot format" })
+        return nil
+    end
+    local link = addon.Api.ItemLink(itemID) or ("|cffffffff|Hitem:" .. itemID .. "::::::::60:::::|h[item " .. itemID .. "]|h|r")
+    local message = kind == "other" and fillFormat(formatString, { "Fake Looter", link }) or fillFormat(formatString, { link })
+    local lootRecord = DevProbe.RecordLootLine(message, true)
+    recordCheck(kind == "other" and "lootOther" or "loot", { ok = lootRecord ~= nil and lootRecord.kind == (kind == "other" and "other" or "self"),
+        message = lootRecord and lootRecord.message or message, kind = lootRecord and lootRecord.kind, itemID = itemID })
+    return lootRecord
+end
+
+------------------------------------------------------------------ fake recipe drops (Triggers section)
+
+-- a recipe item for the drop triggers: the asked id, else the first recipe in my bags
+---@param itemID integer|nil
+---@return integer|nil
+local function dropItem(itemID)
+    if itemID then return itemID end
+    local bagItem = addon.Api.BagRecipeItems()[1]
+    return bagItem and bagItem.itemID
+end
+
+-- A fake member announces a recipe drop to me: the real decision from my own tooltip, the alert, and the answer I would
+-- whisper (captured, never sent).
+---@param itemID? integer
+function DevProbe.SimulateIncomingDrop(itemID)
+    itemID = dropItem(itemID)
+    if not itemID or not addon.Drops then
+        addon.Print("fake drop: no recipe item in my bags; /psd fake dropin <itemID>")
+        recordCheck("dropIn", { ok = false, why = "no recipe item" })
+        return
+    end
+    local looter = fakeMember("Looter")
+    addon.RecipeDrops.seen[looter .. ":" .. itemID] = nil   -- a repeated test is not a duplicate
+    local captured
+    addon.Drops.OnDrop(looter, itemID, {
+        answer = function(target, answeredItemID, status, rank) captured = { target = target, item = answeredItemID, s = status, r = rank } end,
+        done = function(result)
+            addon.Print(("fake drop from %s: %s -> my status %s, answer %s (captured, not sent)"):format(looter,
+                tostring(addon.Api.ItemName(itemID) or itemID), tostring(result.status), captured and (captured.s .. " " .. captured.r) or "none"))
+            recordCheck("dropIn", { ok = result.status ~= "unreadable", itemID = itemID, status = result.status, answer = captured,
+                alerts = #addon.RecipeDrops.alerts })
+        end,
+    })
+end
+
+-- A recipe "dropped for me" with answers from four fake members (three green, one red), so the tooltip list, its order
+-- and the "..." can be checked. Nothing is sent to the guild.
+---@param itemID? integer
+function DevProbe.SimulateMyDropAnswers(itemID)
+    itemID = dropItem(itemID)
+    if not itemID then
+        addon.Print("fake answers: no recipe item in my bags; /psd fake dropmine <itemID>")
+        recordCheck("dropMine", { ok = false, why = "no recipe item" })
+        return
+    end
+    local now = addon.Utility.Now()
+    addon.RecipeDrops.NoteMyDrop(itemID, now)
+    local answers = { { "Alchemist", "g", 280 }, { "Tailor", "r", 240 }, { "Cook", "g", 300 }, { "Skinner", "g", 265 } }
+    for _, answer in ipairs(answers) do
+        addon.RecipeDrops.AddAnswer(fakeMember(answer[1]), { item = itemID, s = answer[2], r = answer[3] }, now)
+    end
+    addon.Events.Fire("DATA_CHANGED", "drops")
+    local link = addon.Api.ItemLink(itemID) or tostring(itemID)
+    addon.Print(("fake answers to my drop %s: hover the link or the item in the bags (expected: Cook 300, Alchemist 280, Skinner 265, then ...)")
+        :format(link))
+    local hint = addon.RecipeDrops.HintRows(itemID)
+    recordCheck("dropMine", { ok = hint ~= nil and #hint.rows == 3 and hint.more == 1, itemID = itemID, rows = hint and hint.rows,
+        more = hint and hint.more })
+end
+
+if addon.IS_DEVELOPMENT_BUILD and CreateFrame then
+    local lootFrame = CreateFrame("Frame")
+    pcall(lootFrame.RegisterEvent, lootFrame, "CHAT_MSG_LOOT")
+    lootFrame:SetScript("OnEvent", function(_, _, message)
+        addon.Log.Protected("devProbe.lootLine", "recording a loot line failed", DevProbe.RecordLootLine, message, false)
+    end)
+end
+
+------------------------------------------------------------------ the Dev tools menu and /psd fake
+
+---@class DevEntry
+---@field key string /psd fake <key>
+---@field section string
+---@field label string
+---@field run fun(arguments: integer[])
+
+DevProbe.SECTIONS = { "Members", "Triggers", "Probes", "Cleanup" }
+
+---@type DevEntry[]
+DevProbe.ENTRIES = {
+    { key = "enchanter", section = "Members", label = "Enchanter: 6 enchants", run = function() DevProbe.AddFakeEnchanter() end },
+    { key = "keys", section = "Members", label = "Keyholder: dungeon keys", run = function() DevProbe.AddFakeKeys() end },
+    { key = "naxx", section = "Members", label = "Keyholder: Naxxramas", run = function() DevProbe.AddFakeNaxxramas() end },
+    { key = "feedback", section = "Members", label = "Tester: 3 feedback messages", run = function() DevProbe.AddFakeFeedback() end },
+    { key = "request", section = "Triggers", label = "Realm request (WANTO / WANT)", run = function() DevProbe.SimulateRealmRequest() end },
+    { key = "loot", section = "Triggers", label = "Recipe loot (me)", run = function(arguments) DevProbe.SimulateRecipeLoot("self", arguments[1]) end },
+    { key = "lootother", section = "Triggers", label = "Recipe loot (other player)", run = function(arguments) DevProbe.SimulateRecipeLoot("other", arguments[1]) end },
+    { key = "dropin", section = "Triggers", label = "Recipe drop from a member", run = function(arguments) DevProbe.SimulateIncomingDrop(arguments[1]) end },
+    { key = "dropmine", section = "Triggers", label = "Answers to my recipe drop", run = function(arguments) DevProbe.SimulateMyDropAnswers(arguments[1]) end },
+    { key = "recipes", section = "Probes", label = "Recipes in my bags", run = function(arguments) DevProbe.RecipeProbe(arguments) end },
+    { key = "items", section = "Probes", label = "Item probe (catalog)", run = function(arguments) DevProbe.Run(arguments) end },
+    { key = "remove", section = "Cleanup", label = "Remove all fake data", run = function() DevProbe.RemoveFakeData() end },
+}
+
+-- Runs the entry with this key; false for an unknown key.
+---@param key string
+---@param arguments? integer[]
+---@return boolean
+function DevProbe.RunEntry(key, arguments)
+    for _, entry in ipairs(DevProbe.ENTRIES) do
+        if entry.key == key then
+            addon.Log.Protected("devProbe.entry", "a dev tools entry failed", entry.run, arguments or {})
+            return true
+        end
+    end
+    return false
+end
+
+function DevProbe.PrintEntries()
+    addon.Print("dev tools (/psd fake <key> [itemID]):")
+    for _, section in ipairs(DevProbe.SECTIONS) do
+        for _, entry in ipairs(DevProbe.ENTRIES) do
+            if entry.section == section then addon.Print(("  %s: %s - %s"):format(section, entry.key, entry.label)) end
+        end
+    end
+end
+
+---@param arguments any
+---@return integer[]
+local function numbersIn(arguments)
+    local numbers = {}
+    for numberText in tostring(arguments or ""):gmatch("%d+") do numbers[#numbers + 1] = tonumber(numberText) end
+    return numbers
+end
+
+if addon.IS_DEVELOPMENT_BUILD then
+    addon.SlashCommands.fake = function(arguments)
+        local key = tostring(arguments or ""):match("^%s*(%S+)")
+        if not key or not DevProbe.RunEntry(key:lower(), numbersIn(arguments)) then DevProbe.PrintEntries() end
+    end
+    addon.SlashCommands.recipeprobe = function(arguments) DevProbe.RecipeProbe(numbersIn(arguments)) end
+    addon.SlashCommands.itemprobe = function(arguments) DevProbe.Run(numbersIn(arguments)) end
+    -- older names of the same entries
+    addon.SlashCommands.fakerequest = function() DevProbe.RunEntry("request") end
+    addon.SlashCommands.fakeenchanter = function() DevProbe.RunEntry("enchanter") end
+    addon.SlashCommands.fakekeys = function() DevProbe.RunEntry("keys") end
+    addon.SlashCommands.fakenaxx = function() DevProbe.RunEntry("naxx") end
+    addon.SlashCommands.fakefeedback = function() DevProbe.RunEntry("feedback") end
 end

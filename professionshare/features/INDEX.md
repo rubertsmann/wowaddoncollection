@@ -26,3 +26,6 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 023 | Send backlog and offline whispers | verifying | ProfessionShare 1.2.1, GuildGames 0.4.1, LibGuildSync MINOR 5 | release commit | [023-send-backlog-and-offline-whispers](023-send-backlog-and-offline-whispers/spec.md) |
 | 024 | Feedback tab and hidden debug tab | verifying | 1.3.0 (protocol 2.5, schema 7) | release commit 1.3.0 | [024-feedback-tab-and-hidden-debug-tab](024-feedback-tab-and-hidden-debug-tab/spec.md) |
 | 025 | Reputation list with faction hints | verifying | 1.4.0 unreleased (protocol 2.6, schema 8) | feat commit (reputation list) | [025-reputation-list-with-faction-hints](025-reputation-list-with-faction-hints/spec.md) |
+| 026 | Debug fake data menu and recipe probe | done | 1.4.0 unreleased (dev tools; protocol and schema unchanged) | feat commit (recipe drops) | [026-debug-fake-data-menu-and-recipe-probe](026-debug-fake-data-menu-and-recipe-probe/spec.md) |
+| 027 | Recipe drop alerts | done | 1.4.0 unreleased (protocol 2.7, schema 8) | feat commit (recipe drops) | [027-recipe-drop-alerts](027-recipe-drop-alerts/spec.md) |
+| 029 | Grouped settings page | done | 1.4.0 unreleased (UI + local settings) | feat commit (recipe drops) | [029-grouped-settings-page](029-grouped-settings-page/spec.md) |

@@ -205,108 +205,176 @@ local function nextChoice(choices, currentValue, field)
     return field and choices[1][field] or choices[1]
 end
 
+-- One page with every switch of the addon, grouped by feature (General, Order notifications, Recipe drops, Recipe list).
+-- The sections are taller than the game's settings area, so the page scrolls. Every control reads its value again when
+-- the page is shown and after any click (refreshPanel).
 local function buildOptionsPanel()
     optionsPanel = CreateFrame("Frame", addon.FRAME_PREFIX .. "OptionsPanel")
     optionsPanel.name = addon.TITLE
-    local titleText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    titleText:SetPoint("TOPLEFT", 16, -16); titleText:SetText(addon.TITLE .. " - " .. Text["Notifications"])
-    local subtitleText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    subtitleText:SetPoint("TOPLEFT", titleText, "BOTTOMLEFT", 0, -6); subtitleText:SetWidth(560); subtitleText:SetJustifyH("LEFT")
-    subtitleText:SetText(Text["How ProfessionShare tells you about new orders on the board and news on your own orders."])
+    local scrollFrame = CreateFrame("ScrollFrame", addon.FRAME_PREFIX .. "OptionsScroll", optionsPanel, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 0, -6); scrollFrame:SetPoint("BOTTOMRIGHT", -28, 6)
+    local content = CreateFrame("Frame", nil, scrollFrame)
+    content:SetSize(600, 1000)
+    scrollFrame:SetScrollChild(content)
 
-    local nextTop, checkButtons = -64, {}
-    ---@param settingKey string
+    local titleText = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    titleText:SetPoint("TOPLEFT", 16, -10); titleText:SetText(addon.TITLE .. " - " .. Text["Settings"])
+    local subtitleText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    subtitleText:SetPoint("TOPLEFT", titleText, "BOTTOMLEFT", 0, -6); subtitleText:SetWidth(560); subtitleText:SetJustifyH("LEFT")
+    subtitleText:SetText(Text["Every switch of ProfessionShare, grouped by feature."])
+
+    local nextTop = -50                 -- the layout cursor: top edge of the next control in the content frame
+    local refreshers = {}               -- functions that set every control from the stored settings
+    local refreshPanel = function() for _, refresh in ipairs(refreshers) do refresh() end end
+
+    ---@param anchoredFrame table
     ---@param label string
-    ---@param tooltipText? string
-    local function addCheckButton(settingKey, label, tooltipText)
-        local checkButton = CreateFrame("CheckButton", nil, optionsPanel, "UICheckButtonTemplate")
-        checkButton:SetSize(26, 26); checkButton:SetPoint("TOPLEFT", 16, nextTop)
-        local labelText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        labelText:SetPoint("LEFT", checkButton, "RIGHT", 4, 0); labelText:SetText(label)
-        checkButton:SetScript("OnClick", function(self)
-            Notify.Set(interfaceSettings(), settingKey, self:GetChecked() and true or false)
-            Alerts.Update()
+    ---@param tooltipText string
+    local function addTooltip(anchoredFrame, label, tooltipText)
+        anchoredFrame:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(label)
+            GameTooltip:AddLine(tooltipText, 1, 1, 1, true); GameTooltip:Show()
         end)
-        if tooltipText then
-            checkButton:SetScript("OnEnter", function(self)
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(label)
-                GameTooltip:AddLine(tooltipText, 1, 1, 1, true); GameTooltip:Show()
-            end)
-            checkButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        anchoredFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
+
+    -- a section title with a line of explanation under it
+    ---@param title string
+    ---@param hint string|nil
+    local function addSection(title, hint)
+        nextTop = nextTop - 18
+        local sectionTitle = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        sectionTitle:SetPoint("TOPLEFT", 16, nextTop); sectionTitle:SetText(title)
+        local divider = content:CreateTexture(nil, "ARTWORK")
+        divider:SetPoint("TOPLEFT", 16, nextTop - 20); divider:SetSize(560, 1); divider:SetColorTexture(1, 0.82, 0, 0.35)
+        nextTop = nextTop - 26
+        if hint then
+            local hintText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            hintText:SetPoint("TOPLEFT", 18, nextTop); hintText:SetWidth(560); hintText:SetJustifyH("LEFT"); hintText:SetText(hint)
+            nextTop = nextTop - math.max(14, math.ceil(tonumber(hintText:GetStringHeight()) or 14)) - 6
         end
-        checkButtons[settingKey] = checkButton
+    end
+
+    -- a checkbox bound to get/set
+    ---@param label string
+    ---@param get fun(): boolean
+    ---@param set fun(value: boolean)
+    ---@param tooltipText? string
+    ---@return table checkButton
+    local function addCheck(label, get, set, tooltipText)
+        local checkButton = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
+        checkButton:SetSize(26, 26); checkButton:SetPoint("TOPLEFT", 16, nextTop)
+        local labelText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        labelText:SetPoint("LEFT", checkButton, "RIGHT", 4, 0); labelText:SetText(label)
+        checkButton:SetScript("OnClick", function(self) set(self:GetChecked() and true or false); refreshPanel() end)
+        if tooltipText then addTooltip(checkButton, label, tooltipText) end
+        refreshers[#refreshers + 1] = function() checkButton:SetChecked(get()) end
         nextTop = nextTop - 28
         return checkButton
     end
-    addCheckButton("badge", Text["Number of new orders on the minimap button and the Orders tab"])
-    addCheckButton("icon", Text["Minimap button shows a letter while something is new"])
-    addCheckButton("sound", Text["Play a sound"])
-    local soundButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
-    soundButton:SetSize(150, 22); soundButton:SetPoint("LEFT", checkButtons.sound, "RIGHT", 220, 0)
-    local soundTestButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
-    soundTestButton:SetSize(70, 22); soundTestButton:SetPoint("LEFT", soundButton, "RIGHT", 4, 0); soundTestButton:SetText(Text["Test"])
+
+    ---@param width number
+    ---@param height number
+    ---@return table button
+    local function newButton(width, height)
+        local button = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+        button:SetSize(width, height)
+        return button
+    end
+
+    ------------------------------------------------ General
+    addSection(Text["General"])
+    addCheck(Text["Show the minimap button"], function() return addon.UI.MinimapButtonShown() end,
+        function(shown) addon.UI.SetMinimapButtonShown(shown) end, Text["Hidden: open the window with the slash command."])
+
+    ------------------------------------------------ Order notifications
+    addSection(Text["Order notifications"], Text["How ProfessionShare tells you about new orders on the board and news on your own orders."])
+    ---@param settingKey string
+    ---@param label string
+    ---@param tooltipText? string
+    local function addNotifyCheck(settingKey, label, tooltipText)
+        return addCheck(label, function() return setting(settingKey) end, function(value)
+            Notify.Set(interfaceSettings(), settingKey, value)
+            Alerts.Update()
+        end, tooltipText)
+    end
+    addNotifyCheck("badge", Text["Number of new orders on the minimap button and the Orders tab"])
+    addNotifyCheck("icon", Text["Minimap button shows a letter while something is new"])
+    local soundCheck = addNotifyCheck("sound", Text["Play a sound"])
+    local soundButton = newButton(150, 22); soundButton:SetPoint("LEFT", soundCheck, "RIGHT", 220, 0)
+    local soundTestButton = newButton(70, 22); soundTestButton:SetPoint("LEFT", soundButton, "RIGHT", 4, 0); soundTestButton:SetText(Text["Test"])
     soundTestButton:SetScript("OnClick", playSound)
-    addCheckButton("chat", Text["Chat message"])
-    addCheckButton("screen", Text["Message in the middle of the screen"])
-    addCheckButton("flash", Text["Flash the game icon in the taskbar"], Text["Only visible while the game is in the background."])
-    addCheckButton("mine", Text["My orders: tell me when someone claims or finishes them"])
+    soundButton:SetScript("OnClick", function()
+        Notify.Set(interfaceSettings(), "soundName", nextChoice(Notify.SOUNDS, setting("soundName"), 1)); refreshPanel(); playSound()
+    end)
+    refreshers[#refreshers + 1] = function()
+        soundButton:SetText(soundLabel(setting("soundName")))
+        soundButton:SetEnabled(setting("sound")); soundTestButton:SetEnabled(setting("sound"))
+    end
+    addNotifyCheck("chat", Text["Chat message"])
+    addNotifyCheck("screen", Text["Message in the middle of the screen"])
+    addNotifyCheck("flash", Text["Flash the game icon in the taskbar"], Text["Only visible while the game is in the background."])
+    addNotifyCheck("mine", Text["My orders: tell me when someone claims or finishes them"])
 
-    local scopeLabelText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    scopeLabelText:SetPoint("TOPLEFT", 20, nextTop - 10); scopeLabelText:SetText(Text["Tell me about"])
-    local scopeButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
-    scopeButton:SetSize(220, 22); scopeButton:SetPoint("LEFT", scopeLabelText, "RIGHT", 10, 0)
-    local scopeHintText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    scopeHintText:SetPoint("TOPLEFT", scopeLabelText, "BOTTOMLEFT", 0, -10); scopeHintText:SetWidth(560); scopeHintText:SetJustifyH("LEFT")
+    local scopeLabelText = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    scopeLabelText:SetPoint("TOPLEFT", 20, nextTop - 6); scopeLabelText:SetText(Text["Tell me about"])
+    local scopeButton = newButton(220, 22); scopeButton:SetPoint("LEFT", scopeLabelText, "RIGHT", 10, 0)
+    scopeButton:SetScript("OnClick", function()
+        Notify.Set(interfaceSettings(), "scope", nextChoice(Notify.SCOPES, setting("scope"))); refreshPanel(); Alerts.Update()
+    end)
+    refreshers[#refreshers + 1] = function() scopeButton:SetText(scopeLabel(setting("scope"))) end
+    nextTop = nextTop - 30
+    local scopeHintText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    scopeHintText:SetPoint("TOPLEFT", 20, nextTop); scopeHintText:SetWidth(560); scopeHintText:SetJustifyH("LEFT")
     scopeHintText:SetText(Text["My professions: also orders for recipes of a profession you have that you do not know yet."])
-
-    local testAllButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
-    testAllButton:SetSize(220, 24); testAllButton:SetPoint("TOPLEFT", scopeHintText, "BOTTOMLEFT", 0, -16)
+    nextTop = nextTop - 24
+    local testAllButton = newButton(220, 24); testAllButton:SetPoint("TOPLEFT", 20, nextTop)
     testAllButton:SetText(Text["Test all notifications"])
     testAllButton:SetScript("OnClick", function() Alerts.Test() end)
-    testAllButton:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(Text["Test all notifications"])
-        GameTooltip:AddLine(Text["Shows every switched-on effect once. The taskbar flash follows after 3 seconds: switch to another window to see it."], 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    testAllButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    addTooltip(testAllButton, Text["Test all notifications"],
+        Text["Shows every switched-on effect once. The taskbar flash follows after 3 seconds: switch to another window to see it."])
+    nextTop = nextTop - 32
 
-    -- Recipes table columns (several can be on) and its sort; the window redraws at once
+    ------------------------------------------------ Recipe drops
+    addSection(Text["Recipe drops"], Text["When a tradeable recipe drops into your bags, guild members who can learn it are told. Hover the recipe to see who answered."])
+    local RecipeDrops = addon.RecipeDrops
+    ---@param settingKey string
+    ---@param label string
+    ---@param tooltipText? string
+    local function addDropCheck(settingKey, label, tooltipText)
+        return addCheck(label, function() return RecipeDrops.Get(interfaceSettings(), settingKey) end,
+            function(value) RecipeDrops.Set(interfaceSettings(), settingKey, value) end, tooltipText)
+    end
+    addDropCheck("share", Text["Share my recipe drops and answer those of others"],
+        Text["Off: your drops are not announced and you do not answer when a member's recipe drops."])
+    addDropCheck("chat", Text["Chat message for a recipe drop"])
+    addDropCheck("icon", Text["Minimap button shows a letter when a recipe I can learn drops"])
+
+    ------------------------------------------------ Recipe list
+    addSection(Text["Recipe list"], Text["Columns shown in the Recipes table. Click a column title in the window to sort by it."])
     local RecipeTable = addon.RecipeTable
-    local recipeTitleText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    recipeTitleText:SetPoint("TOPLEFT", testAllButton, "BOTTOMLEFT", -4, -24); recipeTitleText:SetText(Text["Recipe list"])
-    local recipeHintText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    recipeHintText:SetPoint("TOPLEFT", recipeTitleText, "BOTTOMLEFT", 0, -6); recipeHintText:SetWidth(560); recipeHintText:SetJustifyH("LEFT")
-    recipeHintText:SetText(Text["Columns shown in the Recipes table. Click a column title in the window to sort by it."])
-    local columnButtons = {}
+    local gridTop = nextTop
     for columnIndex, columnKey in ipairs(RecipeTable.OPTIONAL_KEYS) do
-        local columnButton = CreateFrame("CheckButton", nil, optionsPanel, "UICheckButtonTemplate")
+        local columnButton = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
         columnButton:SetSize(26, 26)
         -- two columns of checkboxes
         local gridColumn, gridRow = (columnIndex - 1) % 2, math.floor((columnIndex - 1) / 2)
-        columnButton:SetPoint("TOPLEFT", recipeHintText, "BOTTOMLEFT", gridColumn * 200, -8 - gridRow * 28)
-        local labelText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        columnButton:SetPoint("TOPLEFT", 16 + gridColumn * 200, gridTop - gridRow * 28)
+        local labelText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         labelText:SetPoint("LEFT", columnButton, "RIGHT", 4, 0); labelText:SetText(RecipeTable.ColumnLabel(columnKey))
         columnButton:SetScript("OnClick", function(self)
             RecipeTable.SetColumn(interfaceSettings(), columnKey, self:GetChecked() and true or false)
             addon.UI.Refresh()
         end)
-        columnButtons[columnKey] = columnButton
+        refreshers[#refreshers + 1] = function() columnButton:SetChecked(RecipeTable.ColumnShown(interfaceSettings(), columnKey)) end
     end
-    local sortRowCount = math.ceil(#RecipeTable.OPTIONAL_KEYS / 2)
-    local sortLabelText = optionsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    sortLabelText:SetPoint("TOPLEFT", recipeHintText, "BOTTOMLEFT", 4, -16 - sortRowCount * 28)
+    nextTop = gridTop - math.ceil(#RecipeTable.OPTIONAL_KEYS / 2) * 28 - 6
+    local sortLabelText = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    sortLabelText:SetPoint("TOPLEFT", 20, nextTop - 4)
     sortLabelText:SetText(Text["Sort by"])
-    local sortKeyButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
-    sortKeyButton:SetSize(160, 22); sortKeyButton:SetPoint("LEFT", sortLabelText, "RIGHT", 10, 0)
-    local sortDirectionButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
-    sortDirectionButton:SetSize(130, 22); sortDirectionButton:SetPoint("LEFT", sortKeyButton, "RIGHT", 6, 0)
-
-    local function refreshPanel()
-        for settingKey, checkButton in pairs(checkButtons) do checkButton:SetChecked(setting(settingKey)) end
-        scopeButton:SetText(scopeLabel(setting("scope")))
-        soundButton:SetText(soundLabel(setting("soundName")))
-        soundButton:SetEnabled(setting("sound")); soundTestButton:SetEnabled(setting("sound"))
-        for columnKey, columnButton in pairs(columnButtons) do columnButton:SetChecked(RecipeTable.ColumnShown(interfaceSettings(), columnKey)) end
+    local sortKeyButton = newButton(160, 22); sortKeyButton:SetPoint("LEFT", sortLabelText, "RIGHT", 10, 0)
+    local sortDirectionButton = newButton(130, 22); sortDirectionButton:SetPoint("LEFT", sortKeyButton, "RIGHT", 6, 0)
+    refreshers[#refreshers + 1] = function()
         local recipeSort = RecipeTable.GetSort(interfaceSettings())
         sortKeyButton:SetText(RecipeTable.ColumnLabel(recipeSort.key))
         sortDirectionButton:SetText(recipeSort.descending and Text["Descending"] or Text["Ascending"])
@@ -322,15 +390,12 @@ local function buildOptionsPanel()
         RecipeTable.SetSort(interfaceSettings(), recipeSort.key, not recipeSort.descending)
         refreshPanel(); addon.UI.Refresh()
     end)
-    scopeButton:SetScript("OnClick", function()
-        Notify.Set(interfaceSettings(), "scope", nextChoice(Notify.SCOPES, setting("scope"))); refreshPanel(); Alerts.Update()
-    end)
-    soundButton:SetScript("OnClick", function()
-        Notify.Set(interfaceSettings(), "soundName", nextChoice(Notify.SOUNDS, setting("soundName"), 1)); refreshPanel(); playSound()
-    end)
-    for _, checkButton in pairs(checkButtons) do checkButton:HookScript("OnClick", refreshPanel) end
+    nextTop = nextTop - 40
+
+    content:SetHeight(-nextTop)
     optionsPanel:SetScript("OnShow", refreshPanel)
     optionsPanel.refresh = refreshPanel
+    optionsPanel.refreshers = refreshers
 
     -- Settings panel of the game (modern API first, then the old interface options), else a plain window.
     local registered = false

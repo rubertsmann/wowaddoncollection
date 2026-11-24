@@ -33,6 +33,8 @@ Core\Data\Offers.lua
 Core\Data\Access.lua
 Core\Data\FactionHints.lua
 Core\Data\Reputation.lua
+Core\Data\RecipeCheck.lua
+Core\Data\RecipeDrops.lua
 Core\Data\Feedback.lua
 Core\Net\Sync.lua
 Core\View\Model.lua
@@ -44,6 +46,7 @@ Core\View\Notify.lua
 Core\Net\Communication.lua
 Core\Debug\Diagnostics.lua
 Core\Game\Events.lua
+Core\Game\Drops.lua
 
 UI\SecureDock.lua
 UI\Table.lua

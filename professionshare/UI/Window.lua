@@ -33,7 +33,7 @@ local function timeAgo(timestamp) return Widgets.TimeAgo(timestamp, Text) end
 local function createDialogFrame(frameName) return Widgets.CreateDialogFrame(frameName, addon.Log) end
 local QUESTION_MARK_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 ---@type { count: integer, showIcon: boolean, hideNumber: boolean } unseen orders shown by UI.SetNotice
-local noticeState = { count = 0, showIcon = false, hideNumber = false }
+local noticeState = { count = 0, showIcon = false, hideNumber = false, drops = 0 }
 
 ---@class WindowState
 local windowState = {
@@ -1041,32 +1041,31 @@ local function buildDebugTab()
     mainFrame.nameCheckButton:SetPoint("LEFT", clearButton, "RIGHT", 8, 0)
     local exportButton = createButton(debugTab, Text["Export report"], 120, 22, function() addon.SlashCommands.export() end)
     exportButton:SetPoint("TOPRIGHT", 0, 0)
-    if addon.IS_DEVELOPMENT_BUILD and addon.DevProbe then   -- dev build only: records item/category/tooltip data to SavedVariables
-        local probeButton = createButton(debugTab, Text["Item probe"], 100, 22, function() addon.DevProbe.Run() end)
-        probeButton:SetPoint("RIGHT", exportButton, "LEFT", -8, 0)
-        -- an enchanter in the dev data, so enchants appear in the Recipes tab
-        local fakeEnchanterButton = createButton(debugTab, Text["Fake enchanter"], 110, 18, function() addon.DevProbe.AddFakeEnchanter() end)
-        fakeEnchanterButton:SetPoint("TOPRIGHT", debugTab, "TOPRIGHT", 0, -26)   -- second row: the first is full at the minimum width
-        mainFrame.fakeEnchanterButton = fakeEnchanterButton
-        -- replays a request that names me with a realm, answers are captured, not sent
-        local fakeRequestButton = createButton(debugTab, Text["Fake request"], 100, 18, function() addon.DevProbe.SimulateRealmRequest() end)
-        fakeRequestButton:SetPoint("RIGHT", fakeEnchanterButton, "LEFT", -8, 0)
-        mainFrame.fakeRequestButton = fakeRequestButton
-        -- a fake member with dungeon keys / a Naxxramas attunement, for the Misc Items Keys and Attunements modes
-        local fakeKeysButton = createButton(debugTab, Text["Fake keys"], 90, 18, function() addon.DevProbe.AddFakeKeys() end)
-        fakeKeysButton:SetPoint("RIGHT", fakeRequestButton, "LEFT", -8, 0)
-        local fakeNaxxramasButton = createButton(debugTab, Text["Fake Naxxramas"], 110, 18, function() addon.DevProbe.AddFakeNaxxramas() end)
-        fakeNaxxramasButton:SetPoint("RIGHT", fakeKeysButton, "LEFT", -8, 0)
-        mainFrame.fakeKeysButton, mainFrame.fakeNaxxramasButton = fakeKeysButton, fakeNaxxramasButton
-        -- messages from a fake member, for the developer list of the Feedback tab
-        local fakeFeedbackButton = createButton(debugTab, Text["Fake feedback"], 110, 18, function() addon.DevProbe.AddFakeFeedback() end)
-        fakeFeedbackButton:SetPoint("RIGHT", fakeNaxxramasButton, "LEFT", -8, 0)
-        mainFrame.fakeFeedbackButton = fakeFeedbackButton
+    if addon.IS_DEVELOPMENT_BUILD and addon.DevProbe then   -- dev build only: fake data, fake triggers and probes in one menu
+        local DevProbe = addon.DevProbe
+        local devToolsButton = createMenuDropdown(debugTab, "WowStyle1DropdownTemplate", 120)
+        if devToolsButton then
+            devToolsButton:SetupMenu(function(_, rootMenu)
+                for sectionIndex, section in ipairs(DevProbe.SECTIONS) do
+                    if sectionIndex > 1 and rootMenu.CreateDivider then rootMenu:CreateDivider() end
+                    if rootMenu.CreateTitle then rootMenu:CreateTitle(section) end
+                    for _, entry in ipairs(DevProbe.ENTRIES) do
+                        if entry.section == section then
+                            rootMenu:CreateButton(entry.label, function() DevProbe.RunEntry(entry.key); refreshDebug() end)
+                        end
+                    end
+                end
+            end)
+            setDropdownText(devToolsButton, Text["Dev tools"])
+        else   -- no menus: list the entries in the chat (/psd fake <key> runs one)
+            devToolsButton = createButton(debugTab, Text["Dev tools"], 120, 22, function() DevProbe.PrintEntries() end)
+        end
+        devToolsButton:SetPoint("RIGHT", exportButton, "LEFT", -8, 0)
+        mainFrame.devToolsButton = devToolsButton
     end
     mainFrame.debugStatusText = createFontString(debugTab, "GameFontHighlightSmall")
     mainFrame.debugStatusText:SetPoint("TOPLEFT", 0, -28)
-    if mainFrame.fakeFeedbackButton then mainFrame.debugStatusText:SetPoint("RIGHT", mainFrame.fakeFeedbackButton, "LEFT", -8, 0)
-    else mainFrame.debugStatusText:SetPoint("RIGHT", 0, 0) end
+    mainFrame.debugStatusText:SetPoint("RIGHT", 0, 0)
     -- column headings of the name check (shown only in that view)
     local nameCheckHeader = CreateFrame("Frame", nil, debugTab); nameCheckHeader:SetSize(720, 16); nameCheckHeader:SetPoint("TOPLEFT", 0, -44)
     local headingTexts = createColumns(nameCheckHeader, "GameFontNormalSmall")
@@ -2236,9 +2235,36 @@ function UI.SetNotice(unseenCount, showIcon, hideNumber)
     end
     if not minimapButton then return end
     -- through the LibDataBroker object, so LibDBIcon and data displays (Titan Panel, ...) show the same icon
-    minimapButton.dataObject.icon = noticeState.showIcon and noticeState.count > 0 and NEWS_ICON or DEFAULT_ICON
+    local showNews = (noticeState.showIcon and noticeState.count > 0) or noticeState.drops > 0
+    minimapButton.dataObject.icon = showNews and NEWS_ICON or DEFAULT_ICON
     minimapButton.badge:SetShown(noticeState.count > 0 and not noticeState.hideNumber)
     minimapButton.badgeText:SetText(noticeState.count > 99 and "99+" or tostring(noticeState.count))
+end
+
+-- Whether the minimap button is shown (the player can hide it on the settings page).
+---@return boolean
+function UI.MinimapButtonShown()
+    local iconSettings = addon.db and addon.db.ui and addon.db.ui.minimapIcon
+    return not (type(iconSettings) == "table" and iconSettings.hide)
+end
+
+-- Shows or hides the minimap button (LibDBIcon keeps the choice in ui.minimapIcon.hide).
+---@param shown boolean
+function UI.SetMinimapButtonShown(shown)
+    if not (addon.db and addon.db.ui) then return end
+    addon.db.ui.minimapIcon = type(addon.db.ui.minimapIcon) == "table" and addon.db.ui.minimapIcon or {}
+    addon.db.ui.minimapIcon.hide = not shown
+    local minimapIcons = LibStub and LibStub:GetLibrary("LibDBIcon-1.0", true)
+    if minimapIcons then
+        if shown then pcall(minimapIcons.Show, minimapIcons, addon.FRAME_PREFIX) else pcall(minimapIcons.Hide, minimapIcons, addon.FRAME_PREFIX) end
+    end
+end
+
+-- The minimap button shows the news icon while a recipe that dropped for a member is one I can learn (0 clears it).
+---@param alertCount integer
+function UI.SetDropNotice(alertCount)
+    noticeState.drops = tonumber(alertCount) or 0
+    UI.SetNotice(noticeState.count, noticeState.showIcon, noticeState.hideNumber)
 end
 
 -- LibDBIcon's button (Widgets.CreateMinimapButton, shared with GuildGames); its badge shows the count
@@ -2254,6 +2280,13 @@ local function buildMinimapButton()
         onTooltip = function(tooltip)
             tooltip:SetText(addon.TITLE)
             if noticeState.count > 0 then tooltip:AddLine(Format(Text["{n} new on the order board"], { n = noticeState.count }), 1, 0.82, 0) end
+            if noticeState.drops > 0 then
+                for _, alert in ipairs(addon.RecipeDrops.alerts) do
+                    tooltip:AddLine(Format(Text["{item} dropped for {name}: you can learn it"], { item = addon.Api.ItemLink(alert.itemID)
+                        or addon.Api.ItemName(alert.itemID) or tostring(alert.itemID), name = addon.Utility.Escape(addon.Utility.ShortName(alert.from)
+                        or alert.from) }), 0.2, 1, 0.6)
+                end
+            end
             tooltip:AddLine(Text["Click: open window. Drag: move."], 1, 1, 1)
         end,
     })
