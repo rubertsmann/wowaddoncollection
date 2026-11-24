@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 (2026-11-25, protocol 1.3, schema 2, LibGuildSync MINOR 6)
+- `/gg catch` (and the throw binding and rope icon) inside a dungeon or raid now says, in the red line at the top of
+  the screen and in chat, that catching does not work there (feature 031).
+- The rope is refused at an enemy someone else tagged and at one farther than 28 yards (when the client tells the
+  distance; otherwise the throw is allowed as before).
+- Arena (feature 032): watch to see the result. A decided fight says "your fight is decided, watch it"; the result,
+  the wager, W/L, XP and side bets are settled only after the replay (or by themselves 24 h later).
+- Arena: counter offers. The challenged player can answer with another wager (paid at once); the challenger accepts
+  (pays or gets back the difference, the fight starts) or declines (both wagers come back). Protocol 1.3 (additive: a
+  1.2 peer sees a countered challenge as unanswered).
+
 ## 0.5.0 (2026-11-24, protocol 1.2, schema 2, LibGuildSync MINOR 6)
 - New minimal view (feature 030): only the companion, round care gauges that fill clockwise, a heart icon, no text.
   `/gg` opens it by default; the top-left icon switches to the full window and back. Options: start view, opacity,

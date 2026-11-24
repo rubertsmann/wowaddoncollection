@@ -145,6 +145,25 @@ local function read(func, ...)
     return NotSecret(value)
 end
 
+-- True when another player or group tagged `unit` (its kill is not mine), nil when the client does not say.
+---@param unit string
+---@return boolean|nil
+function Api.IsTapDenied(unit)
+    local denied = read(UnitIsTapDenied, unit)
+    if denied == nil then return nil end
+    return denied and true or false
+end
+
+-- Whether `unit` is within ROPE_RANGE (the client's 28-yard interact distance, index 4), nil when the client does not
+-- say (it may refuse the check for hostile units in combat).
+---@param unit string
+---@return boolean|nil
+function Api.InRopeRange(unit)
+    local inRange = read(CheckInteractDistance, unit, 4)
+    if inRange == nil then return nil end
+    return inRange and true or false
+end
+
 -- What AZEcaught can know about a unit, or nil when there is no unit (or its GUID is hidden). Never raises.
 ---@param unit string
 ---@return UnitSnapshot|nil
@@ -163,7 +182,8 @@ function Api.UnitSnapshot(unit)
             level = type(level) == "number" and level or nil,
             classification = type(classification) == "string" and classification or "normal",
             health = (type(health) == "number" and type(healthMaximum) == "number" and healthMaximum > 0) and health / healthMaximum or nil,
-            hostile = canAttack ~= nil and (canAttack and true or false) or nil, dead = Api.IsDead(unit) }
+            hostile = canAttack ~= nil and (canAttack and true or false) or nil, dead = Api.IsDead(unit),
+            tapDenied = Api.IsTapDenied(unit), inRange = Api.InRopeRange(unit) }
     end)
     if not ok then
         addon.AzeCaught.Journal("WARNING", "api.unit", "reading a unit failed", { unit = unit, error = tostring(snapshot) })
@@ -179,6 +199,19 @@ function Api.InInstance()
     local ok, inside, kind = pcall(IsInInstance)
     if not ok then return nil end
     return NotSecret(kind) or (NotSecret(inside) and "yes") or nil
+end
+
+-- True inside a dungeon or raid, where the client hides what AZEcaught reads from enemies.
+---@return boolean
+function Api.InDungeon()
+    local kind = Api.InInstance()
+    return kind == "party" or kind == "raid"
+end
+
+-- `text` in the red message line at the top of the screen (the client's error frame).
+---@param text string
+function Api.ShowOverlay(text)
+    if UIErrorsFrame and UIErrorsFrame.AddMessage then pcall(UIErrorsFrame.AddMessage, UIErrorsFrame, text, 1, 0.3, 0.3) end
 end
 
 -- The nameplate frame of a unit token, or nil.
@@ -293,6 +326,7 @@ function Api.UnitDump(unit)
         canAttack = { G.UnitCanAttack, "player", unit }, isEnemy = { G.UnitIsEnemy, "player", unit },
         isDead = { G.UnitIsDead, unit }, inCombat = { G.UnitAffectingCombat, unit },
         threat = { G.UnitThreatSituation, "player", unit }, tapDenied = { G.UnitIsTapDenied, unit },
+        interactRange4 = { G.CheckInteractDistance, unit, 4 },
         isPlayer = { G.UnitIsPlayer, unit }, isBoss = { G.UnitIsBossMob, unit }, questBoss = { G.UnitIsQuestBoss, unit },
         armor = { G.UnitArmor, unit }, attackPower = { G.UnitAttackPower, unit }, damage = { G.UnitDamage, unit },
         attackSpeed = { G.UnitAttackSpeed, unit }, resistance = { G.UnitResistance, unit, 1 },

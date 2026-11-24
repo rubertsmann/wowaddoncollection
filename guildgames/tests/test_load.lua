@@ -83,7 +83,7 @@ return {
                 harness.equal(addon.IS_DEVELOPMENT_BUILD, development)
                 harness.equal(addon.PREFIX, development and "GGamesDev" or "GGames")
                 harness.equal(addon.SAVED_VARIABLES_NAME, development and "GuildGamesDevDB" or "GuildGamesDB")
-                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 2); harness.equal(addon.Store.SCHEMA, 2)
+                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 3); harness.equal(addon.Store.SCHEMA, 2)
                 -- the key binding's globals carry this build's names (live + dev installed together)
                 local binding = addon.Catcher.BindingNames(development)
                 harness.equal(binding.name, development and "AZECAUGHT_THROW_DEV" or "AZECAUGHT_THROW")
@@ -256,6 +256,23 @@ return {
                     harness.truthy(okCommand, "/gg caught " .. command .. ": " .. tostring(commandError))
                 end
                 harness.truthy(pcall(addon.SlashCommands.catch, ""), "/gg catch")
+                -- in a dungeon or raid the throw is refused with an overlay and a chat line
+                local savedInstance, savedErrors, savedPrint = IsInInstance, UIErrorsFrame, addon.Print
+                local overlay, chat = {}, {}
+                UIErrorsFrame = { AddMessage = function(_, text) overlay[#overlay + 1] = text end }
+                addon.Print = function(text) chat[#chat + 1] = text end
+                for _, kind in ipairs({ "party", "raid" }) do
+                    IsInInstance = function() return true, kind end
+                    overlay, chat = {}, {}
+                    harness.equal(addon.Catcher.Throw("target"), false, "no throw in " .. kind)
+                    harness.truthy(overlay[1] and overlay[1]:find("dungeons", 1, true), "overlay in " .. kind .. ": " .. tostring(overlay[1]))
+                    harness.truthy(chat[1] and chat[1]:find("dungeons", 1, true), "chat line in " .. kind .. ": " .. tostring(chat[1]))
+                end
+                IsInInstance = function() return false, "none" end
+                overlay = {}
+                addon.SlashCommands.catch("")
+                harness.equal(#overlay, 0, "no dungeon overlay in the open world")
+                IsInInstance, UIErrorsFrame, addon.Print = savedInstance, savedErrors, savedPrint
                 -- the icon options page: built, toggles and steps the settings, the slash command too
                 local Options = addon.AzeCaughtOptions
                 harness.truthy(Options.widgets.frame, "the options page was built (see Log: caught.options)")
@@ -390,8 +407,9 @@ return {
                         -- the foe challenges me: an incoming fight with Accept
                         records["Foe-R"].arena.ch["Foe-R#" .. start] = { to = me, at = start, wg = 0, f = foe }
                         harness.truthy(pcall(addon.ArenaView.SelectPage, "fights"))
-                        harness.equal(addon.ArenaView.widgets.acceptButton, nil, "accept only in the row (user 2026-11-21)")
-                        local okAnswer, answerError = pcall(addon.ArenaView.Answer, true)
+                        harness.truthy(addon.ArenaView.widgets.acceptButton, "accept is in the dialog below the list (next to the counter offer)")
+                        harness.equal(addon.ArenaView.state.selected, "Foe-R#" .. start, "the incoming challenge is selected")
+                        local okAnswer, answerError = pcall(addon.ArenaView.Decide, true)
                         harness.truthy(okAnswer, tostring(answerError))
                         harness.truthy(Arena.State().an["Foe-R#" .. start], "accepted")
                         local savedServerTime = rawget(_G, "GetServerTime")
@@ -417,6 +435,10 @@ return {
                         local okTick, tickError = pcall(addon.Catcher.ArenaTick, true)
                         harness.truthy(okTick, "arena tick: " .. tostring(tickError))
                         harness.equal(Arena.State().w + Arena.State().l, 1, "the fight was settled")
+                        -- the counter offer buttons answer with a refusal for an unknown fight, never an error
+                        harness.truthy(pcall(addon.ArenaView.Counter), "counter offer button")
+                        harness.truthy(pcall(addon.ArenaView.AnswerCounter, true, "Nobody-R#1"), "accept counter button")
+                        harness.truthy(pcall(addon.ArenaView.AnswerCounter, false, "Nobody-R#1"), "decline counter button")
                         addon.Games.AllRecords, addon.Utility.Now = savedRecords, savedNow
                         rawset(_G, "GetServerTime", savedServerTime)
                         -- the guild view: a click selects a pet, the fight icon opens the challenge modal

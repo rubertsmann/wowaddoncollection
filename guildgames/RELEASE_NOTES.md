@@ -1,3 +1,22 @@
+# GuildGames 0.6.0
+
+**English:** Arena fights are now a surprise: when your fight is decided, the chat tells you to watch it, and the
+result, the wager and any side bets are paid only after you watched the replay (or by themselves after 24 hours).
+When someone challenges you, you can now make a counter offer with a different wager; the challenger then accepts it
+(the fight starts) or declines it (both get their gold back). Accept and decline are now two icons below the fight
+list. Catching: the rope now says why it cannot be thrown: catching does not work in dungeons and raids, the enemy
+must be your own kill (not tagged by someone else) and within 28 yards. Members on older versions still play with
+you, but they do not see counter offers, so update to use them.
+
+**Deutsch:** Arena-Kämpfe sind jetzt eine Überraschung: Wenn dein Kampf entschieden ist, sagt dir der Chat, dass du
+ihn ansehen sollst, und das Ergebnis, der Einsatz und Wetten werden erst ausgezahlt, wenn du die Wiederholung gesehen
+hast (oder nach 24 Stunden von selbst). Wenn dich jemand herausfordert, kannst du jetzt ein Gegenangebot mit einem
+anderen Einsatz machen; der Herausforderer nimmt es an (der Kampf beginnt) oder lehnt ab (beide bekommen ihr Gold
+zurück). Annehmen und Ablehnen sind jetzt zwei Symbole unter der Kampfliste. Fangen: Das Seil sagt jetzt, warum es
+nicht geworfen werden kann: In Dungeons und Schlachtzügen funktioniert Fangen nicht, der Gegner muss dein eigener Kill
+sein (nicht von jemand anderem markiert) und höchstens 28 Meter entfernt. Mitglieder mit älteren Versionen spielen
+weiter mit dir, sehen aber keine Gegenangebote; aktualisiere, um sie zu nutzen.
+
 # GuildGames 0.5.0
 
 **English:** New minimal view: /gg and the minimap button now open a small window with only your AZEcaught companion

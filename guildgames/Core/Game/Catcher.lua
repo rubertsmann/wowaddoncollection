@@ -196,6 +196,8 @@ local function throwRefusalText(reason)
     if reason == "rolled" then return Text["You already tried to catch this one."] end
     if reason == "dead" then return Text["It is already dead."] end
     if reason == "thrown" then return Text["You already threw the rope at this one."] end
+    if reason == "tapped" then return Text["Someone else tagged this one: only your own kills can be caught."] end
+    if reason == "range" then return Text["Too far away: get within 28 yards to throw the rope."] end
     return Text["Only NPCs can be caught."]
 end
 
@@ -204,6 +206,13 @@ end
 ---@return boolean thrown
 function Catcher.Throw(unit)
     unit = unit or "target"
+    if Api.InDungeon() then
+        local text = Text["Catching does not work in dungeons and raids."]
+        Api.ShowOverlay(text)
+        addon.Print(text)
+        AzeCaught.Journal("DEBUG", "throw.refused", "a throw was refused", { reason = "instance", unit = unit })
+        return false
+    end
     local snapshot = Api.UnitSnapshot(unit)
     if not snapshot then
         addon.Print(Text["No target to throw the rope at."])
@@ -222,7 +231,8 @@ function Catcher.Throw(unit)
             classification = snapshot.classification, display = display, stats = Api.UnitStats(unit) }, now())
     end
     local thrown, reason = AzeCaught.Throw({ guid = snapshot.guid, health = snapshot.health, name = snapshot.name,
-        level = snapshot.level, classification = snapshot.classification, display = display }, Api.PlayerLevel(), Api.Clock(), now())
+        level = snapshot.level, classification = snapshot.classification, display = display,
+        tapDenied = snapshot.tapDenied, inRange = snapshot.inRange }, Api.PlayerLevel(), Api.Clock(), now())
     local name = addon.Utility.ChatSafe(snapshot.name or AzeCaught.State().collection[snapshot.npc or 0] and AzeCaught.State().collection[snapshot.npc].n or "?")
     if thrown then
         Catcher.PlayRopeEffect(unit)
@@ -755,6 +765,17 @@ function Catcher.ArenaNoticeText(notice)
     elseif notice.kind == "answered" then
         return Format(notice.accepted and Text["{name} accepted your arena challenge. The fight is decided in 5 minutes."]
             or Text["{name} declined your arena challenge."], { name = short(notice.by) })
+    elseif notice.kind == "ready" then
+        return "|cffffd100" .. Format(Text["Arena: your fight against {name} is decided. Watch it in AZEcaught > Arena to see the result."],
+            { name = short(notice.opponent) }) .. "|r"
+    elseif notice.kind == "betready" then
+        return Format(Text["Arena: the fight you bet on ({name}) is decided. Watch it to see your bet's result."], { name = short(notice.fighter) })
+    elseif notice.kind == "countered" then
+        return "|cffffd100" .. Format(Text["{name} made a counter offer to your arena challenge: {gold} instead of {offered}. Answer in AZEcaught > Arena."],
+            { name = short(notice.by), gold = money(notice.wager), offered = money(notice.offered) }) .. "|r"
+    elseif notice.kind == "counteranswered" then
+        return Format(notice.accepted and Text["{name} accepted your counter offer ({gold}). The fight is decided in 5 minutes."]
+            or Text["{name} declined your counter offer."], { name = short(notice.by), gold = money(notice.wager) })
     elseif notice.kind == "won" then
         return "|cff66ff66" .. Format(Text["Arena: your companion beat {name}! (+{gold})"], { name = short(notice.opponent), gold = money(notice.wager * 2) }) .. "|r"
     elseif notice.kind == "lost" then
@@ -795,9 +816,9 @@ function Catcher.ArenaTick(force)
     for _, notice in ipairs(notices) do
         local line = Catcher.ArenaNoticeText(notice)
         if line then addon.Print(line) end
-        if notice.kind == "challenged" then Api.PlaySound(Api.SoundKitFor({ "READY_CHECK", "RAID_WARNING" })) end
+        if notice.kind == "challenged" or notice.kind == "countered" then Api.PlaySound(Api.SoundKitFor({ "READY_CHECK", "RAID_WARNING" })) end
         if notice.kind == "won" or notice.kind == "lost" or notice.kind == "refund" or notice.kind == "betwon" then publish = true end
-        if notice.kind == "won" or notice.kind == "lost" then Catcher.lastFight = notice.id end
+        if notice.kind == "won" or notice.kind == "lost" or notice.kind == "ready" then Catcher.lastFight = notice.id end
     end
     if changed or publish then Catcher.PublishArena()
     elseif #notices > 0 then addon.Events.Fire("CAUGHT_CHANGED") end

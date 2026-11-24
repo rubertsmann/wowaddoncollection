@@ -497,12 +497,15 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
     if not npcID then return refuse("unknown") end
     if AzeCaught.rolled[target.guid] then return refuse("rolled", { npc = npcID }) end
     if AzeCaught.thrown[target.guid] then return refuse("thrown", { npc = npcID }) end
+    -- tapDenied / inRange are nil when the client does not say: then the throw is allowed
+    if target.tapDenied == true then return refuse("tapped", { npc = npcID }) end
     -- the client may hide the health (a secret in combat/instances): then the throw is allowed and rolls as if the NPC
     -- were at THROW_HEALTH, the worst case
     local healthKnown = type(target.health) == "number" and target.health == target.health
     local health = healthKnown and target.health or AzeCaught.THROW_HEALTH
     if healthKnown and health <= 0 then return refuse("dead", { npc = npcID }) end
     if healthKnown and health > AzeCaught.THROW_HEALTH then return refuse("health", { npc = npcID, hp = round1(health * 100) }) end
+    if target.inRange == false then return refuse("range", { npc = npcID }) end
     if AzeCaught.lastThrowAt and clockSeconds - AzeCaught.lastThrowAt < AzeCaught.THROW_COOLDOWN then
         return refuse("cooldown", { npc = npcID, left = round1(AzeCaught.THROW_COOLDOWN - (clockSeconds - AzeCaught.lastThrowAt)) })
     end

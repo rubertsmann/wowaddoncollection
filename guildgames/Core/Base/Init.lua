@@ -5,13 +5,13 @@ local addonName, addon = ...
 -- The build flag and every name derived from it (PREFIX "GGames"/"GGamesDev", /gg or /ggd, SavedVariables, frames) come
 -- from LibGuildSync-1.0 Addon.Setup (LibGuildSync/Addon.lua). The fallback version only matters for the offline tests.
 LibStub("LibGuildSync-1.0").Addon.Setup(addon, addonName,
-    { name = "GuildGames", prefix = "GGames", command = "gg", fallbackVersion = "0.5.0", color = "ffcc33" })
+    { name = "GuildGames", prefix = "GGames", command = "gg", fallbackVersion = "0.6.0", color = "ffcc33" })
 
 -- Wire protocol (docs/protocol.md): MAJOR must match exactly between peers, MINOR may differ (additive changes only).
 ---@type integer
 addon.PROTOCOL_MAJOR = 1
 ---@type integer
-addon.PROTOCOL_MINOR = 2   -- 1.1: the optional "caught" record section; 1.2: "arena"
+addon.PROTOCOL_MINOR = 3   -- 1.1: the optional "caught" record section; 1.2: "arena"; 1.3: arena counter offers
 ---@type integer alias: the major is what the payload "v" field carries
 addon.PROTOCOL = addon.PROTOCOL_MAJOR
 

@@ -39,7 +39,8 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
   - Every hostile NPC you fight lands in your **collection**. When one is below 35% health, a rope icon shows on its
     nameplate. Throw the rope (click the icon, bind "AZEcaught: throw rope" in the key bindings, or `/gg catch` in a
     macro) and kill it within 3 seconds for a chance to catch it. Your very first catch always succeeds. One throw per
-    enemy. The icon's ring turns from red to green as the chance grows and pulses at the best moment; until your first
+    enemy. Catching does not work in dungeons and raids: a throw there says so on screen and in chat. The enemy must be your
+    own kill (not tagged by someone else) and within 28 yards. The icon's ring turns from red to green as the chance grows and pulses at the best moment; until your first
     throw a red arrow points at it. Kill too slowly and the rope snaps. Move, resize or hide the icon in Options >
     AddOns > GuildGames AZEcaught (or `/gg caught icon on|off|x|y|size|reset`).
   - The chance rises from 20% at 35% health to 90% at 10% health and below; elite, rare, rare elite and boss NPCs
@@ -56,12 +57,14 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     Switching away from a companion with negative hearts makes it run away.
   - **Guild** view: everyone's companion, ranked by NPC level + rarity + hearts. Last week's place pays 500g, 300g, 150g,
     or 25g into your pool. The minimap button shows a badge when a need is due; `/gg notify off` turns reminders off.
-  - **Arena:** challenge a guild member's companion from the Guild view (optional wager in gold). They accept or
-    decline whenever they are online; 5 minutes later the fight is decided on its own (no input: stats, arena level,
+  - **Arena:** challenge a guild member's companion from the Guild view (optional wager in gold). They accept,
+    decline or make a **counter offer** (another wager, paid at once) whenever they are online; a counter offer is
+    accepted or declined by the challenger (declined: both wagers come back). 5 minutes after the accept the fight is decided on its own (no input: stats, arena level,
     training, hearts, needs and the creature type's ability decide). The winner takes both wagers; the rest of the guild
     can bet on either side in those 5 minutes at odds from the win chance. Train Attack, Defense, Speed or Vitality
-    (gold, energy and 10 minutes of play time per point), gain XP and arena levels, and watch every fight as a replay
-    in the Arena view (`/gg arena`). Both players need this version (protocol 1.2).
+    (gold, energy and 10 minutes of play time per point) and gain XP and arena levels. A decided fight shows
+    "watch!": its result, the wager and side bets are paid only after you watched the replay in the Arena view
+    (`/gg arena`), or on their own 24 hours later. Both players need this version (protocol 1.3 for counter offers).
 - **Money pool:** one balance for all games: 20g to start, plus your casino results, catch rewards and weekly payouts,
   minus food and water. You cannot stake more than the balance. It is shown next to the game switch.
 - **Window:** the icons at the top left switch the game (hover for the name). Drag the handle in the bottom-left

@@ -107,6 +107,9 @@ return {
         harness.equal(select(2, AzeCaught.Throw({ guid = "Player-1-2", health = 0.1 }, 10, 100, NOW)), "unknown")
         harness.equal(select(2, AzeCaught.Throw({ guid = GUID, health = 0.5 }, 10, 100, NOW)), "health")
         harness.equal(select(2, AzeCaught.Throw({ guid = GUID, health = 0 }, 10, 100, NOW)), "dead")
+        harness.equal(select(2, AzeCaught.Throw({ guid = GUID, health = 0.1, tapDenied = true }, 10, 100, NOW)), "tapped")
+        harness.equal(select(2, AzeCaught.Throw({ guid = GUID, health = 0.1, inRange = false }, 10, 100, NOW)), "range")
+        harness.equal(select(2, AzeCaught.Throw({ guid = GUID, health = 0.5, inRange = false }, 10, 100, NOW)), "health", "health is told first")
         harness.truthy(AzeCaught.Throw({ guid = GUID, health = 0.35, name = "Wolf", level = 10 }, 10, 100, NOW), "at the threshold")
         harness.equal(select(2, AzeCaught.Throw({ guid = "Creature-0-1-2-3-5-B", health = 0.1 }, 10, 101, NOW)), "cooldown")
         -- a death without a throw, then the real one, then the same death again

@@ -1,6 +1,6 @@
 # GuildGames wire protocol and stored data
 
-Protocol **1.2**, schema **2** (1.2 since the companion arena, 0.3.0; 1.1 since 0.2.0; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Base/Init.lua` (versions, prefix), `Core/Net/Sync.lua`
+Protocol **1.3**, schema **2** (1.3 since arena counter offers; 1.2 since the companion arena, 0.3.0; 1.1 since 0.2.0; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Base/Init.lua` (versions, prefix), `Core/Net/Sync.lua`
 (messages), `Core/Data/Games.lua` (record, validation), `Core/Data/Store.lua` (schema). The transport, chunk header, compatibility
 rules, guild gate and record-pull engine are LibGuildSync-1.0's (`Libs/LibGuildSync`, documented in the libguildsync repo).
 Tests: `tests/test_games_sync.lua`, `tests/test_games.lua`, `tests/test_store_and_locale.lua`.
@@ -55,6 +55,13 @@ protocol, so ProfessionShare and GuildGames never read each other's messages.
   drain|focus|barrier|strike`). A bad `arena` section is dropped alone. Every client computes a fight from the two
   snapshots and the id (`Arena.Fight`, deterministic) and settles only its own pool; an answer counts only from the
   challenged player within 24 h of the challenge. Written by `Games.SetSection("arena")`; 1.1 peers drop it.
+- **Arena counter offers (protocol 1.3, feature 032):** `co[id] = {wg, at, f}` in the challenged player's arena section:
+  a counter offer (wager 0..1000g, the time, the counter's fighter) instead of an `an` answer; it counts when made within
+  24 h of the challenge and before a stop. The challenger answers it in its own `ch[id]` with `ca` (accepted at) or
+  `cd` (declined at), at most one, within 24 h of the counter. With `ca` the fight uses `co.f`, `co.wg` and
+  `fightAt = ca + 5 min`. A 1.2 peer copies only `ch/an/bt` (it ignores `co`, `ca`, `cd` and keeps the section), so it
+  sees the challenge as unanswered and cannot bet on a counter fight. Local only (never sent): `watched[id]`, the
+  fights whose replay I watched; a fight's money is settled after that or 24 h after the fight time.
 - **Money pool (local only, never sent):** `balance = 20g + casino net (coin + slots + survivor) - pending survivor stake
   + ledger.earned - ledger.spent`. Every casino play START (flip, spin, survivor run) is refused with `funds` when the stake
   is above the balance; settling a run never is.

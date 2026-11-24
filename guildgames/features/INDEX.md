@@ -11,3 +11,5 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 020 | Companion arena (async auto battles, training, wagers, side bets) | verifying | GuildGames 0.3.0 (protocol 1.2, schema 2), unreleased | - | [020-companion-arena](020-companion-arena/spec.md) |
 | 021 | Comment audit and reduction (all addons) | verifying | none (tooling) | 14e9558..HEAD | [021-comment-audit-and-reduction](021-comment-audit-and-reduction/spec.md) |
 | 030 | Compact pet view (minimal window: round pet, ring gauges, no text) | verifying | GuildGames 0.5.0 (protocol 1.2, schema 2), unreleased | - | [030-compact-pet-view](030-compact-pet-view/spec.md) |
+| 031 | Catch limits: dungeons (overlay + chat), 28 yd range, not tagged by others | verifying | GuildGames 0.6.0 (protocol 1.3, schema 2) | - | [031-catch-refused-in-dungeons](031-catch-refused-in-dungeons/spec.md) |
+| 032 | Arena: watch to reveal the result, counter offers | verifying | GuildGames 0.6.0 (protocol 1.3, schema 2) | - | [032-arena-watch-to-reveal-and-counter-offers](032-arena-watch-to-reveal-and-counter-offers/spec.md) |
