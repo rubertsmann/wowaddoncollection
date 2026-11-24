@@ -64,3 +64,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: user: "everything works fine in that feature" (list, filter, search, hints tooltip, name click, /psd rep)
 - Evidence: user statement in the session
 - Next: still NOT-VERIFIED: progress sharing over time and two members on 1.4.0 syncing (MULTI-CLIENT); then status done
+
+## 2026-11-24 17:57 | VERIFY | two real members on 1.4.1 exchange reputation
+- Did: read the live SavedVariables after several guild members updated
+- Result: two 1.4.1 members announced reputation (`WANTR` x5 out, `REP` x5 in), both records stored with 10-11 factions; older members (1.3.0, 1.0.2) still sync recipes; no warnings after 12:51
+- Evidence: live ProfessionShare.lua comm log and `rep` table
+- Next: only "progress shared after gaining reputation" (level at once, progress after 30 min) is still unseen in game; status can go to done if the user accepts that

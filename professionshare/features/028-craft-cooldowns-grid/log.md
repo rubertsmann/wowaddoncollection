@@ -38,3 +38,15 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: docs describe the built state; in-game checks listed in verify.md
 - Evidence: this commit's diff (not committed yet: the user has not asked for a commit)
 - Next: BLOCKED on the user: deploy is done; restart the game, run the verify.md in-game checklist (start with `/psd cd` next to an open Alchemy/Tailoring window, then Dev tools -> "Crafters: cooldowns in every state")
+
+## 2026-11-24 13:30 | VERIFY | first in-game check (live 1.4.1 and dev build)
+- Did: read the live and dev SavedVariables after the user's report "the features are working as expected"
+- Result: no ERROR/EXCEPTION today; dev fake crafters ran, tiles of all three groups whispered; live: a real member's synced recipes contain 17187 (Transmute: Arcanite), the Transmute tile listed that member and whispered (no 1.4 member yet, so no peer cooldown records); verify.md rows R1, R2, R4, R7-R11 IN-GAME, R3/R12 partial
+- Evidence: WTF/Account/<account>/SavedVariables/ProfessionShare.lua (log 13:21-13:22, recipes), ProfessionShare-Dev.lua (log 12:12)
+- Next: own cooldown reading with an alchemist or tailor (`/ps cd`, checklist 1-2), then a second member on 1.4.x (checklist 7); status stays verifying until then or until the user accepts the gaps
+
+## 2026-11-24 17:57 | VERIFY | first real members on 1.4.1
+- Did: read the live SavedVariables after several guild members updated
+- Result: three members on 1.4.1; HELLO with the cooldown field arrives, "cds: peer has none" for each (none knows a timegated recipe, checked against their synced recipes), `cds` empty; 1.3.0 / 1.0.2 members still sync; no warnings after 12:51
+- Evidence: live ProfessionShare.lua comm log (HELLO `ver=1.4.1/6`, `why` lines), `cds = {}`, chars records without cooldown recipe ids
+- Next: checklist 7 needs a 1.4.x member who knows a transmute, Mooncloth or the Salt Shaker; 1-2 an own alchemist/tailor; 6 the 20 s trigger; or the user accepts the gaps -> done

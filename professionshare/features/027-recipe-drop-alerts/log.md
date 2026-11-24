@@ -39,3 +39,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: user's question: the tooltip lines exist only for recipes from my own loot of this session; the button lets recipes already in the bags get them
 - Evidence: `luajit tests/run.lua` -> 332 passed, 0 failed (new: "the bag scan announces each tradeable recipe once..."; test_load runs AnnounceBags and /ps drops scan)
 - Next: in game: settings -> Recipe drops -> button with tradeable recipes in the bags; hover one (expect "Guild members who can use it:" + "Waiting for answers..." / "Nobody online can use it.")
+
+## 2026-11-24 13:30 | VERIFY | bag scan button in game
+- Did: read the dev SavedVariables after the user's report "the features are working as expected"
+- Result: `drops.bagScan items=2`, both recipes `outcome=announced` (13:02); the user saw the tooltip lines
+- Evidence: WTF/Account/<account>/SavedVariables/ProfessionShare-Dev.lua (log 13:02:48-13:02:50)
+- Next: answers from a second member on 1.4.x
