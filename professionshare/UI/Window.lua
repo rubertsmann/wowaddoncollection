@@ -595,10 +595,66 @@ local function miscEmptyText(mode)
     return Text["No recipe items on offer yet. They are listed automatically from the bags, bank, mail, guild bank and auctions of every guild member."]
 end
 
+-- Cooldowns mode: the grid instead of the table (UI/CooldownGrid.lua); the table-only controls are hidden.
+---@param isGrid boolean
+local function showMiscGrid(isGrid)
+    miscList:SetShown(not isGrid)
+    mainFrame.miscHeader:SetShown(not isGrid)
+    if mainFrame.miscColumnsButton then mainFrame.miscColumnsButton:SetShown(not isGrid) end
+    mainFrame.offerDetailText:SetShown(not isGrid)
+    if mainFrame.cooldownGrid then mainFrame.cooldownGrid.frame:SetShown(isGrid) end
+    mainFrame.cooldownExpandButton:SetShown(isGrid)
+    mainFrame.cooldownLegendText:SetShown(isGrid)
+end
+
+---@return CooldownLookups
+local function cooldownLookups()
+    local function isOnline(playerName)
+        if addon.Api.IsOnline(playerName) then return true end
+        -- dev build: the fake crafters of the Dev tools menu count as online
+        return addon.IS_DEVELOPMENT_BUILD and addon.DevProbe ~= nil and addon.DevProbe.IsFakeOnline(playerName) or false
+    end
+    return { isOnline = isOnline, spellName = addon.Api.SpellName, itemName = addon.Api.ItemName, itemIcon = addon.Api.ItemIcon }
+end
+
+local function refreshCooldowns()
+    local settings = interfaceSettings()
+    local tiles = addon.Model.BuildCooldownTiles({ text = windowState.offerText, me = me(), now = addon.Utility.Now() },
+        cooldownLookups())
+    local expanded = settings and settings.cooldownExpanded == true
+    local readyCrafts, crafterCount = 0, 0
+    for _, tile in ipairs(tiles) do
+        if tile.best and tile.best.state == "ready" then readyCrafts = readyCrafts + 1 end
+        crafterCount = crafterCount + #tile.crafters
+    end
+    local shownTiles = expanded and addon.Model.ExpandCooldownTiles(tiles) or tiles
+    local emptyText = (expanded and crafterCount == 0) and Text["Nobody in the guild is known to craft a timegated recipe yet."]
+        or (#tiles == 0 and Text["Nothing to show."]) or nil
+    if mainFrame.cooldownGrid then mainFrame.cooldownGrid:SetTiles(shownTiles, expanded, emptyText) end
+    mainFrame.cooldownExpandButton:SetLabel(expanded and Text["One tile per craft"] or Text["One tile per crafter"])
+    mainFrame.offerCountText:SetText(Format(Text["{n} ready to ask"], { n = readyCrafts }))
+    mainFrame.offersEmptyText:SetShown(false)
+end
+
 local function refreshOffers()
     if not mainFrame or windowState.tab ~= "available" then return end
     local settings = interfaceSettings()
     local mode = addon.MiscTables.GetMode(settings)
+    local isGrid = addon.MiscTables.IsGrid(mode)
+    showMiscGrid(isGrid)
+    if isGrid then
+        currentMiscMode = mode
+        setDropdownText(mainFrame.miscModeButton, addon.MiscTables.ModeLabel(mode))
+        mainFrame.myProfessionsOnlyButton:SetShown(false)
+        if mainFrame.reputationFactionButton then mainFrame.reputationFactionButton:SetShown(false) end
+        for _, offerButton in ipairs({ mainFrame.dibsButton, mainFrame.hideOfferButton, mainFrame.whisperOwnerButton,
+            mainFrame.whisperHolderButton }) do
+            offerButton:SetShown(false)
+        end
+        mainFrame.offerSearchHint:SetText(Text["search craft or member"])
+        refreshCooldowns()
+        return
+    end
     local columnTable = addon.MiscTables.Table(mode)
     local filterState = { text = windowState.offerText, myProfessionsOnly = windowState.offerMyProfessionsOnly, me = me() }
     local miscRows
@@ -1512,6 +1568,7 @@ local function buildAvailableTab(availableTab)
         setDropdownText(columnsDropdown, Text["Columns"])
         columnsDropdown:SetPoint("TOPRIGHT", availableTab, "TOPRIGHT", -80, -10)
     end
+    mainFrame.miscColumnsButton = columnsDropdown
     mainFrame.offerCountText = createFontString(availableTab, "GameFontNormalSmall", "RIGHT")
     mainFrame.offerCountText:SetPoint("TOPRIGHT", availableTab, "TOPRIGHT", -4, -14)
 
@@ -1519,6 +1576,7 @@ local function buildAvailableTab(availableTab)
         MiscTables.Table(MiscTables.GetMode(interfaceSettings())).ClickHeader(interfaceSettings(), columnKey)
         refreshOffers()
     end)
+    mainFrame.miscHeader = miscHeader
     ---@param row table
     ---@param offerRow OfferViewRow
     local function fillOfferRow(row, offerRow)
@@ -1702,6 +1760,32 @@ local function buildAvailableTab(availableTab)
         end)
     end)
     mainFrame.whisperHolderButton:SetPoint("BOTTOMLEFT", 0, 0)
+
+    -- Cooldowns mode: the tile grid, a switch between one tile per craft and one per crafter, a short legend
+    mainFrame.cooldownExpandButton = createButton(availableTab, Text["One tile per crafter"], 170, 22, function()
+        local settings = interfaceSettings()
+        if settings then settings.cooldownExpanded = not settings.cooldownExpanded end
+        refreshOffers()
+    end)
+    mainFrame.cooldownExpandButton:SetPoint("LEFT", offerSearchBox, "RIGHT", 8, 0)
+    mainFrame.cooldownExpandButton:Hide()
+    local gridCreated, grid = pcall(addon.CooldownGrid.Create, availableTab, {
+        whisper = whisper,
+        timeAgo = timeAgo,
+        onExpire = function() if mainFrame:IsShown() then refreshOffers() end end,
+    })
+    if gridCreated then
+        mainFrame.cooldownGrid = grid
+        grid.frame:SetPoint("TOPLEFT", 0, -40); grid.frame:SetPoint("BOTTOMRIGHT", -26, 36)   -- the scroll bar sits to the right of the frame
+        grid.frame:Hide()
+    else
+        addon.Log.Error("window.cooldownGrid", "the cooldown grid could not be created", { error = tostring(grid) })
+    end
+    mainFrame.cooldownLegendText = createFontString(availableTab, "GameFontDisableSmall")
+    mainFrame.cooldownLegendText:SetPoint("BOTTOMLEFT", 4, 8); mainFrame.cooldownLegendText:SetPoint("RIGHT", availableTab, "RIGHT", -8, 0)
+    mainFrame.cooldownLegendText:SetText(Text["Glowing: someone online can craft it now. Badge: crafters ready / all. ?: someone has not shared a cooldown yet. Click to whisper, right-click to choose who."])
+    mainFrame.cooldownLegendText:SetWordWrap(true)
+    mainFrame.cooldownLegendText:Hide()
 end
 
 ------------------------------------------------------------------ Feedback tab: messages for the developer

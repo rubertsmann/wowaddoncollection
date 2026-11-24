@@ -33,6 +33,7 @@ Core\Data\Offers.lua
 Core\Data\Access.lua
 Core\Data\FactionHints.lua
 Core\Data\Reputation.lua
+Core\Data\CraftCooldowns.lua
 Core\Data\RecipeCheck.lua
 Core\Data\RecipeDrops.lua
 Core\Data\Feedback.lua
@@ -50,6 +51,7 @@ Core\Game\Drops.lua
 
 UI\SecureDock.lua
 UI\Table.lua
+UI\CooldownGrid.lua
 UI\Window.lua
 UI\Alerts.lua
 UI\DevProbe.lua

@@ -895,6 +895,174 @@ function Model.RecipeContact(crafters, myName)
     return nil
 end
 
+------------------------------------------------------------------ craft cooldowns (Misc Items, Cooldowns mode)
+
+-- Short time left for a tile, like an action button: "2d", "5h", "12m", "40s".
+---@param seconds number
+---@return string
+function Model.FormatCooldownShort(seconds)
+    if seconds >= 86400 then return math.floor(seconds / 86400) .. "d" end
+    if seconds >= 3600 then return math.floor(seconds / 3600) .. "h" end
+    if seconds >= 60 then return math.ceil(seconds / 60) .. "m" end
+    return math.max(math.ceil(seconds), 0) .. "s"
+end
+
+-- Time left for a tooltip: "2d 4h", "3h 12m", "12:30".
+---@param seconds number
+---@return string
+function Model.FormatCooldownLong(seconds)
+    seconds = math.max(math.floor(seconds + 0.5), 0)
+    if seconds >= 86400 then return ("%dd %dh"):format(math.floor(seconds / 86400), math.floor(seconds % 86400 / 3600)) end
+    if seconds >= 3600 then return ("%dh %dm"):format(math.floor(seconds / 3600), math.floor(seconds % 3600 / 60)) end
+    return ("%d:%02d"):format(math.floor(seconds / 60), seconds % 60)
+end
+
+---@class CooldownLookups
+---@field isOnline? fun(playerName: string): boolean|nil
+---@field spellName? fun(spellID: integer): string|nil
+---@field itemName? fun(itemID: integer): string|nil
+---@field itemIcon? fun(itemID: integer): any
+
+-- The craft's name in the viewer's language: "Transmute" for the shared transmute cooldown, else the recipe's or the
+-- crafted item's name from this client, else the English name from the data file.
+---@param group CraftCooldownGroup
+---@param lookups? CooldownLookups
+---@return string
+function Model.CooldownGroupName(group, lookups)
+    lookups = lookups or {}
+    if group.key == "transmute" then return addon.Text["Transmute"] end
+    local name = #group.recipes == 1 and lookups.spellName and lookups.spellName(group.recipes[1])
+    name = name or (lookups.itemName and lookups.itemName(group.produces))
+    return escape(name or group.name)
+end
+
+---@alias CooldownState "ready"|"cooling"|"unknown"
+
+---@class CooldownCrafter
+---@field who string raw player name
+---@field playerName string escaped short name
+---@field state CooldownState
+---@field readyAt? integer my clock; nil when unknown
+---@field remaining number seconds left (0 unless cooling)
+---@field estimated boolean the ready time comes from a seen cast, not from the game's cooldown
+---@field seen? integer my clock when the record was last received or read
+---@field online boolean
+---@field mine boolean
+
+---@class CooldownTile
+---@field key string group key (expanded tiles: group key .. "#" .. player)
+---@field group CraftCooldownGroup
+---@field name string escaped craft name, viewer's language
+---@field profession string profession label, viewer's language
+---@field icon any
+---@field crafters CooldownCrafter[] best first
+---@field best? CooldownCrafter whom a click whispers: online, not me, the best state
+---@field readyCount integer crafters ready right now
+---@field state "ready"|"cooling"|"unknown"|"none"
+---@field remaining number seconds until the soonest crafter is ready (cooling tiles)
+---@field duration number the length of the shown cooldown (for the sweep)
+---@field estimated boolean the shown cooldown is an estimate
+---@field mine boolean I am one of the crafters
+
+local STATE_RANK = { ready = 0, unknown = 1, cooling = 2 }
+
+---@param left CooldownCrafter
+---@param right CooldownCrafter
+---@return boolean
+local function crafterOrder(left, right)
+    if left.online ~= right.online then return left.online end
+    if left.state ~= right.state then return STATE_RANK[left.state] < STATE_RANK[right.state] end
+    if left.state == "cooling" and left.remaining ~= right.remaining then return left.remaining < right.remaining end
+    return left.playerName < right.playerName
+end
+
+-- One tile per timegated craft, in the data file's order. Crafters are everyone whose synced recipes contain the craft,
+-- plus everyone whose cooldown record lists it (item groups: whoever holds the item). Names come from peers and are
+-- escaped; craft names and icons come from this client.
+---@param state { text?: string, me?: string, now: integer }
+---@param lookups? CooldownLookups
+---@return CooldownTile[]
+function Model.BuildCooldownTiles(state, lookups)
+    lookups = lookups or {}
+    local CraftCooldowns, database = addon.CraftCooldowns, addon.Store.db
+    local now, searchWords = state.now, Model.SearchWords(state.text)
+    local groupsByCharacter = {}
+    for playerName, characterRecord in pairs(database.chars) do groupsByCharacter[playerName] = CraftCooldowns.GroupsOfCharacter(characterRecord) end
+    local tiles = {}
+    for _, group in ipairs(CraftCooldowns.GROUPS) do
+        local crafterNames = {}
+        for playerName, groups in pairs(groupsByCharacter) do if groups[group.key] then crafterNames[playerName] = true end end
+        for playerName, cooldownRecord in pairs(database.cds) do
+            if cooldownRecord.c[group.key] ~= nil then crafterNames[playerName] = true end
+        end
+        local crafters, readyCount, mine, allNames = {}, 0, false, {}
+        for playerName in pairs(crafterNames) do
+            local cooldownRecord = database.cds[playerName]
+            local readyAt = cooldownRecord and cooldownRecord.c[group.key]
+            local crafterState = readyAt == nil and "unknown" or (readyAt <= now and "ready") or "cooling"
+            local isMine = playerName == state.me
+            local crafter = { who = playerName, playerName = escape(addon.Utility.ShortName(playerName) or playerName),
+                state = crafterState, readyAt = readyAt, remaining = crafterState == "cooling" and readyAt - now or 0,
+                estimated = cooldownRecord and cooldownRecord.e[group.key] == true or false,
+                seen = cooldownRecord and cooldownRecord.seen, mine = isMine,
+                online = isMine or (lookups.isOnline and lookups.isOnline(playerName) == true) or false }
+            if crafterState == "ready" then readyCount = readyCount + 1 end
+            if isMine then mine = true end
+            crafters[#crafters + 1] = crafter
+            allNames[#allNames + 1] = crafter.playerName
+        end
+        table.sort(crafters, crafterOrder)
+        local name = Model.CooldownGroupName(group, lookups)
+        local profession = escape(addon.Names.Profession(group.skillLine))
+        if Model.MatchesWords(searchWords, { name, group.name, profession, table.concat(allNames, " ") }) then
+            local tile = { key = group.key, group = group, name = name, profession = profession, crafters = crafters,
+                readyCount = readyCount, mine = mine, remaining = 0, duration = group.fallback, estimated = false,
+                icon = lookups.itemIcon and lookups.itemIcon(group.produces) or nil }
+            for _, crafter in ipairs(crafters) do
+                if crafter.online and not crafter.mine then tile.best = crafter break end
+            end
+            if #crafters == 0 then tile.state = "none"
+            elseif readyCount > 0 then tile.state = "ready"
+            else
+                -- the soonest cooldown among the crafters (online ones first: they are the ones who can be asked)
+                local soonest
+                for _, crafter in ipairs(crafters) do
+                    if crafter.state == "cooling" and (not soonest or (crafter.online and not soonest.online)
+                        or (crafter.online == soonest.online and crafter.remaining < soonest.remaining)) then
+                        soonest = crafter
+                    end
+                end
+                if soonest then
+                    tile.state, tile.remaining, tile.estimated = "cooling", soonest.remaining, soonest.estimated
+                    tile.duration = math.max(group.fallback, soonest.remaining)
+                else
+                    tile.state = "unknown"
+                end
+            end
+            tiles[#tiles + 1] = tile
+        end
+    end
+    return tiles
+end
+
+-- One tile per crafter instead of one per craft (the grid's "every crafter" view), crafters in the same order.
+---@param tiles CooldownTile[]
+---@return CooldownTile[]
+function Model.ExpandCooldownTiles(tiles)
+    local expanded = {}
+    for _, tile in ipairs(tiles) do
+        for _, crafter in ipairs(tile.crafters) do
+            local crafterState = crafter.state
+            expanded[#expanded + 1] = { key = tile.key .. "#" .. crafter.who, group = tile.group, name = tile.name,
+                profession = tile.profession, icon = tile.icon, crafters = { crafter },
+                best = (crafter.online and not crafter.mine) and crafter or nil, readyCount = crafterState == "ready" and 1 or 0,
+                state = crafterState, remaining = crafter.remaining, estimated = crafter.estimated, mine = crafter.mine,
+                duration = math.max(tile.group.fallback, crafter.remaining), crafter = crafter }
+        end
+    end
+    return expanded
+end
+
 -- Text inserted into a whisper. link: a hyperlink built by THIS client (Api.RecipeLink), else the recipe name as plain
 -- "[Name]" with every "|" and bracket removed, so text a peer sent can never become a link or escape code in chat.
 ---@param link string|nil

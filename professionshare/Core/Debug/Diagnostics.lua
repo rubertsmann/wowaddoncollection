@@ -255,6 +255,10 @@ function Diagnostics.Report(options)
                 local pull = communication.sync.wantedReputation[playerName]
                 addLine("pulled reputation record of %s (rev %s) %ds ago", playerName, tostring(pull.revision), now - (pull.startedAt or now))
             end
+            for _, playerName in ipairs(sortedKeys(communication.sync.wantedCooldowns or {})) do
+                local pull = communication.sync.wantedCooldowns[playerName]
+                addLine("pulled cooldown record of %s (rev %s) %ds ago", playerName, tostring(pull.revision), now - (pull.startedAt or now))
+            end
             addLine("scheduled sends: %d", #(communication.sync.pending or {}))
         end
     end
@@ -295,6 +299,19 @@ function Diagnostics.Report(options)
         local reputationRecord = database.rep[playerName]
         addLine("%s%s rev=%s factions=%d", playerName, playerName == myName and " (me)" or "", tostring(reputationRecord.rev),
             count(reputationRecord.f))
+    end
+    addLine("")
+    addLine("--- craft cooldown records held (%d) ---", count(database.cds or {}))
+    for _, playerName in ipairs(sortedKeys(database.cds or {})) do
+        local cooldownRecord = database.cds[playerName]
+        local groupParts = {}
+        for _, groupKey in ipairs(sortedKeys(cooldownRecord.c or {})) do
+            local readyAt = cooldownRecord.c[groupKey]
+            groupParts[#groupParts + 1] = ("%s=%s%s"):format(groupKey, readyAt == 0 and "ready" or tostring(readyAt - now) .. "s",
+                cooldownRecord.e and cooldownRecord.e[groupKey] and "(est)" or "")
+        end
+        addLine("%s%s rev=%s %s", playerName, playerName == myName and " (me)" or "", tostring(cooldownRecord.rev),
+            table.concat(groupParts, ","))
     end
     -- feedback: only counts (the text is for the developer, not for every exported report)
     local feedbackRecordCount, feedbackMessageCount = addon.Feedback.Counts()

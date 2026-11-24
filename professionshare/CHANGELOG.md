@@ -2,7 +2,16 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
-## 1.4.0 (unreleased, protocol 2.7, schema 8)
+## 1.4.0 (unreleased, protocol 2.8, schema 9)
+- New **Cooldowns** mode in the Misc Items tab (feature 028): a grid of the timegated crafts (all transmutes as one
+  tile, Mooncloth, Salt Shaker) with a cooldown sweep, time left, a "ready / all" badge and a glow while an online
+  crafter is ready; a flash when a cooldown runs out. Tooltip: every crafter (online dot, time left, ready time,
+  "updated ... ago"); click whispers the best crafter with the craft link, right-click picks a crafter; a switch shows
+  one tile per crafter. Each client reads its own cooldowns from the game (spell, profession window, item; a seen cast
+  without a reported cooldown uses the known duration as an estimate) and shares them (`HELLO.crev`, `WANTC`/`CDS`);
+  the record carries the sender's time so differing clocks do not matter. `/ps cd [scan]` probes it; dev build: Dev
+  tools -> fake crafters in every state and a cooldown that ends in 20 s.
+- Protocol 2.8 (additive: 2.7 peers ignore `crev` and drop `WANTC`/`CDS`), schema 9 (additive: `cds`).
 - New **Reputation** list in the Misc Items tab (feature 025): one row per guild member and faction (raid factions,
   recipe vendors, home cities, goblin towns, battlegrounds) with Faction, Player, Standing, Progress and Updated
   (hidden by default) columns. Every column sorts (Standing by level, then progress), a dropdown filters one faction,

@@ -171,7 +171,7 @@ return {
             access = { ["A-R"] = { name = "A-R", rev = BIG - 5, keys = { [7146] = { bag = true } }, att = {} } },
             feedback = {}, feedbackState = {}, feedbackDelivered = {} }
         local out, status = addon.Store.Init(sv)
-        harness.equal(status, "migrated"); harness.equal(out.schema, 8)
+        harness.equal(status, "migrated"); harness.equal(out.schema, addon.Store.SCHEMA)
         harness.truthy(out.access["A-R"]); harness.equal(type(out.rep), "table")
         local sv2 = { schema = 8, rep = {
             ["A-R"] = { name = "A-R", rev = BIG - 5, f = { [THORIUM] = { s = 6, v = 1, m = 12000 } } },

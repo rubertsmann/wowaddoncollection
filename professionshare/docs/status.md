@@ -15,6 +15,11 @@
 
 **Feature 027 (Recipe drop alerts; protocol 2.7):** done. OFFLINE (`tests/test_recipe_drops.lua`, `test_load.lua`) and IN-GAME with the dev triggers on one client. NOT verified: a real drop, two members (accepted by the user). Review: `review/recipe-drops.md`. Checklist: `features/027-recipe-drop-alerts/verify.md`.
 
+**Feature 028 (Misc Items: Cooldowns grid; protocol 2.8, schema 9):** built and proven OFFLINE (`tests/test_craft_cooldowns.lua`,
+`test_craft_cooldowns_model.lua`, `test_load.lua`; suite `331 passed`). NOT verified in game: the recipe/spell ids and durations
+(`/ps cd`), whether `GetSpellCooldown` reports tradeskill cooldowns after a relog, the grid look and effects, two-client sync.
+Checklist: `features/028-craft-cooldowns-grid/verify.md`.
+
 **Feature 026 (Dev tools menu, recipe probe; dev build only):** done. OFFLINE plus IN-GAME (recipe tooltips on Forever deDE: red requirement line, bind on pickup, loot formats). Open: a real recipe loot line, "Already known". Checklist: `features/026-debug-fake-data-menu-and-recipe-probe/verify.md`.
 
 **Feature 025 (Misc Items: Reputation list with faction hints; protocol 2.6, schema 8):** built and proven OFFLINE (`tests/test_reputation.lua`, `test_reputation_model.lua`, `test_reputation_api.lua`, `test_load.lua`). NOT verified in game: GetFactionInfoByID on Forever, the faction ids (`/ps rep`), the list look, filter dropdown and hint tooltip, two-client sync. Hint data is static and unverified against Forever. Checklist: `features/025-reputation-list-with-faction-hints/verify.md`.

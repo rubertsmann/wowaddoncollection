@@ -14,6 +14,8 @@ local addonName, addon = ...
 --   OFFERS {offers}             a character's offers/dibs record (2.1+)
 --   HELLO.arev, WANTA {names, via?}, ACCESS {access}   a character's dungeon keys and raid attunements (2.4+)
 --   HELLO.rrev, WANTR {names, via?}, REP {rep}   a character's faction standings (2.6+)
+--   HELLO.crev, WANTC {names, via?}, CDS {cds, at}   a character's craft cooldowns; `at` = the sender's server time when
+--                               it answered, so the receiver converts the ready times to its own clock (2.8+)
 --   HELLO.frev, WANTF {names, via?}, FEEDBACK {feedback}   a character's messages for the developer (2.5+); only the
 --                               developer's client pulls them (Feedback.IsReader)
 -- Protocol 2.3 also had HELLO.grev, WANTG and GAMES (guild games, 0.6.0). They moved to the GuildGames addon: a 0.6
@@ -27,7 +29,7 @@ local addonName, addon = ...
 ---@field random fun(): number in [0, 1)
 ---@field store StoreModule
 ---@field orders OrderBoard
----@field onChange fun(kind: "chars"|"offers"|"orders"|"access"|"rep"|"feedback")
+---@field onChange fun(kind: "chars"|"offers"|"orders"|"access"|"rep"|"cds"|"feedback")
 ---@field me string|fun(): string|nil my canonical name, or a function returning it
 
 ---@class SyncModule
@@ -172,6 +174,30 @@ local function reputationKind()
     }
 end
 
+-- The craft cooldown record (protocol 2.8): ready times in the owner's clock. The answer carries the owner's server time
+-- (`at`); the receiver keeps the time left and adds it to its own clock (CraftCooldowns.FromWire).
+---@return RecordKind
+local function cooldownKind()
+    local CraftCooldowns = addon.CraftCooldowns
+    return {
+        name = "cds", label = "cds", helloField = "crev", absentNote = "cds: peer has none",
+        requestType = "WANTC", answerType = "CDS", recordField = "cds",
+        noneNote = "asked for my cooldown record but I have none",
+        heldRevision = function(playerName)
+            local cooldownRecord = CraftCooldowns.Get(playerName)
+            return cooldownRecord and cooldownRecord.rev or 0
+        end,
+        myRecord = function(myName) return CraftCooldowns.Get(myName) end,
+        sanitize = CraftCooldowns.Sanitize,
+        store = function(sync, cooldownRecord, message)
+            return CraftCooldowns.Put(CraftCooldowns.FromWire(cooldownRecord, message.at, sync.environment.now()))
+        end,
+        answer = function(sync, cooldownRecord)
+            return { t = "CDS", cds = CraftCooldowns.ToWire(cooldownRecord), at = sync.environment.now() }
+        end,
+    }
+end
+
 -- The feedback record (protocol 2.5): messages for the developer. Only a reader (the developer's client) pulls them:
 -- for everyone else every announced revision counts as held, and a record that still arrives (a pull retry answered on
 -- GUILD reaches every member) is not stored.
@@ -286,6 +312,7 @@ function Sync.New(environment)
     sync.wantedOffers = sync:AddRecordKind(offersKind())
     sync.wantedAccess = sync:AddRecordKind(accessKind())
     sync.wantedReputation = sync:AddRecordKind(reputationKind())
+    sync.wantedCooldowns = sync:AddRecordKind(cooldownKind())
     sync.wantedFeedback = sync:AddRecordKind(feedbackKind())
     sync:AddHelloHook(ordersHelloHook(environment))
     sync:AddHandler("OPUSH", onOrderPush)

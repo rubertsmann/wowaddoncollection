@@ -966,6 +966,190 @@ function Api.StandingLabel(standing)
     return nil
 end
 
+------------------------------------------------------------------ craft cooldowns (CraftCooldowns)
+
+-- Right after login the game answers "no cooldown" for every spell until its cooldown data has arrived. A "ready" read
+-- from a spell is only believed once Events has seen the first SPELL_UPDATE_COOLDOWN (or enough time has passed);
+-- before that, a stored cooling value must not be replaced by a false "ready". Readings that show a cooldown are always
+-- believed.
+Api.cooldownState = { trusted = false }
+
+-- a cooldown shorter than this is the global cooldown, not the craft's
+local GLOBAL_COOLDOWN_SECONDS = 2
+
+-- seconds left from a (start, duration) pair in GetTime() terms; 0 = no cooldown, nil = the values are unusable
+---@param start any
+---@param duration any
+---@return number|nil
+local function secondsLeft(start, duration)
+    if type(start) ~= "number" or type(duration) ~= "number" or not GetTime then return nil end
+    if start <= 0 or duration <= GLOBAL_COOLDOWN_SECONDS then return 0 end
+    local remaining = start + duration - GetTime()
+    if remaining <= 0 then return 0 end
+    return math.min(remaining, duration)   -- a start time after "now" (clock wrap on long uptimes) still ends within duration
+end
+
+-- the cooldown of a spell I know: seconds left, or nil when the client gives no usable answer
+---@param spellID integer
+---@return number|nil
+local function spellSecondsLeft(spellID)
+    if C_Spell and C_Spell.GetSpellCooldown then
+        local information = tryCall("C_Spell.GetSpellCooldown", C_Spell.GetSpellCooldown, spellID)
+        if type(information) == "table" then return secondsLeft(information.startTime, information.duration) end
+    end
+    if GetSpellCooldown then
+        local start, duration = tryCall("GetSpellCooldown", GetSpellCooldown, spellID)
+        return secondsLeft(start, duration)
+    end
+    return nil
+end
+
+---@param itemID integer
+---@return number|nil
+local function itemSecondsLeft(itemID)
+    local getItemCooldown = (C_Container and C_Container.GetItemCooldown) or GetItemCooldown
+    if not getItemCooldown then return nil end
+    local start, duration = tryCall("GetItemCooldown", getItemCooldown, itemID)
+    return secondsLeft(start, duration)
+end
+
+-- the open profession window's own cooldown for a recipe (nil: window closed, recipe not in it, or no answer)
+---@param recipeID integer
+---@return number|nil
+local function tradeSkillSecondsLeft(recipeID)
+    if not Api.open.tradeskill then return nil end
+    if C_TradeSkillUI and C_TradeSkillUI.GetRecipeCooldown then
+        local information = C_TradeSkillUI.GetRecipeInfo and tryCall("C_TradeSkillUI.GetRecipeInfo", C_TradeSkillUI.GetRecipeInfo, recipeID)
+        if type(information) ~= "table" or not information.learned then return nil end
+        local cooldown = tryCall("C_TradeSkillUI.GetRecipeCooldown", C_TradeSkillUI.GetRecipeCooldown, recipeID)
+        if type(cooldown) == "number" then return math.max(cooldown, 0) end
+        return 0   -- learned, in the open window, and the window reports no cooldown
+    end
+    if GetNumTradeSkills and GetTradeSkillCooldown and GetTradeSkillRecipeLink then
+        for skillIndex = 1, (tryCall("GetNumTradeSkills", GetNumTradeSkills) or 0) do
+            local link = tryCall("GetTradeSkillRecipeLink", GetTradeSkillRecipeLink, skillIndex)
+            if type(link) == "string" and tonumber(link:match("|H%a+:(%d+)")) == recipeID then
+                local cooldown = tryCall("GetTradeSkillCooldown", GetTradeSkillCooldown, skillIndex)
+                return type(cooldown) == "number" and math.max(cooldown, 0) or 0
+            end
+        end
+    end
+    return nil
+end
+
+---@param spellID integer
+---@return boolean
+local function knowsSpell(spellID)
+    if IsPlayerSpell and tryCall("IsPlayerSpell", IsPlayerSpell, spellID) then return true end
+    if IsSpellKnown and tryCall("IsSpellKnown", IsSpellKnown, spellID) then return true end
+    return false
+end
+
+---@class CraftCooldownProbe
+---@field known boolean
+---@field byRecipes boolean I know a recipe of the group (my stored recipes)
+---@field bySpell boolean the client says I know one of its spells
+---@field itemCount? integer
+---@field spell? number seconds left from the spell cooldown
+---@field trade? number seconds left from the open profession window
+---@field item? number seconds left from the item cooldown
+---@field reading? CooldownReading what was taken
+
+-- My craft cooldowns as the game reports them right now.
+-- Returns known (group key -> true for each group I can do), readings (group key -> CooldownReading for the groups the
+-- game gave a believable answer for) and the raw values per group for /ps cd.
+---@return table<string, boolean> known
+---@return table<string, CooldownReading> readings
+---@return table<string, CraftCooldownProbe> probes
+function Api.ReadCraftCooldowns()
+    local CraftCooldowns = addon.CraftCooldowns
+    local myName = addon.Utility.Me()
+    local myRecord = myName and addon.Store.db and addon.Store.db.chars[myName]
+    local byRecipes = CraftCooldowns.GroupsOfCharacter(myRecord)
+    local known, readings, probes = {}, {}, {}
+    for _, group in ipairs(CraftCooldowns.GROUPS) do
+        local probe = { byRecipes = byRecipes[group.key] == true, bySpell = false }
+        probes[group.key] = probe
+        for _, recipeID in ipairs(group.recipes) do
+            if knowsSpell(recipeID) then probe.bySpell = true end
+            local tradeLeft = tradeSkillSecondsLeft(recipeID)
+            if tradeLeft then probe.trade = math.max(probe.trade or 0, tradeLeft) end
+            if probe.byRecipes or knowsSpell(recipeID) then
+                local spellLeft = spellSecondsLeft(recipeID)
+                if spellLeft then probe.spell = math.max(probe.spell or 0, spellLeft) end
+            end
+        end
+        if group.item then
+            probe.itemCount = Api.ItemCount(group.item)
+            if probe.itemCount > 0 then probe.item = itemSecondsLeft(group.item) end
+        end
+        probe.known = probe.byRecipes or probe.bySpell or (probe.itemCount or 0) > 0 or probe.trade ~= nil
+        if probe.known then
+            known[group.key] = true
+            -- the profession window is the most direct answer; then the spell, then the item
+            local remaining, source = probe.trade, "trade"
+            if remaining == nil then remaining, source = probe.spell, "spell" end
+            if remaining == nil then remaining, source = probe.item, "item" end
+            local believable = remaining ~= nil and (remaining > 0 or source == "trade" or Api.cooldownState.trusted)
+            if believable then
+                probe.reading = { remaining = remaining, source = source }
+                readings[group.key] = probe.reading
+            end
+        end
+    end
+    return known, readings, probes
+end
+
+---@class CooldownRecipeProbe
+---@field recipeID integer
+---@field name string|nil
+---@field cooldown number seconds left (0 = ready)
+
+-- Every learned recipe of the OPEN profession window that has a cooldown (running or not, as far as the client says),
+-- so /ps cd can show the real recipe ids on this client. Empty when no window is open or the API is missing.
+---@return CooldownRecipeProbe[]
+function Api.OpenWindowCooldownRecipes()
+    local found = {}
+    if not Api.open.tradeskill then return found end
+    if C_TradeSkillUI and C_TradeSkillUI.GetAllRecipeIDs and C_TradeSkillUI.GetRecipeCooldown then
+        for _, recipeID in ipairs(tryCall("C_TradeSkillUI.GetAllRecipeIDs", C_TradeSkillUI.GetAllRecipeIDs) or {}) do
+            local information = tryCall("C_TradeSkillUI.GetRecipeInfo", C_TradeSkillUI.GetRecipeInfo, recipeID)
+            if type(information) == "table" and information.learned then
+                local cooldown, isDayCooldown, charges, maximumCharges =
+                    tryCall("C_TradeSkillUI.GetRecipeCooldown", C_TradeSkillUI.GetRecipeCooldown, recipeID)
+                if type(cooldown) == "number" or isDayCooldown or (type(maximumCharges) == "number" and maximumCharges > 0)
+                    or addon.CraftCooldowns.GroupOfRecipe(recipeID) then
+                    found[#found + 1] = { recipeID = recipeID, name = information.name, cooldown = tonumber(cooldown) or 0,
+                        charges = charges, dayCooldown = isDayCooldown }
+                end
+            end
+        end
+    elseif GetNumTradeSkills and GetTradeSkillCooldown then
+        for skillIndex = 1, (tryCall("GetNumTradeSkills", GetNumTradeSkills) or 0) do
+            local cooldown = tryCall("GetTradeSkillCooldown", GetTradeSkillCooldown, skillIndex)
+            local link = GetTradeSkillRecipeLink and tryCall("GetTradeSkillRecipeLink", GetTradeSkillRecipeLink, skillIndex)
+            local recipeID = type(link) == "string" and tonumber(link:match("|H%a+:(%d+)"))
+            if recipeID and (type(cooldown) == "number" or addon.CraftCooldowns.GroupOfRecipe(recipeID)) then
+                found[#found + 1] = { recipeID = recipeID, name = (tryCall("GetTradeSkillInfo", GetTradeSkillInfo, skillIndex)),
+                    cooldown = tonumber(cooldown) or 0 }
+            end
+        end
+    end
+    return found
+end
+
+-- The chat link for a timegated craft, built by THIS client: the recipe's link for a one-recipe group, else (and as the
+-- fallback) the crafted item's link; nil when neither is available yet.
+---@param group CraftCooldownGroup
+---@return string|nil
+function Api.CraftLink(group)
+    if #group.recipes == 1 then
+        local link = Api.RecipeLink(group.recipes[1], group.produces)
+        if link then return link end
+    end
+    return Api.ItemLink(group.produces)
+end
+
 ------------------------------------------------------------------ craft and whisper from lists
 
 ---@param text any

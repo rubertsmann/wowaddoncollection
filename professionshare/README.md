@@ -32,6 +32,12 @@ shared crafting-order board.
     Thorium Brotherhood, Timbermaw, Cenarion Circle, Zandalar, Brood of Nozdormu, home cities, goblin towns,
     battlegrounds): one row per member and faction, sortable by standing, filtered by a faction dropdown and the
     search box. Click a name to whisper that member. Hover a row to see what each standing unlocks (static hints, `Core/Data/FactionHints.lua`).
+  * **Cooldowns** – a grid of the timegated crafts (Transmute, Mooncloth, Salt Shaker), one action-button-sized tile per
+    craft (or, with the switch, one per crafter). Each tile shows the cooldown sweep and time left of the best crafter,
+    a "ready / all" badge, and glows while someone online can craft it now. Hover for every crafter with their time
+    left, the exact ready time and when it was last updated; click to whisper the best crafter with the craft's link,
+    right-click to pick one. Each client reads its own cooldowns from the game and shares them; `/ps cd` shows what
+    the game reports.
 * **Recipe drop alerts** – when a tradeable recipe drops into your bags, guild members with the addon who can learn it
   get a chat line and/or the minimap news icon. Hover the recipe (in the bags or the chat line) to see who answered:
   up to 3 names with their skill, green = can learn it now, red = skill too low, "..." when more. Each client decides
@@ -86,11 +92,11 @@ The UI is available in English and German; profession and recipe names always fo
   |---|---|---|
   | `Core/Base/` | identity, shared helpers, logging, localization | Init, Utility, Log, Locale (+ `Locales/`) |
   | `Core/Debug/` | network trace, diagnostic report | Trace, Diagnostics |
-  | `Core/Data/` | SavedVariables schema and records | Store, Orders, Offers, Access, Reputation, FactionHints (static hint data), RecipeCheck, RecipeDrops, Feedback, Scanner |
+  | `Core/Data/` | SavedVariables schema and records | Store, Orders, Offers, Access, Reputation, FactionHints (static hint data), CraftCooldowns (timegated crafts + cooldown records), RecipeCheck, RecipeDrops, Feedback, Scanner |
   | `Core/Net/` | addon-channel communication on LibGuildSync | Codec, Guard, Sync, Communication |
   | `Core/Game/` | the WoW API boundary | Api, Events, Drops |
   | `Core/View/` | view-models for the UI (pure) | Model, Names, ItemText, Notify |
-  | `UI/` | frames | Window, Alerts, DevProbe (dev build only) |
+  | `UI/` | frames | Window, CooldownGrid, Alerts, DevProbe (dev build only) |
   | `Libs/LibGuildSync/` | shared with GuildGames: transport, record-pull engine, names, log, trace, widgets | junction to `../libguildsync` in a working copy (`tools/deploy.ps1`), real files in the zip |
 
   Everything in `Core/` except `Core/Game/` is pure Lua and runs in the offline tests.

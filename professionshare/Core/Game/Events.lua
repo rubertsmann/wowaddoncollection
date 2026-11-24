@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- Internal pub/sub + WoW event wiring. Scans are debounced; the guild gets a HELLO when my data changes.
--- Internal events: DATA_CHANGED(kind), LOCAL_CHANGED, OFFERS_CHANGED, ACCESS_CHANGED, REPUTATION_CHANGED, FEEDBACK_CHANGED, WINDOW_OPENED, TRADESKILL(isOpen), ITEM_INFO, SPELL_INFO.
+-- Internal events: DATA_CHANGED(kind), LOCAL_CHANGED, OFFERS_CHANGED, ACCESS_CHANGED, REPUTATION_CHANGED, COOLDOWNS_CHANGED, FEEDBACK_CHANGED, WINDOW_OPENED, TRADESKILL(isOpen), ITEM_INFO, SPELL_INFO.
 -- Every handler runs protected: an error in one handler is logged (Log.Exception, with stack) and the others still run.
 ---@class EventsModule
 local Events = {}
@@ -13,7 +13,7 @@ addon.Events = Events
 do
     local missingModules = {}
     for _, moduleName in ipairs({ "Utility", "Log", "Locale", "Store", "Names", "Api", "Scanner", "Codec", "Guard", "Orders",
-        "Offers", "Access", "FactionHints", "Reputation", "RecipeCheck", "RecipeDrops", "Sync", "Model", "Communication", "Trace", "Diagnostics" }) do
+        "Offers", "Access", "FactionHints", "Reputation", "CraftCooldowns", "RecipeCheck", "RecipeDrops", "Sync", "Model", "Communication", "Trace", "Diagnostics" }) do
         if not addon[moduleName] then missingModules[#missingModules + 1] = moduleName end
     end
     if #missingModules > 0 then
@@ -129,12 +129,51 @@ local function scheduleReputationScan(delaySeconds)
 end
 Events.ScanReputation = scheduleReputationScan
 
+-- Craft cooldowns: read from the game whenever it may have changed (login, cooldown updates, the profession window, a cast
+-- of a timegated craft). A reading the game does not answer keeps the stored value (CraftCooldowns.Update).
+-- castGroupKey: a group whose spell was just cast; when the game reports no cooldown for it, the fallback is used.
+local cooldownReadPending, pendingCastGroups = false, {}
+---@param delaySeconds? number
+---@param castGroupKey? string
+local function scheduleCooldownRead(delaySeconds, castGroupKey)
+    if castGroupKey then pendingCastGroups[castGroupKey] = true end
+    if cooldownReadPending then return end
+    cooldownReadPending = true
+    C_Timer.After(delaySeconds or 2, function()
+        cooldownReadPending = false
+        local castGroups = pendingCastGroups
+        pendingCastGroups = {}
+        local myName = addon.Utility.Me()
+        if not myName then return end
+        local ok, known, readings = addon.Log.Protected("events.cooldownRead", "the craft cooldown read failed",
+            addon.Api.ReadCraftCooldowns)
+        if not ok then return end
+        for groupKey in pairs(castGroups) do
+            local group = addon.CraftCooldowns.Group(groupKey)
+            local reading = readings[groupKey]
+            if group and not (reading and reading.remaining > 0) then
+                known[groupKey] = true
+                readings[groupKey] = { remaining = group.fallback, source = "cast" }
+                addon.Log.Information("events.cooldownRead", "a timegated craft was cast but the game reports no cooldown; the fallback is used",
+                    { group = groupKey, seconds = group.fallback })
+            end
+        end
+        if addon.CraftCooldowns.Update(myName, known, readings, addon.Utility.Now()) then
+            addon.Log.Debug("events.cooldownRead", "my craft cooldowns changed")
+            Events.Fire("COOLDOWNS_CHANGED")
+            Events.Fire("DATA_CHANGED", "cds-local")
+        end
+    end)
+end
+Events.ReadCooldowns = scheduleCooldownRead
+
 -- My own changes are announced coalesced (at most one HELLO per Channel.HELLO_INTERVAL_SECONDS): while crafting, every
 -- skill-up changes my record, and each announcement makes every online member pull the whole record again.
 Events.On("LOCAL_CHANGED", function() addon.Communication.RequestHelloSoon() end)
 Events.On("OFFERS_CHANGED", function() addon.Communication.RequestHelloSoon() end)
 Events.On("ACCESS_CHANGED", function() addon.Communication.RequestHelloSoon() end)
 Events.On("REPUTATION_CHANGED", function() addon.Communication.RequestHelloSoon() end)
+Events.On("COOLDOWNS_CHANGED", function() addon.Communication.RequestHelloSoon() end)
 Events.On("FEEDBACK_CHANGED", function() addon.Communication.RequestHelloSoon() end)
 -- a record from a peer arrived: drop MY dibs on items that are gone (the new record may have removed them)
 Events.On("DATA_CHANGED", function(kind)
@@ -214,6 +253,12 @@ function onGameEvent.PLAYER_LOGIN()
         addon.Communication.Start()
         scheduleItemScan(0.5)
         scheduleReputationScan(1.0)
+        scheduleCooldownRead(2.0)
+        -- if no cooldown update came by now, "ready" readings are believed anyway (nothing was cooling)
+        C_Timer.After(20, function()
+            addon.Api.cooldownState.trusted = true
+            scheduleCooldownRead(0.1)
+        end)
         addon.Communication.RequestHello(true, true)  -- isLogin = true: online peers answer with their own HELLO
         if changed then Events.Fire("DATA_CHANGED", "chars") end
     end)
@@ -235,6 +280,7 @@ function onGameEvent.TRADE_SKILL_SHOW()
     addon.Log.Debug("events.tradeSkill", "a profession window opened")
     addon.Api.open.tradeskill = true
     scheduleProfessionScan(1.5)
+    scheduleCooldownRead(1.5)
     Events.Fire("TRADESKILL", true)   -- Orders tab: select a pending recipe, switch the Craft button
 end
 function onGameEvent.TRADE_SKILL_CLOSE()
@@ -295,6 +341,20 @@ function onGameEvent.GUILDBANKBAGSLOTS_CHANGED() scheduleItemScan(1.5) end
 function onGameEvent.AUCTION_OWNED_LIST_UPDATE() scheduleItemScan(1.5) end
 function onGameEvent.OWNED_AUCTIONS_UPDATED() scheduleItemScan(1.5) end
 function onGameEvent.UPDATE_FACTION() scheduleReputationScan(5) end
+-- the first cooldown update after login means the client's cooldown data has arrived; it also fires when one starts
+function onGameEvent.SPELL_UPDATE_COOLDOWN()
+    addon.Api.cooldownState.trusted = true
+    scheduleCooldownRead(2)
+end
+function onGameEvent.BAG_UPDATE_COOLDOWN() scheduleCooldownRead(2) end
+function onGameEvent.UNIT_SPELLCAST_SUCCEEDED(unit, _, spellID)
+    if unit ~= "player" then return end
+    local group = addon.CraftCooldowns.GroupOfCast(spellID)
+    if group then
+        addon.Log.Information("events.cooldownCast", "a timegated craft was cast", { group = group.key, spellID = spellID })
+        scheduleCooldownRead(1.5, group.key)
+    end
+end
 -- an attunement quest was handed in (the completed-quest flag is set a moment later)
 function onGameEvent.QUEST_TURNED_IN() scheduleItemScan(3) end
 
@@ -400,6 +460,55 @@ addon.SlashCommands.rep = function(arguments)
     local recordCount, standingCount = Reputation.Counts()
     addon.Print(("record rev %s; %d reputation records (%d standings) known from the guild"):format(
         tostring(myRecord and myRecord.rev), recordCount, standingCount))
+end
+
+-- /ps cd [scan]: what the craft cooldown read sees on this client: the raw values per group, what was taken, my stored
+-- record; with a profession window open also every recipe in it that has a cooldown (the in-game probe for the recipe
+-- ids, the APIs and the durations).
+addon.SlashCommands.cd = function(arguments)
+    local Api, CraftCooldowns = addon.Api, addon.CraftCooldowns
+    local myName = addon.Utility.Me()
+    local now = addon.Utility.Now()
+    local ok, known, readings, probes = addon.Log.Protected("events.cooldownCommand", "the craft cooldown read failed",
+        Api.ReadCraftCooldowns)
+    if not ok then addon.Print("read failed: " .. tostring(known)) return end
+    if (arguments or ""):match("^%s*scan") and myName then
+        local changed = CraftCooldowns.Update(myName, known, readings, now)
+        if changed then Events.Fire("COOLDOWNS_CHANGED") end
+        Events.Fire("DATA_CHANGED", "cds-local")
+        addon.Print("scan: " .. (changed and "updated" or "unchanged"))
+    end
+    local function yesOrNo(value) return value and "yes" or "NO" end
+    addon.Print(("APIs: C_Spell.GetSpellCooldown %s, GetSpellCooldown %s, item cooldown %s, C_TradeSkillUI.GetRecipeCooldown %s, IsPlayerSpell %s, overlay glow %s"):format(
+        yesOrNo(C_Spell and C_Spell.GetSpellCooldown), yesOrNo(GetSpellCooldown),
+        yesOrNo((C_Container and C_Container.GetItemCooldown) or GetItemCooldown),
+        yesOrNo(C_TradeSkillUI and C_TradeSkillUI.GetRecipeCooldown), yesOrNo(IsPlayerSpell), yesOrNo(ActionButton_ShowOverlayGlow)))
+    addon.Print(("clock: server %s, local %s (difference %ss); cooldown data trusted %s; profession window open %s"):format(
+        tostring(now), tostring(time and time()), tostring(time and (time() - now)), yesOrNo(Api.cooldownState.trusted),
+        yesOrNo(Api.open.tradeskill)))
+    local myRecord = myName and CraftCooldowns.Get(myName)
+    local function seconds(value) return value and ("%ds"):format(math.floor(value + 0.5)) or "-" end
+    for _, group in ipairs(CraftCooldowns.GROUPS) do
+        local probe = probes[group.key]
+        local stored = myRecord and myRecord.c[group.key]
+        local storedText = stored == nil and "-" or (stored == 0 and "ready")
+            or (stored <= now and "ready (passed)") or (addon.Model.FormatCooldownLong(stored - now))
+        addon.Print(("%s: known %s (recipes %s, spell %s%s) | spell %s, window %s, item %s -> taken %s | stored %s%s%s"):format(
+            group.key, yesOrNo(probe.known), yesOrNo(probe.byRecipes), yesOrNo(probe.bySpell),
+            group.item and (", item held " .. tostring(probe.itemCount)) or "",
+            seconds(probe.spell), seconds(probe.trade), seconds(probe.item),
+            probe.reading and (seconds(probe.reading.remaining) .. " from " .. probe.reading.source) or "nothing",
+            storedText, myRecord and myRecord.e[group.key] and " (estimate)" or "",
+            group.verified and "" or " [ids unverified]"))
+    end
+    for _, recipe in ipairs(Api.OpenWindowCooldownRecipes()) do
+        local group = CraftCooldowns.GroupOfRecipe(recipe.recipeID)
+        addon.Print(("  window recipe %d %s: cooldown %s%s -> %s"):format(recipe.recipeID, tostring(recipe.name),
+            seconds(recipe.cooldown), recipe.dayCooldown and " (day cooldown)" or "", group and group.key or "NOT IN ANY GROUP"))
+    end
+    local recordCount, entryCount = CraftCooldowns.Counts()
+    addon.Print(("record rev %s; %d cooldown records (%d entries) known from the guild"):format(
+        tostring(myRecord and myRecord.rev), recordCount, entryCount))
 end
 
 for gameEvent in pairs(onGameEvent) do registerGameEvent(gameEvent) end

@@ -28,4 +28,5 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 025 | Reputation list with faction hints | verifying | 1.4.0 unreleased (protocol 2.6, schema 8) | feat commit (reputation list) | [025-reputation-list-with-faction-hints](025-reputation-list-with-faction-hints/spec.md) |
 | 026 | Debug fake data menu and recipe probe | done | 1.4.0 unreleased (dev tools; protocol and schema unchanged) | feat commit (recipe drops) | [026-debug-fake-data-menu-and-recipe-probe](026-debug-fake-data-menu-and-recipe-probe/spec.md) |
 | 027 | Recipe drop alerts | done | 1.4.0 unreleased (protocol 2.7, schema 8) | feat commit (recipe drops) | [027-recipe-drop-alerts](027-recipe-drop-alerts/spec.md) |
+| 028 | Craft cooldowns grid | verifying | 1.4.0 unreleased (protocol 2.8, schema 9) | - | [028-craft-cooldowns-grid](028-craft-cooldowns-grid/spec.md) |
 | 029 | Grouped settings page | done | 1.4.0 unreleased (UI + local settings) | feat commit (recipe drops) | [029-grouped-settings-page](029-grouped-settings-page/spec.md) |

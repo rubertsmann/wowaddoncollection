@@ -341,7 +341,7 @@ end
 -- names of fake members made before they were remembered in devFake
 local LEGACY_FAKE_ROLES = { "Enchanter", "Keyholder", "Tester", "Requester" }
 -- the tables that hold one record per member
-local MEMBER_TABLES = { "chars", "offers", "access", "rep", "feedback" }
+local MEMBER_TABLES = { "chars", "offers", "access", "rep", "cds", "feedback" }
 local MAXIMUM_LOOT_LINES = 20
 local LOOT_RECHECK_SECONDS = { 2, 10 }
 
@@ -421,7 +421,8 @@ function DevProbe.RemoveFakeData()
     for fakeName in pairs(fakeNames) do addon.Store.keptNames[fakeName] = nil end
     addon.Utility.Wipe(devTable("devFake"))
     table.sort(removed)
-    for _, tableKey in ipairs({ "chars", "offers", "access", "rep", "feedback" }) do addon.Events.Fire("DATA_CHANGED", tableKey) end
+    for fakeName in pairs(fakeNames) do DevProbe.fakeOnline[fakeName] = nil end
+    for _, tableKey in ipairs(MEMBER_TABLES) do addon.Events.Fire("DATA_CHANGED", tableKey) end
     addon.Print(("fake data removed: %d records%s"):format(#removed, #removed > 0 and (": " .. table.concat(removed, ", ")) or ""))
     return recordCheck("remove", { ok = true, removed = removed })
 end
@@ -490,6 +491,78 @@ function DevProbe.AddFakeNaxxramas()
     addon.Print(("fake Naxxramas attunement added for %s. Misc Items -> Attunements."):format(accessRecord.name))
     recordCheck("naxx", { ok = true, name = accessRecord.name })
     return accessRecord
+end
+
+------------------------------------------------------------------ fake craft cooldowns (Misc Items -> Cooldowns)
+
+-- fake members the cooldown grid treats as online (session only; real members come from the guild roster)
+---@type table<string, boolean>
+DevProbe.fakeOnline = {}
+
+---@param playerName string
+---@return boolean
+function DevProbe.IsFakeOnline(playerName) return DevProbe.fakeOnline[playerName] == true end
+
+-- A fake crafter: a character record with `recipes` in `profession`, and (when `readyTimes` is given) a cooldown record
+-- as if it had arrived from a peer whose clock is `skew` seconds off (it goes through CraftCooldowns.FromWire).
+---@param role string
+---@param profession { id: integer, name: string }|nil
+---@param recipes integer[]
+---@param readyIn table<string, integer>|nil group key -> seconds from now (0 = ready)
+---@param options { online: boolean, skew?: integer, estimated?: table<string, boolean> }
+---@return string fakeName
+local function addFakeCrafter(role, profession, recipes, readyIn, options)
+    local fakeName = fakeMember(role)
+    local now = addon.Utility.Now()
+    if profession then
+        local knownRecipes = {}
+        for _, recipeID in ipairs(recipes) do knownRecipes[recipeID] = true end
+        local previous = addon.Store.db.chars[fakeName]
+        addon.Store.PutCharacter({ name = fakeName, class = "PRIEST", level = 60, rev = math.max(now, (previous and previous.rev or 0) + 1),
+            professions = { [profession.name] = { id = profession.id, name = profession.name, rank = 300, max = 300, recipes = knownRecipes } } })
+    end
+    if readyIn then
+        local ownerNow = now + (options.skew or 0)
+        local readyTimes = {}
+        for groupKey, seconds in pairs(readyIn) do readyTimes[groupKey] = seconds > 0 and (ownerNow + seconds) or 0 end
+        local previous = addon.CraftCooldowns.Get(fakeName)
+        local wireRecord = addon.CraftCooldowns.Sanitize({ name = fakeName, rev = math.max(now, (previous and previous.rev or 0) + 1),
+            c = readyTimes, e = options.estimated or {} })
+        addon.CraftCooldowns.Put(addon.CraftCooldowns.FromWire(wireRecord, ownerNow, now))
+    end
+    DevProbe.fakeOnline[fakeName] = options.online or nil
+    return fakeName
+end
+
+local ALCHEMY, TAILORING = { id = 171, name = "Alchemy" }, { id = 197, name = "Tailoring" }
+
+-- Fake crafters in every state: ready (online), cooling with a clock 2 h ahead (online), an estimate that runs out in
+-- 50 s (online), cooling (offline), no cooldown data (online).
+---@return table result
+function DevProbe.AddFakeCooldowns()
+    local names = {
+        addFakeCrafter("Alchemist", ALCHEMY, { 17187, 17559 }, { transmute = 0 }, { online = true }),
+        addFakeCrafter("Tailor", TAILORING, { 18560 }, { mooncloth = 3 * 3600 + 120 }, { online = true, skew = 7200 }),
+        addFakeCrafter("Salter", nil, {}, { saltshaker = 50 }, { online = true, estimated = { saltshaker = true } }),
+        addFakeCrafter("Sleeper", ALCHEMY, { 17187 }, { transmute = 20 * 3600 }, { online = false }),
+        addFakeCrafter("Newbie", ALCHEMY, { 11479 }, nil, { online = true }),
+    }
+    addon.Events.Fire("DATA_CHANGED", "cds")
+    addon.Print(("fake cooldowns added for %d members (one clock 2 h ahead; the salt runs out in 50 s). Misc Items -> Cooldowns.")
+        :format(#names))
+    return recordCheck("cooldowns", { ok = true, names = names })
+end
+
+-- A fake crafter whose cooldown of `groupKey` (default transmute) ends in 20 s, to watch a tile turn ready.
+---@param groupKey string|nil
+---@return table result
+function DevProbe.AddFakeCooldownEnding(groupKey)
+    local group = addon.CraftCooldowns.Group(groupKey) or addon.CraftCooldowns.Group("transmute")
+    local profession = group.skillLine == 197 and TAILORING or (#group.recipes > 0 and ALCHEMY or nil)
+    local fakeName = addFakeCrafter("Timer", profession, group.recipes, { [group.key] = 20 }, { online = true })
+    addon.Events.Fire("DATA_CHANGED", "cds")
+    addon.Print(("%s: %s is ready in 20 s. Misc Items -> Cooldowns."):format(fakeName, group.key))
+    return recordCheck("cdsoon", { ok = true, name = fakeName, group = group.key })
 end
 
 -- Three messages from a fake member (one bug with a diagnostic snapshot), for the developer list of the Feedback tab.
@@ -849,6 +922,9 @@ DevProbe.ENTRIES = {
     { key = "keys", section = "Members", label = "Keyholder: dungeon keys", run = function() DevProbe.AddFakeKeys() end },
     { key = "naxx", section = "Members", label = "Keyholder: Naxxramas", run = function() DevProbe.AddFakeNaxxramas() end },
     { key = "feedback", section = "Members", label = "Tester: 3 feedback messages", run = function() DevProbe.AddFakeFeedback() end },
+    { key = "cooldowns", section = "Members", label = "Crafters: cooldowns in every state", run = function() DevProbe.AddFakeCooldowns() end },
+    { key = "cdsoon", section = "Triggers", label = "A cooldown ends in 20 s", run = function() DevProbe.AddFakeCooldownEnding() end },
+    { key = "cdprobe", section = "Probes", label = "Craft cooldowns (/ps cd)", run = function() addon.SlashCommands.cd("") end },
     { key = "request", section = "Triggers", label = "Realm request (WANTO / WANT)", run = function() DevProbe.SimulateRealmRequest() end },
     { key = "loot", section = "Triggers", label = "Recipe loot (me)", run = function(arguments) DevProbe.SimulateRecipeLoot("self", arguments[1]) end },
     { key = "lootother", section = "Triggers", label = "Recipe loot (other player)", run = function(arguments) DevProbe.SimulateRecipeLoot("other", arguments[1]) end },

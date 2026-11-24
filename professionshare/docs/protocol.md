@@ -223,3 +223,27 @@ switches in `ui.drops`).
 - Display safety: answerer names are escaped (tooltip) or made chat safe (chat lines); item names come from the
   viewer's own client.
 - Traffic: one small GUILD message per looted recipe, one whisper per member who can use it or lacks only the skill.
+
+## 16. Craft cooldowns (protocol 2.8, schema 9; feature 028)
+Additive minor change: a 2.7 peer ignores `crev` and drops `WANTC`/`CDS` as unknown message types.
+- `HELLO` gets optional `crev` = `rev` of my cooldown record (omitted when I have none). A receiver holding an older
+  (or no) record whispers `WANTC {names={sender}}`; same engine, retries and dedup as `WANTR` (record kind `cds`,
+  registered after `rep`).
+- `CDS {cds = rec, at}`: `rec = { name, rev, c = { [groupKey] = readyAt }, e = { [groupKey] = true } }`. `groupKey` is a
+  key of `Core/Data/CraftCooldowns.lua` `GROUPS` (`transmute`, `mooncloth`, `saltshaker`); `readyAt` is the author's
+  server time when that cooldown ends, 0 = ready; `e` marks an estimate (a cast was seen, the game reported no
+  cooldown). A group missing from `c` = the author cannot do it (or its cooldown was never read). `at` = the author's
+  server time when the answer was built.
+- Clock handling: the receiver keeps `readyAt - at` (time left) and stores `receiverNow + timeLeft`
+  (`CraftCooldowns.FromWire`), so two clients whose clocks differ show the same time left (within the transit delay).
+  A peer that sends no `at` is taken to share the receiver's clock.
+- Traffic: `rev` changes only when a ready time moves by more than 60 s, a group appears or goes, or an estimate becomes
+  a real reading; reading the same cooldown again does not resend the record.
+- `CraftCooldowns.Sanitize` (allow-list): <= 16 entries, string keys <= 24 bytes, ready times integers in
+  `[0, 2^31-1]`, `e` values `true` only, `rev` in `[0, now + 1 day]`; a malformed entry rejects the record, an unknown
+  group key is skipped. `FromWire` drops a group with more than 8 days left.
+- Display safety: craft names, icons and links come from the viewer's client; owner names are escaped in
+  `Core/View/Model.lua`.
+- Stored: `cds[name]` (schema 9, migration 8 -> 9 creates the table) in the receiver's clock, plus `seen` (receiver's
+  time of arrival, local only, never sent); re-validated on every load, dropped for members who left the guild,
+  emptied by `/ps clean`, dropped for peers by the version reset like `rep`.

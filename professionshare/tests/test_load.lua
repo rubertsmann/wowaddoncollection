@@ -99,13 +99,26 @@ return {
                 -- the Misc Items modes: keys and attunements with a peer's record, then back to recipe items
                 addon.Access.Put({ name = "B-R", rev = 5, keys = { [7146] = { keyring = true } }, att = { mc = true, bwl = false } })
                 addon.Reputation.Put({ name = "B-R", rev = 5, f = { [59] = { s = 6, v = 4200, m = 12000 } } })
-                for _, mode in ipairs({ "keys", "attunements", "reputation", "offers" }) do
+                addon.Store.PutCharacter({ name = "B-R", class = "MAGE", level = 60, rev = 2, professions = {
+                    Alchemy = { name = "Alchemy", id = 171, rank = 300, max = 300, recipes = { [17187] = true } } } })
+                addon.CraftCooldowns.Put({ name = "B-R", rev = 5, c = { transmute = addon.Utility.Now() + 3600 }, e = {} })
+                addon.CraftCooldowns.Put({ name = "A-R", rev = 5, c = { mooncloth = 0 }, e = {} })
+                for _, mode in ipairs({ "keys", "attunements", "reputation", "cooldowns", "offers" }) do
                     addon.MiscTables.SetMode(addon.db.ui, mode)
                     local okM, errM = pcall(addon.UI.Refresh)
                     harness.truthy(okM, "refreshing the " .. mode .. " mode failed: " .. tostring(errM))
                 end
                 harness.truthy(addon.SlashCommands.access, "/ps access missing")
                 harness.truthy(pcall(addon.SlashCommands.access, ""), "/ps access failed")
+                addon.MiscTables.SetMode(addon.db.ui, "cooldowns")
+                addon.db.ui.cooldownExpanded = true
+                local okE, errE = pcall(addon.UI.Refresh)
+                harness.truthy(okE, "refreshing the cooldown grid, one tile per crafter, failed: " .. tostring(errE))
+                addon.db.ui.cooldownExpanded = nil
+                addon.MiscTables.SetMode(addon.db.ui, "offers")
+                harness.truthy(addon.SlashCommands.cd, "/ps cd missing")
+                local okC, errC = pcall(addon.SlashCommands.cd, "scan")
+                harness.truthy(okC, "/ps cd failed: " .. tostring(errC))
                 harness.truthy(addon.SlashCommands.rep, "/ps rep missing")
                 local okR, errR = pcall(addon.SlashCommands.rep, "")
                 harness.truthy(okR, "/ps rep failed: " .. tostring(errR))
@@ -171,6 +184,22 @@ return {
                         "/ps fakenaxx exists only in the dev build")
                     harness.equal(addon.SlashCommands.fakefeedback ~= nil, addon.IS_DEVELOPMENT_BUILD and true or false,
                         "/ps fakefeedback exists only in the dev build")
+                    -- dev fake cooldowns: every state, one peer with a clock 2 h ahead, and a cooldown ending in 20 s
+                    local okD, errD = pcall(addon.DevProbe.AddFakeCooldowns)
+                    harness.truthy(okD, "fake cooldowns failed: " .. tostring(errD))
+                    local fakeTailor = addon.CraftCooldowns.Get("Fake Tailor")
+                    harness.truthy(fakeTailor and addon.CraftCooldowns.Sanitize(fakeTailor), "the fake record is a valid record")
+                    local tailorLeft = fakeTailor.c.mooncloth - addon.Utility.Now()
+                    harness.truthy(tailorLeft > 3 * 3600 and tailorLeft <= 3 * 3600 + 120, "the clock skew is taken out: " .. tailorLeft)
+                    harness.equal(addon.CraftCooldowns.Get("Fake Newbie"), nil, "the newbie has no cooldown record")
+                    harness.truthy(addon.DevProbe.IsFakeOnline("Fake Alchemist")); harness.truthy(not addon.DevProbe.IsFakeOnline("Fake Sleeper"))
+                    local okS, errS = pcall(addon.DevProbe.AddFakeCooldownEnding, "mooncloth")
+                    harness.truthy(okS, "fake ending cooldown failed: " .. tostring(errS))
+                    harness.truthy(addon.CraftCooldowns.Get("Fake Timer").c.mooncloth > 0)
+                    addon.MiscTables.SetMode(addon.db.ui, "cooldowns")
+                    local okG, errG = pcall(addon.UI.Refresh)
+                    harness.truthy(okG, "the grid with fake cooldowns failed: " .. tostring(errG))
+                    addon.MiscTables.SetMode(addon.db.ui, "offers")
                     if addon.IS_DEVELOPMENT_BUILD then
                         local okB, fakeRecord = pcall(addon.DevProbe.AddFakeFeedback)
                         harness.truthy(okB and fakeRecord, "fake feedback failed: " .. tostring(fakeRecord))

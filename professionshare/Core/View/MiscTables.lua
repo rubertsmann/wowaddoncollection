@@ -1,6 +1,7 @@
 local addonName, addon = ...
 
--- The Misc Items tab: its modes (Recipe items, Keys, Attunements, Reputation) and one column table per mode (ColumnTable). Pure.
+-- The Misc Items tab: its modes (Recipe items, Keys, Attunements, Reputation, Cooldowns) and one column table per table mode
+-- (ColumnTable); the Cooldowns mode is a grid (UI/CooldownGrid.lua), not a table. Pure.
 -- Shown columns, sort and the chosen mode are kept in the SavedVariables `ui` table (local, never sent), one settings
 -- key per mode, so each mode remembers its own column choice.
 ---@class MiscTablesModule
@@ -10,10 +11,10 @@ addon.MiscTables = MiscTables
 local Text = addon.Text
 local ColumnTable = addon.ColumnTable
 
----@alias MiscMode "offers"|"keys"|"attunements"|"reputation"
+---@alias MiscMode "offers"|"keys"|"attunements"|"reputation"|"cooldowns"
 
 ---@type MiscMode[] dropdown order
-MiscTables.MODES = { "offers", "keys", "attunements", "reputation" }
+MiscTables.MODES = { "offers", "keys", "attunements", "reputation", "cooldowns" }
 MiscTables.DEFAULT_MODE = "offers"
 
 ---@param mode MiscMode
@@ -22,6 +23,7 @@ function MiscTables.ModeLabel(mode)
     if mode == "keys" then return Text["Keys"] end
     if mode == "attunements" then return Text["Attunements"] end
     if mode == "reputation" then return Text["Reputation"] end
+    if mode == "cooldowns" then return Text["Cooldowns"] end
     return Text["Recipe items"]
 end
 
@@ -84,21 +86,26 @@ MiscTables.tables = {
     }),
 }
 
+-- whether the mode shows a grid instead of a table
+---@param mode any
+---@return boolean
+function MiscTables.IsGrid(mode) return mode == "cooldowns" end
+
 ---@param interfaceSettings table|nil
 ---@return MiscMode
 function MiscTables.GetMode(interfaceSettings)
     local storedMode = type(interfaceSettings) == "table" and interfaceSettings.miscMode or nil
-    if MiscTables.tables[storedMode] then return storedMode end
+    if MiscTables.tables[storedMode] or MiscTables.IsGrid(storedMode) then return storedMode end
     return MiscTables.DEFAULT_MODE
 end
 
 ---@param interfaceSettings table|nil
 ---@param mode any
 function MiscTables.SetMode(interfaceSettings, mode)
-    if type(interfaceSettings) ~= "table" or not MiscTables.tables[mode] then return end
+    if type(interfaceSettings) ~= "table" or not (MiscTables.tables[mode] or MiscTables.IsGrid(mode)) then return end
     interfaceSettings.miscMode = mode
 end
 
 ---@param mode MiscMode
----@return table the column table of that mode
+---@return table the column table of that mode (grid modes: the default mode's, never shown)
 function MiscTables.Table(mode) return MiscTables.tables[mode] or MiscTables.tables[MiscTables.DEFAULT_MODE] end
