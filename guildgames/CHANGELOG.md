@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 (2026-11-24, protocol 1.2, schema 2, LibGuildSync MINOR 6)
+- New minimal view (feature 030): only the companion, round care gauges that fill clockwise, a heart icon, no text.
+  `/gg` opens it by default; the top-left icon switches to the full window and back. Options: start view, opacity,
+  size, lock, hide in combat (`db.ui.petView`, no schema change). Dev: `/ggd caught hearts <n>`.
+- An awake companion plays a random animation it has (roar, dance, laugh, wave, attack, ...) every 90-240 s in the
+  minimal view and the companion panel. Dev: `/ggd caught emote` plays one now.
+
 ## 0.4.2 (2026-11-23, protocol 1.2, schema 2, LibGuildSync MINOR 6)
 - The minimap button is also listed in the addon compartment where the client has one, so GuildGames stays reachable
   when Leatrix Plus or another collector hides minimap buttons (LibGuildSync MINOR 6).

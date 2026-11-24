@@ -10,3 +10,4 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 020 | Companion arena | planned | - | - | [020-companion-arena](020-companion-arena/spec.md) |
 | 020 | Companion arena (async auto battles, training, wagers, side bets) | verifying | GuildGames 0.3.0 (protocol 1.2, schema 2), unreleased | - | [020-companion-arena](020-companion-arena/spec.md) |
 | 021 | Comment audit and reduction (all addons) | verifying | none (tooling) | 14e9558..HEAD | [021-comment-audit-and-reduction](021-comment-audit-and-reduction/spec.md) |
+| 030 | Compact pet view (minimal window: round pet, ring gauges, no text) | verifying | GuildGames 0.5.0 (protocol 1.2, schema 2), unreleased | - | [030-compact-pet-view](030-compact-pet-view/spec.md) |

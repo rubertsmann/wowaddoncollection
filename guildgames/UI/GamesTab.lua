@@ -682,7 +682,7 @@ function GamesTab.Build(stage, sidebar, header)
     for _, gameKey in ipairs(switchOrder()) do
         local key = gameKey
         local button = Widgets.CreateButton(header, "", 26, 20, function() GamesTab.SelectGame(key) end)
-        if previousButton then button:SetPoint("LEFT", previousButton, "RIGHT", 3, 0) else button:SetPoint("LEFT", header, "LEFT", 4, 0) end
+        if previousButton then button:SetPoint("LEFT", previousButton, "RIGHT", 3, 0) else button:SetPoint("LEFT", header, "LEFT", header.firstButtonOffset or 4, 0) end
         local icon = button:CreateTexture(nil, "OVERLAY")
         icon:SetSize(16, 16); icon:SetPoint("CENTER", 0, 1); icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         addon.UIHelpers.SetTextureOr(icon, GAME_ICONS[key], { 1, 0.82, 0.2 })

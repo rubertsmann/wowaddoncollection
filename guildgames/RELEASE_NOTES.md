@@ -1,3 +1,21 @@
+# GuildGames 0.5.0
+
+**English:** New minimal view: /gg and the minimap button now open a small window with only your AZEcaught companion
+and no text. Four round buttons around it (food, water, petting, sleep) fill up like a ring with each need and turn
+yellow or red when it gets low; click one to care for your pet. The heart in the top-right corner pulses when you earn
+hearts. The icon in the top-left corner switches to the full window and back. In Options > AddOns > GuildGames
+AZEcaught you can choose which view opens first, set the opacity and size, lock its position and hide it in combat.
+Your companion now also does something on its own every few minutes: a roar, a dance, a wave or a swing. Members on
+older versions keep working with you.
+
+**Deutsch:** Neue minimale Ansicht: /gg und der Minimap-Knopf öffnen jetzt ein kleines Fenster nur mit deinem
+AZEcaught-Begleiter und ohne Text. Vier runde Knöpfe darum (Futter, Wasser, Streicheln, Schlaf) füllen sich wie ein
+Ring mit jedem Bedürfnis und werden gelb oder rot, wenn es knapp wird; ein Klick pflegt dein Tier. Das Herz oben rechts
+pulsiert, wenn du Herzen bekommst. Das Symbol oben links wechselt zum vollen Fenster und zurück. Unter Optionen >
+AddOns > GuildGames AZEcaught wählst du, welche Ansicht zuerst öffnet, stellst Deckkraft und Größe ein, sperrst die
+Position und blendest sie im Kampf aus. Dein Begleiter macht jetzt außerdem alle paar Minuten etwas von selbst: ein
+Brüllen, einen Tanz, ein Winken oder einen Hieb. Mitglieder mit älteren Versionen arbeiten weiter mit dir zusammen.
+
 # GuildGames 0.4.2
 
 **English:** GuildGames is now also listed in the addon menu at the minimap (the button that lists your addons), where your

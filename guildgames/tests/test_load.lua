@@ -93,7 +93,11 @@ return {
                 harness.truthy(addon.UI and addon.GamesTab and addon.SlotMachine and addon.Communication and addon.Sync, "namespace incomplete")
                 addon.Store.Init({})
                 addon.Store.db.me = "A-R"
-                harness.truthy(pcall(addon.UI.Toggle), "building the window failed")
+                local okToggle, toggleError = pcall(addon.UI.Toggle)
+                harness.truthy(okToggle, "opening the pet view failed: " .. tostring(toggleError))
+                harness.truthy(addon.PetView.widgets.frame, "the default start mode builds the pet view")
+                local okFull, fullError = pcall(addon.UI.SetMode, "full")
+                harness.truthy(okFull, "building the window failed: " .. tostring(fullError))
                 harness.truthy(addon.GamesTab.widgets.flipButton, "the coin flip was not built (see Log: window.games)")
                 harness.truthy(addon.SlotMachine.widgets.spinButton, "the slot machine was not built (see Log: games.slots)")
                 addon.GamesTab.ReadStake = function() return 100 end   -- the stub boxes hold no text

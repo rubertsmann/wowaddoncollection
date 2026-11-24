@@ -401,3 +401,152 @@ function Model.BuildNpcInfo(npcID, entry)
     end
     return npcView
 end
+
+------------------------------------------------------------------ the pet view (minimal window)
+
+Model.PET_VIEW_DEFAULTS = { startMode = "minimal", opacity = 1, scale = 1, locked = false, hideInCombat = true }
+Model.PET_VIEW_LIMITS = { opacity = { 0.2, 1 }, scale = { 0.5, 2 } }
+Model.PET_VIEW_GAUGES = { "feed", "water", "pet", "sleep" }
+Model.GAUGE_NEED = { feed = "hunger", water = "thirst", pet = "affection", sleep = "energy" }
+Model.GAUGE_ZONE_COLOR = { ok = { 0.3, 0.85, 0.35 }, needy = { 1, 0.75, 0.15 }, critical = { 1, 0.25, 0.2 }, empty = { 0.6, 0.1, 0.1 },
+    never = { 0.45, 0.45, 0.45 } }
+
+---@param value any
+---@return boolean
+local function isNumber(value) return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge end
+
+---@param value any
+---@param limits number[]
+---@param default number
+---@return number
+local function clampOr(value, limits, default)
+    if not isNumber(value) then return default end
+    return math.max(limits[1], math.min(limits[2], value))
+end
+
+-- The pet view's options from db.ui.petView, with defaults for missing or broken values (the saved table is not changed).
+---@param raw any
+---@return { startMode: "minimal"|"full", opacity: number, scale: number, locked: boolean, hideInCombat: boolean, open: boolean, mode: "minimal"|"full", left: number|nil, top: number|nil }
+function Model.PetViewSettings(raw)
+    raw = type(raw) == "table" and raw or {}
+    local defaults, limits = Model.PET_VIEW_DEFAULTS, Model.PET_VIEW_LIMITS
+    local function mode(value, default) return (value == "minimal" or value == "full") and value or default end
+    local function flag(value, default) if type(value) == "boolean" then return value end return default end
+    local startMode = mode(raw.startMode, defaults.startMode)
+    return {
+        startMode = startMode,
+        mode = mode(raw.mode, startMode),
+        opacity = clampOr(raw.opacity, limits.opacity, defaults.opacity),
+        scale = clampOr(raw.scale, limits.scale, defaults.scale),
+        locked = flag(raw.locked, defaults.locked),
+        hideInCombat = flag(raw.hideInCombat, defaults.hideInCombat),
+        open = raw.open == true,
+        left = isNumber(raw.left) and raw.left or nil,
+        top = isNumber(raw.top) and raw.top or nil,
+    }
+end
+
+-- The share of a gauge's ring for a need value of 0..100: 0..1, broken values show none.
+---@param value any
+---@return number
+function Model.GaugeShare(value)
+    if not isNumber(value) then return 0 end
+    return math.max(0, math.min(100, value)) / 100
+end
+
+-- The arc cell for `share` (0..1) out of `cells` drawn arcs (cell n = n/cells of the ring); nil when nothing shows.
+-- Rounded to the nearest cell, so a sliver above 0 still shows one cell and almost-full shows the whole ring.
+---@param share number
+---@param cells integer
+---@return integer|nil
+function Model.RingArc(share, cells)
+    local value = Model.GaugeShare((tonumber(share) or 0) * 100)
+    if value <= 0 then return nil end
+    return math.max(1, math.min(cells, math.floor(value * cells + 0.5)))
+end
+
+-- Texture coordinates (left, right, top, bottom) of arc cell `cell` (1-based, row by row) in a `columns` x `columns` grid.
+---@param cell integer
+---@param columns integer
+---@return number left, number right, number top, number bottom
+function Model.ArcTexCoord(cell, columns)
+    local index = cell - 1
+    local column, row = index % columns, math.floor(index / columns)
+    return column / columns, (column + 1) / columns, row / columns, (row + 1) / columns
+end
+
+-- Animations an idle companion may play on its own (AnimationData ids: roar, dance, laugh, wave, cheer, bow, talk,
+-- exclamation, question, flex, point, eat, unarmed and one-handed attack, special attack). A model plays only those
+-- it has (HasAnimation); creatures mostly have roar and the attacks.
+Model.IDLE_EMOTES = { 74, 69, 70, 67, 68, 66, 60, 64, 65, 82, 84, 61, 16, 17, 57 }
+Model.IDLE_EMOTE_DELAY = { 90, 240 }   -- seconds between two of them, at random
+
+-- Seconds until the next idle emote.
+---@param random fun(low: integer, high: integer): integer
+---@return integer
+function Model.IdleEmoteDelay(random)
+    return random(Model.IDLE_EMOTE_DELAY[1], Model.IDLE_EMOTE_DELAY[2])
+end
+
+-- The idle emotes in a random order (Fisher-Yates; the list itself stays as it is).
+---@param random fun(low: integer, high: integer): integer
+---@return integer[]
+function Model.ShuffledIdleEmotes(random)
+    local order = {}
+    for index, animationID in ipairs(Model.IDLE_EMOTES) do order[index] = animationID end
+    for index = #order, 2, -1 do
+        local other = random(1, index)
+        order[index], order[other] = order[other], order[index]
+    end
+    return order
+end
+
+-- The colour of a gauge: its need's zone, grey when the companion never has this need.
+---@param zone string|nil
+---@return number[]
+function Model.GaugeColor(zone)
+    return Model.GAUGE_ZONE_COLOR[zone] or Model.GAUGE_ZONE_COLOR.never
+end
+
+-- Where everything of the pet view sits, as offsets from the frame's top-left corner (x right, y down is negative).
+-- The pet is the circle in the middle; the four gauges sit around its lower half (left, lower left, lower right,
+-- right); the switch icon is in the top-left corner and the heart in the top-right one.
+---@param petSize number diameter of the pet circle
+---@param gaugeSize number diameter of a gauge
+---@param cornerSize number size of the switch icon and the heart
+---@return { width: number, height: number, pet: { x: number, y: number }, gauges: table<string, { x: number, y: number }>, switch: { x: number, y: number }, heart: { x: number, y: number } }
+function Model.PetViewLayout(petSize, gaugeSize, cornerSize)
+    local orbit = petSize / 2 + gaugeSize / 2 + 5
+    local angles = { feed = 270, water = 215, pet = 145, sleep = 90 }   -- degrees clockwise from 12 o'clock
+    local margin = 2
+    local half = math.max(orbit + gaugeSize / 2, petSize / 2) + margin
+    local width = half * 2
+    local below = orbit * math.cos(math.rad(180 - 145)) + gaugeSize / 2 + margin
+    local above = math.max(petSize / 2, cornerSize) + margin + cornerSize / 2
+    local height = above + below
+    local centerX, centerY = width / 2, -above
+    local layout = { width = width, height = height, pet = { x = centerX, y = centerY }, gauges = {} }
+    for key, degrees in pairs(angles) do
+        local angle = math.rad(degrees)
+        layout.gauges[key] = { x = centerX + math.sin(angle) * orbit, y = centerY + math.cos(angle) * orbit }
+    end
+    layout.switch = { x = margin + cornerSize / 2, y = -(margin + cornerSize / 2) }
+    layout.heart = { x = width - margin - cornerSize / 2, y = -(margin + cornerSize / 2) }
+    return layout
+end
+
+-- A window's top-left corner moved so the window stays on the screen (all in UIParent units, y up).
+---@param left number
+---@param top number
+---@param width number
+---@param height number
+---@param screenWidth number
+---@param screenHeight number
+---@return number left, number top
+function Model.KeepOnScreen(left, top, width, height, screenWidth, screenHeight)
+    if not isNumber(left) then left = (screenWidth - width) / 2 end
+    if not isNumber(top) then top = (screenHeight + height) / 2 end
+    left = math.max(0, math.min(screenWidth - math.min(width, screenWidth), left))
+    top = math.min(screenHeight, math.max(math.min(height, screenHeight), top))
+    return left, top
+end

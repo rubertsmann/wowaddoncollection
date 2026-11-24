@@ -254,8 +254,8 @@ local GRIP_TEXTURE = "Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up"
 
 ---@return number left, number top the window's top-left corner in UIParent units
 local function topLeftCorner()
-    local scale = mainFrame:GetScale() or 1
-    return (mainFrame:GetLeft() or 0) * scale, (mainFrame:GetTop() or 0) * scale
+    local scale = tonumber(mainFrame:GetScale()) or 1
+    return (tonumber(mainFrame:GetLeft()) or 0) * scale, (tonumber(mainFrame:GetTop()) or 0) * scale
 end
 
 -- Anchors the window by its top-left corner (UIParent units) at `scale`, so scaling grows it to the bottom right.
@@ -456,6 +456,22 @@ local function build()
     divider:SetHeight(1); divider:SetPoint("BOTTOMLEFT", 8, 0); divider:SetPoint("BOTTOMRIGHT", -8, 0)
     divider:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.25)
 
+    -- the switch to the minimal pet view, at the top-left corner (the pet view has its switch at the same spot)
+    local switchButton = createFlatButton(header, "", 20, 18, function() UI.SetMode("minimal") end)
+    switchButton:SetPoint("LEFT", 2, 0)
+    local switchIcon = switchButton:CreateTexture(nil, "OVERLAY")
+    switchIcon:SetSize(18, 18); switchIcon:SetPoint("CENTER", 0, 0)
+    addon.UIHelpers.SetTextureOr(switchIcon, addon.PetView.MINIMAL_VIEW_ICON, { ACCENT[1], ACCENT[2], ACCENT[3] })
+    switchButton:HookScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText(Text["Minimal view"])
+        GameTooltip:Show()
+    end)
+    switchButton:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    parts.switchButton = switchButton
+    header.firstButtonOffset = 26
+
     local closeButton = createFlatButton(header, "x", 20, 18, function() UI.Toggle() end)
     closeButton:SetPoint("RIGHT", -2, 0)
     -- the leaderboard toggle: an arrow only (it points to the sidebar when closed, back when open); the name is its tooltip
@@ -504,25 +520,80 @@ local function build()
     addon.Events.On("DATA_CHANGED", UI.Refresh)
 end
 
--- Opens with a short fade in and closes with a fade out. A tween that is still running finishes first.
-function UI.Toggle()
-    if not mainFrame then build() end
-    local Animate = addon.Animate
-    if mainFrame:IsShown() and not UI.closing then
-        UI.closing = true
-        local fromAlpha = mainFrame:GetAlpha() or 1
-        Animate.Tween("window", 0.18, function(elapsed) mainFrame:SetAlpha(fromAlpha * (1 - elapsed / 0.18)) end,
-            function() UI.closing = false; mainFrame:Hide(); mainFrame:SetAlpha(1) end)
+---@return boolean
+local function fullShown() return (mainFrame and mainFrame:IsShown() and not UI.closing) and true or false end
+
+-- The full window closes with a short fade out (or at once).
+---@param animate boolean
+local function hideFull(animate)
+    if not mainFrame or not mainFrame:IsShown() then return end
+    if not animate then
+        addon.Animate.FinishTween("window")
+        UI.closing = false; mainFrame:Hide(); mainFrame:SetAlpha(1)
         return
     end
+    UI.closing = true
+    local fromAlpha = mainFrame:GetAlpha() or 1
+    addon.Animate.Tween("window", 0.18, function(elapsed) mainFrame:SetAlpha(fromAlpha * (1 - elapsed / 0.18)) end,
+        function() UI.closing = false; mainFrame:Hide(); mainFrame:SetAlpha(1) end)
+end
+
+-- The full window opens with a short fade in; with (left, top) its top-left corner goes there first.
+---@param left? number
+---@param top? number
+local function showFull(left, top)
+    if not mainFrame then build() end
+    if left and top then
+        placeWindow(left, top, tonumber(mainFrame:GetScale()) or 1)
+        savePlacement()
+    end
+    if fullShown() then return end
     UI.closing = false
     mainFrame:SetAlpha(0)
     mainFrame:Show()
-    Animate.Tween("window", 0.22, function(elapsed) mainFrame:SetAlpha(elapsed / 0.22) end, function() mainFrame:SetAlpha(1) end)
+    addon.Animate.Tween("window", 0.22, function(elapsed) mainFrame:SetAlpha(elapsed / 0.22) end, function() mainFrame:SetAlpha(1) end)
 end
 
----@return boolean
-function UI.IsShown() return (mainFrame and mainFrame:IsShown() and not UI.closing) and true or false end
+-- Switches between the full window and the minimal pet view. The new one opens with its top-left corner where the
+-- other one had it, so the switch icon stays under the mouse.
+---@param mode "full"|"minimal"
+function UI.SetMode(mode)
+    local PetView = addon.PetView
+    mode = mode == "minimal" and "minimal" or "full"
+    addon.UIHelpers.Settings().petView = addon.UIHelpers.Settings().petView or {}
+    addon.UIHelpers.Settings().petView.mode = mode
+    local left, top
+    if mode == "minimal" then
+        if fullShown() then left, top = topLeftCorner() end
+        hideFull(false)
+        PetView.Show(left, top)
+    else
+        if PetView.IsShown() then left, top = PetView.TopLeft()
+        elseif PetView.state.hiddenByCombat then left, top = PetView.Settings().left, PetView.Settings().top end
+        PetView.Hide(false)
+        showFull(left, top)
+    end
+    addon.AzeCaught.Journal("DEBUG", "petView.mode", "the window mode switched", { mode = mode })
+end
+
+-- The full window (commands that open a game or view): from the pet view it switches, else it opens.
+function UI.ShowFull()
+    if not fullShown() then UI.SetMode("full") end
+end
+
+-- /gg and the minimap button: closes whichever view is open, else opens the start mode of the options.
+function UI.Toggle()
+    local PetView = addon.PetView
+    if fullShown() or PetView.IsShown() or PetView.state.hiddenByCombat then
+        hideFull(true)
+        PetView.Hide(true)
+        return
+    end
+    UI.SetMode(PetView.Settings().startMode)
+end
+
+---@return boolean the full window or the pet view is open
+function UI.IsShown() return fullShown() or addon.PetView.IsShown() end
 
 -- Redraws the leaderboards (GamesTab defers it while a game animates).
 function UI.Refresh()

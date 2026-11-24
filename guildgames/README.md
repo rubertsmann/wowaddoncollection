@@ -8,6 +8,14 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
 
 ## Use
 - `/gg` opens the window. The buttons at the top left choose the game. They are locked while a game animates.
+- **Minimal view:** `/gg` and the minimap button open, by default, a small view with only your AZEcaught companion and
+  no text. The round pet sits in the middle, with four round care buttons around its lower half: feed, water, pet and
+  sleep. The ring around each button fills clockwise with that need (half a ring = 50%) and is green, yellow or red by
+  zone. A click does the care action. The heart at the top right pulses on a gain and turns dark below 0. The icon at
+  the top left switches to the full window and back, at the same screen spot. Hover anything for the details. Options
+  > AddOns > GuildGames AZEcaught set the start view (minimal or full), the opacity (20-100%, full while hovered), the
+  size (50-200%), a position lock and hiding in combat (on by default). The view stays open across reloads. Every few
+  minutes an awake companion does something on its own: a roar, a dance, a wave, a swing, whatever its model can do.
 - **Coin flip:** enter a stake in gold/silver/copper (1c to 100 000g), choose Heads or Tails, then **Flip**. A win
   nets the stake and a loss costs it.
 - **Slot machine:** 3 reels x 3 rows with 5 paylines (the rows and both diagonals). Three equal symbols on a line pay

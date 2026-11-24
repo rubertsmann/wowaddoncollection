@@ -1078,6 +1078,20 @@ function developmentCommands.need(arguments)
     AzeCaught.Journal("INFORMATION", "dev.need", "a need was set by hand", { need = need, value = companion[need] })
     addon.Events.Fire("CAUGHT_CHANGED"); commands.state()
 end
+-- /ggd caught hearts <n>: sets the companion's hearts (negative too), to see the pet view's heart states
+function developmentCommands.hearts(arguments)
+    local value = tonumber((arguments or ""):match("(%-?%d+)"))
+    local companion = AzeCaught.Active()
+    if not companion or not value then printLine("hearts <n> (needs a companion)") return end
+    companion.hearts = addon.Utility.Clamp(value, -AzeCaught.MAXIMUM_HEARTS, AzeCaught.MAXIMUM_HEARTS)
+    AzeCaught.Journal("INFORMATION", "dev.hearts", "the hearts were set by hand", { hearts = companion.hearts })
+    addon.Events.Fire("CAUGHT_CHANGED"); commands.state()
+end
+-- /ggd caught emote: the shown companion models play an idle emote within a second (no 90-240 s wait)
+function developmentCommands.emote()
+    addon.AzeCaughtPanel.idleEmoteForcedUntil = Api.Clock() + 1
+    printLine("an idle emote plays within a second on every shown companion model (the pet view, the companion panel)")
+end
 function developmentCommands.week()
     AzeCaught.State().paidWeek = nil
     local amount, reason = Catcher.RunPayout()
@@ -1191,7 +1205,7 @@ addon.SlashCommands.caught = function(arguments)
     word = (word or ""):lower()
     AzeCaught.Journal("DEBUG", "command", "a command was typed", { command = word ~= "" and word or "(open)", arguments = rest })
     if word == "" then
-        if not addon.UI.IsShown() then addon.UI.Toggle() end
+        addon.UI.ShowFull()
         if addon.GamesTab.SelectGame then addon.GamesTab.SelectGame("caught") end
         return
     end
@@ -1207,7 +1221,7 @@ function commands.arena(arguments)
     local word, rest = (arguments or ""):match("^%s*(%S*)%s*(.-)%s*$")
     word = (word or ""):lower()
     if addon.IS_DEVELOPMENT_BUILD and (word == "dummy" or word == "request" or word == "skip") then developmentCommands[word](rest) return end
-    if not addon.UI.IsShown() then addon.UI.Toggle() end
+    addon.UI.ShowFull()
     if addon.GamesTab.SelectGame then addon.GamesTab.SelectGame("caught") end
     addon.AzeCaughtPanel.SelectView("arena")
 end

@@ -213,6 +213,47 @@ function Panel.PrepareModel(model, idleFunction)
     end)
 end
 
+-- Plays an emote, then the idle pose after EMOTE_SECONDS; a newer emote (or the menu showing) voids the timer.
+---@param model table
+---@param candidates integer[]
+---@param reason string
+function Panel.EmoteThenIdle(model, candidates, reason)
+    playEmote(model, candidates, reason)
+    model.busyUntil = addon.Api.Clock() + EMOTE_SECONDS
+    local token = nextEmoteToken(model)
+    if C_Timer then
+        C_Timer.After(EMOTE_SECONDS, function()
+            if emoteTokens[model] == token then Panel.IdleOfCompanion(model, "after:" .. reason) end
+        end)
+    end
+end
+
+-- Now and then an awake companion does something on its own: a random animation it has (Model.IDLE_EMOTES), then
+-- back to idle. Called from the views' refresh; the first one comes a while after the model was shown.
+---@param model table
+function Panel.MaybeIdleEmote(model)
+    local companion = AzeCaught.Active()
+    if not model or not companion or companion.asleep or not model:IsVisible() then model.nextIdleEmoteAt = nil return end
+    local clock = addon.Api.Clock()
+    if not model.nextIdleEmoteAt then model.nextIdleEmoteAt = clock + addon.Model.IdleEmoteDelay(math.random) return end
+    local forced = clock < (Panel.idleEmoteForcedUntil or 0) and model.forcedAt ~= Panel.idleEmoteForcedUntil
+    if (clock < model.nextIdleEmoteAt and not forced) or clock < (model.busyUntil or 0) then return end
+    if forced then model.forcedAt = Panel.idleEmoteForcedUntil end
+    model.nextIdleEmoteAt = clock + addon.Model.IdleEmoteDelay(math.random)
+    local candidates = {}
+    for _, animationID in ipairs(addon.Model.ShuffledIdleEmotes(math.random)) do
+        local has = true
+        if model.HasAnimation then
+            local ok, result = pcall(model.HasAnimation, model, animationID)
+            has = ok and result and true or false
+        end
+        if has then candidates[#candidates + 1] = animationID end
+    end
+    if #candidates == 0 then return end
+    candidates[#candidates + 1] = 0
+    Panel.EmoteThenIdle(model, candidates, "idleEmote")
+end
+
 -- The companion model back to idle now (the menu shows, a view switches back).
 ---@param reason string
 function Panel.ShowIdle(reason)
@@ -344,8 +385,10 @@ function Panel.SelectView(view)
 end
 
 -- A care button's click: ignored during the click cooldown, else the action (Sleep turns into Wake while asleep).
+-- The cooldown is shared by every view that cares (this panel and the pet view), so one click pays once.
 ---@param key "feed"|"water"|"pet"|"sleep"
-function Panel.ClickCare(key)
+---@param target? CareTarget where the effects show; default this panel
+function Panel.ClickCare(key, target)
     local clock = addon.Api.Clock()
     if clock < (Panel.state.careReadyAt or 0) then
         AzeCaught.Journal("DEBUG", "ui.cooldown", "a care click came during the cooldown", { action = key,
@@ -358,10 +401,22 @@ function Panel.ClickCare(key)
     for _, button in pairs(widgets.careButtons or {}) do
         if button.cooldown then pcall(button.cooldown.SetCooldown, button.cooldown, clock, CARE_COOLDOWN) end
     end
-    Panel.Care(action)
+    Panel.Care(action, target)
     Panel.RefreshCareButtons()
-    if C_Timer then C_Timer.After(CARE_COOLDOWN + 0.05, function() Panel.RefreshCareButtons() end) end
+    addon.Events.Fire("CARE_COOLDOWN")
+    if C_Timer then C_Timer.After(CARE_COOLDOWN + 0.05, function()
+        Panel.RefreshCareButtons()
+        addon.Events.Fire("CARE_COOLDOWN")
+    end) end
 end
+
+---@return number seconds until care clicks are accepted again (0 = now)
+function Panel.CareCooldownLeft()
+    return math.max(0, (Panel.state.careReadyAt or 0) - addon.Api.Clock())
+end
+Panel.CARE_COOLDOWN, Panel.CARE_ICONS, Panel.ACTION_COLOR = CARE_COOLDOWN, CARE_ICONS, ACTION_COLOR
+Panel.CareRefusalText, Panel.PlayEmote, Panel.EMOTES, Panel.NeedLabel = careRefusalText, playEmote, EMOTES, needLabel
+Panel.HEART_ICON = HEART_ICON
 
 -- Icons, prices and greyed-out state of the care buttons (AzeCaught.CareAvailability; the cooldown greys them too).
 function Panel.RefreshCareButtons()
@@ -383,31 +438,43 @@ function Panel.RefreshCareButtons()
     end
 end
 
--- care button -> AzeCaught.Care + effects
+---@class CareTarget where a care action's effects show
+---@field parent table the frame the burst is drawn on
+---@field model table the model that plays the emote
+---@field heartIcon table|nil pulses on a heart gain
+---@field floatText table|nil the "+n hearts" text (nil: no floating text)
+---@field status fun(text: string)|nil shows the refusal or the price paid (nil: the refusal goes to the error line)
+
+---@return CareTarget
+local function panelTarget()
+    return { parent = widgets.companionView, model = widgets.model, heartIcon = widgets.heartIcon, floatText = widgets.floatText,
+        status = function(text) widgets.statusText:SetText(text) end }
+end
+
+-- care button -> AzeCaught.Care + effects on `target` (default this panel)
 ---@param action CareAction
-function Panel.Care(action)
+---@param target? CareTarget
+function Panel.Care(action, target)
+    target = target or panelTarget()
     local result, refusal = AzeCaught.Care(action, me(), addon.Utility.Now())
     if not result then
-        widgets.statusText:SetText("|cffff5555" .. careRefusalText(refusal) .. "|r")
+        local text = careRefusalText(refusal)
+        if target.status then target.status("|cffff5555" .. text .. "|r")
+        elseif UIErrorsFrame and UIErrorsFrame.AddMessage then pcall(UIErrorsFrame.AddMessage, UIErrorsFrame, text, 1, 0.3, 0.3) end
         return
     end
     local color = ACTION_COLOR[action] or { 1, 1, 1 }
-    addon.Animate.Burst("care", widgets.companionView, widgets.model, 0, -20, { count = 18, color = color, speed = 120, duration = 1 })
+    local model = target.model
+    addon.Animate.Burst("care", target.parent, model, 0, -20, { count = 18, color = color, speed = 120, duration = 1 })
     if result.hearts > 0 then
-        addon.Animate.FloatText("hearts", widgets.floatText, widgets.model, 0, 10, "+" .. result.hearts .. " " .. Text["hearts"], { 1, 0.3, 0.4 })
-        addon.Animate.Pulse(widgets.heartIcon, 1.5, 0.4)
+        if target.floatText then
+            addon.Animate.FloatText("hearts", target.floatText, model, 0, 10, "+" .. result.hearts .. " " .. Text["hearts"], { 1, 0.3, 0.4 })
+        end
+        if target.heartIcon then addon.Animate.Pulse(target.heartIcon, 1.5, 0.4) end
     end
-    local model = widgets.model
-    playEmote(model, EMOTES[action] or EMOTES.idle, action)
-    -- back to idle when the emote is over; a newer action (or the menu showing) voids this timer
-    local token = nextEmoteToken(model)
-    if C_Timer then
-        C_Timer.After(EMOTE_SECONDS, function()
-            if widgets.model == model and emoteTokens[model] == token then Panel.IdleOfCompanion(model, "afterAction") end
-        end)
-    end
+    Panel.EmoteThenIdle(model, EMOTES[action] or EMOTES.idle, action)
     addon.Api.PlaySound(addon.Api.SoundKitFor({ "IG_MAINMENU_OPTION_CHECKBOX_ON" }))
-    widgets.statusText:SetText(result.cost > 0 and Format(Text["Paid {gold}."], { gold = money(result.cost) }) or "")
+    if target.status then target.status(result.cost > 0 and Format(Text["Paid {gold}."], { gold = money(result.cost) }) or "") end
     addon.Catcher.PublishSoon(true)
     addon.Events.Fire("CAUGHT_CHANGED")
 end
@@ -1037,7 +1104,10 @@ function Panel.Build(panel)
         elapsedTotal = elapsedTotal + elapsedSeconds
         if elapsedTotal < 0.5 then return end
         elapsedTotal = 0
-        if Panel.state.view == "companion" then addon.Log.Protected("caught.ui", "refreshing the companion failed", Panel.RefreshCompanion) end
+        if Panel.state.view == "companion" then
+            addon.Log.Protected("caught.ui", "refreshing the companion failed", Panel.RefreshCompanion)
+            addon.Log.Protected("caught.ui", "an idle emote failed", Panel.MaybeIdleEmote, widgets.model)
+        end
         if Panel.state.view == "arena" and addon.ArenaView.state.page ~= "guild" then
             addon.Log.Protected("caught.ui", "refreshing the arena failed", addon.ArenaView.Refresh)
         end
