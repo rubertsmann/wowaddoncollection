@@ -620,9 +620,9 @@ local function shortNameList(playerNames)
     return table.concat(shortNames, ", ")
 end
 
--- One row per key somebody in the guild holds. Holder names come from peers and are escaped; the item name, icon and
--- class come from THIS client, and an id this client does not take for a key is not shown (a peer cannot list
--- arbitrary items).
+-- One row per key somebody in the guild holds, plus one per listed key nobody holds (holder count 0). Holder names
+-- come from peers and are escaped; the item name, icon and class come from THIS client, and an id this client does not
+-- take for a key is not shown (a peer cannot list arbitrary items).
 ---@param state AccessFilterState
 ---@param itemClassFunction fun(itemID: integer): any, any, any classID, subclassID, icon
 ---@param itemNameFunction? fun(itemID: integer): string|nil
@@ -631,7 +631,9 @@ function Model.BuildKeyRows(state, itemClassFunction, itemNameFunction)
     local Access = addon.Access
     local searchText = sortKey(state.text)
     local keyRows = {}
-    for itemID, holderRows in pairs(Access.KeyHolders()) do
+    local holdersByItem = Access.KeyHolders()
+    for itemID in pairs(Access.KEYS) do holdersByItem[itemID] = holdersByItem[itemID] or {} end
+    for itemID, holderRows in pairs(holdersByItem) do
         local classID, _, icon = itemClassFunction(itemID)
         if Access.IsKey(itemID, classID) then
             local itemName = escape((itemNameFunction and itemNameFunction(itemID))

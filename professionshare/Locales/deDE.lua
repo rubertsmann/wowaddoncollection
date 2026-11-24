@@ -216,6 +216,7 @@ addon.Locale.Register("deDE", {
         ["Scholomance"] = "Scholomance",
         ["Stratholme"] = "Stratholme",
         ["Dire Maul"] = "Düsterbruch",
+    ["Dalaran"] = "Dalaran",
         ["Upper Blackrock Spire"] = "Obere Schwarzfelsspitze",
         ["Onyxia's Lair"] = "Onyxias Hort",
         ["Molten Core"] = "Geschmolzener Kern",

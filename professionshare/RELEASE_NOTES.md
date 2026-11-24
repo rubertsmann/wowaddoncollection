@@ -1,3 +1,14 @@
+# ProfessionShare 1.4.2
+
+**English:** Misc Items -> Keys now lists every main dungeon key, also the ones nobody in the guild holds yet (greyed
+out, 0 holders), so you can see at a glance which keys are missing. The Dalaran sewer key is now listed for Dalaran.
+No need for everyone to update at the same time: members on 1.4.x work together as before.
+
+**Deutsch:** Sonstiges -> Schlüssel zeigt jetzt alle wichtigen Dungeonschlüssel, auch die, die noch niemand in der
+Gilde hat (ausgegraut, 0 Besitzer). So siehst du sofort, welche Schlüssel noch fehlen. Der Kanalisationsschlüssel von
+Dalaran wird jetzt für Dalaran angezeigt. Nicht alle müssen gleichzeitig updaten: Mitglieder mit 1.4.x arbeiten wie
+gewohnt zusammen.
+
 # ProfessionShare 1.4.1
 
 **English:** New button in the settings (Interface -> AddOns -> ProfessionShare -> Recipe drops): **Announce the

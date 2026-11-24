@@ -10,7 +10,10 @@ Result after work:    `luajit tests/run.lua` -> 257 passed, 0 failed (three runs
 |---|---|---|---|---|---|---|
 | R1 | Tab "Misc Items", mode dropdown, mode kept, recipe items unchanged | `test_load` (window builds, all three modes refresh), `test_access_model` "misc tables: mode setting validated...", existing `test_offers_model` | OFFLINE (logic, stubbed frames) | 257 passed | pass; look and dropdown NOT verified in game | 2026-11-23 |
 | R2 | Keys mode rows, search, holders, whisper | `test_access_model` "key rows: ..." (2 tests) | OFFLINE | 257 passed | pass (row content); click/whisper NOT verified in game | 2026-11-23 |
-| R3 | Key = class 13 or listed, deny-list | `test_access` "deny-listed one-run keys...", `test_items_api` "access api: keys from bags and key ring..." | OFFLINE | 257 passed | pass; the item ids themselves NOT verified in game | 2026-11-23 |
+| R3 | Key = class 13 or listed, deny-list | `test_access` "deny-listed one-run keys...", `test_items_api` "access api: keys from bags and key ring..." | OFFLINE | 257 passed | pass | 2026-11-23 |
+| R3 | the listed ids on Forever | dev key probe, devChecks.keyProbe from WTF; live access records of six members | IN-GAME | all 10 listed ids resolve (names match, class 13, Seal/Amulet class 4); 277507 "Kanalisationsschlüssel von Dalaran", 267089 "Lagerschlüssel von Krol'Dok" class 13; key ring yes, quest API yes | pass | 2026-11-24 |
+| R4 | key ring on Forever | live access records | IN-GAME | members' keys stored under "keyring" and "bank" | pass | 2026-11-24 |
+| R2b | listed keys nobody holds get a row (user request) | `test_access_model` "key rows: ..." | OFFLINE | 332 passed | pass; look NOT verified in game | 2026-11-24 |
 | R4 | Bags, key ring, bank while open; bank kept | `test_items_api` "access api: keys...", `test_access` "(RF2) ..." | OFFLINE | 257 passed | pass; key ring on Forever unknown | 2026-11-23 |
 | R5 | Attunements from quests/items | `test_items_api` "access api (RF3) ...", `test_access_model` "attunement rows ..." | OFFLINE | 257 passed | pass; quest ids NOT verified in game | 2026-11-23 |
 | R6 | Own record, arev, pulled on change, last | `test_access` "access sync: a changed record reaches a peer once; afterwards only arev travels" | OFFLINE | 257 passed | pass | 2026-11-23 |

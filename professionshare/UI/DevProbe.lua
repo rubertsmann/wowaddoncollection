@@ -745,6 +745,174 @@ function DevProbe.RecipeProbe(extraItemIDs)
     return nil
 end
 
+------------------------------------------------------------------ key probe (Probes section)
+
+local keyProbeRunning = false
+
+-- Everything GetItemInfo / GetItemSpell report for an item (nil while it is not loaded).
+---@param itemID integer
+---@return table|nil
+local function itemInformation(itemID)
+    local getItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    if not getItemInfo then return nil end
+    local ok, name, link, quality, itemLevel, minimumLevel, typeName, subtypeName, stackCount, equipLocation, icon, sellPrice,
+        classID, subclassID, bindType, expansionID = pcall(getItemInfo, itemID)
+    if not ok or not name then return nil end
+    local information = { link = link and link:gsub("|", "||") or nil, quality = quality, itemLevel = itemLevel,
+        minimumLevel = minimumLevel, typeName = typeName, subtypeName = subtypeName, stackCount = stackCount,
+        equipLocation = equipLocation, icon = icon, sellPrice = sellPrice, classID = classID, subclassID = subclassID,
+        bindType = bindType, expansionID = expansionID }
+    local getItemSpell = (C_Item and C_Item.GetItemSpell) or GetItemSpell
+    if getItemSpell then
+        local spellOk, spellName, spellID = pcall(getItemSpell, itemID)
+        if spellOk then information.spellName, information.spellID = spellName, spellID end
+    end
+    return information
+end
+
+-- The item's tooltip for this character as "text {r g b}" lines (nil while it is not loaded).
+---@param itemID integer
+---@return string[]|nil
+local function tooltipEvidence(itemID)
+    local ok, tooltipLines = pcall(addon.Api.ItemTooltipLinesWithColor, itemID)
+    if not ok then return { "tooltip error: " .. tostring(tooltipLines) } end
+    if not tooltipLines then return nil end
+    local evidenceLines = {}
+    for _, tooltipLine in ipairs(tooltipLines) do
+        evidenceLines[#evidenceLines + 1] = tooltipLine.text .. (tooltipLine.r and (" {%.2f %.2f %.2f}"):format(tooltipLine.r,
+            tooltipLine.g or 0, tooltipLine.b or 0) or "")
+    end
+    return evidenceLines
+end
+
+local keyScanRunning = false
+
+-- Walks item ids 1..maximumID through the client's own item data (GetItemInfoInstant, no server query) in slices of
+-- `sliceSize` per frame and collects every item of class Key; then reads their names (asking the server once).
+-- Result in devChecks.keyScan. `done` (optional) is called with the result.
+---@param maximumID? integer default 300000
+---@param sliceSize? integer default 10000
+---@param done? fun(result: table)
+---@return table|nil result (nil while it runs)
+function DevProbe.KeyScan(maximumID, sliceSize, done)
+    if keyScanRunning then addon.Print("key scan already running") return nil end
+    local Api, Access = addon.Api, addon.Access
+    maximumID, sliceSize = maximumID or 300000, sliceSize or 10000
+    local found, nextID = {}, 1
+    local function finish()
+        local result = { ok = true, maximumID = maximumID, keys = {}, unlisted = 0, notLoaded = 0 }
+        for _, itemID in ipairs(found) do
+            local _, subclassID = Api.ItemClass(itemID)
+            local keyResult = { itemID = itemID, name = Api.ItemName(itemID), subclassID = subclassID,
+                instance = Access.KEYS[itemID], denied = Access.DENY[itemID] or nil,
+                info = itemInformation(itemID), lines = tooltipEvidence(itemID) }
+            if not keyResult.name then result.notLoaded = result.notLoaded + 1 end
+            if not keyResult.instance and not keyResult.denied then result.unlisted = result.unlisted + 1 end
+            result.keys[#result.keys + 1] = keyResult
+        end
+        addon.Print(("key scan: ids 1-%d, %d items of class Key, %d not on the list or the deny list, %d names not loaded (/reload writes devChecks.keyScan)")
+            :format(maximumID, #found, result.unlisted, result.notLoaded))
+        recordCheck("keyScan", result)
+        if done then done(result) end
+        return result
+    end
+    local function readNames()
+        local notLoaded = 0
+        for _, itemID in ipairs(found) do if not Api.ItemName(itemID) then notLoaded = notLoaded + 1 end end
+        if notLoaded == 0 or not (C_Timer and C_Timer.After) then keyScanRunning = false return finish() end
+        addon.Print(("key scan: %d keys found, %d names not loaded yet, reading in 5s"):format(#found, notLoaded))
+        C_Timer.After(5, function()
+            keyScanRunning = false
+            addon.Log.Protected("devProbe.keyScan", "the key scan failed", finish)
+        end)
+        return nil
+    end
+    local function slice()
+        local lastID = math.min(nextID + sliceSize - 1, maximumID)
+        for itemID = nextID, lastID do
+            if Api.ItemClass(itemID) == Access.KEY_CLASS then found[#found + 1] = itemID end
+        end
+        nextID = lastID + 1
+        if nextID <= maximumID then
+            if C_Timer and C_Timer.After then
+                C_Timer.After(0, function() addon.Log.Protected("devProbe.keyScan", "the key scan failed", slice) end)
+                return nil
+            end
+            return slice()
+        end
+        return readNames()
+    end
+    keyScanRunning = true
+    addon.Print(("key scan: walking item ids 1-%d (%d per frame)"):format(maximumID, sliceSize))
+    return slice()
+end
+
+-- Every listed key, every key in a known access record, every key my scan sees and `extraItemIDs`, with the client's
+-- name and item class, whether it counts as a key and which instance it is listed for; plus my attunement quest answers.
+-- Items the client has not loaded yet are read again after a few seconds.
+---@param extraItemIDs? integer[]
+---@return table|nil result (nil while it waits for item data)
+function DevProbe.KeyProbe(extraItemIDs)
+    if keyProbeRunning then addon.Print("key probe already running") return nil end
+    local Api, Access = addon.Api, addon.Access
+    local sources = {}
+    local function plan(itemID, source)
+        if type(itemID) ~= "number" then return end
+        sources[itemID] = sources[itemID] or {}
+        sources[itemID][source] = true
+    end
+    for itemID in pairs(Access.KEYS) do plan(itemID, "listed") end
+    local holdersByItem = Access.KeyHolders()
+    for itemID in pairs(holdersByItem) do plan(itemID, "record") end
+    local scanned, accessScan = pcall(Api.ScanAccess)
+    for _, heldKeys in pairs(scanned and type(accessScan) == "table" and accessScan.keys or {}) do
+        for itemID in pairs(heldKeys) do plan(itemID, "scan") end
+    end
+    for _, itemID in ipairs(extraItemIDs or {}) do plan(itemID, "argument") end
+    local function finish()
+        local result = { ok = true, keys = {}, unlisted = 0, notLoaded = 0, attunements = {},
+            keyring = Api.accessStatistics and Api.accessStatistics.keyring or false,
+            questApi = Api.accessStatistics and Api.accessStatistics.questApi or false }
+        for _, itemID in ipairs(addon.Utility.SortedKeys(sources)) do
+            local classID, subclassID = Api.ItemClass(itemID)
+            local keyResult = { itemID = itemID, name = Api.ItemName(itemID), classID = classID, subclassID = subclassID,
+                isKey = Access.IsKey(itemID, classID), denied = Access.DENY[itemID] or nil, instance = Access.KEYS[itemID],
+                holders = #(holdersByItem[itemID] or {}), sources = addon.Utility.SortedKeys(sources[itemID]),
+                info = itemInformation(itemID), lines = tooltipEvidence(itemID) }
+            if not keyResult.name then result.notLoaded = result.notLoaded + 1 end
+            if keyResult.isKey and not keyResult.instance then result.unlisted = result.unlisted + 1 end
+            result.keys[#result.keys + 1] = keyResult
+        end
+        for _, attunement in ipairs(Access.ATTUNEMENTS) do
+            local quests = {}
+            for _, questID in ipairs(attunement.quests) do quests[tostring(questID)] = tostring(Api.QuestDone(questID)) end
+            result.attunements[attunement.key] = { quests = quests,
+                item = attunement.item and Api.ItemCount(attunement.item) or nil }
+        end
+        result.ok = result.notLoaded == 0
+        addon.Print(("key probe: %d items, %d keys without an instance, %d not loaded (/reload writes devChecks.keyProbe):")
+            :format(#result.keys, result.unlisted, result.notLoaded))
+        for _, keyResult in ipairs(result.keys) do
+            addon.Print(("  %d %s: class %s/%s, key=%s, instance=%s, holders=%d (%s)"):format(keyResult.itemID,
+                tostring(keyResult.name or "?"), tostring(keyResult.classID), tostring(keyResult.subclassID),
+                tostring(keyResult.isKey), tostring(keyResult.instance or "-"), keyResult.holders, table.concat(keyResult.sources, ",")))
+        end
+        return recordCheck("keyProbe", result)
+    end
+    local notLoaded = 0
+    for itemID in pairs(sources) do
+        if not Api.ItemName(itemID) then notLoaded = notLoaded + 1 end   -- also asks the server
+    end
+    if notLoaded == 0 or not (C_Timer and C_Timer.After) then return finish() end
+    keyProbeRunning = true
+    addon.Print(("key probe: %d items not loaded yet, reading in 3s"):format(notLoaded))
+    C_Timer.After(3, function()
+        keyProbeRunning = false
+        addon.Log.Protected("devProbe.keyProbe", "the key probe failed", finish)
+    end)
+    return nil
+end
+
 ------------------------------------------------------------------ loot recorder and fake loot (Triggers section)
 
 ---@param itemID integer
@@ -931,6 +1099,8 @@ DevProbe.ENTRIES = {
     { key = "dropin", section = "Triggers", label = "Recipe drop from a member", run = function(arguments) DevProbe.SimulateIncomingDrop(arguments[1]) end },
     { key = "dropmine", section = "Triggers", label = "Answers to my recipe drop", run = function(arguments) DevProbe.SimulateMyDropAnswers(arguments[1]) end },
     { key = "recipes", section = "Probes", label = "Recipes in my bags", run = function(arguments) DevProbe.RecipeProbe(arguments) end },
+    { key = "keyprobe", section = "Probes", label = "Keys and attunements", run = function(arguments) DevProbe.KeyProbe(arguments) end },
+    { key = "keyscan", section = "Probes", label = "All keys in the item data", run = function(arguments) DevProbe.KeyScan(arguments[1]) end },
     { key = "items", section = "Probes", label = "Item probe (catalog)", run = function(arguments) DevProbe.Run(arguments) end },
     { key = "remove", section = "Cleanup", label = "Remove all fake data", run = function() DevProbe.RemoveFakeData() end },
 }
@@ -973,6 +1143,8 @@ if addon.IS_DEVELOPMENT_BUILD then
     end
     addon.SlashCommands.recipeprobe = function(arguments) DevProbe.RecipeProbe(numbersIn(arguments)) end
     addon.SlashCommands.itemprobe = function(arguments) DevProbe.Run(numbersIn(arguments)) end
+    addon.SlashCommands.keyprobe = function(arguments) DevProbe.KeyProbe(numbersIn(arguments)) end
+    addon.SlashCommands.keyscan = function(arguments) DevProbe.KeyScan(numbersIn(arguments)[1]) end
     -- older names of the same entries
     addon.SlashCommands.fakerequest = function() DevProbe.RunEntry("request") end
     addon.SlashCommands.fakeenchanter = function() DevProbe.RunEntry("enchanter") end

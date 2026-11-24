@@ -62,3 +62,22 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: status stays `verifying` (in-game checklist open)
 - Evidence: `luajit tests/run.lua` -> 257 passed, 0 failed
 - Next: user runs the in-game checklist in verify.md
+
+## 2026-11-24 21:35 | VERIFY | Key ids from the guild's real records; dev key probe
+- Did: read the live SavedVariables: six members' access records hold 6893, 7146, 11000, 18249 (listed) and 277507, 267089 (Forever items, not listed, no instance); every location seen is "keyring" or "bank" (key ring exists on Forever); every attunement is false for every member. Added `DevProbe.KeyProbe` (Dev tools -> Probes -> "Keys and attunements", `/psd keyprobe [itemID ...]`): name, item class, key yes/no, listed instance, holders, attunement quest answers -> devChecks.keyProbe. Fixed the Access.KEYS comment that claimed an in-game check.
+- Result: user reports a Dalaran dungeon key is missing its instance; which id it is needs the probe
+- Evidence: `luajit tests/run.lua` -> 332 passed, 0 failed
+- Next: user runs `/psd keyprobe 277507 267089` and /reload; map the Dalaran key in Access.KEYS + "Dalaran" instance name; then "show keys nobody holds"
+
+## 2026-11-24 21:57 | BUILD | Dalaran key, rows for keys nobody holds
+- Did: read devChecks.keyProbe (21:56:38): all 10 listed ids resolve on Forever, key ring and quest API present; 277507 = "Kanalisationsschlüssel von Dalaran", 267089 = "Lagerschlüssel von Krol'Dok". User: Dalaran is missing, the key opens the Dalaran instance -> `Access.KEYS[277507] = "dalaran"`, instance name "Dalaran" (deDE). User asked for all main keys also when nobody holds them -> `Model.BuildKeyRows` adds a row per `Access.KEYS` entry with 0 holders; `UI/Window.lua` greys those names. README, CHANGELOG (Unreleased), doc.md, verify.md.
+- Result: Keys list = held keys + every listed key; whisper stays disabled for 0 holders
+- Evidence: `luajit tests/run.lua` -> 332 passed, 0 failed
+- Next: user /reloads and looks at Misc Items -> Keys; decide what 267089 opens; attunement quest ids still unconfirmed (no member attuned yet)
+
+## 2026-11-24 22:16 | DECISION | Forever's other keys stay unlisted for now
+- Did: dev key scan (devChecks.keyScan 22:11:52): 150 class Key items in ids 1-300000; tooltips of the Forever keys name no instance except 277136 ("Vord'anaargefängnis in den Tiefengrabhügeln"). User: Krol'Dok and the others are not known yet (maybe a future raid).
+- Result: list unchanged (10 classic keys + Dalaran); unlisted keys appear without instance once held; `/psd keyscan` re-checks when new content opens
+- Evidence: spec.md Decisions; `luajit tests/run.lua` -> 332 passed, 0 failed
+- Next: user looks at Misc Items -> Keys after /reload; commit when asked
+

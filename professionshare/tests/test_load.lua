@@ -257,6 +257,39 @@ return {
                         for _, name in ipairs({ "LOOT_ITEM_SELF", "LOOT_ITEM", "GetItemInfoInstant" }) do _G[name] = savedGlobals[name] end   -- pairs would skip nils
                         harness.truthy(pcall(DevProbe.RecipeProbe, {}), "the recipe probe runs without recipe items")
                         harness.truthy(addon.db.devChecks.recipes, "recipe probe result written")
+                        local savedTimer = C_Timer; C_Timer = nil   -- items are not loaded here: read at once
+                        local okK = pcall(DevProbe.KeyProbe, { 277507 })
+                        local savedInstant = GetItemInfoInstant
+                        GetItemInfoInstant = function(itemID)
+                            if itemID == 7 or itemID == 33 or itemID == 11078 then return itemID, "", "", "", 1, 13, 0 end
+                            return itemID, "", "", "", 1, 15, 0
+                        end
+                        local okS, keyScan = pcall(DevProbe.KeyScan, 40, 15)
+                        GetItemInfoInstant = savedInstant
+                        harness.truthy(okS and keyScan, "the key scan runs: " .. tostring(keyScan))
+                        harness.equal(#keyScan.keys, 2, "class Key items in 1-40")
+                        harness.equal(keyScan.keys[2].itemID, 33); harness.equal(keyScan.unlisted, 2)
+                        harness.truthy(addon.db.devChecks.keyScan, "key scan result written")
+                        local savedInfo = GetItemInfo
+                        GetItemInfo = function(itemID) return "Key " .. itemID, "link", 1, 1, 0, "Key", "Key", 1, "", 1, 0, 13, 0, 1, 0 end
+                        local okP, probe = pcall(DevProbe.KeyProbe, { 277507 })
+                        GetItemInfo = savedInfo
+                        harness.truthy(okP and probe and probe.keys[1].info and probe.keys[1].info.classID == 13,
+                            "the key probe stores the item information: " .. tostring(probe))
+                        C_Timer = savedTimer
+                        harness.truthy(okK, "the key probe runs")
+                        local keyProbe = addon.db.devChecks.keyProbe
+                        harness.truthy(keyProbe, "key probe result written")
+                        if keyProbe then
+                            local listed, extra = 0, nil
+                            for _, keyResult in ipairs(keyProbe.keys) do
+                                if keyResult.instance then listed = listed + 1 end
+                                if keyResult.itemID == 277507 then extra = keyResult end
+                            end
+                            harness.equal(listed, addon.Utility.Count(addon.Access.KEYS), "every listed key is probed")
+                            harness.truthy(extra and extra.sources[1] == "argument", "an extra id is probed")
+                            harness.truthy(keyProbe.attunements.mc, "attunement quests are probed")
+                        end
                         -- recipe drops: my loot is announced once in the bags; a member's drop is decided from my own tooltip
                         do
                             local names = { "LOOT_ITEM_SELF", "GetItemInfoInstant", "GetItemInfo", "GetItemCount", "C_TooltipInfo",

@@ -12,7 +12,8 @@ table like the Recipes tab, with its own columns and sort.
 - Tab **Misc Items**: pick the mode in the dropdown at the top left; the search box works in every mode.
 - **Columns** menu (top right): turn the optional columns of the shown mode on or off. Click a column title to sort; click
   again to flip the direction. Every mode remembers its own columns and sort.
-- Keys: click a row to see holders and where they keep the key; click the icon (or "Whisper a holder") to whisper the
+- Keys: every key of the list (`Access.KEYS`) has a row, also with nobody holding it (greyed out, 0 holders); other
+  class Key items appear once somebody holds them. Click a row to see holders and where they keep the key; click the icon (or "Whisper a holder") to whisper the
   first other holder with the key's link. `*` marks keys you hold.
 - Attunements: click a row (or hover) to see who is attuned and who is known not to be. `*` marks raids you are attuned to.
 - `/ps access` prints what the key and attunement scan sees; `/ps access scan` also stores it.
@@ -37,9 +38,10 @@ Only item ids, location keys and attunement keys/booleans are stored and sent. T
 are English with German translations; item names follow the viewer's client.
 
 ## Limits and known issues
-- Item and quest ids come from web sources (Warcraft Tavern keys guide, warcraft.wiki.gg attunement page) and memory;
-  not yet confirmed on Forever (`/ps access`).
-- Whether Forever has a key ring container and the quest API is not known yet.
+- Key ids come from web sources (Warcraft Tavern keys guide); all ten plus the Forever Dalaran sewer key (277507) were
+  confirmed on Forever with the dev key probe (`/psd keyprobe`), and Forever has a key ring and the quest API. The
+  attunement quest ids (warcraft.wiki.gg) are answered by the client but not yet seen "true" on any member.
+- "Lagerschlüssel von Krol'Dok" (267089, Forever) is shown without an instance: what it opens is not known.
 - The bank is "last seen": a key moved out of the bank stays listed there until the next bank visit.
 - Members on 2.3 builds are not listed in Keys/Attunements until they update.
 - No party/raid frame icon yet (deferred, see log).

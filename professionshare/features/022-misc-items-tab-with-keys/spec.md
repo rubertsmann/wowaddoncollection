@@ -108,7 +108,9 @@ members hold which dungeon key) and **Attunements** (which members can enter whi
 - 2026-11-23: Keys and attunements ride on the existing debounced item scan (same bag events) plus `QUEST_TURNED_IN`; no own timer.
 - 2026-11-23: R8 (portrait icon) deferred: Forever's party/raid frames are unknown and the result cannot be checked offline; build after the in-game check of the lists.
 - 2026-11-23: "online first" in R2 dropped: the addon keeps no online state for members; names only.
+- 2026-11-24: Main keys = `Access.KEYS` (the ten classic keys + 277507 Dalaran sewer key, user: "it opens the ini of dalaran"); every listed key has a row even with no holder (user). Forever's other keys found by the dev key scan (Krol'Dok 267089/271721, Brosche der Wächterinnen 277136, Schlüsselsteinfragment 281350, Fenris, Azshara, ...) are NOT listed: user: "krol dok key is not known at the moment - maybe a raid that is opened in the future. the others also not known atm". They still show (without instance) once somebody holds one.
 
 ## Open questions
-- Does Forever have a key ring container, and is `C_QuestLog.IsQuestFlaggedCompleted` available? (needs: game, `/ps access`)
+- ~~Does Forever have a key ring container, and is `C_QuestLog.IsQuestFlaggedCompleted` available?~~ Answered 2026-11-24: both yes (dev key probe).
+- Are the attunement quest ids right? The client answers, but no member has shown "attuned" yet (needs: an attuned member).
 - Are Naxxramas / BWL already in Forever's content? Rows for missing content can be hidden later (needs: user)

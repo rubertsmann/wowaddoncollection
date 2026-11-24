@@ -1607,7 +1607,8 @@ local function buildAvailableTab(availableTab)
     ---@param row table
     ---@param keyRow KeyViewRow
     local function fillKeyRow(row, keyRow)
-        row.label:SetText(keyRow.mine and (keyRow.name .. " |cff33ff99*|r") or keyRow.name)
+        local keyName = keyRow.holderCount == 0 and ("|cff808080" .. keyRow.name .. "|r") or keyRow.name
+        row.label:SetText(keyRow.mine and (keyName .. " |cff33ff99*|r") or keyName)
         Table.SetCell(row, "instance", "|cffaaaaaa" .. keyRow.instance .. "|r")
         Table.SetCell(row, "holderCount", tostring(keyRow.holderCount))
         Table.SetCell(row, "holderNames", "|cff999999" .. keyRow.holderNames .. "|r")

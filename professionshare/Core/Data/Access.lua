@@ -33,8 +33,8 @@ local MAXIMUM_ID, MAXIMUM_KEYS = 2147483647, 60
 ---@type integer item class of keys
 Access.KEY_CLASS = 13
 
--- key item -> instance it opens. Ids from the Warcraft Tavern keys guide and warcraft.wiki.gg, checked in game with
--- /ps access. Entry items of another class (Seal of Ascension, Drakefire Amulet) only count through this list.
+-- key item -> instance it opens. Ids from the Warcraft Tavern keys guide and warcraft.wiki.gg; names and item classes on
+-- this client are checked with the dev key probe. Entry items of another class (Seal of Ascension, Drakefire Amulet) only count through this list.
 ---@type table<integer, string>
 Access.KEYS = {
     [6893] = "gnomeregan",       -- Workshop Key
@@ -47,6 +47,7 @@ Access.KEYS = {
     [18249] = "direMaul",        -- Crescent Key
     [12344] = "upperBlackrock",  -- Seal of Ascension
     [16309] = "onyxia",          -- Drakefire Amulet
+    [277507] = "dalaran",        -- Dalaran sewer key (Forever)
 }
 
 -- class Key items that are left out: they only open something inside one run and vanish or are used up
@@ -87,7 +88,7 @@ function Access.InstanceName(instanceKey)
         gnomeregan = Text["Gnomeregan"], scarlet = Text["Scarlet Monastery"], searingGorge = Text["Searing Gorge"],
         blackrockDepths = Text["Blackrock Depths"], scholomance = Text["Scholomance"], stratholme = Text["Stratholme"],
         direMaul = Text["Dire Maul"], upperBlackrock = Text["Upper Blackrock Spire"], onyxia = Text["Onyxia's Lair"],
-        moltenCore = Text["Molten Core"], blackwingLair = Text["Blackwing Lair"], naxxramas = Text["Naxxramas"],
+        dalaran = Text["Dalaran"], moltenCore = Text["Molten Core"], blackwingLair = Text["Blackwing Lair"], naxxramas = Text["Naxxramas"],
     }
     return instanceKey and names[instanceKey] or nil
 end

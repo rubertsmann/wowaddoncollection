@@ -19,9 +19,17 @@ return {
         Access.Put({ name = "B-R", rev = 1, keys = { [7146] = { bag = true }, [555] = { bag = true }, [424242] = { bag = true } }, att = {} })
         Access.Put({ name = "Me-R", rev = 1, keys = { [7146] = { keyring = true }, [12344] = { bank = true }, [11078] = { bag = true } }, att = {} })
         local rows = addon.Model.BuildKeyRows({ me = "Me-R" }, itemClass, itemName)
-        harness.equal(#rows, 2)
-        local byID = {}
-        for _, row in ipairs(rows) do byID[row.itemID] = row end
+        local byID, held = {}, 0
+        for _, row in ipairs(rows) do
+            byID[row.itemID] = row
+            if row.holderCount > 0 then held = held + 1 end
+        end
+        harness.equal(held, 2)
+        harness.equal(#rows, addon.Utility.Count(Access.KEYS), "every listed key has a row, also with no holder")
+        harness.equal(byID[13704].holderCount, 0); harness.equal(byID[13704].holderNames, "")
+        harness.equal(byID[13704].instance, "Scholomance"); harness.equal(byID[13704].mine, false)
+        harness.equal(addon.Model.KeyContact(byID[13704], "Me-R"), nil, "nobody to whisper")
+        harness.equal(byID[277507].instance, "Dalaran")
         harness.equal(byID[7146].holderCount, 2); harness.truthy(byID[7146].mine)
         harness.equal(byID[7146].instance, "Scarlet Monastery"); harness.equal(byID[7146].name, "The Scarlet Key")
         harness.equal(byID[12344].instance, "Upper Blackrock Spire")
@@ -35,7 +43,8 @@ return {
         addon.Access.Put({ name = "B-R", rev = 1, keys = { [7146] = { bag = true } }, att = {} })
         addon.Access.Put({ name = "C-R", rev = 1, keys = { [12344] = { bag = true } }, att = {} })
         local function search(text) return #addon.Model.BuildKeyRows({ text = text, me = "Me-R" }, itemClass, itemName) end
-        harness.equal(search("scarlet"), 1); harness.equal(search("blackrock"), 1); harness.equal(search("c-r"), 1)
+        harness.equal(search("scarlet"), 1); harness.equal(search("c-r"), 1)
+        harness.equal(search("blackrock"), 3, "Upper Blackrock and the two Blackrock Depths keys (held or not)")
         harness.equal(search("zzz"), 0)
         addon.Store.db.access["X|r-R"] = { name = "X|r-R", rev = 1, keys = { [7146] = { bag = true } }, att = {} }
         local rows = addon.Model.BuildKeyRows({ me = "Me-R" }, itemClass, itemName)

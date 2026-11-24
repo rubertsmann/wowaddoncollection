@@ -25,7 +25,8 @@ shared crafting-order board.
   to take yours back); the owner decides and hands the item over manually. "Remove from my list" hides an offer
   locally until its owner's list changes.
   * **Keys** – which guild members hold which dungeon key (Scarlet Key, Key to the City, Skeleton Key, Shadowforge Key,
-    Seal of Ascension, ...), read from bags, key ring and bank. Click the icon to whisper a holder.
+    Seal of Ascension, Dalaran sewer key, ...), read from bags, key ring and bank. Every main key is listed, also when
+    nobody holds it yet (greyed out, 0 holders). Click the icon to whisper a holder.
   * **Attunements** – who is attuned to Molten Core, Onyxia, Blackwing Lair, Naxxramas and Upper Blackrock Spire, and who
     is known not to be yet.
   * **Reputation** – every guild member's standing with the factions that matter (Hydraxian Waterlords, Argent Dawn,

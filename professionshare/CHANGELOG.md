@@ -2,6 +2,10 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.4.2 (2026-11-24, protocol 2.8, schema 9)
+- Misc Items -> Keys: every main key has a row, also when nobody in the guild holds it (greyed out, 0 holders). The
+  Dalaran sewer key (Forever) is listed for Dalaran. The key ids were checked on Forever. No protocol or schema change.
+
 ## 1.4.1 (2026-11-24, protocol 2.8, schema 9)
 - Settings page, Recipe drops: new button **Announce the recipes in my bags now** (also `/ps drops scan`). Every
   tradeable recipe in the bags (each item once, at most 20, 2 s apart) is announced as if it had just dropped; members
