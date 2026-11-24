@@ -77,7 +77,8 @@ end
 -- the dev tools: "announced", "offline" (not in a guild channel), "bound", "unreadable".
 ---@param itemID integer
 ---@param done? fun(outcome: string)
-function Drops.Announce(itemID, done)
+---@param quiet? boolean no chat line per item (the bag scan prints one summary)
+function Drops.Announce(itemID, done, quiet)
     Drops.ReadRecipe(itemID, function(reading)
         local outcome
         if not reading or not reading.required then outcome = "unreadable"
@@ -85,7 +86,7 @@ function Drops.Announce(itemID, done)
         else
             RecipeDrops.NoteMyDrop(itemID, now())
             outcome = addon.Communication.BroadcastDrop(itemID) and "announced" or "offline"
-            if setting("chat") then
+            if setting("chat") and not quiet then
                 addon.Print(Format(Text["{item} dropped: hover it to see who in the guild can use it."], { item = itemText(itemID) }))
             end
             addon.Events.Fire("DATA_CHANGED", "drops")
@@ -117,6 +118,44 @@ function Drops.OnLootLine(message, done)
     end
     after(BAG_CHECK_SECONDS[1], lookInBags)
     return loot
+end
+
+-- seconds between two announcements of the bag scan (one small GUILD message each; keeps the send queue calm)
+local BAG_SCAN_SPACING = 2
+
+-- Announces every tradeable recipe in my bags as if it had just dropped (settings page button, /ps drops scan): the
+-- guild is told, members who can learn one get the alert, and the recipe's tooltip lists who answered.
+-- done(counts) with announced / bound / unreadable / offline counts; false when sharing is switched off.
+---@param done? fun(counts: table<string, integer>)
+---@return boolean started
+function Drops.AnnounceBags(done)
+    if not setting("share") then
+        addon.Print(Text["Recipe drops: sharing is switched off, nothing was announced."])
+        return false
+    end
+    local itemIDs = RecipeDrops.BagScanList(addon.Api.BagRecipeItems())
+    addon.Log.Information("drops.bagScan", "the recipes in my bags are announced as new drops", { items = #itemIDs })
+    if #itemIDs == 0 then
+        addon.Print(Text["Recipe drops: no tradeable recipe in your bags."])
+        if done then done({}) end
+        return true
+    end
+    addon.Print(Format(Text["Recipe drops: announcing {n} recipes from your bags..."], { n = #itemIDs }))
+    local counts, finished = {}, 0
+    for index, itemID in ipairs(itemIDs) do
+        after((index - 1) * BAG_SCAN_SPACING, function()
+            Drops.Announce(itemID, function(outcome)
+                counts[outcome] = (counts[outcome] or 0) + 1
+                finished = finished + 1
+                if finished < #itemIDs then return end
+                addon.Print(Format(Text["Recipe drops: {announced} announced, {skipped} skipped (bind on pickup or no profession). Hover them to see who answered."],
+                    { announced = counts.announced or 0, skipped = (counts.bound or 0) + (counts.unreadable or 0) }))
+                if (counts.offline or 0) > 0 then addon.Print(Text["Recipe drops: not connected to the guild channel yet, try again in a moment."]) end
+                if done then done(counts) end
+            end, true)
+        end)
+    end
+    return true
 end
 
 ------------------------------------------------------------------ a member's drop
@@ -248,12 +287,13 @@ end)
 local function onOff(value) return value and Text["on"] or Text["off"] end
 
 addon.SlashCommands.drops = function(arguments)
+    if tostring(arguments or ""):lower():match("^%s*scan%s*$") then Drops.AnnounceBags() return end
     local settingKey, valueText = tostring(arguments or ""):lower():match("^%s*(%a+)%s+(%a+)")
     if settingKey then
         local value
         if valueText == "on" then value = true elseif valueText == "off" then value = false end
         if value == nil or not RecipeDrops.Set(interfaceSettings(), settingKey, value) then
-            addon.Print(Format(Text["Usage: {cmd} drops [share|chat|icon on|off]"], { cmd = (addon.SLASH_COMMANDS or {})[1] }))
+            addon.Print(Format(Text["Usage: {cmd} drops [scan | share|chat|icon on|off]"], { cmd = (addon.SLASH_COMMANDS or {})[1] }))
             return
         end
     end

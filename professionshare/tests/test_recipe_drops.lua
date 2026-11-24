@@ -117,4 +117,16 @@ return {
         local status, reason = oldPeer:OnMessage({ v = addon.PROTOCOL, t = "DROP", item = 14468 }, "Anna-R")
         harness.equal(status, "dropped"); harness.truthy(tostring(reason):find("unknown message type"))
     end,
+
+    ["recipe drops: the bag scan announces each tradeable recipe once, at most the tooltip limit"] = function(harness)
+        local addon = harness.addon()
+        local RecipeDrops = addon.RecipeDrops
+        local list = RecipeDrops.BagScanList({ { itemID = 100, bound = false }, { itemID = 200, bound = true },
+            { itemID = 100, bound = false }, { itemID = 300, bound = false }, { itemID = -5, bound = false }, { itemID = 0 / 0 } })
+        harness.equal(#list, 2); harness.equal(list[1], 100); harness.equal(list[2], 300)
+        local many = {}
+        for index = 1, 50 do many[index] = { itemID = 1000 + index, bound = false } end
+        harness.equal(#RecipeDrops.BagScanList(many), RecipeDrops.MAXIMUM_DROPS)
+        harness.equal(#RecipeDrops.BagScanList(nil), 0)
+    end,
 }

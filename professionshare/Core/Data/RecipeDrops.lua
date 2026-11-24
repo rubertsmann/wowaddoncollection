@@ -152,6 +152,23 @@ function RecipeDrops.NoteMyDrop(itemID, now)
     return drop
 end
 
+-- Which recipes from my bags a forced scan announces, as if each had just dropped: each item id once, bound ones left
+-- out, at most MAXIMUM_DROPS (the tooltip keeps no more). bagItems: Api.BagRecipeItems() entries.
+---@param bagItems { itemID: integer, bound: boolean }[]
+---@return integer[] itemIDs in bag order
+function RecipeDrops.BagScanList(bagItems)
+    local itemIDs, seen = {}, {}
+    for _, bagItem in ipairs(bagItems or {}) do
+        local itemID = addon.Utility.SafeInteger(bagItem.itemID, 1, RecipeDrops.MAXIMUM_ITEM_ID)
+        if itemID and not bagItem.bound and not seen[itemID] then
+            seen[itemID] = true
+            itemIDs[#itemIDs + 1] = itemID
+            if #itemIDs >= RecipeDrops.MAXIMUM_DROPS then break end
+        end
+    end
+    return itemIDs
+end
+
 -- Stores an answer to one of my drops; false for an answer to anything else (malformed, not my drop, too late).
 ---@param sender any
 ---@param message any

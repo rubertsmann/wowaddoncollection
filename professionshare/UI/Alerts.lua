@@ -349,6 +349,13 @@ local function buildOptionsPanel()
         Text["Off: your drops are not announced and you do not answer when a member's recipe drops."])
     addDropCheck("chat", Text["Chat message for a recipe drop"])
     addDropCheck("icon", Text["Minimap button shows a letter when a recipe I can learn drops"])
+    local bagScanButton = newButton(260, 24); bagScanButton:SetPoint("TOPLEFT", 20, nextTop - 4)
+    bagScanButton:SetText(Text["Announce the recipes in my bags now"])
+    bagScanButton:SetScript("OnClick", function() addon.Drops.AnnounceBags() end)
+    addTooltip(bagScanButton, Text["Announce the recipes in my bags now"],
+        Text["Treats every tradeable recipe in your bags as if it had just dropped: guild members who can learn one are told, and its tooltip shows who answered. For testing; members get the alert as for a real drop."])
+    refreshers[#refreshers + 1] = function() bagScanButton:SetEnabled(RecipeDrops.Get(interfaceSettings(), "share")) end
+    nextTop = nextTop - 34
 
     ------------------------------------------------ Recipe list
     addSection(Text["Recipe list"], Text["Columns shown in the Recipes table. Click a column title in the window to sort by it."])

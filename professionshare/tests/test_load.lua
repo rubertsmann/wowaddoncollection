@@ -116,6 +116,9 @@ return {
                 harness.truthy(okE, "refreshing the cooldown grid, one tile per crafter, failed: " .. tostring(errE))
                 addon.db.ui.cooldownExpanded = nil
                 addon.MiscTables.SetMode(addon.db.ui, "offers")
+                local okBag, errBag = pcall(addon.Drops.AnnounceBags)
+                harness.truthy(okBag, "the bag scan of recipe drops failed: " .. tostring(errBag))
+                harness.truthy(pcall(addon.SlashCommands.drops, "scan"), "/ps drops scan failed")
                 harness.truthy(addon.SlashCommands.cd, "/ps cd missing")
                 local okC, errC = pcall(addon.SlashCommands.cd, "scan")
                 harness.truthy(okC, "/ps cd failed: " .. tostring(errC))
