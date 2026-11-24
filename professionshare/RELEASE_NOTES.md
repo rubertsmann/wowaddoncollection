@@ -1,3 +1,28 @@
+# ProfessionShare 1.4.0
+
+**English:** The Misc Items tab has two new lists. **Cooldowns** shows the crafts with a cooldown (Transmute, Mooncloth,
+Salt Shaker) as a grid of icons: each one shows how long until somebody in the guild can craft it again and glows when
+someone online is ready. Hover an icon to see every crafter and their time left; click it to whisper the best crafter
+with the craft's link already in the chat box, or right-click to choose a crafter. **Reputation** lists the guild's
+standing with the factions that matter (Argent Dawn, Timbermaw, Hydraxian Waterlords, cities and more), with a faction
+filter, search, and a hint what each standing unlocks. New **recipe drop alerts**: when a tradeable recipe drops into
+your bags, guild members who can learn it get a chat line or the minimap icon, and the recipe's tooltip shows you who
+answered. All settings are now grouped on one page (Interface -> AddOns -> ProfessionShare, or `/ps options`), with a
+switch for the minimap button. Members on older versions keep working with you, but only members on this version share
+cooldowns, reputation and recipe drops.
+
+**Deutsch:** Der Reiter Sonstiges hat zwei neue Listen. **Abklingzeiten** zeigt die Rezepte mit Abklingzeit
+(Transmutieren, Mondstoff, Salzstreuer) als Symbolraster: Jedes Symbol zeigt, wie lange es dauert, bis jemand in der
+Gilde es wieder herstellen kann, und leuchtet, wenn jemand online bereit ist. Fahre über ein Symbol, um alle Hersteller
+mit ihrer Restzeit zu sehen; ein Klick flüstert den besten Hersteller mit dem Link des Rezepts im Chatfeld an, ein
+Rechtsklick lässt dich einen Hersteller wählen. **Ruf** zeigt den Ruf der Gilde bei den wichtigen Fraktionen
+(Argentumdämmerung, Holzschlundfeste, Hydraxianer, Hauptstädte und mehr), mit Fraktionsfilter, Suche und einem Hinweis,
+was jede Rufstufe freischaltet. Neu sind **Rezept-Fundmeldungen**: Fällt ein handelbares Rezept in deine Taschen,
+bekommen Gildenmitglieder, die es lernen können, eine Chatzeile oder das Minimap-Symbol, und der Tooltip des Rezepts
+zeigt dir, wer geantwortet hat. Alle Einstellungen stehen jetzt gebündelt auf einer Seite (Interface -> AddOns ->
+ProfessionShare oder `/ps options`), mit einem Schalter für den Minimap-Knopf. Mitglieder mit älteren Versionen arbeiten
+weiter mit dir zusammen, aber nur Mitglieder mit dieser Version teilen Abklingzeiten, Ruf und Rezeptfunde.
+
 # ProfessionShare 1.3.0
 
 **English:** New **Feedback** tab: send feedback, a feature request or a bug report straight to the addon developer.

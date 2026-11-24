@@ -2,7 +2,7 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
-## 1.4.0 (unreleased, protocol 2.8, schema 9)
+## 1.4.0 (2026-11-24, protocol 2.8, schema 9)
 - New **Cooldowns** mode in the Misc Items tab (feature 028): a grid of the timegated crafts (all transmutes as one
   tile, Mooncloth, Salt Shaker) with a cooldown sweep, time left, a "ready / all" badge and a glow while an online
   crafter is ready; a flash when a cooldown runs out. Tooltip: every crafter (online dot, time left, ready time,
