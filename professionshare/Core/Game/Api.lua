@@ -756,6 +756,113 @@ function Api.ScanAccess()
     return { keys = keysByLocation, att = attunements }
 end
 
+------------------------------------------------------------------ faction standings (Reputation)
+
+---@class FactionInformation
+---@field name string|nil the faction's name in this client's language
+---@field standing integer|nil 1 Hated .. 8 Exalted
+---@field progress integer|nil progress inside the standing
+---@field size integer|nil size of the standing
+
+-- One faction as this client reports it, or nil when it cannot be asked. Classic GetFactionInfoByID first, the
+-- C_Reputation table API of newer clients second.
+---@param factionID integer
+---@return FactionInformation|nil
+local function factionInformation(factionID)
+    if GetFactionInfoByID then
+        local name, _, standing, barMinimum, barMaximum, barValue = tryCall("GetFactionInfoByID", GetFactionInfoByID, factionID)
+        if type(standing) == "number" and type(barMinimum) == "number" and type(barMaximum) == "number" and type(barValue) == "number" then
+            return { name = name, standing = standing, progress = barValue - barMinimum, size = barMaximum - barMinimum }
+        end
+        if type(name) == "string" then return { name = name } end
+    end
+    if C_Reputation and C_Reputation.GetFactionDataByID then
+        local factionData = tryCall("C_Reputation.GetFactionDataByID", C_Reputation.GetFactionDataByID, factionID)
+        if type(factionData) == "table" then
+            local low, high, current = factionData.currentReactionThreshold, factionData.nextReactionThreshold, factionData.currentStanding
+            if type(factionData.reaction) == "number" and type(low) == "number" and type(high) == "number" and type(current) == "number" then
+                return { name = factionData.name, standing = factionData.reaction, progress = current - low, size = high - low }
+            end
+            return { name = factionData.name }
+        end
+    end
+    return nil
+end
+
+-- the faction ids in the player's reputation list as it is shown (children of collapsed headers are not listed)
+---@return table<integer, true>
+local function listedFactionIDs()
+    local factionIDs = {}
+    local numberOfFactions = (C_Reputation and C_Reputation.GetNumFactions) or GetNumFactions
+    local count = tonumber(tryCall("GetNumFactions", numberOfFactions)) or 0
+    for factionIndex = 1, math.min(count, 500) do
+        local factionID
+        if GetFactionInfo then
+            factionID = select(14, tryCall("GetFactionInfo", GetFactionInfo, factionIndex))
+        elseif C_Reputation and C_Reputation.GetFactionDataByIndex then
+            local factionData = tryCall("C_Reputation.GetFactionDataByIndex", C_Reputation.GetFactionDataByIndex, factionIndex)
+            factionID = type(factionData) == "table" and factionData.factionID or nil
+        end
+        if type(factionID) == "number" then factionIDs[factionID] = true end
+    end
+    return factionIDs
+end
+
+---@class ReputationScanStatistics
+---@field api boolean the client answers faction questions
+---@field listed integer factions in the shown reputation list
+---@field met integer listed factions (FactionHints) the character has met
+
+---@type ReputationScanStatistics of the last ScanReputation (for /ps rep)
+Api.reputationStatistics = { api = false, listed = 0, met = 0 }
+
+-- My standing with every faction of FactionHints.FACTIONS I have met, or nil when the client cannot be asked (the record
+-- then stays as it is). Factions of the other side are skipped. A faction counts as met when it is in my reputation list,
+-- or when its standing is not an untouched default (Neutral or Hated with no progress), which also finds factions under a
+-- collapsed header.
+---@return table<integer, FactionStanding>|nil
+function Api.ScanReputation()
+    local statistics = { api = false, listed = 0, met = 0 }
+    Api.reputationStatistics = statistics
+    local listed = listedFactionIDs()
+    statistics.listed = addon.Utility.Count(listed)
+    local mySide = UnitFactionGroup and tryCall("UnitFactionGroup", UnitFactionGroup, "player")
+    local standings = {}
+    for _, faction in ipairs(addon.FactionHints.FACTIONS) do
+        local otherSide = faction.side ~= nil and type(mySide) == "string" and faction.side ~= mySide
+        local information = not otherSide and factionInformation(faction.id)
+        if information and information.standing then
+            statistics.api = true
+            local untouched = (information.standing == 4 or information.standing == 1) and information.progress == 0
+            if listed[faction.id] or not untouched then
+                standings[faction.id] = { s = information.standing, v = information.progress, m = information.size }
+                statistics.met = statistics.met + 1
+            end
+        end
+    end
+    if not statistics.api then return nil end
+    return standings
+end
+
+-- the faction's name in this client's language, or nil
+---@param factionID integer
+---@return string|nil
+function Api.FactionName(factionID)
+    local information = factionInformation(factionID)
+    local name = information and information.name
+    if type(name) == "string" and name ~= "" then return name end
+    return nil
+end
+
+-- the game's own label of a standing ("Honored", "Wohlwollend"), or nil
+---@param standing integer
+---@return string|nil
+function Api.StandingLabel(standing)
+    local label = _G["FACTION_STANDING_LABEL" .. tostring(standing)]
+    if type(label) == "string" and label ~= "" then return label end
+    return nil
+end
+
 ------------------------------------------------------------------ craft and whisper from lists
 
 ---@param text any

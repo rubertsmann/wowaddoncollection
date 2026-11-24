@@ -2,6 +2,18 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.4.0 (unreleased, protocol 2.6, schema 8)
+- New **Reputation** list in the Misc Items tab (feature 025): one row per guild member and faction (raid factions,
+  recipe vendors, home cities, goblin towns, battlegrounds) with Faction, Player, Standing, Progress and Updated
+  (hidden by default) columns. Every column sorts (Standing by level, then progress), a dropdown filters one faction,
+  the search box matches every word in faction, member and standing. Hovering a row shows what each standing of that
+  faction unlocks, the member's reached standings highlighted; clicking a member's name (or the icon) opens a whisper; the hints are static data
+  (`Core/Data/FactionHints.lua`, updated with the `update-faction-hints` project skill). `/ps rep [scan]` probes it.
+- Each client shares its own standings (`HELLO.rrev`, `WANTR`/`REP`): a level change at once, progress at most every
+  30 minutes. Only factions the character has met are shared.
+- The Recipes search and the Reputation search share one word matcher (`Model.SearchWords`, `Model.MatchesWords`).
+- Protocol 2.6 (additive: 2.5 peers ignore `rrev` and drop `WANTR`/`REP`), schema 8 (additive: `rep`).
+
 ## 1.3.0 (2026-11-23, protocol 2.5, schema 7, LibGuildSync MINOR 6)
 - New **Feedback** tab (feature 024): send feedback, a feature request or a bug report (type dropdown with a template
   text per type) to the addon developer. Bug reports attach a diagnostic snapshot (version, sync state, newest

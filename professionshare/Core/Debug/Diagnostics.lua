@@ -251,6 +251,10 @@ function Diagnostics.Report(options)
                 local pull = communication.sync.wantedAccess[playerName]
                 addLine("pulled access record of %s (rev %s) %ds ago", playerName, tostring(pull.revision), now - (pull.startedAt or now))
             end
+            for _, playerName in ipairs(sortedKeys(communication.sync.wantedReputation or {})) do
+                local pull = communication.sync.wantedReputation[playerName]
+                addLine("pulled reputation record of %s (rev %s) %ds ago", playerName, tostring(pull.revision), now - (pull.startedAt or now))
+            end
             addLine("scheduled sends: %d", #(communication.sync.pending or {}))
         end
     end
@@ -284,6 +288,13 @@ function Diagnostics.Report(options)
         end
         addLine("%s%s rev=%s keys=%d att=%s", playerName, playerName == myName and " (me)" or "", tostring(accessRecord.rev),
             count(accessRecord.keys), table.concat(attunementParts, ","))
+    end
+    addLine("")
+    addLine("--- reputation records held (%d) ---", count(database.rep or {}))
+    for _, playerName in ipairs(sortedKeys(database.rep or {})) do
+        local reputationRecord = database.rep[playerName]
+        addLine("%s%s rev=%s factions=%d", playerName, playerName == myName and " (me)" or "", tostring(reputationRecord.rev),
+            count(reputationRecord.f))
     end
     -- feedback: only counts (the text is for the developer, not for every exported report)
     local feedbackRecordCount, feedbackMessageCount = addon.Feedback.Counts()

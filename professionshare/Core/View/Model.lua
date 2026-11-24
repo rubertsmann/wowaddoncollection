@@ -41,6 +41,33 @@ end
 ---@return string
 local function sortKey(text) return addon.Utility.SearchKey(text or "") end
 
+-- The words of a search text, each folded like Utility.SearchKey (case and accents do not matter). Shared by every list
+-- with a free-text search: a row matches when EVERY word appears somewhere in its texts (Model.MatchesWords).
+---@param text string|nil
+---@return string[]
+function Model.SearchWords(text)
+    local searchWords = {}
+    for searchWord in sortKey(text):gmatch("%S+") do searchWords[#searchWords + 1] = searchWord end
+    return searchWords
+end
+
+-- Whether every search word appears in at least one of the texts (non-strings are skipped). No words match everything.
+---@param searchWords string[]
+---@param texts any[]
+---@return boolean
+function Model.MatchesWords(searchWords, texts)
+    if #searchWords == 0 then return true end
+    local searchKeys = {}
+    for _, text in ipairs(texts) do
+        if type(text) == "string" then searchKeys[#searchKeys + 1] = sortKey(text) end
+    end
+    local haystack = table.concat(searchKeys, "\n")
+    for _, searchWord in ipairs(searchWords) do
+        if not haystack:find(searchWord, 1, true) then return false end
+    end
+    return true
+end
+
 ---@param left { name: string, key: any }
 ---@param right { name: string, key: any }
 ---@return boolean
@@ -258,8 +285,7 @@ end
 ---@return RecipeRow[]
 function Model.BuildRecipeRows(store, state, itemNameFunction, lookups)
     lookups = lookups or {}
-    local searchWords = {}
-    for searchWord in sortKey(state.text):gmatch("%S+") do searchWords[#searchWords + 1] = searchWord end
+    local searchWords = Model.SearchWords(state.text)
     local selectedCategories = type(state.categories) == "table" and next(state.categories) and state.categories or nil
     local rowByRecipe, recipeRows = {}, {}
     for _, characterRecord in pairs(store.db.chars) do
@@ -301,14 +327,7 @@ function Model.BuildRecipeRows(store, state, itemNameFunction, lookups)
             if lookups.text and catalogEntry and catalogEntry.produces then searchableTexts[#searchableTexts + 1] = lookups.text(catalogEntry.produces) end
             -- a recipe without an item (enchant) is searched by its spell's effect text
             if lookups.effect and not (catalogEntry and catalogEntry.produces) then searchableTexts[#searchableTexts + 1] = lookups.effect(recipeRow.recipeID) end
-            local searchKeys = {}
-            for _, searchableText in ipairs(searchableTexts) do
-                if type(searchableText) == "string" then searchKeys[#searchKeys + 1] = sortKey(searchableText) end
-            end
-            local haystack = table.concat(searchKeys, "\n")
-            for _, searchWord in ipairs(searchWords) do
-                if not haystack:find(searchWord, 1, true) then keep = false; break end
-            end
+            keep = Model.MatchesWords(searchWords, searchableTexts)
         end
         if keep then
             recipeRow.crafterCount = #recipeRow.crafters
@@ -687,6 +706,142 @@ function Model.BuildAttunementRows(state, itemClassFunction)
         end
     end
     return attunementRows
+end
+
+------------------------------------------------------------------ faction standings
+
+---@class ReputationFilterState
+---@field text? string free-text search
+---@field me? string
+---@field faction? integer only this faction (nil: all)
+
+---@class ReputationLookups
+---@field factionName? fun(factionID: integer): string|nil the faction's name in the viewer's client
+---@field standingLabel? fun(standing: integer): string|nil the client's label of a standing
+
+---@class ReputationViewRow
+---@field key string owner .. "#" .. faction id
+---@field factionID integer
+---@field name string faction name, viewer's language
+---@field icon string
+---@field who string raw owner name
+---@field playerName string escaped short name
+---@field standing integer 1 Hated .. 8 Exalted
+---@field standingLabel string
+---@field standingRank number sorts by level, then progress
+---@field progress integer
+---@field size integer
+---@field progressText string "4200/12000"
+---@field updated integer the record's revision (server time of its last shared change)
+---@field mine boolean
+
+-- this addon's standing labels in the viewer's language, used when the client has none (index = standing)
+---@return string[]
+local function standingLabels()
+    local Text = addon.Text
+    return { Text["Hated"], Text["Hostile"], Text["Unfriendly"], Text["Neutral"], Text["Friendly"], Text["Honored"],
+        Text["Revered"], Text["Exalted"] }
+end
+
+-- The label of a standing in the viewer's language: the client's own label, else this addon's translation.
+---@param standing integer
+---@param lookups? ReputationLookups
+---@return string
+function Model.StandingLabel(standing, lookups)
+    local label = lookups and lookups.standingLabel and lookups.standingLabel(standing)
+    if type(label) == "string" and label ~= "" then return label end
+    return standingLabels()[standing] or tostring(standing)
+end
+
+-- The faction's name in the viewer's language: the client's name, else the English name of the hint data.
+---@param factionID integer
+---@param lookups? ReputationLookups
+---@return string
+function Model.FactionName(factionID, lookups)
+    local name = lookups and lookups.factionName and lookups.factionName(factionID)
+    if type(name) == "string" and name ~= "" then return name end
+    local faction = addon.FactionHints.Faction(factionID)
+    return faction and faction.name or ("#" .. tostring(factionID))
+end
+
+-- One row per member and faction over every known record. Owner names come from peers and are escaped; faction names
+-- and standing labels from this client or this addon. The search matches every word in faction (also its English
+-- name), player and standing.
+---@param state ReputationFilterState
+---@param lookups? ReputationLookups
+---@return ReputationViewRow[]
+function Model.BuildReputationRows(state, lookups)
+    local FactionHints = addon.FactionHints
+    local searchWords = Model.SearchWords(state.text)
+    local factionNames = {}
+    local reputationRows = {}
+    for owner, reputationRecord in pairs(addon.Store.db.rep) do
+        local playerName = escape(addon.Utility.ShortName(owner) or owner)
+        for factionID, standing in pairs(reputationRecord.f) do
+            local faction = FactionHints.Faction(factionID)
+            if faction and (state.faction == nil or state.faction == factionID) then
+                factionNames[factionID] = factionNames[factionID] or escape(Model.FactionName(factionID, lookups))
+                local standingLabel = escape(Model.StandingLabel(standing.s, lookups))
+                if Model.MatchesWords(searchWords, { factionNames[factionID], faction.name, playerName, standingLabel }) then
+                    reputationRows[#reputationRows + 1] = { key = owner .. "#" .. factionID, factionID = factionID,
+                        name = factionNames[factionID], icon = faction.icon, who = owner, playerName = playerName,
+                        standing = standing.s, standingLabel = standingLabel,
+                        standingRank = standing.s + (standing.m > 0 and standing.v / standing.m or 0) * 0.999,
+                        progress = standing.v, size = standing.m, progressText = standing.v .. "/" .. standing.m,
+                        updated = reputationRecord.rev, mine = owner == state.me }
+                end
+            end
+        end
+    end
+    return reputationRows
+end
+
+---@class FactionChoice
+---@field id integer
+---@field name string escaped
+
+-- The factions somebody in the guild has a standing with, sorted by name (the faction filter dropdown).
+---@param lookups? ReputationLookups
+---@return FactionChoice[]
+function Model.ReputationFactions(lookups)
+    local seen, factionChoices = {}, {}
+    for _, reputationRecord in pairs(addon.Store.db.rep) do
+        for factionID in pairs(reputationRecord.f) do
+            if not seen[factionID] and addon.FactionHints.Faction(factionID) then
+                seen[factionID] = true
+                factionChoices[#factionChoices + 1] = { id = factionID, name = escape(Model.FactionName(factionID, lookups)), key = factionID }
+            end
+        end
+    end
+    table.sort(factionChoices, byNameThenKey)
+    return factionChoices
+end
+
+---@class FactionHintLine
+---@field standing integer
+---@field label string standing label, viewer's language
+---@field text string hint text, viewer's language
+---@field state "reached"|"next"|"later" relative to the given standing (nil standing: every line "later")
+---@field items integer[]
+
+-- The hint lines of a faction for the tooltip, marked against a player's standing.
+---@param factionID integer
+---@param standing integer|nil
+---@param languageCode string|nil
+---@param lookups? ReputationLookups
+---@return FactionHintLine[]
+function Model.FactionHintLines(factionID, standing, languageCode, lookups)
+    local FactionHints = addon.FactionHints
+    local faction = FactionHints.Faction(factionID)
+    local nextHint = FactionHints.NextHint(factionID, standing)
+    local hintLines = {}
+    for _, hint in ipairs(faction and faction.hints or {}) do
+        local state = "later"
+        if standing and hint.standing <= standing then state = "reached" elseif hint == nextHint and standing then state = "next" end
+        hintLines[#hintLines + 1] = { standing = hint.standing, label = Model.StandingLabel(hint.standing, lookups),
+            text = FactionHints.HintText(hint, languageCode), state = state, items = hint.items or {} }
+    end
+    return hintLines
 end
 
 ------------------------------------------------------------------ craft and whisper from lists

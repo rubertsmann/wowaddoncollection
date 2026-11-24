@@ -98,13 +98,17 @@ return {
                 harness.truthy(pcall(addon.UI.Refresh), "refreshing the available tab failed")
                 -- the Misc Items modes: keys and attunements with a peer's record, then back to recipe items
                 addon.Access.Put({ name = "B-R", rev = 5, keys = { [7146] = { keyring = true } }, att = { mc = true, bwl = false } })
-                for _, mode in ipairs({ "keys", "attunements", "offers" }) do
+                addon.Reputation.Put({ name = "B-R", rev = 5, f = { [59] = { s = 6, v = 4200, m = 12000 } } })
+                for _, mode in ipairs({ "keys", "attunements", "reputation", "offers" }) do
                     addon.MiscTables.SetMode(addon.db.ui, mode)
                     local okM, errM = pcall(addon.UI.Refresh)
                     harness.truthy(okM, "refreshing the " .. mode .. " mode failed: " .. tostring(errM))
                 end
                 harness.truthy(addon.SlashCommands.access, "/ps access missing")
                 harness.truthy(pcall(addon.SlashCommands.access, ""), "/ps access failed")
+                harness.truthy(addon.SlashCommands.rep, "/ps rep missing")
+                local okR, errR = pcall(addon.SlashCommands.rep, "")
+                harness.truthy(okR, "/ps rep failed: " .. tostring(errR))
                 -- the games moved to the GuildGames addon; no tab, no dev commands, no game module
                 harness.equal(addon.Games, nil); harness.equal(addon.GamesTab, nil)
                 harness.truthy(not slurp("UI/Window.lua"):find('key = "games"', 1, true), "the window still defines a games tab")

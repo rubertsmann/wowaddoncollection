@@ -65,6 +65,8 @@ Display: every peer-originated string leaves `Core/View/Model.lua` escaped (`|` 
 | 4 | 0.6.0 | + `games` (section 9) |
 | 5 | 0.7.0 | - `games` and the games UI settings (moved to GuildGames, feature 015) |
 | 6 | 1.2.0 | + `access` (dungeon keys and raid attunements, section 12) |
+| 7 | 1.3.0 | + `feedback`, `feedbackState`, `feedbackDelivered` (section 13) |
+| 8 | 1.4.0 | + `rep` (faction standings, section 14) |
 
 - Migrations run stepwise in `Store.Migrate` (`MIGRATIONS[n]` = n -> n+1). Peer-derived caches (`chars`, `catalog`) are
   re-fetchable, so a migration may drop them; `orders` and the viewer's own record deserve care.
@@ -185,3 +187,23 @@ Additive minor change: a 2.4 peer ignores `frev` and drops `WANTF`/`FEEDBACK` as
   (the reader's local status), `feedbackDelivered[t] = true` (sender only: my messages a reader has asked for, shown as
   "delivered"). Schema 7, migration 6 -> 7 creates the tables. Re-validated on every load; not dropped by
   the roster prune, the version reset or `/ps clean` (the developer keeps messages of members who left).
+
+## 14. Faction standings (protocol 2.6, schema 8; feature 025)
+Additive minor change: a 2.5 peer ignores `rrev` and drops `WANTR`/`REP` as unknown message types.
+- `HELLO` gets optional `rrev` = `rev` of my reputation record (omitted when I have none). A receiver holding an older
+  (or no) record whispers `WANTR {names={sender}}`; same engine, retries and dedup as `WANTA` (record kind `rep`,
+  registered after `access`).
+- `REP {rep = rec}`: `rec = { name, rev, f = { [factionID] = { s, v, m } } }`: `s` standing 1 Hated .. 8 Exalted, `v`
+  progress inside the standing, `m` size of the standing (`0 <= v <= m <= 1 000 000`). Only factions of
+  `Core/Data/FactionHints.lua` `FACTIONS` are sent; factions the author has not met are left out. The author is the only
+  writer; a newer `rev` replaces the whole record.
+- Traffic: a standing level change (or a newly met faction) bumps `rev` at once; a progress-only change at most every
+  `Reputation.PROGRESS_INTERVAL` (30 min), so farming reputation does not make the guild re-pull the record per kill.
+- `Reputation.Sanitize` (allow-list): <= 64 entries, faction ids 1..100000, integers in range, `v <= m`, `rev` in
+  `[0, now + 1 day]`; a malformed entry rejects the record, a well-formed entry for a faction this build does not list
+  is skipped (a newer build may track more factions).
+- Display safety: faction names and standing labels come from the viewer's client (English data name / addon
+  translation as fallback); owner names are escaped in `Core/View/Model.lua`. The hint texts are static data of the
+  viewer's own build and never travel.
+- Stored: `rep[name]` (schema 8, migration 7 -> 8 creates the table); re-validated on every load, dropped for members
+  who left the guild, emptied by `/ps clean`, dropped for peers by the version reset like `access`.

@@ -54,9 +54,9 @@ local function countSent(b, messageType)
 end
 
 return {
-    ["feedback: protocol 2.5 and schema 7 are pinned"] = function(harness)
+    ["feedback: protocol 2.5+ and schema 7+ (feedback arrived there)"] = function(harness)
         local addon = fresh(harness)
-        harness.equal(addon.PROTOCOL_MINOR, 5); harness.equal(addon.Store.SCHEMA, 7)
+        harness.truthy(addon.PROTOCOL_MINOR >= 5); harness.truthy(addon.Store.SCHEMA >= 7)
     end,
 
     ["feedback: Add cleans the text, refuses empty/duplicate/unknown type, keeps the newest 10, rev grows"] = function(harness)
@@ -218,7 +218,7 @@ return {
         local sv = { schema = 6, chars = {}, catalog = {}, orders = {}, offers = {}, hidden = {}, ui = {}, me = "Me-R",
             access = { ["A-R"] = { name = "A-R", rev = BIG - 5, keys = { [7146] = { bag = true } }, att = {} } } }
         local out, status = addon.Store.Init(sv)
-        harness.equal(status, "migrated"); harness.equal(out.schema, 7)
+        harness.equal(status, "migrated"); harness.equal(out.schema, addon.Store.SCHEMA)
         harness.truthy(out.access["A-R"]); harness.equal(type(out.feedback), "table"); harness.equal(type(out.feedbackState), "table")
     end,
 }

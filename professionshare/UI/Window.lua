@@ -51,6 +51,8 @@ local windowState = {
     selectedOffer = nil,
     selectedKey = nil,             -- Misc Items, Keys mode: item id
     selectedAttunement = nil,      -- Misc Items, Attunements mode: attunement key
+    selectedReputation = nil,      -- Misc Items, Reputation mode: row key (owner#factionID)
+    reputationFaction = nil,       -- Misc Items, Reputation mode: faction filter (nil = all)
     debugFilterIndex = 1,
     debugView = "trace",           -- "trace" (message log) | "names" (name check table)
 }
@@ -487,6 +489,7 @@ end
 local function selectedMiscKey(mode)
     if mode == "keys" then return windowState.selectedKey end
     if mode == "attunements" then return windowState.selectedAttunement end
+    if mode == "reputation" then return windowState.selectedReputation end
     return windowState.selectedOffer
 end
 
@@ -495,6 +498,7 @@ end
 local function selectMiscRow(mode, rowKey)
     if mode == "keys" then windowState.selectedKey = rowKey
     elseif mode == "attunements" then windowState.selectedAttunement = rowKey
+    elseif mode == "reputation" then windowState.selectedReputation = rowKey
     else windowState.selectedOffer = rowKey end
 end
 
@@ -518,7 +522,24 @@ local function keyLocationLabel(location)
     return Text["Bags"]
 end
 
--- the text under the list: dibs of an offer, holders of a key, who is attuned to a raid
+-- faction names and standing labels from this client (Model falls back to the addon's own texts)
+---@return ReputationLookups
+local function reputationLookups()
+    return { factionName = addon.Api.FactionName, standingLabel = addon.Api.StandingLabel }
+end
+
+-- layout only, no text: an empty tooltip line, and the indent of an item under a hint
+local TOOLTIP_SPACER, TOOLTIP_INDENT = " ", "   "
+
+---@type table<integer, string> colour of each standing (1 Hated .. 8 Exalted)
+local STANDING_COLOR = { "cc2222", "ff3333", "ee6622", "ffff00", "33ff33", "33ff99", "33ffcc", "33ccff" }
+
+---@param standing integer
+---@param text string
+---@return string
+local function standingText(standing, text) return "|cff" .. (STANDING_COLOR[standing] or "ffffff") .. text .. "|r" end
+
+-- the text under the list: dibs of an offer, holders of a key, who is attuned to a raid, what a standing unlocks next
 ---@param mode MiscMode
 ---@param selectedRow table|nil
 ---@return string
@@ -533,6 +554,16 @@ local function miscDetailText(mode, selectedRow)
             holderTexts[index] = ("%s |cffaaaaaa(%s)|r"):format(holderName, table.concat(locationLabels, ", "))
         end
         return Format(Text["{name}: {list}"], { name = selectedRow.name, list = table.concat(holderTexts, "   ") })
+    end
+    if mode == "reputation" then
+        if not selectedRow then return Text["Select a row to see what the next standing unlocks."] end
+        local nextHint = addon.FactionHints.NextHint(selectedRow.factionID, selectedRow.standing)
+        local nextText = nextHint and Format(Text["Next: {standing}: {hint}"], {
+            standing = addon.Model.StandingLabel(nextHint.standing, reputationLookups()),
+            hint = addon.FactionHints.HintText(nextHint, addon.Locale.code) }) or Text["Nothing more to unlock."]
+        return Format(Text["{player}: {faction}, {standing} ({progress}). {next}"], { player = selectedRow.playerName,
+            faction = selectedRow.name, standing = standingText(selectedRow.standing, selectedRow.standingLabel),
+            progress = selectedRow.progressText, next = nextText })
     end
     if mode == "attunements" then
         if not selectedRow then return Text["Select a raid to see who is attuned."] end
@@ -558,6 +589,9 @@ local function miscEmptyText(mode)
         return Text["No dungeon keys known yet. They are listed automatically from the bags, key ring and bank of every guild member."]
     end
     if mode == "attunements" then return Text["Nothing to show."] end
+    if mode == "reputation" then
+        return Text["No reputation known yet. Guild members on version 1.4.0 or newer share their standings automatically."]
+    end
     return Text["No recipe items on offer yet. They are listed automatically from the bags, bank, mail, guild bank and auctions of every guild member."]
 end
 
@@ -570,6 +604,9 @@ local function refreshOffers()
     local miscRows
     if mode == "keys" then miscRows = addon.Model.BuildKeyRows(filterState, addon.Api.ItemClass, addon.Api.ItemName)
     elseif mode == "attunements" then miscRows = addon.Model.BuildAttunementRows(filterState, addon.Api.ItemClass)
+    elseif mode == "reputation" then
+        miscRows = addon.Model.BuildReputationRows({ text = windowState.offerText, me = me(), faction = windowState.reputationFaction },
+            reputationLookups())
     else miscRows = addon.Model.BuildOfferRows(addon.Store, filterState, addon.Api.ItemClass, addon.Api.ItemName) end
     columnTable.Sort(miscRows, columnTable.GetSort(settings))
     -- each row knows its mode: the relayout below may still redraw the previous mode's rows once
@@ -578,12 +615,20 @@ local function refreshOffers()
     setDropdownText(mainFrame.miscModeButton, addon.MiscTables.ModeLabel(mode))
     local isOffers = mode == "offers"
     mainFrame.myProfessionsOnlyButton:SetShown(isOffers)
+    if mainFrame.reputationFactionButton then
+        mainFrame.reputationFactionButton:SetShown(mode == "reputation")
+        local selectedFaction = windowState.reputationFaction
+        setDropdownText(mainFrame.reputationFactionButton, selectedFaction
+            and addon.Model.FactionName(selectedFaction, reputationLookups()) or Text["All factions"])
+    end
     mainFrame.offerSearchHint:SetText(isOffers and Text["search item, owner or profession"]
-        or mode == "keys" and Text["search key, dungeon or member"] or Text["search raid or member"])
+        or mode == "keys" and Text["search key, dungeon or member"]
+        or mode == "reputation" and Text["search faction, member or standing"] or Text["search raid or member"])
     miscList:UpdateLayout()   -- another mode has other columns
     miscList:SetData(miscRows)
     if mode == "keys" then mainFrame.offerCountText:SetText(Plural(#miscRows, Text["{n} key"], Text["{n} keys"]))
     elseif mode == "attunements" then mainFrame.offerCountText:SetText("")
+    elseif mode == "reputation" then mainFrame.offerCountText:SetText(Plural(#miscRows, Text["{n} standing"], Text["{n} standings"]))
     else mainFrame.offerCountText:SetText(Plural(#miscRows, Text["{n} offer"], Text["{n} offers"])) end
     local selectedRow = selectedMiscRow()
     for _, offerButton in ipairs({ mainFrame.dibsButton, mainFrame.hideOfferButton, mainFrame.whisperOwnerButton }) do
@@ -1378,7 +1423,7 @@ local function buildOrdersTab(ordersTab)
     end
 end
 
--- The Misc Items tab: a mode dropdown (Recipe items, Keys, Attunements) over one table whose columns, sort and column
+-- The Misc Items tab: a mode dropdown (Recipe items, Keys, Attunements, Reputation) over one table whose columns, sort and column
 -- choice belong to the shown mode (MiscTables). The search box serves every mode; the buttons under the list depend on it.
 ---@param availableTab table
 local function buildAvailableTab(availableTab)
@@ -1419,6 +1464,37 @@ local function buildAvailableTab(availableTab)
         refreshOffers()
     end)
     mainFrame.myProfessionsOnlyButton:SetPoint("LEFT", offerSearchBox, "RIGHT", 8, 0)
+
+    -- Reputation mode: the faction filter (All factions, or the factions somebody in the guild has a standing with)
+    local function chooseFaction(factionID)
+        windowState.reputationFaction = factionID ~= 0 and factionID or nil
+        windowState.selectedReputation = nil
+        refreshOffers()
+    end
+    local factionDropdown = createMenuDropdown(availableTab, "WowStyle1DropdownTemplate", 170)
+    if factionDropdown then
+        factionDropdown:SetupMenu(function(_, rootMenu)
+            local function isSelected(factionID) return (windowState.reputationFaction or 0) == factionID end
+            rootMenu:CreateRadio(Text["All factions"], isSelected, chooseFaction, 0)
+            for _, factionChoice in ipairs(addon.Model.ReputationFactions(reputationLookups())) do
+                rootMenu:CreateRadio(factionChoice.name, isSelected, chooseFaction, factionChoice.id)
+            end
+        end)
+    else   -- no menus: cycle through All and the factions
+        factionDropdown = createButton(availableTab, Text["All factions"], 170, 22, function()
+            local factionChoices = addon.Model.ReputationFactions(reputationLookups())
+            local nextFaction = factionChoices[1] and factionChoices[1].id or 0
+            for position, factionChoice in ipairs(factionChoices) do
+                if factionChoice.id == windowState.reputationFaction then
+                    nextFaction = factionChoices[position + 1] and factionChoices[position + 1].id or 0
+                end
+            end
+            chooseFaction(nextFaction)
+        end)
+    end
+    factionDropdown:SetPoint("LEFT", offerSearchBox, "RIGHT", 8, 0)
+    factionDropdown:Hide()
+    mainFrame.reputationFactionButton = factionDropdown
 
     -- columns of the shown mode: a checkbox menu (the name column is always shown)
     local columnsDropdown = createMenuDropdown(availableTab, "WowStyle1FilterDropdownTemplate", 100)
@@ -1518,6 +1594,52 @@ local function buildAvailableTab(availableTab)
         row.onIconEnter = showAttunementTooltip
         row.onIconClick = nil
     end
+    ---@param row table
+    ---@param reputationRow ReputationViewRow
+    local function fillReputationRow(row, reputationRow)
+        row.label:SetText(reputationRow.mine and (reputationRow.name .. " |cff33ff99*|r") or reputationRow.name)
+        Table.SetCell(row, "player", reputationRow.mine and ("|cff33ff99" .. reputationRow.playerName .. "|r") or reputationRow.playerName)
+        Table.SetCell(row, "standing", standingText(reputationRow.standing, reputationRow.standingLabel))
+        Table.SetCell(row, "progress", "|cffaaaaaa" .. reputationRow.progressText .. "|r")
+        Table.SetCell(row, "updated", "|cff999999" .. timeAgo(reputationRow.updated) .. "|r")
+        local canWhisper = not reputationRow.mine
+        -- what each standing of the faction unlocks; the row player's reached standings green, the next one white
+        local function showReputationTooltip(owner)
+            GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+            GameTooltip:SetText(reputationRow.name, 1, 0.82, 0)
+            GameTooltip:AddLine(Format(Text["{player}: {standing} ({progress})"], { player = reputationRow.playerName,
+                standing = standingText(reputationRow.standing, reputationRow.standingLabel), progress = reputationRow.progressText }),
+                1, 1, 1, true)
+            local hintLines = addon.Model.FactionHintLines(reputationRow.factionID, reputationRow.standing, addon.Locale.code,
+                reputationLookups())
+            if #hintLines > 0 then
+                GameTooltip:AddLine(TOOLTIP_SPACER)
+                GameTooltip:AddLine(Text["What each standing unlocks:"], 1, 0.82, 0)
+            end
+            for _, hintLine in ipairs(hintLines) do
+                local red, green, blue = 0.55, 0.55, 0.55
+                if hintLine.state == "reached" then red, green, blue = 0.2, 1, 0.6
+                elseif hintLine.state == "next" then red, green, blue = 1, 1, 1 end
+                local marker = hintLine.state == "next" and "> " or ""
+                GameTooltip:AddLine(marker .. hintLine.label .. ": " .. hintLine.text, red, green, blue, true)
+                for _, itemID in ipairs(hintLine.items) do
+                    GameTooltip:AddLine(TOOLTIP_INDENT .. (addon.Api.ItemName(itemID) or Format(Text["Item #{id}"], { id = itemID })), red, green, blue, true)
+                end
+            end
+            GameTooltip:AddLine(TOOLTIP_SPACER)
+            GameTooltip:AddLine(Format(Text["Hints are static notes, last checked {date}."], { date = addon.FactionHints.CHECKED }),
+                0.5, 0.5, 0.5, true)
+            if canWhisper then
+                GameTooltip:AddLine(Format(Text["Click the icon or the name: whisper {name}"], { name = reputationRow.playerName }), 0.6, 0.8, 1, true)
+            end
+            GameTooltip:Show()
+        end
+        row:SetScript("OnEnter", showReputationTooltip)
+        row.onIconEnter = showReputationTooltip
+        row.onIconClick = canWhisper and function() whisper(reputationRow.who) end or nil
+        -- the player's name whispers too (my own name selects the row like any other cell)
+        Table.SetCellClick(row, "player", canWhisper and function() whisper(reputationRow.who) end or nil)
+    end
     miscList = createScrollList(availableTab, Table.CreateTableRow, function(row, miscRow)
         local mode = miscRow.miscMode or currentMiscMode
         Table.LayoutRow(row, miscCells)
@@ -1527,6 +1649,7 @@ local function buildAvailableTab(availableTab)
         row:SetScript("OnLeave", function() GameTooltip:Hide() end)
         if mode == "keys" then fillKeyRow(row, miscRow)
         elseif mode == "attunements" then fillAttunementRow(row, miscRow)
+        elseif mode == "reputation" then fillReputationRow(row, miscRow)
         else fillOfferRow(row, miscRow) end
     end)
     miscList:SetPoint("TOPLEFT", 0, -58); miscList:SetPoint("BOTTOMRIGHT", 0, 112)

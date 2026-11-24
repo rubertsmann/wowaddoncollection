@@ -13,6 +13,7 @@ local addonName, addon = ...
 --   WANTO {names, via?}         "send me your offers record" (2.1+)
 --   OFFERS {offers}             a character's offers/dibs record (2.1+)
 --   HELLO.arev, WANTA {names, via?}, ACCESS {access}   a character's dungeon keys and raid attunements (2.4+)
+--   HELLO.rrev, WANTR {names, via?}, REP {rep}   a character's faction standings (2.6+)
 --   HELLO.frev, WANTF {names, via?}, FEEDBACK {feedback}   a character's messages for the developer (2.5+); only the
 --                               developer's client pulls them (Feedback.IsReader)
 -- Protocol 2.3 also had HELLO.grev, WANTG and GAMES (guild games, 0.6.0). They moved to the GuildGames addon: a 0.6
@@ -26,7 +27,7 @@ local addonName, addon = ...
 ---@field random fun(): number in [0, 1)
 ---@field store StoreModule
 ---@field orders OrderBoard
----@field onChange fun(kind: "chars"|"offers"|"orders"|"access"|"feedback")
+---@field onChange fun(kind: "chars"|"offers"|"orders"|"access"|"rep"|"feedback")
 ---@field me string|fun(): string|nil my canonical name, or a function returning it
 
 ---@class SyncModule
@@ -152,6 +153,25 @@ local function accessKind()
     }
 end
 
+-- The reputation record (protocol 2.6): faction standings. A level change is announced at once, progress at most every
+-- Reputation.PROGRESS_INTERVAL, so `rrev` changes seldom and the record is pulled only after a change.
+---@return RecordKind
+local function reputationKind()
+    local Reputation = addon.Reputation
+    return {
+        name = "rep", label = "rep", helloField = "rrev", absentNote = "rep: peer has none",
+        requestType = "WANTR", answerType = "REP", recordField = "rep",
+        noneNote = "asked for my reputation record but I have none",
+        heldRevision = function(playerName)
+            local reputationRecord = Reputation.Get(playerName)
+            return reputationRecord and reputationRecord.rev or 0
+        end,
+        myRecord = function(myName) return Reputation.Get(myName) end,
+        sanitize = Reputation.Sanitize,
+        store = function(_, reputationRecord) return Reputation.Put(reputationRecord) end,
+    }
+end
+
 -- The feedback record (protocol 2.5): messages for the developer. Only a reader (the developer's client) pulls them:
 -- for everyone else every announced revision counts as held, and a record that still arrives (a pull retry answered on
 -- GUILD reaches every member) is not stored.
@@ -238,6 +258,7 @@ function Sync.New(environment)
     sync.wanted = sync:AddRecordKind(characterKind(environment))
     sync.wantedOffers = sync:AddRecordKind(offersKind())
     sync.wantedAccess = sync:AddRecordKind(accessKind())
+    sync.wantedReputation = sync:AddRecordKind(reputationKind())
     sync.wantedFeedback = sync:AddRecordKind(feedbackKind())
     sync:AddHelloHook(ordersHelloHook(environment))
     sync:AddHandler("OPUSH", onOrderPush)

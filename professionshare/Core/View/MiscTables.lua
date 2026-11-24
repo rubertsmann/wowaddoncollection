@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- The Misc Items tab: its modes (Recipe items, Keys, Attunements) and one column table per mode (ColumnTable). Pure.
+-- The Misc Items tab: its modes (Recipe items, Keys, Attunements, Reputation) and one column table per mode (ColumnTable). Pure.
 -- Shown columns, sort and the chosen mode are kept in the SavedVariables `ui` table (local, never sent), one settings
 -- key per mode, so each mode remembers its own column choice.
 ---@class MiscTablesModule
@@ -10,10 +10,10 @@ addon.MiscTables = MiscTables
 local Text = addon.Text
 local ColumnTable = addon.ColumnTable
 
----@alias MiscMode "offers"|"keys"|"attunements"
+---@alias MiscMode "offers"|"keys"|"attunements"|"reputation"
 
 ---@type MiscMode[] dropdown order
-MiscTables.MODES = { "offers", "keys", "attunements" }
+MiscTables.MODES = { "offers", "keys", "attunements", "reputation" }
 MiscTables.DEFAULT_MODE = "offers"
 
 ---@param mode MiscMode
@@ -21,6 +21,7 @@ MiscTables.DEFAULT_MODE = "offers"
 function MiscTables.ModeLabel(mode)
     if mode == "keys" then return Text["Keys"] end
     if mode == "attunements" then return Text["Attunements"] end
+    if mode == "reputation" then return Text["Reputation"] end
     return Text["Recipe items"]
 end
 
@@ -65,6 +66,21 @@ MiscTables.tables = {
         },
         columnsSetting = "attunementColumns", sortSetting = "attunementSort",
         defaultSort = { key = "attunedCount", descending = true }, idField = "key",
+    }),
+    -- one row per member and faction; Standing sorts by level, then progress inside it
+    reputation = ColumnTable.New({
+        columns = {
+            { key = "name", width = nil, numeric = false, justify = "LEFT", field = "name", label = function() return Text["Faction"] end },
+            { key = "player", width = 120, numeric = false, justify = "LEFT", field = "playerName", label = function() return Text["Player"] end },
+            { key = "standing", width = 110, numeric = true, justify = "LEFT", field = "standingRank",
+                label = function() return Text["Standing"] end },
+            { key = "progress", width = 100, numeric = true, justify = "RIGHT", field = "progress",
+                label = function() return Text["Progress"] end },
+            { key = "updated", width = 90, numeric = true, justify = "RIGHT", field = "updated",
+                label = function() return Text["Updated"] end, hidden = true },
+        },
+        columnsSetting = "reputationColumns", sortSetting = "reputationSort",
+        defaultSort = { key = "standing", descending = true }, idField = "key",
     }),
 }
 

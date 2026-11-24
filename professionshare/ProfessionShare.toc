@@ -31,6 +31,8 @@ Core\Net\Guard.lua
 Core\Data\Orders.lua
 Core\Data\Offers.lua
 Core\Data\Access.lua
+Core\Data\FactionHints.lua
+Core\Data\Reputation.lua
 Core\Data\Feedback.lua
 Core\Net\Sync.lua
 Core\View\Model.lua

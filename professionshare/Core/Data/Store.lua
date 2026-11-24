@@ -9,6 +9,7 @@ local addonName, addon = ...
 --   offers[playerName] = OfferRecord: recipe items on offer + that character's dibs (see Offers.lua)
 --   hidden[offerKey]   = owner's revision when the viewer hid that offer
 --   access[playerName] = AccessRecord: dungeon keys and raid attunements of that character (see Access.lua)
+--   rep[playerName]    = ReputationRecord: that character's standing with the listed factions (see Reputation.lua)
 --   feedback[playerName] = FeedbackRecord: messages for the developer (only mine, except on the developer's client)
 --   feedbackState[messageKey] = the developer's status of a message (that client only; see Feedback.lua)
 --   feedbackDelivered[sentAt] = true: one of my messages the developer's client has asked for (this client only)
@@ -66,7 +67,8 @@ addon.Store = Store
 --   5  0.7.0           - games and the games UI settings (moved to the GuildGames addon; fresh start)
 --   6  1.2.0           + access (dungeon keys and raid attunements); additive, schema 5 data is kept
 --   7  1.3.0           + feedback, feedbackState, feedbackDelivered (messages for the developer); additive, schema 6 data is kept
-Store.SCHEMA = 7
+--   8  1.4.0           + rep (faction standings); additive, schema 7 data is kept
+Store.SCHEMA = 8
 
 local SECONDS_PER_DAY = 86400
 local MAXIMUM_ID = 2147483647              -- recipe / item / spell ids fit a signed 32-bit integer
@@ -87,7 +89,7 @@ end
 local function withAllTables(savedVariables)
     savedVariables = savedVariables or {}
     savedVariables.schema = Store.SCHEMA
-    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "access", "feedback", "feedbackState", "feedbackDelivered", "debug", "ui" }) do
+    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "access", "rep", "feedback", "feedbackState", "feedbackDelivered", "debug", "ui" }) do
         if type(savedVariables[key]) ~= "table" then savedVariables[key] = {} end
     end
     -- network trace ring (Core/Debug/Trace.lua)
@@ -150,7 +152,7 @@ end
 ---@return StoreCounts
 function Store.Clean()
     local removed = Store.Counts()
-    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "access", "profNames", "debug", "trace", "itemText" }) do
+    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "access", "rep", "profNames", "debug", "trace", "itemText" }) do
         addon.Utility.Wipe(Store.db[key])
     end
     addon.Log.Reset()
@@ -163,10 +165,10 @@ end
 -- recipes, the orders (the only copy of an order may be mine; CanonicalizeStoredNames has given them the current keys),
 -- UI settings. Everything dropped is fetched again from online members. Tables are emptied IN PLACE.
 ---@param myName string|nil
----@return { chars: integer, offers: integer, access: integer, catalog: integer } removed
+---@return { chars: integer, offers: integer, access: integer, rep: integer, catalog: integer } removed
 function Store.ResetPeerData(myName)
     local database = Store.db
-    local removed = { chars = 0, offers = 0, access = 0, catalog = 0 }
+    local removed = { chars = 0, offers = 0, access = 0, rep = 0, catalog = 0 }
     local myRecipeIDs = {}
     local myRecord = myName and database.chars[myName]
     for _, profession in pairs(myRecord and myRecord.professions or {}) do
@@ -180,6 +182,9 @@ function Store.ResetPeerData(myName)
     end
     for playerName in pairs(database.access) do
         if playerName ~= myName then database.access[playerName] = nil removed.access = removed.access + 1 end
+    end
+    for playerName in pairs(database.rep) do
+        if playerName ~= myName then database.rep[playerName] = nil removed.rep = removed.rep + 1 end
     end
     for recipeID in pairs(database.catalog) do
         if not myRecipeIDs[recipeID] then database.catalog[recipeID] = nil removed.catalog = removed.catalog + 1 end
@@ -208,6 +213,7 @@ function Store.SanitizePersisted(savedVariables)
     droppedCount = droppedCount + droppedHere
     droppedCount = droppedCount + addon.Offers.SanitizePersisted(savedVariables)
     droppedCount = droppedCount + addon.Access.SanitizePersisted(savedVariables)
+    droppedCount = droppedCount + addon.Reputation.SanitizePersisted(savedVariables)
     droppedCount = droppedCount + addon.Feedback.SanitizePersisted(savedVariables)
     local professionNamesByLanguage = {}
     if type(savedVariables.profNames) == "table" then
@@ -257,6 +263,9 @@ local MIGRATIONS = {
         if type(savedVariables.feedback) ~= "table" then savedVariables.feedback = {} end
         if type(savedVariables.feedbackState) ~= "table" then savedVariables.feedbackState = {} end
         if type(savedVariables.feedbackDelivered) ~= "table" then savedVariables.feedbackDelivered = {} end
+    end,
+    [7] = function(savedVariables)   -- additive: faction standings
+        if type(savedVariables.rep) ~= "table" then savedVariables.rep = {} end
     end,
 }
 
@@ -445,6 +454,14 @@ function Store.CanonicalizeStoredNames()
         if not keptRecord or (keptRecord.rev or 0) < (accessRecord.rev or 0) then accessRecords[canonicalName] = accessRecord end
     end
     Refill(database.access, accessRecords)
+    local reputationRecords = {}
+    for playerName, reputationRecord in pairs(database.rep) do
+        local canonicalName = canonical(playerName)
+        reputationRecord.name = canonicalName
+        local keptRecord = reputationRecords[canonicalName]
+        if not keptRecord or (keptRecord.rev or 0) < (reputationRecord.rev or 0) then reputationRecords[canonicalName] = reputationRecord end
+    end
+    Refill(database.rep, reputationRecords)
     local feedbackRecords = {}
     for playerName, feedbackRecord in pairs(database.feedback) do
         local canonicalName = canonical(playerName)
@@ -480,7 +497,7 @@ end
 ---@type table<string, boolean>
 Store.keptNames = {}
 
--- Drop cached characters (and their offers and access records) that are no longer in the guild roster; never drops `keptName`.
+-- Drop cached characters (and their offers, access and reputation records) that are no longer in the guild roster; never drops `keptName`.
 ---@param rosterNames table<string, boolean>
 ---@param keptName string|nil
 ---@return integer removedCount characters removed
@@ -503,6 +520,12 @@ function Store.Prune(rosterNames, keptName)
         if not rosterNames[playerName] and playerName ~= keptName and not Store.keptNames[playerName] then
             Store.db.access[playerName] = nil
             removedNames[#removedNames + 1] = playerName .. "(access)"
+        end
+    end
+    for playerName in pairs(Store.db.rep) do
+        if not rosterNames[playerName] and playerName ~= keptName and not Store.keptNames[playerName] then
+            Store.db.rep[playerName] = nil
+            removedNames[#removedNames + 1] = playerName .. "(rep)"
         end
     end
     -- a prune that removes records right after they arrived means the sender's name and the roster's form of it differ

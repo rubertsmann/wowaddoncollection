@@ -17,7 +17,7 @@ shared crafting-order board.
   minimap button, plus a sound and a chat line; screen message and taskbar flash optional. `/ps options` to configure.
 * **Find recipes by what they make** – profession dropdown, category checkboxes (head, chest, food, ...) and a free-text
   search that also matches item effects and stats ("intellect", "agility").
-* **Misc Items tab** – a dropdown switches between three lists, each a table with its own columns (choose them in the
+* **Misc Items tab** – a dropdown switches between four lists, each a table with its own columns (choose them in the
   "Columns" menu, click a column title to sort):
   * **Recipe items** – tradeable recipe items (patterns, plans, formulas such as "Recipe: Savory Deviate Delight") that
   guild members hold in bags, bank, reagent bank, mail, guild bank or auctions, listed automatically so nobody sells
@@ -28,6 +28,10 @@ shared crafting-order board.
     Seal of Ascension, ...), read from bags, key ring and bank. Click the icon to whisper a holder.
   * **Attunements** – who is attuned to Molten Core, Onyxia, Blackwing Lair, Naxxramas and Upper Blackrock Spire, and who
     is known not to be yet.
+  * **Reputation** – every guild member's standing with the factions that matter (Hydraxian Waterlords, Argent Dawn,
+    Thorium Brotherhood, Timbermaw, Cenarion Circle, Zandalar, Brood of Nozdormu, home cities, goblin towns,
+    battlegrounds): one row per member and faction, sortable by standing, filtered by a faction dropdown and the
+    search box. Click a name to whisper that member. Hover a row to see what each standing unlocks (static hints, `Core/Data/FactionHints.lua`).
 * **Feedback tab** – send feedback, a feature request or a bug report to the addon developer (choose the type, a short
   template appears; bug reports attach version, sync state and recent log lines unless unticked). Only the developer's
   client fetches the messages; you get no status in the addon. The tab appears only in the developer's guild.
@@ -54,7 +58,7 @@ after `package.ps1` (settings in `tools/curseforge.json`; token in `$env:CF_API_
 ## Use
 
 `/ps` (or the minimap button) opens the window. Click each profession icon at the top right of the Recipes tab once so the recipes are read.
-`/ps offers` (what the item scan sees; `/ps offers scan` forces a scan), `/ps access` (keys and attunements the scan sees; `/ps access scan` stores them), `/ps scan`, `/ps dump`, `/ps chars`, `/ps comm`, `/ps hello`, `/ps debug [n]`, `/ps version`,
+`/ps offers` (what the item scan sees; `/ps offers scan` forces a scan), `/ps access` (keys and attunements the scan sees; `/ps access scan` stores them), `/ps rep` (faction standings the scan sees; `/ps rep scan` shares them now), `/ps scan`, `/ps dump`, `/ps chars`, `/ps comm`, `/ps hello`, `/ps debug [n]`, `/ps version`,
 `/ps export` (diagnostic report to copy for the addon author; also the **Debug** tab, which the live build shows after `/ps debug`), `/ps trace [n] [problems]`, `/ps ident`,
 `/ps locale <code>|auto` (UI language, then `/reload`), `/ps i18n` (what the client reports),
 profession icons at the top right of the Recipes tab (one click opens that profession and reads its recipes),
@@ -75,7 +79,7 @@ The UI is available in English and German; profession and recipe names always fo
   |---|---|---|
   | `Core/Base/` | identity, shared helpers, logging, localization | Init, Utility, Log, Locale (+ `Locales/`) |
   | `Core/Debug/` | network trace, diagnostic report | Trace, Diagnostics |
-  | `Core/Data/` | SavedVariables schema and records | Store, Orders, Offers, Scanner |
+  | `Core/Data/` | SavedVariables schema and records | Store, Orders, Offers, Access, Reputation, FactionHints (static hint data), Feedback, Scanner |
   | `Core/Net/` | addon-channel communication on LibGuildSync | Codec, Guard, Sync, Communication |
   | `Core/Game/` | the WoW API boundary | Api, Events |
   | `Core/View/` | view-models for the UI (pure) | Model, Names, ItemText, Notify |

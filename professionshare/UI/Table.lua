@@ -274,6 +274,9 @@ function Table.LayoutRow(row, cells)
     for columnKey, cellText in pairs(row.cellTexts) do
         if not shownKeys[columnKey] then cellText:Hide() end
     end
+    for columnKey, cellButton in pairs(type(row.cellButtons) == "table" and row.cellButtons or {}) do   -- Table.SetCellClick: no click on a hidden column
+        if not shownKeys[columnKey] then cellButton:Hide() end
+    end
 end
 
 ---@param row table
@@ -282,4 +285,40 @@ end
 function Table.SetCell(row, columnKey, text)
     local cellText = row.cellTexts[columnKey]
     if cellText then cellText:SetText(text) end
+end
+
+-- Makes one cell of a row clickable (a player name that whispers): an invisible button over the cell's text, above the
+-- row, so a click there runs onClick instead of selecting the row (the cell must be left-aligned). Hovering it runs the row's own OnEnter/OnLeave, so the
+-- row's tooltip still shows. onClick nil turns it off again (rows are reused for other entries and modes).
+---@param row table
+---@param columnKey string
+---@param onClick fun()|nil
+function Table.SetCellClick(row, columnKey, onClick)
+    if type(row.cellButtons) ~= "table" then row.cellButtons = {} end
+    local cellButton = row.cellButtons[columnKey]
+    local cellText = row.cellTexts[columnKey]
+    if not onClick or not cellText or not cellText:IsShown() then
+        if cellButton then cellButton:Hide() end
+        return
+    end
+    if not cellButton then
+        cellButton = CreateFrame("Button", nil, row)
+        cellButton:SetFrameLevel(row:GetFrameLevel() + 2)
+        cellButton:RegisterForClicks("LeftButtonUp")
+        cellButton:SetScript("OnEnter", function()
+            local onEnter = row:GetScript("OnEnter")
+            if onEnter then onEnter(row) end
+        end)
+        cellButton:SetScript("OnLeave", function()
+            local onLeave = row:GetScript("OnLeave")
+            if onLeave then onLeave(row) end
+        end)
+        row.cellButtons[columnKey] = cellButton
+    end
+    -- only over the name itself (call after Table.SetCell): a click beside it still selects the row
+    cellButton:ClearAllPoints()
+    cellButton:SetPoint("LEFT", cellText, "LEFT", 0, 0)
+    cellButton:SetSize(math.max(8, math.min(number(cellText:GetStringWidth()) + 4, number(cellText:GetWidth()))), ROW_HEIGHT)
+    cellButton:SetScript("OnClick", onClick)
+    cellButton:Show()
 end

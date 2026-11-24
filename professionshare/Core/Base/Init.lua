@@ -15,7 +15,7 @@ LibStub("LibGuildSync-1.0").Addon.Setup(addon, addonName,
 ---@type integer
 addon.PROTOCOL_MAJOR = 2
 ---@type integer
-addon.PROTOCOL_MINOR = 5
+addon.PROTOCOL_MINOR = 6
 ---@type integer alias: the major is what the payload "v" field carries
 addon.PROTOCOL = addon.PROTOCOL_MAJOR
 

@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- Internal pub/sub + WoW event wiring. Scans are debounced; the guild gets a HELLO when my data changes.
--- Internal events: DATA_CHANGED(kind), LOCAL_CHANGED, OFFERS_CHANGED, ACCESS_CHANGED, FEEDBACK_CHANGED, WINDOW_OPENED, TRADESKILL(isOpen), ITEM_INFO, SPELL_INFO.
+-- Internal events: DATA_CHANGED(kind), LOCAL_CHANGED, OFFERS_CHANGED, ACCESS_CHANGED, REPUTATION_CHANGED, FEEDBACK_CHANGED, WINDOW_OPENED, TRADESKILL(isOpen), ITEM_INFO, SPELL_INFO.
 -- Every handler runs protected: an error in one handler is logged (Log.Exception, with stack) and the others still run.
 ---@class EventsModule
 local Events = {}
@@ -13,7 +13,7 @@ addon.Events = Events
 do
     local missingModules = {}
     for _, moduleName in ipairs({ "Utility", "Log", "Locale", "Store", "Names", "Api", "Scanner", "Codec", "Guard", "Orders",
-        "Offers", "Access", "Sync", "Model", "Communication", "Trace", "Diagnostics" }) do
+        "Offers", "Access", "FactionHints", "Reputation", "Sync", "Model", "Communication", "Trace", "Diagnostics" }) do
         if not addon[moduleName] then missingModules[#missingModules + 1] = moduleName end
     end
     if #missingModules > 0 then
@@ -100,11 +100,41 @@ local function scheduleItemScan(delaySeconds)
 end
 Events.ScanItems = scheduleItemScan
 
+-- Faction standings: read after UPDATE_FACTION (it fires for every reputation gain, so the scan is debounced) and at
+-- login. A progress-only change that Reputation.Update holds back is read again when it may be shared.
+local reputationScanPending, reputationRetryPending = false, false
+---@param delaySeconds? number
+local function scheduleReputationScan(delaySeconds)
+    if reputationScanPending then return end
+    reputationScanPending = true
+    C_Timer.After(delaySeconds or 5, function()
+        reputationScanPending = false
+        local myName = addon.Utility.Me()
+        if not myName then return end
+        local ok, scan = addon.Log.Protected("events.reputationScan", "the reputation scan failed", addon.Api.ScanReputation)
+        if not ok or not scan then return end
+        local changed, retryAfter = addon.Reputation.Update(myName, scan, addon.Utility.Now())
+        if changed then
+            addon.Log.Debug("events.reputationScan", "my faction standings changed", { met = addon.Api.reputationStatistics.met })
+            Events.Fire("REPUTATION_CHANGED")
+            Events.Fire("DATA_CHANGED", "rep-local")
+        elseif retryAfter and not reputationRetryPending then
+            reputationRetryPending = true
+            C_Timer.After(retryAfter + 1, function()
+                reputationRetryPending = false
+                scheduleReputationScan(0.1)
+            end)
+        end
+    end)
+end
+Events.ScanReputation = scheduleReputationScan
+
 -- My own changes are announced coalesced (at most one HELLO per Channel.HELLO_INTERVAL_SECONDS): while crafting, every
 -- skill-up changes my record, and each announcement makes every online member pull the whole record again.
 Events.On("LOCAL_CHANGED", function() addon.Communication.RequestHelloSoon() end)
 Events.On("OFFERS_CHANGED", function() addon.Communication.RequestHelloSoon() end)
 Events.On("ACCESS_CHANGED", function() addon.Communication.RequestHelloSoon() end)
+Events.On("REPUTATION_CHANGED", function() addon.Communication.RequestHelloSoon() end)
 Events.On("FEEDBACK_CHANGED", function() addon.Communication.RequestHelloSoon() end)
 -- a record from a peer arrived: drop MY dibs on items that are gone (the new record may have removed them)
 Events.On("DATA_CHANGED", function(kind)
@@ -182,6 +212,7 @@ function onGameEvent.PLAYER_LOGIN()
         local changed = addon.Scanner.Refresh(addon.Utility.Now())
         addon.Communication.Start()
         scheduleItemScan(0.5)
+        scheduleReputationScan(1.0)
         addon.Communication.RequestHello(true, true)  -- isLogin = true: online peers answer with their own HELLO
         if changed then Events.Fire("DATA_CHANGED", "chars") end
     end)
@@ -262,6 +293,7 @@ function onGameEvent.MAIL_INBOX_UPDATE() scheduleItemScan(1.5) end
 function onGameEvent.GUILDBANKBAGSLOTS_CHANGED() scheduleItemScan(1.5) end
 function onGameEvent.AUCTION_OWNED_LIST_UPDATE() scheduleItemScan(1.5) end
 function onGameEvent.OWNED_AUCTIONS_UPDATED() scheduleItemScan(1.5) end
+function onGameEvent.UPDATE_FACTION() scheduleReputationScan(5) end
 -- an attunement quest was handed in (the completed-quest flag is set a moment later)
 function onGameEvent.QUEST_TURNED_IN() scheduleItemScan(3) end
 
@@ -339,6 +371,34 @@ addon.SlashCommands.access = function(arguments)
     local recordCount, keyCount = Access.Counts()
     addon.Print(("record rev %s; %d access records (%d keys) known from the guild"):format(
         tostring(myRecord and myRecord.rev), recordCount, keyCount))
+end
+
+-- /ps rep [scan]: what the reputation scan sees on this client (also the in-game probe for the API and the faction ids)
+addon.SlashCommands.rep = function(arguments)
+    local Api, Reputation = addon.Api, addon.Reputation
+    local myName = addon.Utility.Me()
+    local ok, scan = addon.Log.Protected("events.reputationCommand", "the reputation scan failed", Api.ScanReputation)
+    if not ok then addon.Print("scan failed: " .. tostring(scan)) return end
+    if (arguments or ""):match("^%s*scan") and myName and scan then
+        local changed = Reputation.Update(myName, scan, addon.Utility.Now(), true)
+        if changed then Events.Fire("REPUTATION_CHANGED") end
+        Events.Fire("DATA_CHANGED", "rep-local")
+        addon.Print("scan: " .. (changed and "updated" or "unchanged"))
+    end
+    local statistics = Api.reputationStatistics
+    addon.Print(("APIs: GetFactionInfoByID %s, C_Reputation %s, faction API answers %s; %d factions in the shown list, %d listed factions met"):format(
+        GetFactionInfoByID and "yes" or "NO", (C_Reputation and C_Reputation.GetFactionDataByID) and "yes" or "NO",
+        statistics.api and "yes" or "NO", statistics.listed, statistics.met))
+    for _, faction in ipairs(addon.FactionHints.FACTIONS) do
+        local standing = scan and scan[faction.id]
+        local clientName = Api.FactionName(faction.id)
+        local standingText = standing and ("%s %d/%d"):format(Api.StandingLabel(standing.s) or tostring(standing.s), standing.v, standing.m) or "-"
+        addon.Print(("%d %s (%s): %s"):format(faction.id, faction.name, clientName or "?", standingText))
+    end
+    local myRecord = myName and Reputation.Get(myName)
+    local recordCount, standingCount = Reputation.Counts()
+    addon.Print(("record rev %s; %d reputation records (%d standings) known from the guild"):format(
+        tostring(myRecord and myRecord.rev), recordCount, standingCount))
 end
 
 for gameEvent in pairs(onGameEvent) do registerGameEvent(gameEvent) end
