@@ -1,3 +1,16 @@
+# ProfessionShare 1.4.1
+
+**English:** New button in the settings (Interface -> AddOns -> ProfessionShare -> Recipe drops): **Announce the
+recipes in my bags now** (or type `/ps drops scan`). Every tradeable recipe in your bags is announced to the guild as if
+it had just dropped: members who can learn one are told, and hovering the recipe shows you who answered. Handy for
+recipes you looted before updating. Members on 1.4.0 work with you as before.
+
+**Deutsch:** Neuer Knopf in den Einstellungen (Interface -> AddOns -> ProfessionShare -> Rezeptfunde): **Rezepte in
+meinen Taschen jetzt melden** (oder `/ps drops scan`). Jedes handelbare Rezept in deinen Taschen wird der Gilde gemeldet,
+als wäre es gerade gefallen: Mitglieder, die eins lernen können, werden benachrichtigt, und wenn du über das Rezept
+fährst, siehst du, wer geantwortet hat. Praktisch für Rezepte, die du vor dem Update gefunden hast. Mitglieder mit 1.4.0
+arbeiten wie gewohnt mit dir zusammen.
+
 # ProfessionShare 1.4.0
 
 **English:** The Misc Items tab has two new lists. **Cooldowns** shows the crafts with a cooldown (Transmute, Mooncloth,

@@ -2,7 +2,7 @@
 ## Title: ProfessionShare
 ## Notes: Shares guild members' professions, recipes and reagents, plus a crafting order board.
 ## Author: rubertsmann
-## Version: 1.4.0
+## Version: 1.4.1
 ## SavedVariables: ProfessionShareDB
 ## IconTexture: Interface\Icons\INV_Misc_Note_01
 ## X-Category: Professions

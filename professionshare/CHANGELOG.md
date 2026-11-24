@@ -2,6 +2,12 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.4.1 (2026-11-24, protocol 2.8, schema 9)
+- Settings page, Recipe drops: new button **Announce the recipes in my bags now** (also `/ps drops scan`). Every
+  tradeable recipe in the bags (each item once, at most 20, 2 s apart) is announced as if it had just dropped; members
+  who can learn one get the alert, and the recipe's tooltip lists who answered. Disabled while sharing is off.
+  No protocol or schema change (the normal `DROP` message).
+
 ## 1.4.0 (2026-11-24, protocol 2.8, schema 9)
 - New **Cooldowns** mode in the Misc Items tab (feature 028): a grid of the timegated crafts (all transmutes as one
   tile, Mooncloth, Salt Shaker) with a cooldown sweep, time left, a "ready / all" badge and a glow while an online
