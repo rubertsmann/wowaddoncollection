@@ -1,0 +1,10 @@
+#!/bin/sh
+# Blocks a commit message that matches .git/info/forbidden-words.
+. "$(dirname "$0")/_forbidden.sh"
+forbidden_patterns || exit 0
+hits=$(grep -v '^#' "$1" | forbidden_matches)
+if [ -n "$hits" ]; then
+    echo "commit-msg: the message contains forbidden words (identity leak):" >&2
+    echo "$hits" >&2
+    exit 1
+fi
