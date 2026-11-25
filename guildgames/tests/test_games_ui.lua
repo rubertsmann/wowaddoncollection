@@ -96,6 +96,28 @@ local function withSetup(harness, options, body)
 end
 
 return {
+    ["games ui: a model's stand-in icon shows until the model is drawn (OnModelLoaded or a model file)"] = function(harness)
+        withSetup(harness, nil, function(addon)
+            local CompanionModel = addon.CompanionModel
+            local fileID = 0
+            local model = { SetDisplayInfo = function() end, GetModelFileID = function() return fileID end }
+            local state = CompanionModel.StateOf(model)
+            local shown
+            state.fallback = { SetShown = function(_, value) shown = value end }
+            harness.truthy(CompanionModel.Load(model, { npc = 1, disp = 5 }), "the client took the display id")
+            harness.equal(CompanionModel.IsRendered(model), false); harness.equal(shown, true, "the icon stands in")
+            fileID = 123
+            harness.equal(CompanionModel.IsRendered(model), true, "a model file means it is drawn")
+            CompanionModel.Load(model, { npc = 2, disp = 6 })
+            harness.equal(state.rendered, true, "the same file id still counts for the new creature")
+            fileID = 0; state.rendered = false
+            CompanionModel.Load(model, { npc = 3, disp = 7 })
+            harness.equal(shown, true, "a new creature shows the icon until it is drawn")
+            CompanionModel.Load(model, nil)
+            harness.equal(state.loaded, false)
+        end)
+    end,
+
     ["games ui: a survivor run locks the selector, pauses for item cards, and is booked when it ends or is given up"] = function(harness)
         withSetup(harness, nil, function(addon, world)
             local seed = 17

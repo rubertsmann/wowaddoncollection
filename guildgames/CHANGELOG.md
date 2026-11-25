@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1 (2026-11-25, protocol 1.4, schema 2, LibGuildSync MINOR 6)
+- The Arena, Shop and Inventory tabs of AZEcaught open only once a companion is chosen (your next catch becomes it).
+- Pets and monsters show as icons while their model is not drawn (the UI simulator draws no models).
+
 ## 0.9.0 (2026-11-25, protocol 1.4, schema 2, LibGuildSync MINOR 6)
 - Companion Dash (feature 035): a runner game. Your companion jumps over and ducks under monsters from your collection in
   front of a parallax landscape; mouse (top half jump, bottom half duck) or Space / arrow keys; the speed ramps up and one

@@ -22,7 +22,10 @@ local MODEL_SIZE = 64                 -- model frames are larger than the boxes:
 local RUNNER_FACING, MONSTER_FACING = math.pi / 2, -math.pi / 2
 local OBSTACLE_MODELS = 6
 local DISC_TEXTURE = "Interface\\AddOns\\" .. addonName .. "\\UI\\Textures\\Disc"
-local FALLBACK_ICON = "Interface\\Icons\\Ability_Hunter_Pet_Wolf"
+-- stand-ins while a model is not drawn: the runner, a ground monster, a flying monster
+local RUNNER_ICON = "Interface\\Icons\\Ability_Hunter_Pet_Wolf"
+local GROUND_ICON = "Interface\\Icons\\Ability_Hunter_Pet_Boar"
+local FLYER_ICON = "Interface\\Icons\\Ability_Hunter_Pet_Bat"
 local KEYS_JUMP = { SPACE = true, UP = true, W = true }
 local KEYS_DUCK = { DOWN = true, S = true }
 
@@ -149,8 +152,8 @@ local function slotFor(obstacle, run)
     if not free then return nil end
     free.id = obstacle.id
     local monster = run.pool[obstacle.pick]
-    local loaded = addon.CompanionModel.Load(free.model, monster)
-    free.icon:SetShown(not loaded)
+    addon.CompanionModel.SetFallbackIcon(free.model, obstacle.fly and FLYER_ICON or GROUND_ICON, true)
+    addon.CompanionModel.Load(free.model, monster)
     addon.CompanionModel.Play(free.model, addon.CompanionModel.ANIMATION.run, true)
     free.name = monster and monster.n or "?"
     return free
@@ -355,19 +358,17 @@ function RunnerView.Build(panel)
         local shadow = actors:CreateTexture(nil, "ARTWORK")
         addon.UIHelpers.SetTextureOr(shadow, DISC_TEXTURE, { 0, 0, 0 })
         shadow:SetVertexColor(0, 0, 0); shadow:SetSize(Runner.BOX, 8); shadow:Hide()
-        local model = addon.CompanionModel.Create(actors, MODEL_SIZE, MODEL_SIZE, { facing = MONSTER_FACING })
+        local model = addon.CompanionModel.Create(actors, MODEL_SIZE, MODEL_SIZE, { facing = MONSTER_FACING,
+            fallback = { icon = GROUND_ICON, size = Runner.BOX - 4, y = 8, mirror = true } })
         model:Hide()
-        local icon = model:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(Runner.BOX - 6, Runner.BOX - 6); icon:SetPoint("BOTTOM", 0, 8); icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        addon.UIHelpers.SetTextureOr(icon, FALLBACK_ICON, { 0.6, 0.3, 0.2 })
-        icon:Hide()
-        widgets.obstacles[index] = { model = model, shadow = shadow, icon = icon }
+        widgets.obstacles[index] = { model = model, shadow = shadow }
     end
     widgets.runnerShadow = actors:CreateTexture(nil, "ARTWORK")
     addon.UIHelpers.SetTextureOr(widgets.runnerShadow, DISC_TEXTURE, { 0, 0, 0 })
     widgets.runnerShadow:SetVertexColor(0, 0, 0); widgets.runnerShadow:SetSize(Runner.RUNNER_WIDTH + 6, 8)
     widgets.runnerShadow:SetPoint("CENTER", area, "BOTTOMLEFT", Runner.RUNNER_X + Runner.RUNNER_WIDTH / 2, GROUND_Y - 2)
-    widgets.runner = addon.CompanionModel.Create(actors, MODEL_SIZE, MODEL_SIZE, { facing = RUNNER_FACING })
+    widgets.runner = addon.CompanionModel.Create(actors, MODEL_SIZE, MODEL_SIZE, { facing = RUNNER_FACING,
+        fallback = { icon = RUNNER_ICON, size = Runner.RUNNER_WIDTH, y = 6 } })
     widgets.runner:SetFrameLevel(addon.UIHelpers.FrameLevel(actors) + 2)
 
     -- overlay: distance, hint, lock, crash flash, floating text

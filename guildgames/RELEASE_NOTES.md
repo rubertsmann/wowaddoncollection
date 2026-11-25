@@ -1,3 +1,14 @@
+# GuildGames 0.9.1
+
+**English:** The Arena, Shop and Inventory tabs of AZEcaught now open only once you have a companion; until then
+Companion and Collection are available, and your next catch becomes your companion. Small fix: a pet or monster whose
+3D model is not shown yet appears as an icon instead of an empty spot. No need for everyone to update at once.
+
+**Deutsch:** Die Reiter Arena, Laden und Inventar in AZEcaught öffnen sich erst, wenn du einen Begleiter hast; bis
+dahin gibt es Begleiter und Sammlung, und dein nächster Fang wird dein Begleiter. Kleine Korrektur: Ein Begleiter oder
+Monster, dessen 3D-Modell noch nicht angezeigt wird, erscheint als Symbol statt als leere Stelle. Nicht alle müssen
+gleichzeitig aktualisieren.
+
 # GuildGames 0.9.0
 
 **English:** A new game: **Companion Dash**. Your companion runs through a scrolling landscape while the monsters you

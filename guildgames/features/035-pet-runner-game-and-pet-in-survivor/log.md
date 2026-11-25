@@ -44,3 +44,21 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: done
 - Evidence: verify.md; release commit and tag guildgames/v0.9.0
 - Next: none
+
+## 2026-11-25 12:08 | BUILD | Stand-in icons while a model is not drawn (after 0.9.0)
+- Did: user: in game it works, but in the simulator nothing shows because no model is drawn. UI/CompanionModel.lua: optional fallback icon (child frame of the model) shown until OnModelLoaded fires or GetModelFileID reports a file; IsRendered, SetFallbackIcon. RunnerView: wolf for the runner, boar / bat (mirrored) for ground / flying monsters (replaces its own icon); Survivor pet: wolf icon. test_games_ui "a model's stand-in icon shows until the model is drawn"
+- Result: pass; the simulator now shows the runner and the monsters as icons; in game the model hides the icon once drawn
+- Evidence: luajit tests/run.lua -> 171 passed, 0 failed; evidence/sim-run.png
+- Next: user checks in game that no icon stays visible behind a drawn model; commit/release when wanted (not released yet)
+
+## 2026-11-25 12:15 | BUILD | AZEcaught tabs locked until a companion is chosen (after 0.9.0)
+- Did: user: disable every tab except Companion and Collection until a pet is chosen; the first caught pet is chosen automatically (already true: a catch while none is active selects it, AzeCaught.lua recordCatch, test_azecaught "a catch becomes the companion when none is active"). UI/AzeCaughtPanel.lua: Panel.NEEDS_COMPANION (arena, guild, shop, inventory), ViewLocked, UpdateViewButtons (greyed, desaturated, tooltip "Catch a companion first: your next catch becomes it."), UpdateViewLocks on CAUGHT_CHANGED (a catch unlocks, losing the companion goes back to Companion); SelectView opens Companion instead of a locked tab and keeps the saved view; deDE; test_load asserts the locks and the unlock
+- Result: pass; simulator: tabs greyed, a shop request opens Companion
+- Evidence: luajit tests/run.lua -> 171 passed, 0 failed
+- Next: commit/release when wanted (not released yet)
+
+## 2026-11-25 13:37 | DONE | Follow-ups released as 0.9.1
+- Did: user confirmed the tab locks and the stand-in icons work ("everything seems to be working fine") and asked to release; version 0.9.1, CHANGELOG, RELEASE_NOTES
+- Result: done
+- Evidence: release commit and tag guildgames/v0.9.1
+- Next: none

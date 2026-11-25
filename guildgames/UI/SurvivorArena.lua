@@ -31,6 +31,7 @@ local CARD_WIDTH, CARD_HEIGHT = 88, 104
 -- the companion in the tower's place: seen from above when the client lets the model camera be placed, else from the
 -- front; it turns to the nearest monster and attacks whenever a weapon fires
 local PET_MODEL_SIZE = 64
+local PET_FALLBACK_ICON = "Interface\\Icons\\Ability_Hunter_Pet_Wolf"   -- while the model is not drawn
 local TOP_CAMERA_HEIGHT = 4
 local FACING_OFFSET_TOP, FACING_OFFSET_SIDE = -math.pi / 2, math.pi / 2
 local ATTACK_EVENTS = { shot = true, zap = true, cleave = true, nova = true, blast = true }
@@ -741,7 +742,9 @@ function SurvivorArena.Build(panel)
     addon.UIHelpers.SetTextureOr(widgets.tower, addon.Survivor.TOWER_ICON, { 1, 0.85, 0.3 })
     widgets.tower:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     addon.GamesTab.MaskCircle(towerLayer, widgets.tower)
-    widgets.pet = addon.CompanionModel.Create(towerLayer, PET_MODEL_SIZE, PET_MODEL_SIZE, { afterLoad = function(model)
+    widgets.pet = addon.CompanionModel.Create(towerLayer, PET_MODEL_SIZE, PET_MODEL_SIZE, {
+        fallback = { icon = PET_FALLBACK_ICON, size = TOWER_SIZE, y = (PET_MODEL_SIZE - TOWER_SIZE) / 2 },
+        afterLoad = function(model)
         petState.topView = lookFromAbove(model)
         addon.AzeCaught.Journal("DEBUG", "model.survivor", "the survivor companion was framed", { topView = petState.topView })
     end })

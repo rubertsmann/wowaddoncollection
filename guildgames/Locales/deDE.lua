@@ -461,6 +461,7 @@ addon.Locale.Register("deDE", {
         ["At the target frame: off"] = "Am Zielfenster: aus",
         ["The rope icon and the catch items show next to the target frame, for your target only, instead of on the nameplates."] =
             "Das Seil-Symbol und die Fanggegenstände erscheinen neben dem Zielfenster, nur für dein Ziel, statt auf den Namensplaketten.",
+        ["Catch a companion first: your next catch becomes it."] = "Fang zuerst einen Begleiter: Dein nächster Fang wird es.",
         -- runner game
         ["Companion Dash"] = "Begleiter-Sprint",
         ["Best"] = "Bestwert",

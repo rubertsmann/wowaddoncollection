@@ -25,6 +25,8 @@ CompanionModel.ANIMATION = {
 ---@field camera number camera distance scale
 ---@field facing number radians
 ---@field afterLoad fun(model: table)|nil runs after every (re)load, before the animation is set again
+---@field rendered boolean the client drew the loaded model (OnModelLoaded fired or it reports a model file)
+---@field fallback table|nil a child frame with an icon, shown until the model is drawn
 
 local modelStates = setmetatable({}, { __mode = "k" })
 
@@ -34,18 +36,49 @@ local modelStates = setmetatable({}, { __mode = "k" })
 function CompanionModel.StateOf(model)
     local state = modelStates[model]
     if not state then
-        state = { loaded = false, camera = 1, facing = 0 }
+        state = { loaded = false, camera = 1, facing = 0, rendered = false }
         modelStates[model] = state
     end
     return state
 end
 local stateOf = CompanionModel.StateOf
 
--- Creates a model frame (PlayerModel).
+-- True once the client has drawn the loaded model: OnModelLoaded fired, or the model reports its file.
+---@param model table
+---@return boolean
+function CompanionModel.IsRendered(model)
+    local state = stateOf(model)
+    if state.rendered then return true end
+    if state.loaded and model.GetModelFileID then
+        local ok, fileID = pcall(model.GetModelFileID, model)
+        if ok and type(fileID) == "number" and fileID > 0 then state.rendered = true end
+    end
+    return state.rendered
+end
+
+---@param model table
+local function updateFallback(model)
+    local fallback = stateOf(model).fallback
+    if fallback then fallback:SetShown(not CompanionModel.IsRendered(model)) end
+end
+
+-- Sets the fallback icon (mirrored for a creature facing left).
+---@param model table
+---@param icon string
+---@param mirror? boolean
+function CompanionModel.SetFallbackIcon(model, icon, mirror)
+    local fallback = stateOf(model).fallback
+    if not fallback then return end
+    addon.UIHelpers.SetTextureOr(fallback.icon, icon, { 0.6, 0.45, 0.25 })
+    if mirror then fallback.icon:SetTexCoord(0.92, 0.08, 0.08, 0.92) else fallback.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+end
+
+-- Creates a model frame (PlayerModel). With `options.fallback` an icon stands in until the model is drawn (a client or
+-- a simulator that draws no models, or a creature it cannot load).
 ---@param parent table
 ---@param width number
 ---@param height number
----@param options? { camera: number, facing: number, afterLoad: fun(model: table) }
+---@param options? { camera: number, facing: number, afterLoad: fun(model: table), fallback: { icon: string, size: number, y: number, mirror: boolean } }
 ---@return table model
 function CompanionModel.Create(parent, width, height, options)
     local model = CreateFrame("PlayerModel", nil, parent)
@@ -55,7 +88,22 @@ function CompanionModel.Create(parent, width, height, options)
     state.camera = options and options.camera or 1
     state.facing = options and options.facing or 0
     state.afterLoad = options and options.afterLoad
-    pcall(model.SetScript, model, "OnModelLoaded", function(self) CompanionModel.Frame(self) end)
+    local fallbackOptions = options and options.fallback
+    if fallbackOptions then
+        local fallback = CreateFrame("Frame", nil, model)
+        fallback:SetAllPoints()
+        fallback.icon = fallback:CreateTexture(nil, "ARTWORK")
+        fallback.icon:SetSize(fallbackOptions.size, fallbackOptions.size)
+        fallback.icon:SetPoint("BOTTOM", model, "BOTTOM", 0, fallbackOptions.y or 0)
+        state.fallback = fallback
+        CompanionModel.SetFallbackIcon(model, fallbackOptions.icon, fallbackOptions.mirror)
+        fallback:SetScript("OnUpdate", function() updateFallback(model) end)
+    end
+    pcall(model.SetScript, model, "OnModelLoaded", function(self)
+        stateOf(self).rendered = true
+        updateFallback(self)
+        CompanionModel.Frame(self)
+    end)
     return model
 end
 
@@ -80,17 +128,19 @@ function CompanionModel.Load(model, creature)
     local state = stateOf(model)
     if not creature then
         if model.ClearModel then pcall(model.ClearModel, model) end
-        state.shownKey, state.loaded = nil, false
+        state.shownKey, state.loaded, state.rendered = nil, false, false
+        updateFallback(model)
         return false
     end
     local key = tostring(creature.npc) .. ":" .. tostring(creature.disp)
     if state.shownKey == key then return state.loaded end
-    state.shownKey = key
+    state.shownKey, state.rendered = key, false
     local ok = false
     if (tonumber(creature.disp) or 0) > 0 and model.SetDisplayInfo then ok = pcall(model.SetDisplayInfo, model, creature.disp) end
     if not ok and model.SetCreature and creature.npc then ok = pcall(model.SetCreature, model, creature.npc) end
     state.loaded = ok and true or false
     if ok then CompanionModel.Frame(model) end
+    updateFallback(model)
     return state.loaded
 end
 

@@ -194,6 +194,13 @@ return {
                 for _, view in ipairs({ "collection", "guild", "companion" }) do addon.AzeCaughtPanel.SelectView(view) end
                 -- switching: select a row, the button asks "Stats will be reset", confirming switches
                 local Panel = addon.AzeCaughtPanel
+                -- without a companion only Companion and Collection open
+                for _, view in ipairs({ "arena", "guild", "shop", "inventory" }) do
+                    harness.equal(Panel.ViewLocked(view), true, view .. " is locked")
+                    Panel.SelectView(view)
+                    harness.equal(Panel.state.view, "companion", view .. " opens the companion instead")
+                end
+                harness.equal(Panel.ViewLocked("collection"), false); harness.equal(Panel.ViewLocked("companion"), false)
                 Panel.SelectView("collection"); Panel.SelectSection("caught")
                 Panel.SelectRow(4711)
                 harness.equal(Panel.state.previewNpc, 4711, "a click selects the row")
@@ -204,6 +211,8 @@ return {
                 harness.equal(Panel.widgets.confirmDialog:IsShown(), false); harness.equal(addon.AzeCaught.Active(), nil)
                 Panel.RequestSwitch(); Panel.ConfirmSwitch()
                 harness.truthy(addon.AzeCaught.Active(), "confirming switches")
+                harness.equal(Panel.ViewLocked("shop"), false, "a companion unlocks the tabs")
+                Panel.SelectView("shop"); harness.equal(Panel.state.view, "shop"); Panel.SelectView("collection")
                 Panel.SelectSection("seen"); Panel.SelectSection("caught")
                 addon.AzeCaught.Active().hunger = 40
                 addon.AzeCaughtPanel.Care("feed"); addon.AzeCaughtPanel.Care("pet"); addon.AzeCaughtPanel.Care("sleep")

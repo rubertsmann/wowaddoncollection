@@ -84,6 +84,17 @@ local VIEW_ICONS = {
     inventory = "Interface\\Icons\\INV_Misc_Bag_08",
 }
 
+-- Tabs that need a companion: until one is chosen only Companion and Collection open (a catch while none is chosen
+-- makes the caught NPC the companion).
+Panel.NEEDS_COMPANION = { arena = true, guild = true, shop = true, inventory = true }
+
+-- True while `view` is locked because no companion is chosen.
+---@param view string
+---@return boolean
+function Panel.ViewLocked(view)
+    return Panel.NEEDS_COMPANION[view] == true and AzeCaught.Active() == nil
+end
+
 -- The view a saved `view` opens (an unknown or old one opens the companion).
 ---@param view any
 ---@return string
@@ -396,7 +407,7 @@ end
 
 ---@param view "companion"|"collection"|"guild"|"arena"|"shop"|"inventory" "guild": the arena's Guild page
 function Panel.SelectView(view)
-    settings().caughtView = view
+    if Panel.ViewLocked(view) then view = "companion" else settings().caughtView = view end
     if view == "guild" then   -- the guild list lives in the arena
         view = "arena"
         addon.ArenaView.state.page = "guild"
@@ -404,14 +415,31 @@ function Panel.SelectView(view)
     end
     Panel.state.view = view
     for key, frame in pairs(widgets.views or {}) do frame:SetShown(key == view) end
-    for key, button in pairs(widgets.viewButtons or {}) do
-        button:SetEnabled(key ~= view)
-        if button.SetSelected then button:SetSelected(key == view) end
-        if button.icon then button.icon:SetAlpha(key == view and 1 or 0.6) end
-    end
+    Panel.UpdateViewButtons()
     AzeCaught.Journal("DEBUG", "ui.view", "a view was selected", { view = view })
     if view == "arena" then Panel.AdvanceGuide("arena") end
     Panel.Refresh()
+end
+
+-- The tab buttons: the open one selected, the locked ones greyed out with the reason in their tooltip.
+function Panel.UpdateViewButtons()
+    local view = Panel.state.view
+    for key, button in pairs(widgets.viewButtons or {}) do
+        local locked = Panel.ViewLocked(key)
+        button:SetEnabled(key ~= view and not locked)
+        if button.SetSelected then button:SetSelected(key == view) end
+        if button.icon then
+            button.icon:SetAlpha(key == view and 1 or (locked and 0.3 or 0.6))
+            if button.icon.SetDesaturated then button.icon:SetDesaturated(locked) end
+        end
+        button.lockedText = locked and Text["Catch a companion first: your next catch becomes it."] or nil
+    end
+end
+
+-- A companion was chosen or lost: the locks change, and a locked tab that is open goes back to the companion.
+function Panel.UpdateViewLocks()
+    if not widgets.viewButtons then return end
+    if Panel.ViewLocked(Panel.state.view) then Panel.SelectView("companion") else Panel.UpdateViewButtons() end
 end
 
 -- A care button's click: ignored during the click cooldown, else the action (Sleep turns into Wake while asleep).
@@ -1118,6 +1146,7 @@ function Panel.Build(panel)
             if not GameTooltip then return end
             GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
             GameTooltip:SetText(self.tooltip)
+            if self.lockedText then GameTooltip:AddLine(self.lockedText, 1, 0.45, 0.35, true) end
             GameTooltip:Show()
         end)
         button:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -1408,7 +1437,10 @@ function Panel.RefreshGuild()
     end
 end
 
-addon.Events.On("CAUGHT_CHANGED", function() if widgets.panel and widgets.panel:IsVisible() then Panel.Refresh() end end)
+addon.Events.On("CAUGHT_CHANGED", function()
+    Panel.UpdateViewLocks()
+    if widgets.panel and widgets.panel:IsVisible() then Panel.Refresh() end
+end)
 local function guildShown() return widgets.panel and widgets.panel:IsVisible() and Panel.state.view == "arena" and addon.ArenaView.state.page == "guild" end
 addon.Events.On("GAMES_CHANGED", function() if guildShown() then Panel.Refresh() end end)
 addon.Events.On("DATA_CHANGED", function() if guildShown() then Panel.Refresh() end end)
