@@ -1,8 +1,8 @@
 local addonName, addon = ...
 
 -- The minimal window: only the companion, no text. The round pet in the middle, four round care gauges around its
--- lower half (a ring that fills clockwise with the need), the hearts top right and the switch to the full window top
--- left. Values, prices and refusals are in the tooltips. It stands in for the whole window (UI.SetMode); options
+-- lower half (a ring that fills clockwise with the need), the hearts top right, the switch to the full window top
+-- left and the training button at the bottom (a click opens the four stat icons; a click anywhere else closes them). Values, prices and refusals are in the tooltips. It stands in for the whole window (UI.SetMode); options
 -- (start mode, opacity, size, lock, hide in combat) live in db.ui.petView and are read through Model.PetViewSettings.
 ---@class PetViewModule
 local PetView = {}
@@ -23,6 +23,7 @@ local OUTLINE_COLOR = { 0.95, 0.78, 0.3 }
 local FADE_SECONDS = 0.2
 local REFRESH_SECONDS = 0.5
 local PLACEHOLDER_ICON = "Interface\\Icons\\Ability_Hunter_BeastTaming"
+local TRAIN_ICON = "Interface\\Icons\\Spell_Nature_Strength"
 local FULL_VIEW_ICON = "Interface\\Buttons\\UI-Panel-BiggerButton-Up"
 local MINIMAL_VIEW_ICON = "Interface\\Buttons\\UI-Panel-SmallerButton-Up"
 PetView.FULL_VIEW_ICON, PetView.MINIMAL_VIEW_ICON = FULL_VIEW_ICON, MINIMAL_VIEW_ICON
@@ -346,6 +347,8 @@ local function build()
     switch:SetScript("OnLeave", hideTooltip)
     widgets.switch = switch
 
+    PetView.BuildTraining(frame, layout.train, at)
+
     -- live: needs decay, sleep ends; the opacity follows the mouse
     local sinceRefresh = 0
     frame:SetScript("OnUpdate", function(self, elapsedSeconds)
@@ -353,7 +356,7 @@ local function build()
         local owner = state.tooltipOwner
         if owner and (GameTooltip:GetOwner() ~= owner) then state.tooltipOwner = nil
         elseif owner and (not owner:IsVisible() or not mouseOver(owner)) then hideTooltip() end
-        local hovered = mouseOver(self) or self.dragging
+        local hovered = mouseOver(self) or self.dragging or (widgets.trainMenu and widgets.trainMenu:IsShown() and mouseOver(widgets.trainMenu))
         local settings = PetView.Settings()
         local target = hovered and 1 or settings.opacity
         state.alpha = state.alpha + (target - state.alpha) * math.min(1, elapsedSeconds * 8)
@@ -364,7 +367,7 @@ local function build()
         addon.Log.Protected("petView.refresh", "refreshing the pet view failed", PetView.Refresh)
         addon.Log.Protected("petView.emote", "an idle emote failed", addon.AzeCaughtPanel.MaybeIdleEmote, widgets.model)
     end)
-    frame:SetScript("OnHide", hideTooltip)
+    frame:SetScript("OnHide", function() hideTooltip(); PetView.CloseTraining() end)
     frame:SetScript("OnShow", function()
         model.shownKey = nil   -- the model resets on show: load it again
         PetView.Refresh()
@@ -379,6 +382,110 @@ local function build()
     return frame
 end
 PetView.Build = build
+
+------------------------------------------------------------------ training menu
+
+-- The training button (a small round icon under the pet) and its menu: the four stat icons in a row below it. A click
+-- on an icon trains that stat; the running training shows its time on its icon, the others are greyed out. A click
+-- anywhere else closes the menu (GLOBAL_MOUSE_DOWN; without it a screen-wide catcher takes that click).
+---@param frame table the view
+---@param point { x: number, y: number }
+---@param at fun(region: table, point: table)
+function PetView.BuildTraining(frame, point, at)
+    local button = CreateFrame("Button", nil, frame)
+    button:SetSize(CORNER_SIZE, CORNER_SIZE); at(button, point)
+    disc(button, CORNER_SIZE, { 0, 0, 0, 0.75 }, "BACKGROUND")
+    local icon = button:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(CORNER_SIZE - 4, CORNER_SIZE - 4); icon:SetPoint("CENTER")
+    addon.UIHelpers.SetTextureOr(icon, TRAIN_ICON, { 1, 0.75, 0.2 })
+    makeRound(icon, button)
+    button.icon = icon
+    -- a training runs: a thin gold ring around the button
+    button.ring = PetView.Shape(button, THIN_RING_TEXTURE, CORNER_SIZE + 4, { 1, 0.82, 0, 0.95 }, "BORDER")
+    button.ring:Hide()
+    disc(button, CORNER_SIZE - 4, { 1, 1, 1, 0.2 }, "HIGHLIGHT")
+    button:RegisterForClicks("LeftButtonUp")
+    button:SetScript("OnClick", function() PetView.ToggleTraining() end)
+    button:SetScript("OnEnter", function(self)
+        state.hovered = true
+        local lines = { { Text["Training"], { 1, 0.82, 0 } } }
+        local current = addon.ArenaView.FighterState()
+        if current and current.training and current.left then
+            lines[2] = { Format(Text["Training {stat}: {time} left (play time)"], { stat = addon.ArenaView.STAT_TEXT[current.training.stat],
+                time = ("%d:%02d"):format(math.floor(current.left / 60), math.floor(current.left) % 60) }) }
+        else
+            lines[2] = { Text["Not training."], { 0.7, 0.7, 0.7 } }
+        end
+        showTooltip(self, lines)
+    end)
+    button:SetScript("OnLeave", hideTooltip)
+    widgets.trainButton = button
+
+    local STAT_SIZE, GAP = 28, 6
+    local count = #addon.Arena.STATS
+    local menu = CreateFrame("Frame", nil, frame)
+    menu:SetSize(count * STAT_SIZE + (count + 1) * GAP, STAT_SIZE + 2 * GAP)
+    menu:SetFrameLevel(frame:GetFrameLevel() + 20)
+    menu:EnableMouse(true)
+    local plate = menu:CreateTexture(nil, "BACKGROUND"); plate:SetAllPoints(); plate:SetColorTexture(0.04, 0.04, 0.06, 0.9)
+    menu:Hide()
+    widgets.trainMenu = menu
+    widgets.trainIcons = {}
+    for index, stat in ipairs(addon.Arena.STATS) do
+        local statIcon = addon.ArenaView.CreateStatIcon(menu, stat, STAT_SIZE, false)
+        statIcon:SetPoint("TOPLEFT", GAP + (index - 1) * (STAT_SIZE + GAP), -GAP)
+        statIcon:HookScript("OnClick", function() PetView.RefreshTraining() end)
+        widgets.trainIcons[stat] = statIcon
+    end
+    -- closes on a click outside the menu and the button
+    local closer = CreateFrame("Frame", nil, menu)
+    local listens = pcall(closer.RegisterEvent, closer, "GLOBAL_MOUSE_DOWN")
+    if listens then
+        closer:SetScript("OnEvent", function()
+            if menu:IsShown() and not mouseOver(menu) and not mouseOver(button) then PetView.CloseTraining() end
+        end)
+    else
+        local catcher = CreateFrame("Button", nil, UIParent)
+        catcher:SetAllPoints(UIParent); catcher:SetFrameStrata("MEDIUM"); catcher:SetFrameLevel(math.max(0, frame:GetFrameLevel() - 1))
+        catcher:RegisterForClicks("AnyUp"); catcher:SetScript("OnClick", function() PetView.CloseTraining() end)
+        catcher:Hide()
+        widgets.trainCatcher = catcher
+    end
+    AzeCaught.Journal("DEBUG", "petView.train", "the training menu was built", { globalMouse = listens and true or false })
+end
+
+-- Opens the training menu below the training button (above it when there is no room below), or closes it.
+function PetView.ToggleTraining()
+    local menu = widgets.trainMenu
+    if not menu then return end
+    if menu:IsShown() then PetView.CloseTraining() return end
+    if not addon.ArenaView.FighterState() then return end
+    hideTooltip()
+    menu:ClearAllPoints()
+    local bottom = tonumber(widgets.trainButton:GetBottom()) or 1000
+    if bottom - menu:GetHeight() - 6 < 0 then menu:SetPoint("BOTTOM", widgets.trainButton, "TOP", 0, 4)
+    else menu:SetPoint("TOP", widgets.trainButton, "BOTTOM", 0, -4) end
+    menu:Show()
+    if widgets.trainCatcher then widgets.trainCatcher:Show() end
+    PetView.RefreshTraining()
+end
+
+function PetView.CloseTraining()
+    if widgets.trainMenu then widgets.trainMenu:Hide() end
+    if widgets.trainCatcher then widgets.trainCatcher:Hide() end
+end
+
+-- The training button (shown with a companion, a gold ring while a stat trains) and the open menu's icons.
+function PetView.RefreshTraining()
+    if not widgets.trainButton then return end
+    local current = addon.ArenaView.FighterState()
+    widgets.trainButton:SetShown(current ~= nil)
+    widgets.trainButton.ring:SetShown(current ~= nil and current.training ~= nil and current.left ~= nil)
+    if not current then PetView.CloseTraining() return end
+    if widgets.trainMenu:IsShown() then
+        for _, statIcon in pairs(widgets.trainIcons) do addon.ArenaView.FillStatIcon(statIcon, current) end
+    end
+end
 
 ------------------------------------------------------------------ refresh, show, hide
 
@@ -395,6 +502,7 @@ function PetView.Refresh()
         addon.AzeCaughtPanel.IdleOfCompanion(widgets.model, companion.asleep and "fellAsleep" or "wokeUp")
     end
     for key, gauge in pairs(widgets.gauges) do fillGauge(gauge, key, companion) end
+    PetView.RefreshTraining()
     if companion then
         local hearts = tonumber(companion.hearts) or 0
         local negative = hearts < 0

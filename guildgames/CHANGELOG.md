@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 (2026-11-25, protocol 1.3, schema 2, LibGuildSync MINOR 6)
+- The fighter moved into the Companion view (feature 033): arena level, W/L and XP under the name, the four stat icons
+  with their points (10/25) below the need bars, a click trains. Arena > Fighter is gone (Arena: Guild, Fights).
+- The need bars are the care buttons: a click on Food, Water, Petting or Energy feeds, waters, pets or sleeps/wakes
+  (the four care icons are gone).
+- Minimal view: a training button under the pet opens the four stat icons; a click trains, the time shows on the icon,
+  a click elsewhere closes them.
+
 ## 0.6.0 (2026-11-25, protocol 1.3, schema 2, LibGuildSync MINOR 6)
 - `/gg catch` (and the throw binding and rope icon) inside a dungeon or raid now says, in the red line at the top of
   the screen and in chat, that catching does not work there (feature 031).

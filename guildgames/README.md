@@ -11,7 +11,9 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
 - **Minimal view:** `/gg` and the minimap button open, by default, a small view with only your AZEcaught companion and
   no text. The round pet sits in the middle, with four round care buttons around its lower half: feed, water, pet and
   sleep. The ring around each button fills clockwise with that need (half a ring = 50%) and is green, yellow or red by
-  zone. A click does the care action. The heart at the top right pulses on a gain and turns dark below 0. The icon at
+  zone. A click does the care action. The small button at 6 o'clock under the pet opens the training: the four stat
+  icons (Attack, Defense, Speed, Vitality); a click on one starts that training, its icon shows the time left and the
+  others are greyed out; a click anywhere else closes them. The heart at the top right pulses on a gain and turns dark below 0. The icon at
   the top left switches to the full window and back, at the same screen spot. Hover anything for the details. Options
   > AddOns > GuildGames AZEcaught set the start view (minimal or full), the opacity (20-100%, full while hovered), the
   size (50-200%), a position lock and hiding in combat (on by default). The view stays open across reloads. Every few
@@ -52,6 +54,10 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     undead and mechanical companions never get thirsty, rage users and rare NPCs get needy sooner.
   - Pick a caught NPC as your **companion** (3D model). In play time only, it needs water every hour, food every 2 hours,
     petting every 2 hours and 1 hour of sleep every 4 hours; the bars show the thresholds.
+  - **Companion** view: a click on a need bar cares for it (Food bar feeds, Water waters, Petting pets, Energy puts it
+    to sleep or wakes it; hover for the price). Under the name: the arena level, wins/losses and an XP bar (hover for
+    the stats and the ability). Below the bars: the four stat icons with their trained points (e.g. 10/25); a click
+    trains that stat.
   - Food costs 50s and water 25s from the pool; petting and sleep are free. Care in time earns hearts (red heart counter) and a care streak (at most +1 per hour);
     a critical need costs a heart every 10 minutes, into the negatives. Two hours without food or water and it dies.
     Switching away from a companion with negative hearts makes it run away.
@@ -62,7 +68,8 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     accepted or declined by the challenger (declined: both wagers come back). 5 minutes after the accept the fight is decided on its own (no input: stats, arena level,
     training, hearts, needs and the creature type's ability decide). The winner takes both wagers; the rest of the guild
     can bet on either side in those 5 minutes at odds from the win chance. Train Attack, Defense, Speed or Vitality
-    (gold, energy and 10 minutes of play time per point) and gain XP and arena levels. A decided fight shows
+    in the Companion view or the minimal view's training button (gold, energy and 10 minutes of play time per point)
+    and gain XP and arena levels. The Arena view has the Guild and Fights pages. A decided fight shows
     "watch!": its result, the wager and side bets are paid only after you watched the replay in the Arena view
     (`/gg arena`), or on their own 24 hours later. Both players need this version (protocol 1.3 for counter offers).
 - **Money pool:** one balance for all games: 20g to start, plus your casino results, catch rewards and weekly payouts,

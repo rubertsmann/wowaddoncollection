@@ -96,6 +96,9 @@ return {
                 local okToggle, toggleError = pcall(addon.UI.Toggle)
                 harness.truthy(okToggle, "opening the pet view failed: " .. tostring(toggleError))
                 harness.truthy(addon.PetView.widgets.frame, "the default start mode builds the pet view")
+                harness.truthy(addon.PetView.widgets.trainButton and addon.PetView.widgets.trainMenu, "the pet view has the training button and menu")
+                harness.equal(#(function() local list = {} for _, icon in pairs(addon.PetView.widgets.trainIcons) do list[#list + 1] = icon end return list end)(), 4,
+                    "four stat icons in the training menu")
                 local okFull, fullError = pcall(addon.UI.SetMode, "full")
                 harness.truthy(okFull, "building the window failed: " .. tostring(fullError))
                 harness.truthy(addon.GamesTab.widgets.flipButton, "the coin flip was not built (see Log: window.games)")
@@ -177,18 +180,27 @@ return {
                 addon.AzeCaught.Active().hunger = 40
                 addon.AzeCaughtPanel.Care("feed"); addon.AzeCaughtPanel.Care("pet"); addon.AzeCaughtPanel.Care("sleep")
                 addon.AzeCaughtPanel.RefreshCompanion()
-                -- care buttons: greyed out when unusable, a click cooldown
+                -- the need bars are the care buttons: greyed out when unusable, a click cooldown
                 do
                     local Panel = addon.AzeCaughtPanel
                     local companion = addon.AzeCaught.Active()
                     companion.asleep = nil; companion.affection = 60; companion.thirst = 100
                     Panel.state.careReadyAt = nil
                     Panel.RefreshCareButtons()
+                    harness.equal(Panel.widgets.careButtons, nil, "no care icon buttons any more")
+                    harness.equal(Panel.widgets.careBars.feed, Panel.widgets.bars.hunger, "the food bar feeds")
+                    harness.equal(Panel.widgets.careBars.water, Panel.widgets.bars.thirst, "the water bar waters")
+                    harness.equal(Panel.widgets.careBars.pet, Panel.widgets.bars.affection, "the petting bar pets")
+                    harness.equal(Panel.widgets.careBars.sleep, Panel.widgets.bars.energy, "the energy bar sleeps")
                     harness.equal(Panel.careState.water.unusable, "full", "water greyed out when full")
+                    harness.equal(Panel.widgets.careBars.water.careEnabled, false, "a full need's bar does not take clicks")
                     harness.equal(Panel.careState.pet.unusable, nil, "petting usable")
+                    harness.equal(Panel.widgets.careBars.pet.careEnabled, true, "the petting bar takes clicks")
                     Panel.ClickCare("pet")
                     harness.equal(companion.affection, 100, "the click petted")
                     companion.affection = 60
+                    Panel.RefreshCareButtons()
+                    harness.equal(Panel.widgets.careBars.pet.careEnabled, false, "greyed out during the cooldown")
                     Panel.ClickCare("pet")
                     harness.equal(companion.affection, 60, "a second click inside the cooldown is ignored")
                     harness.truthy(addon.AzeCaught.JournalLines(1, "ui.cooldown")[1], "the ignored click is journaled")
@@ -395,9 +407,40 @@ return {
                         harness.truthy(okView, "arena view: " .. tostring(viewError))
                         -- "guild" above opened the arena's Guild page (the guild list moved into the arena)
                         harness.equal(Panel.state.view, "arena"); harness.equal(addon.ArenaView.state.page, "guild")
+                        -- the fighter left the arena: an old saved "fighter" page opens Guild
                         harness.truthy(pcall(addon.ArenaView.SelectPage, "fighter"))
-                        harness.truthy(addon.ArenaView.widgets.statRows and addon.ArenaView.widgets.statRows.atk:IsShown() ~= false)
-                        harness.truthy(pcall(addon.ArenaView.Train, "atk"), "train click")
+                        harness.equal(addon.ArenaView.state.page, "guild", "no fighter page any more")
+                        harness.equal(addon.ArenaView.widgets.pageButtons.fighter, nil)
+                        -- the fighter block in the Companion view: four stat icons, a click trains
+                        local okRefresh, refreshError = pcall(addon.ArenaView.RefreshFighter)
+                        harness.truthy(okRefresh, tostring(refreshError))
+                        local atkIcon = addon.ArenaView.widgets.statIcons and addon.ArenaView.widgets.statIcons.atk
+                        harness.truthy(atkIcon and atkIcon.label, "the attack icon with its points label")
+                        harness.equal(atkIcon.label:GetText(), "0/" .. Arena.MAXIMUM_TRAINING, "points/maximum below the icon")
+                        local fighterState = addon.ArenaView.FighterState()
+                        harness.truthy(fighterState and fighterState.fighter, "my companion is a fighter")
+                        AzeCaught.Active().energy = 100
+                        addon.Store.db.pool = addon.Store.db.pool or 0
+                        local trained, trainError = pcall(addon.ArenaView.Train, "atk", function() end)
+                        harness.truthy(trained, "train click: " .. tostring(trainError))
+                        -- a refusal goes to the given line
+                        local refusal
+                        Arena.State().training = Arena.State().training or { stat = "atk", npc = AzeCaught.Active().npc, done = 1e9 }
+                        harness.equal(addon.ArenaView.Train("def", function(text) refusal = text end), false, "busy while training")
+                        harness.truthy(refusal and refusal:find(addon.Text["Already training."], 1, true), "the busy text: " .. tostring(refusal))
+                        -- while one stat trains: its icon shows the time, the others are greyed out
+                        local okFill, fillError = pcall(addon.ArenaView.RefreshFighter)
+                        harness.truthy(okFill, tostring(fillError))
+                        harness.truthy(addon.ArenaView.widgets.statIcons.atk.time:GetText() ~= "", "the time is on the training icon")
+                        harness.equal(addon.ArenaView.widgets.statIcons.def.time:GetText(), "", "no time on the others")
+                        -- the compact view's training menu: opens, shows the same, closes
+                        local PetView = addon.PetView
+                        harness.truthy(pcall(PetView.ToggleTraining))
+                        harness.truthy(PetView.widgets.trainMenu:IsShown(), "the training menu opens")
+                        harness.truthy(PetView.widgets.trainIcons.atk.time:GetText() ~= "", "the training time on the menu icon")
+                        PetView.CloseTraining()
+                        harness.equal(PetView.widgets.trainMenu:IsShown(), false, "and closes")
+                        Arena.State().training = nil
                         local foe = { npc = 5, n = "Bear", cls = "elite", disp = 0, ty = 1, al = 3, atk = 30, def = 30, spd = 30, vit = 30, ab = "rend" }
                         local records = { ["Foe-R"] = { name = "Foe-R", caught = { c = { npc = 5 }, weeks = {} },
                             arena = { w = 0, l = 0, ch = {}, an = {}, bt = {} } } }

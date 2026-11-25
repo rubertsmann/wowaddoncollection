@@ -1,3 +1,21 @@
+# GuildGames 0.7.0
+
+**English:** Your companion's fighter now lives right below the pet. In the Companion view you see its arena level,
+wins and losses and an XP bar under its name, and the four training icons (Attack, Defense, Speed, Vitality) with
+their points, for example 10/25. Click an icon to start that training; the time left shows on the icon. Feeding,
+watering, petting and sleeping are now done by clicking the need bar itself (hover it for the price). The Arena tab
+now only has Guild and Fights. In the small pet window, the new button under the pet opens the four training icons;
+click one to train, click anywhere else to close them. No need for everyone to update at once: nothing changes in
+what the guild sees.
+
+**Deutsch:** Der Kämpfer deines Begleiters sitzt jetzt direkt unter dem Tier. In der Begleiter-Ansicht siehst du unter
+dem Namen die Arenastufe, Siege und Niederlagen und einen EP-Balken, und darunter die vier Trainings-Symbole (Angriff,
+Verteidigung, Tempo, Vitalität) mit ihren Punkten, zum Beispiel 10/25. Ein Klick auf ein Symbol startet das Training;
+die Restzeit steht auf dem Symbol. Füttern, Tränken, Streicheln und Schlafen machst du jetzt mit einem Klick auf den
+Bedarfsbalken selbst (beim Darüberfahren steht der Preis). Der Arena-Reiter hat nur noch Gilde und Kämpfe. Im kleinen
+Tierfenster öffnet der neue Knopf unter dem Tier die vier Trainings-Symbole; ein Klick auf eines trainiert, ein Klick
+irgendwo anders schließt sie. Nicht alle müssen gleichzeitig aktualisieren: Für die Gilde ändert sich nichts.
+
 # GuildGames 0.6.0
 
 **English:** Arena fights are now a surprise: when your fight is decided, the chat tells you to watch it, and the

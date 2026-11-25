@@ -1,9 +1,9 @@
 local _, addon = ...
 
--- The AZEcaught "Arena" view: the guild list (built by AzeCaughtPanel), my fighter (arena level, XP, wins/losses, the
--- four stats with their training) and the fights (incoming challenges to answer, open fights to bet on, finished fights
--- to watch), plus the replay: both models, health bars, floating damage, a shake on every hit and a burst for the winner. Hands-off: the
--- fight is already decided (Arena.Fight); the replay only shows it.
+-- The AZEcaught "Arena" view: the guild list (built by AzeCaughtPanel) and the fights (incoming challenges to answer,
+-- open fights to bet on, finished fights to watch), plus the replay: both models, health bars, floating damage, a shake on every hit and a burst for the winner. Hands-off: the
+-- fight is already decided (Arena.Fight); the replay only shows it. My fighter (level line, the four stat icons that
+-- train) is built here as well, but it sits in the Companion view and in the compact pet view's training menu.
 local ArenaView = {}
 addon.ArenaView = ArenaView
 
@@ -50,7 +50,7 @@ local function createBar(parent, width, height, color)
     return bar
 end
 
------------------------------------------------------------------- fighter page
+------------------------------------------------------------------ fighter block and stat icons
 
 local function trainRefusalText(reason)
     local texts = { busy = Text["Already training."], maximum = Text["This stat is fully trained."], asleep = Text["Your companion is asleep."],
@@ -58,109 +58,187 @@ local function trainRefusalText(reason)
         nocompanion = Text["You have no companion."], readonly = Text["Saved data is read-only."] }
     return texts[reason] or tostring(reason)
 end
+ArenaView.TrainRefusalText = trainRefusalText
 
----@param panel table
-local function buildFighterPage(panel)
-    local Widgets = addon.UI.Widgets
-    local model = addon.AzeCaughtPanel.CreateModel(panel, 110, 132)
-    model:SetPoint("TOPLEFT", 4, -46)
-    widgets.fighterModel = model
-    widgets.fighterName = Widgets.CreateFontString(panel, "GameFontNormal", "CENTER")
-    widgets.fighterName:SetPoint("TOP", model, "BOTTOM", 0, -2); widgets.fighterName:SetWidth(116)
-    widgets.fighterLevel = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
-    widgets.fighterLevel:SetPoint("TOP", widgets.fighterName, "BOTTOM", 0, -2); widgets.fighterLevel:SetWidth(116)
-    widgets.xpBar = createBar(panel, 106, 6, { 0.55, 0.35, 1 })
-    widgets.xpBar:SetPoint("TOP", widgets.fighterLevel, "BOTTOM", 0, -3)
-    widgets.record = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
-    widgets.record:SetPoint("TOP", widgets.xpBar, "BOTTOM", 0, -4); widgets.record:SetWidth(116)
-    widgets.statRows = {}
-    for index, stat in ipairs(addon.Arena.STATS) do
-        local row = CreateFrame("Frame", nil, panel)
-        row:SetSize(176, 32); row:SetPoint("TOPLEFT", 120, -46 - (index - 1) * 34)
-        row.icon = row:CreateTexture(nil, "ARTWORK"); row.icon:SetSize(24, 24); row.icon:SetPoint("LEFT", 0, 0)
-        addon.UIHelpers.SetTextureOr(row.icon, STAT_ICONS[stat], { 0.6, 0.6, 0.6 })
-        if row.icon.SetTexCoord then row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
-        row.label = Widgets.CreateFontString(row, "GameFontHighlightSmall", "LEFT"); row.label:SetPoint("TOPLEFT", 28, -2); row.label:SetWidth(92)
-        row.points = Widgets.CreateFontString(row, "GameFontDisableSmall", "LEFT"); row.points:SetPoint("BOTTOMLEFT", 28, 3); row.points:SetWidth(92)
-        local key = stat
-        row.train = Widgets.CreateIconButton(row, "train", 24, Text["Train"], function() ArenaView.Train(key) end)
-        row.train:SetPoint("RIGHT", -2, 0)
-        row.train:HookScript("OnEnter", function(self)
-            if not GameTooltip then return end
-            local npc = addon.AzeCaught.Active() and addon.Arena.Npc(addon.AzeCaught.Active().npc)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(STAT_TEXT[key], 1, 0.82, 0)
-            GameTooltip:AddLine(Format(Text["Costs {gold} and {energy} energy, takes {minutes} minutes of play time."],
-                { gold = money(addon.Arena.TrainCost(npc and npc.tr[key] or 0)), energy = addon.Arena.TRAIN_ENERGY,
-                  minutes = math.floor(addon.Arena.TRAIN_SECONDS / 60) }), 1, 1, 1, true)
-            GameTooltip:AddLine(Format(Text["+{percent}% per point, at most {maximum} points."],
-                { percent = math.floor(addon.Arena.TRAIN_BONUS * 100), maximum = addon.Arena.MAXIMUM_TRAINING }), 0.7, 0.7, 0.7, true)
-            GameTooltip:Show()
-        end)
-        row.train:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-        widgets.statRows[stat] = row
-    end
-    widgets.trainBar = createBar(panel, 176, 6, { 1, 0.75, 0.2 })
-    widgets.trainBar:SetPoint("TOPLEFT", 120, -186)
-    widgets.trainText = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "LEFT")
-    widgets.trainText:SetPoint("TOPLEFT", 120, -196); widgets.trainText:SetWidth(176)
-    widgets.ability = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "LEFT")
-    widgets.ability:SetPoint("TOPLEFT", 6, -250); widgets.ability:SetWidth(288)
-    widgets.fighterStatus = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
-    widgets.fighterStatus:SetPoint("TOP", 0, -272); widgets.fighterStatus:SetWidth(290)
-    widgets.noFighter = Widgets.CreateFontString(panel, "GameFontDisable", "CENTER")
-    widgets.noFighter:SetPoint("TOP", 0, -110); widgets.noFighter:SetWidth(270)
-    widgets.noFighter:SetText(Text["You need a companion to fight. Catch one and make it your companion."])
+-- What the stat icons show now: my companion's fighter, its arena entry and the running training (only when it is
+-- this companion's), or nil without a companion.
+---@return table|nil
+function ArenaView.FighterState()
+    local Arena = addon.Arena
+    local companion = addon.AzeCaught.Active()
+    local fighter = companion and Arena.Fighter(companion)
+    if not fighter then return nil end
+    local training = Arena.State().training
+    if training and training.npc ~= companion.npc then training = nil end
+    return { companion = companion, fighter = fighter, npc = Arena.Npc(companion.npc), training = training,
+        left = training and Arena.TrainingLeft() or nil }
 end
 
-function ArenaView.Train(stat)
+-- Starts training `stat`. A refusal goes to `onRefusal(text)`, or to the red error line.
+---@param stat string
+---@param onRefusal? fun(text: string)
+---@return boolean ok
+function ArenaView.Train(stat, onRefusal)
     local ok, reason = addon.Arena.Train(me(), stat, now())
     if ok then
-        widgets.fighterStatus:SetText("")
-        addon.Animate.Pulse(widgets.statRows[stat].icon and widgets.statRows[stat] or widgets.trainBar, 1.15, 0.3)
         addon.Events.Fire("CAUGHT_CHANGED")
+        return true
+    end
+    local text = "|cffff6060" .. trainRefusalText(reason) .. "|r"
+    if onRefusal then onRefusal(text) else addon.Api.ShowOverlay(trainRefusalText(reason)) end
+    return false
+end
+
+---@param button table a stat icon
+local function statTooltip(button)
+    if not GameTooltip then return end
+    local Arena = addon.Arena
+    local stat, current = button.stat, ArenaView.FighterState()
+    GameTooltip:SetOwner(button, "ANCHOR_TOP")
+    GameTooltip:SetText(STAT_TEXT[stat] .. (current and ("  |cffffffff" .. current.fighter[stat] .. "|r") or ""), 1, 0.82, 0)
+    if current then
+        local points = current.npc.tr[stat]
+        GameTooltip:AddLine(Format(Text["Trained {points}/{maximum}"], { points = points, maximum = Arena.MAXIMUM_TRAINING }), 1, 1, 1)
+        if current.training and current.training.stat == stat and current.left then
+            GameTooltip:AddLine(Format(Text["Training {stat}: {time} left (play time)"], { stat = STAT_TEXT[stat], time = clock(current.left) }), 1, 0.82, 0, true)
+        elseif points < Arena.MAXIMUM_TRAINING then
+            GameTooltip:AddLine(Format(Text["Costs {gold} and {energy} energy, takes {minutes} minutes of play time."],
+                { gold = money(Arena.TrainCost(points)), energy = Arena.TRAIN_ENERGY, minutes = math.floor(Arena.TRAIN_SECONDS / 60) }), 1, 1, 1, true)
+            if current.training then
+                GameTooltip:AddLine(trainRefusalText("busy"), 1, 0.4, 0.4, true)
+            else
+                GameTooltip:AddLine(Text["Click: train."], 0.4, 1, 0.4)
+            end
+        end
+        GameTooltip:AddLine(Format(Text["+{percent}% per point, at most {maximum} points."],
+            { percent = math.floor(Arena.TRAIN_BONUS * 100), maximum = Arena.MAXIMUM_TRAINING }), 0.7, 0.7, 0.7, true)
+    end
+    GameTooltip:Show()
+end
+
+-- A stat icon: the stat's icon, a dark shade that shrinks while it trains, the time left on the icon and, when
+-- `withLabel`, "points/maximum" below it. A click trains that stat (`onRefusal` gets the refusal text).
+---@param parent table
+---@param stat string
+---@param size number
+---@param withLabel boolean
+---@param onRefusal? fun(text: string)
+---@return table button
+function ArenaView.CreateStatIcon(parent, stat, size, withLabel, onRefusal)
+    local Widgets = addon.UI.Widgets
+    local button = CreateFrame("Button", nil, parent)
+    button:SetSize(size, size)
+    button.stat = stat
+    local border = button:CreateTexture(nil, "BACKGROUND"); border:SetPoint("TOPLEFT", -2, 2); border:SetPoint("BOTTOMRIGHT", 2, -2)
+    border:SetColorTexture(0, 0, 0, 0.85)
+    button.icon = button:CreateTexture(nil, "ARTWORK"); button.icon:SetAllPoints()
+    addon.UIHelpers.SetTextureOr(button.icon, STAT_ICONS[stat], { 0.6, 0.6, 0.6 })
+    if button.icon.SetTexCoord then button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    -- the part still to train, dark from the top
+    button.shade = button:CreateTexture(nil, "OVERLAY"); button.shade:SetPoint("TOPLEFT"); button.shade:SetPoint("TOPRIGHT")
+    button.shade:SetColorTexture(0, 0, 0, 0.65); button.shade:SetHeight(size); button.shade:Hide()
+    button.time = Widgets.CreateFontString(button, "NumberFontNormal", "CENTER"); button.time:SetPoint("CENTER", 0, 0)
+    button.time:SetTextColor(1, 0.82, 0)
+    local highlight = button:CreateTexture(nil, "HIGHLIGHT"); highlight:SetAllPoints(); highlight:SetColorTexture(1, 1, 1, 0.2)
+    button.withLabel = withLabel and true or false
+    if withLabel then
+        button.label = Widgets.CreateFontString(parent, "GameFontHighlightSmall", "CENTER")
+        button.label:SetPoint("TOP", button, "BOTTOM", 0, -1); button.label:SetWidth(60)
+    end
+    button:RegisterForClicks("LeftButtonUp")
+    button:SetScript("OnClick", function(self)
+        if ArenaView.Train(stat, onRefusal) then addon.Animate.Pulse(self, 1.15, 0.3) end
+        ArenaView.FillStatIcon(self, ArenaView.FighterState())
+        if GameTooltip and GameTooltip:GetOwner() == self then statTooltip(self) end
+    end)
+    button:SetScript("OnEnter", statTooltip)
+    button:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    return button
+end
+
+-- Shows `current` (ArenaView.FighterState) on a stat icon: trainable, training (shade + time), or greyed out.
+---@param button table
+---@param current table|nil
+function ArenaView.FillStatIcon(button, current)
+    local Arena = addon.Arena
+    if not current then button:Hide(); if button.withLabel then button.label:Hide() end return end
+    button:Show()
+    local stat = button.stat
+    local points = current.npc.tr[stat]
+    local trainingThis = current.training and current.training.stat == stat and current.left ~= nil
+    local enabled = trainingThis or (current.training == nil and points < Arena.MAXIMUM_TRAINING)
+    pcall(button.icon.SetDesaturated, button.icon, not enabled)
+    button.icon:SetAlpha(enabled and 1 or 0.4)
+    if trainingThis then
+        button.shade:SetHeight(math.max(0.01, button:GetHeight() * addon.Utility.Clamp(current.left / Arena.TRAIN_SECONDS, 0, 1)))
+        button.shade:Show()
+        button.time:SetText(clock(current.left))
     else
-        widgets.fighterStatus:SetText("|cffff6060" .. trainRefusalText(reason) .. "|r")
+        button.shade:Hide()
+        button.time:SetText("")
+    end
+    if button.withLabel then
+        button.label:Show()
+        button.label:SetText((points >= Arena.MAXIMUM_TRAINING and "|cff999999" or "") .. points .. "/" .. Arena.MAXIMUM_TRAINING
+            .. (points >= Arena.MAXIMUM_TRAINING and "|r" or ""))
+    end
+end
+
+---@param holder table the level line's mouse frame
+local function levelTooltip(holder)
+    local current = ArenaView.FighterState()
+    if not GameTooltip or not current then return end
+    local Arena = addon.Arena
+    local level, into, needed = Arena.Level(current.npc.xp)
+    GameTooltip:SetOwner(holder, "ANCHOR_BOTTOM")
+    GameTooltip:SetText(Text["Fighter"] .. ": " .. Format(Text["Arena level {level}"], { level = level }), 1, 0.82, 0)
+    if needed > 0 then GameTooltip:AddLine(into .. "/" .. needed .. " XP", 0.75, 0.6, 1) end
+    GameTooltip:AddLine(Format(Text["Wins {wins} · Losses {losses}"], { wins = current.npc.w, losses = current.npc.l }), 1, 1, 1)
+    for _, stat in ipairs(Arena.STATS) do
+        GameTooltip:AddDoubleLine(STAT_TEXT[stat], tostring(current.fighter[stat]), 0.8, 0.8, 0.8, 1, 1, 1)
+    end
+    GameTooltip:AddLine(Text["Ability"] .. ": " .. ABILITY_TEXT[current.fighter.ab], 1, 0.82, 0, true)
+    if not current.training then GameTooltip:AddLine(Text["Not training."], 0.6, 0.6, 0.6) end
+    GameTooltip:Show()
+end
+
+-- The fighter in the Companion view: the level line (arena level, wins/losses, XP bar) under the name at `levelY`,
+-- and the four stat icons in a row at `iconsY` (where the care buttons used to be).
+---@param panel table the companion view
+---@param levelY number
+---@param iconsY number
+---@param onRefusal fun(text: string)
+function ArenaView.BuildFighterBlock(panel, levelY, iconsY, onRefusal)
+    local Widgets = addon.UI.Widgets
+    local holder = CreateFrame("Frame", nil, panel)
+    holder:SetSize(200, 22); holder:SetPoint("TOP", 0, levelY)
+    holder:SetFrameLevel(panel:GetFrameLevel() + 5)
+    holder:EnableMouse(true)
+    holder:SetScript("OnEnter", levelTooltip)
+    holder:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    widgets.fighterHolder = holder
+    widgets.fighterLevel = Widgets.CreateFontString(holder, "GameFontHighlightSmall", "CENTER")
+    widgets.fighterLevel:SetPoint("TOP", 0, 0); widgets.fighterLevel:SetWidth(200)
+    widgets.xpBar = createBar(holder, 120, 4, { 0.55, 0.35, 1 })
+    widgets.xpBar:SetPoint("TOP", widgets.fighterLevel, "BOTTOM", 0, -2)
+    widgets.statIcons = {}
+    for index, stat in ipairs(addon.Arena.STATS) do
+        local icon = ArenaView.CreateStatIcon(panel, stat, 34, true, onRefusal)
+        icon:SetPoint("TOPLEFT", 36 + (index - 1) * 64, iconsY)
+        widgets.statIcons[stat] = icon
     end
 end
 
 function ArenaView.RefreshFighter()
-    local Arena, AzeCaught = addon.Arena, addon.AzeCaught
-    local companion = AzeCaught.Active()
-    local fighter = companion and Arena.Fighter(companion)
-    widgets.noFighter:SetShown(fighter == nil)
-    for _, row in pairs(widgets.statRows) do row:SetShown(fighter ~= nil) end
-    for _, region in ipairs({ widgets.fighterModel, widgets.fighterName, widgets.fighterLevel, widgets.xpBar, widgets.record,
-        widgets.trainBar, widgets.trainText, widgets.ability }) do region:SetShown(fighter ~= nil) end
-    if not fighter then return end
-    local npc = Arena.Npc(companion.npc)
-    local level, into, needed = Arena.Level(npc.xp)
-    if widgets.fighterModel.shownNpc ~= companion.npc then
-        addon.AzeCaughtPanel.ShowModel(widgets.fighterModel, { npc = companion.npc, disp = companion.disp }, "arena")
-        widgets.fighterModel.shownNpc = companion.npc
-    end
-    addon.UI.Widgets.FitText(widgets.fighterName, addon.Utility.Escape(fighter.n), 0.7)
-    -- level and XP on one line: the font shrinks to fit
+    if not widgets.fighterHolder then return end
+    local current = ArenaView.FighterState()
+    widgets.fighterHolder:SetShown(current ~= nil)
+    for _, icon in pairs(widgets.statIcons) do ArenaView.FillStatIcon(icon, current) end
+    if not current then return end
+    local level, into, needed = addon.Arena.Level(current.npc.xp)
     addon.UI.Widgets.FitText(widgets.fighterLevel, Format(Text["Arena level {level}"], { level = level })
-        .. (needed > 0 and ("  |cff999999" .. into .. "/" .. needed .. " XP|r") or ""), 0.65)
+        .. "  |cff999999" .. Format(Text["{wins}W {losses}L"], { wins = current.npc.w, losses = current.npc.l }) .. "|r", 0.7)
     widgets.xpBar:SetValue(needed > 0 and into / needed or 1)
-    widgets.record:SetText(Format(Text["Wins {wins} · Losses {losses}"], { wins = npc.w, losses = npc.l }))
-    local training = Arena.State().training
-    for _, stat in ipairs(Arena.STATS) do
-        local row = widgets.statRows[stat]
-        row.label:SetText(STAT_TEXT[stat] .. "  |cffffffff" .. fighter[stat] .. "|r")
-        row.points:SetText(Format(Text["Trained {points}/{maximum}"], { points = npc.tr[stat], maximum = Arena.MAXIMUM_TRAINING }))
-        row.train:SetEnabled(training == nil and npc.tr[stat] < Arena.MAXIMUM_TRAINING)
-    end
-    local left = Arena.TrainingLeft()
-    if training and left then
-        widgets.trainBar:SetValue(1 - left / Arena.TRAIN_SECONDS)
-        widgets.trainText:SetText(Format(Text["Training {stat}: {time} left (play time)"], { stat = STAT_TEXT[training.stat], time = clock(left) }))
-    else
-        widgets.trainBar:SetValue(0)
-        widgets.trainText:SetText(Text["Not training."])
-    end
-    widgets.ability:SetText(Text["Ability"] .. ": |cffffd100" .. ABILITY_TEXT[fighter.ab] .. "|r")
 end
 
 ------------------------------------------------------------------ fights page
@@ -928,8 +1006,8 @@ end
 
 ---@param page "fighter"|"fights"|"guild"
 function ArenaView.SelectPage(page)
-    ArenaView.state.page = (page == "fights" or page == "guild") and page or "fighter"
-    widgets.fighterPage:SetShown(ArenaView.state.page == "fighter")
+    -- (an older saved "fighter" page opens Guild: the fighter moved into the Companion view)
+    ArenaView.state.page = page == "fights" and "fights" or "guild"
     widgets.fightsPage:SetShown(ArenaView.state.page == "fights")
     widgets.guildPage:SetShown(ArenaView.state.page == "guild")
     for key, button in pairs(widgets.pageButtons) do
@@ -945,18 +1023,16 @@ function ArenaView.Build(panel)
     local Widgets = addon.UI.Widgets
     widgets.panel = panel
     widgets.pageButtons = {}
-    -- Guild, Fighter, Fights (AzeCaughtPanel builds the guild list into guildPage)
-    local labels = { fighter = Text["Fighter"], fights = Text["Fights"], guild = Text["Guild"] }
-    for index, page in ipairs({ "guild", "fighter", "fights" }) do
+    -- Guild, Fights (AzeCaughtPanel builds the guild list into guildPage)
+    local labels = { fights = Text["Fights"], guild = Text["Guild"] }
+    for index, page in ipairs({ "guild", "fights" }) do
         local key = page
-        local button = Widgets.CreateButton(panel, labels[page], 94, 18, function() ArenaView.SelectPage(key) end)
-        button:SetPoint("TOPLEFT", 4 + (index - 1) * 97, -24)
+        local button = Widgets.CreateButton(panel, labels[page], 143, 18, function() ArenaView.SelectPage(key) end)
+        button:SetPoint("TOPLEFT", 4 + (index - 1) * 149, -24)
         widgets.pageButtons[page] = button
     end
-    widgets.fighterPage = CreateFrame("Frame", nil, panel); widgets.fighterPage:SetAllPoints()
     widgets.fightsPage = CreateFrame("Frame", nil, panel); widgets.fightsPage:SetAllPoints()
     widgets.guildPage = CreateFrame("Frame", nil, panel); widgets.guildPage:SetAllPoints()
-    buildFighterPage(widgets.fighterPage)
     buildFightsPage(widgets.fightsPage)
     buildReplay(panel)
     panel:HookScript("OnHide", function() ArenaView.StopReplay() end)
@@ -968,8 +1044,7 @@ function ArenaView.Refresh()
     local incoming = 0
     for _, row in ipairs(ArenaView.FightRows()) do if row.state == "incoming" then incoming = incoming + 1 end end
     widgets.pageButtons.fights:SetLabel(incoming > 0 and ("|cffffd100" .. Format(Text["Fights ({n} new)"], { n = incoming }) .. "|r") or Text["Fights"])
-    if ArenaView.state.page == "fighter" then ArenaView.RefreshFighter()
-    elseif ArenaView.state.page == "guild" then addon.AzeCaughtPanel.RefreshGuild()
+    if ArenaView.state.page == "guild" then addon.AzeCaughtPanel.RefreshGuild()
     else ArenaView.RefreshFights() end
     if addon.AzeCaughtPanel.UpdateGuide then addon.AzeCaughtPanel.UpdateGuide() end
 end

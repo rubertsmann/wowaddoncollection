@@ -521,7 +521,8 @@ function Model.PetViewLayout(petSize, gaugeSize, cornerSize)
     local margin = 2
     local half = math.max(orbit + gaugeSize / 2, petSize / 2) + margin
     local width = half * 2
-    local below = orbit * math.cos(math.rad(180 - 145)) + gaugeSize / 2 + margin
+    -- the training button sits at 6 o'clock on the same orbit (between water and pet)
+    local below = math.max(orbit * math.cos(math.rad(180 - 145)) + gaugeSize / 2, orbit + cornerSize / 2) + margin
     local above = math.max(petSize / 2, cornerSize) + margin + cornerSize / 2
     local height = above + below
     local centerX, centerY = width / 2, -above
@@ -532,6 +533,7 @@ function Model.PetViewLayout(petSize, gaugeSize, cornerSize)
     end
     layout.switch = { x = margin + cornerSize / 2, y = -(margin + cornerSize / 2) }
     layout.heart = { x = width - margin - cornerSize / 2, y = -(margin + cornerSize / 2) }
+    layout.train = { x = centerX, y = centerY - orbit }
     return layout
 end
 

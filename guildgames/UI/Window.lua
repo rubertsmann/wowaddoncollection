@@ -78,14 +78,12 @@ end
 local ICON_BUTTON = {
     accept = { texture = "Interface\\RaidFrame\\ReadyCheck-Ready", color = { 0.25, 0.85, 0.3 } },
     decline = { texture = "Interface\\RaidFrame\\ReadyCheck-NotReady", color = { 0.95, 0.3, 0.25 } },
-    -- train a stat (Arena > Fighter)
-    train = { texture = "Interface\\Icons\\Spell_Nature_Strength", color = { 1, 0.75, 0.2 }, crop = true },
     -- dev build tools: add a debug thing / make a timer run out
     debug = { texture = "Interface\\Icons\\Trade_Engineering", color = { 1, 0.55, 0.15 }, crop = true, dev = true },
     skip = { texture = "Interface\\Icons\\INV_Misc_PocketWatch_01", color = { 0.35, 0.75, 1 }, crop = true, dev = true },
 }
 ---@param parent table
----@param kind "accept"|"decline"|"train"|"debug"|"skip"
+---@param kind "accept"|"decline"|"debug"|"skip"
 ---@param size number
 ---@param tooltip string
 ---@param onClick? function

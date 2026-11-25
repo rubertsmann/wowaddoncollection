@@ -1,7 +1,8 @@
 local addonName, addon = ...
 
 -- The AZEcaught game panel: three views in the 300 x 336 game stage.
---   Companion   the 3D model, hearts, need bars with threshold marks, the care buttons and their effects
+--   Companion   the 3D model, hearts, need bars with threshold marks (a click on a bar cares for that need), the
+--               care effects, and my fighter (level line, four stat icons that train; built by UI/ArenaView.lua)
 --   Collection  every found NPC (caught ones first), a model preview, click a caught one to make it the companion
 --   Arena       built by UI/ArenaView.lua; its Guild page (built here) lists every member's current companion by companion
 --               level, with a preview of the selected one
@@ -23,7 +24,7 @@ local EMOTES = { feed = { 61, 74, 0 }, water = { 61, 0 }, pet = { 68, 67, 70, 74
 local RARITY_COLOR = { normal = "ffffff", elite = "ffd100", rare = "c0c0c0", rareelite = "a335ee", worldboss = "ff8000" }
 local NEED_ORDER = AzeCaught.NEEDS
 local CARE_COOLDOWN = 1.5    -- seconds the care buttons stay locked after a click
-local CARE_ICON_SIZE = 34
+local CARE_OF_NEED = { hunger = "feed", thirst = "water", affection = "pet", energy = "sleep" }
 local CARE_ICONS = { feed = "Interface\\Icons\\INV_Misc_Food_15", water = "Interface\\Icons\\INV_Drink_07",
     pet = "Interface\\Icons\\Ability_Hunter_BeastSoothe", sleep = "Interface\\Icons\\Spell_Nature_Sleep",
     wake = "Interface\\Icons\\Ability_Warrior_BattleShout" }
@@ -294,8 +295,9 @@ Panel.CreateModel, Panel.ShowModel = createModel, showModel   -- the arena view 
 
 ---@param parent table
 ---@param y number
+---@param careKey? "feed"|"water"|"pet"|"sleep" makes the bar a care button (my companion's bars)
 ---@return table bar
-local function createBar(parent, y)
+local function createBar(parent, y, careKey)
     local Widgets = addon.UI.Widgets
     local bar = CreateFrame("Frame", nil, parent)
     bar:SetSize(286, 14); bar:SetPoint("TOPLEFT", 8, y)
@@ -319,11 +321,21 @@ local function createBar(parent, y)
     bar.value = Widgets.CreateFontString(bar, "GameFontHighlightSmall", "RIGHT")
     bar.value:SetPoint("RIGHT", 0, 0); bar.value:SetWidth(52)
     bar:EnableMouse(true)
+    if careKey then
+        bar.careKey = careKey
+        bar.highlight = bar:CreateTexture(nil, "HIGHLIGHT"); bar.highlight:SetAllPoints(); bar.highlight:SetColorTexture(1, 1, 1, 0.12)
+        bar:SetScript("OnMouseUp", function(self, button)
+            if button ~= "LeftButton" or not self.careEnabled then return end
+            Panel.ClickCare(careKey)
+            if GameTooltip and GameTooltip:GetOwner() == self then self:GetScript("OnEnter")(self) end
+        end)
+    end
     bar:SetScript("OnEnter", function(self)
         if not GameTooltip or not self.need then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(needLabel(self.need))
         GameTooltip:AddLine(self.tooltipText or "", 1, 1, 1, true)
+        if self.careKey then Panel.AddCareTooltip(self.careKey) end
         GameTooltip:Show()
     end)
     bar:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -398,9 +410,6 @@ function Panel.ClickCare(key, target)
     local companion = AzeCaught.Active()
     local action = (key == "sleep" and companion and companion.asleep) and "wake" or key
     Panel.state.careReadyAt = clock + CARE_COOLDOWN
-    for _, button in pairs(widgets.careButtons or {}) do
-        if button.cooldown then pcall(button.cooldown.SetCooldown, button.cooldown, clock, CARE_COOLDOWN) end
-    end
     Panel.Care(action, target)
     Panel.RefreshCareButtons()
     addon.Events.Fire("CARE_COOLDOWN")
@@ -418,24 +427,41 @@ Panel.CARE_COOLDOWN, Panel.CARE_ICONS, Panel.ACTION_COLOR = CARE_COOLDOWN, CARE_
 Panel.CareRefusalText, Panel.PlayEmote, Panel.EMOTES, Panel.NeedLabel = careRefusalText, playEmote, EMOTES, needLabel
 Panel.HEART_ICON = HEART_ICON
 
--- Icons, prices and greyed-out state of the care buttons (AzeCaught.CareAvailability; the cooldown greys them too).
+-- Icons and greyed-out state of the clickable need bars (AzeCaught.CareAvailability; the cooldown greys them too).
 function Panel.RefreshCareButtons()
-    if not widgets.careButtons then return end
+    if not widgets.careBars then return end
     local companion = AzeCaught.Active()
     local coolingDown = addon.Api.Clock() < (Panel.state.careReadyAt or 0)
-    for key, button in pairs(widgets.careButtons) do
+    for key, bar in pairs(widgets.careBars) do
         local action = (key == "sleep" and companion and companion.asleep) and "wake" or key
         local usable, reason = AzeCaught.CareAvailability(action, me())
         careState[key] = { action = action, unusable = not usable and reason or nil }
-        addon.UIHelpers.SetTextureOr(button.icon, CARE_ICONS[action], ACTION_COLOR[action] or { 1, 1, 1 })
-        local enabled = usable and not coolingDown
-        button:SetEnabled(enabled)
-        pcall(button.icon.SetDesaturated, button.icon, not enabled)
-        button.icon:SetAlpha(enabled and 1 or 0.4)
-        local price = action == "feed" and AzeCaught.FOOD_PRICE or action == "water" and AzeCaught.WATER_PRICE or nil
-        button.price:SetText(price and money(price) or (action == "wake" and Text["Wake"] or Text["free"]))
-        button.price:SetAlpha(enabled and 1 or 0.5)
+        addon.UIHelpers.SetTextureOr(bar.icon, CARE_ICONS[action], ACTION_COLOR[action] or { 1, 1, 1 })
+        bar.careEnabled = usable and not coolingDown
+        pcall(bar.icon.SetDesaturated, bar.icon, not bar.careEnabled)
+        bar.icon:SetAlpha(bar.careEnabled and 1 or 0.4)
     end
+end
+
+-- The care lines of a need bar's tooltip: what a click does and what it costs, or why it cannot be done now.
+---@param key "feed"|"water"|"pet"|"sleep"
+function Panel.AddCareTooltip(key)
+    local state = careState[key] or {}
+    local shown = state.action or key
+    local line
+    if shown == "feed" then line = Format(Text["Feed for {gold}"], { gold = money(AzeCaught.FOOD_PRICE) })
+    elseif shown == "water" then line = Format(Text["Water for {gold}"], { gold = money(AzeCaught.WATER_PRICE) })
+    elseif shown == "pet" then line = Text["Petting is free."]
+    elseif shown == "wake" then line = Text["Wake"]
+    else line = Format(Text["Sleeps {time}; refills energy."], { time = duration(AzeCaught.SLEEP_DURATION) }) end
+    GameTooltip:AddLine(Text["Click:"] .. " " .. line, 0.4, 1, 0.4, true)
+    if state.unusable then GameTooltip:AddLine(careRefusalText(state.unusable), 1, 0.4, 0.4, true) end
+end
+
+-- A line in the Companion view's status line (a training refusal, a care result).
+---@param text string
+function Panel.ShowStatus(text)
+    if widgets.statusText then widgets.statusText:SetText(text) end
 end
 
 ---@class CareTarget where a care action's effects show
@@ -635,44 +661,16 @@ local function buildCompanionView(panel)
     widgets.streakText = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "RIGHT")
     widgets.streakText:SetPoint("TOPRIGHT", -8, -182); widgets.streakText:SetWidth(200)
 
-    widgets.bars = {}
-    for index, need in ipairs(NEED_ORDER) do widgets.bars[need] = createBar(panel, -204 - (index - 1) * 18) end
-
-    -- care buttons: icons, greyed out while unusable (AzeCaught.CareAvailability, the reason is in the
-    -- tooltip) and locked for CARE_COOLDOWN after a click (a cooldown sweep shows it)
-    widgets.careButtons = {}
-    for index, action in ipairs({ "feed", "water", "pet", "sleep" }) do
-        local key = action
-        local button = CreateFrame("Button", nil, panel)
-        button:SetSize(CARE_ICON_SIZE, CARE_ICON_SIZE)
-        button:SetPoint("TOPLEFT", 36 + (index - 1) * 64, -276)
-        local icon = button:CreateTexture(nil, "ARTWORK"); icon:SetAllPoints(); icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        button.icon = icon
-        local border = button:CreateTexture(nil, "BACKGROUND"); border:SetPoint("TOPLEFT", -2, 2); border:SetPoint("BOTTOMRIGHT", 2, -2)
-        border:SetColorTexture(0, 0, 0, 0.85)
-        local highlight = button:CreateTexture(nil, "HIGHLIGHT"); highlight:SetAllPoints(); highlight:SetColorTexture(1, 1, 1, 0.2)
-        button.price = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
-        button.price:SetPoint("TOP", button, "BOTTOM", 0, -1); button.price:SetWidth(60)
-        local ok, cooldown = pcall(CreateFrame, "Cooldown", nil, button, "CooldownFrameTemplate")
-        if ok and cooldown then cooldown:SetAllPoints(); button.cooldown = cooldown end
-        button:RegisterForClicks("LeftButtonUp")
-        button:SetScript("OnClick", function() Panel.ClickCare(key) end)
-        button:SetScript("OnEnter", function(self)
-            if not GameTooltip then return end
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            local state = careState[key] or {}
-            local shown = state.action or key
-            if shown == "feed" then GameTooltip:SetText(Format(Text["Feed for {gold}"], { gold = money(AzeCaught.FOOD_PRICE) }))
-            elseif shown == "water" then GameTooltip:SetText(Format(Text["Water for {gold}"], { gold = money(AzeCaught.WATER_PRICE) }))
-            elseif shown == "pet" then GameTooltip:SetText(Text["Petting is free."])
-            elseif shown == "wake" then GameTooltip:SetText(Text["Wake"])
-            else GameTooltip:SetText(Format(Text["Sleeps {time}; refills energy."], { time = duration(AzeCaught.SLEEP_DURATION) })) end
-            if state.unusable then GameTooltip:AddLine(careRefusalText(state.unusable), 1, 0.4, 0.4, true) end
-            GameTooltip:Show()
-        end)
-        button:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-        widgets.careButtons[action] = button
+    -- the need bars are the care buttons: a click on a bar cares for that need
+    widgets.bars, widgets.careBars = {}, {}
+    for index, need in ipairs(NEED_ORDER) do
+        local careKey = CARE_OF_NEED[need]
+        widgets.bars[need] = createBar(panel, -204 - (index - 1) * 18, careKey)
+        if careKey then widgets.careBars[careKey] = widgets.bars[need] end
     end
+
+    -- my fighter: the level line under the name, the four stat icons where the care buttons were
+    addon.ArenaView.BuildFighterBlock(panel, -42, -276, Panel.ShowStatus)
     widgets.statusText = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
     widgets.statusText:SetPoint("TOP", 0, -322); widgets.statusText:SetWidth(290)
     widgets.emptyCompanion = Widgets.CreateFontString(panel, "GameFontDisable", "CENTER")
@@ -1137,6 +1135,7 @@ function Panel.RefreshCompanion()
     end
     for _, bar in pairs(widgets.bars) do bar:SetShown(hasCompanion) end
     Panel.RefreshCareButtons()
+    addon.ArenaView.RefreshFighter()
     if not companion then showModel(widgets.model, nil, "companion") return end
     showModel(widgets.model, companion, "companion")
     if widgets.model.asleepShown ~= (companion.asleep ~= nil) then
