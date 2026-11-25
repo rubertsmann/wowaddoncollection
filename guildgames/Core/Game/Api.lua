@@ -223,6 +223,14 @@ function Api.NamePlateFor(unit)
     return ok and NotSecret(plate) or nil
 end
 
+-- The player's target frame (the default UI's TargetFrame), or nil when this client has none.
+---@return table|nil
+function Api.TargetFrameAnchor()
+    local frame = _G.TargetFrame
+    if type(frame) == "table" and frame.GetObjectType then return frame end
+    return nil
+end
+
 ------------------------------------------------------------------ the catch dump (debugging)
 
 -- One value for the dump: the value as text, "secret" (hidden by the client), "missing" (no such function on this

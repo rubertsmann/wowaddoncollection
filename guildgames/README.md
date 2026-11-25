@@ -7,7 +7,7 @@ bookkeeping.
 WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved here with TalentShare 0.7.0.
 
 ## Use
-- `/gg` opens the window. The buttons at the top left choose the game. They are locked while a game animates.
+- `/gg` opens the window. The buttons at the top left choose the game: AZEcaught (your companion) first, then the coin flip, slots and survivor. They are locked while a game animates.
 - **Minimal view:** `/gg` and the minimap button open, by default, a small view with only your AZEcaught companion and
   no text. The round pet sits in the middle, with four round care buttons around its lower half: feed, water, pet and
   sleep. The ring around each button fills clockwise with that need (half a ring = 50%) and is green, yellow or red by
@@ -44,7 +44,16 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     enemy. Catching does not work in dungeons and raids: a throw there says so on screen and in chat. The enemy must be your
     own kill (not tagged by someone else) and within 28 yards. The icon's ring turns from red to green as the chance grows and pulses at the best moment; until your first
     throw a red arrow points at it. Kill too slowly and the rope snaps. Move, resize or hide the icon in Options >
-    AddOns > GuildGames AZEcaught (or `/gg caught icon on|off|x|y|size|reset`).
+    AddOns > GuildGames AZEcaught (or `/gg caught icon on|off|x|y|size|reset`). There, **At the target frame** puts the
+    rope icon and the catch items next to the target frame, for your target only, instead of on the nameplates
+    (`/gg caught icon target on|off`).
+  - **Shop** and **Inventory** tabs: buy items with the money pool, see and use what you own. Catch items:
+    **Delicious Meat** (50g: every catch roll succeeds for 20 seconds, everywhere; a small clock shows the seconds
+    left), **Magic Trap** (500g: catches a normal enemy at once, at any health, without a fight), **Elite Magic Trap**
+    (1000g: normal or elite) and **Rare Magic Trap** (1500g: normal, elite, rare or rare elite; never a world boss).
+    Catches with items pay the normal reward (a trap: that of a best-moment catch). While you own catch items, a small
+    bag sits next to your target's rope icon (also at full health): click it for a row of your catch items, click one
+    to use it (a trap on the target), click anywhere else to close it. A refused trap is kept.
   - The chance rises from 20% at 35% health to 90% at 10% health and below; elite, rare, rare elite and boss NPCs
     subtract 5, 10, 15 and 25 points. A catch pays a reward into the money pool: the riskier the catch, the more.
   - The collection has two sections: **Caught** (no limit; duplicates count) and **Seen** (every enemy you fought with
@@ -73,7 +82,7 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     "watch!": its result, the wager and side bets are paid only after you watched the replay in the Arena view
     (`/gg arena`), or on their own 24 hours later. Both players need this version (protocol 1.3 for counter offers).
 - **Money pool:** one balance for all games: 20g to start, plus your casino results, catch rewards and weekly payouts,
-  minus food and water. You cannot stake more than the balance. It is shown next to the game switch.
+  minus food, water and the shop. You cannot stake more than the balance. It is shown next to the game switch.
 - **Window:** the icons at the top left switch the game (hover for the name). Drag the handle in the bottom-left
   corner (or the header) to move the window; drag the grip in the bottom-right corner to scale it, double-click it to
   reset the size. Position and size are saved.
@@ -98,7 +107,9 @@ send budget for every addon that embeds it, the guild-only gate, record pulls wi
   `..\libguildsync\LibGuildSync`, and generates `GuildGames-Dev.toc`. The dev build uses `/ggd`, `GuildGamesDevDB` and
   prefix `GGamesDev`.
 - Package: `powershell tools/package.ps1` builds `dist/GuildGames-<version>.zip` with the library as real files.
-- Dev only, AZEcaught: `/ggd caught add` (target or a test NPC as caught), `time <minutes>` (fast-forward play time),
+- Dev only, AZEcaught: `/ggd caught setup [items|boost]` (one start state: a test companion if none, 3000g, 3 of
+  every shop item, the window on the Shop tab; `items` only the items, `boost` also starts Delicious Meat),
+  `/ggd caught add` (target or a test NPC as caught), `time <minutes>` (fast-forward play time),
   `give <gold>`, `force` (next roll catches), `need <name> <0-100>`, `week` (run the weekly payout again).
 - Dev only: `/ggd anim` (animation probe), `/ggd anim speed 0.25`, `/ggd game sim <n>` (fake leaderboard players that are
   never stored or sent). Offline: `luajit tools/coinflip.lua [H|T] [flips]`.

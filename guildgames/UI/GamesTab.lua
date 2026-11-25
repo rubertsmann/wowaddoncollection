@@ -29,13 +29,12 @@ local GAME_ICONS = { coin = "Interface\\Icons\\INV_Misc_Coin_01",
     survivor = "Interface\\Icons\\Spell_Holy_DivineIntervention",
     caught = "Interface\\Icons\\Ability_Hunter_BeastTaming" }
 GamesTab.GAME_ICONS = GAME_ICONS
--- the game switch: the casino games (Games.ORDER, each with a casino leaderboard) and AZEcaught (its own panel with its
--- own guild view; not a casino game, so not in Games.ORDER)
+-- the game switch: AZEcaught first (its own panel with its own guild view; not a casino game, so not in Games.ORDER),
+-- then the casino games (Games.ORDER, each with a casino leaderboard)
 ---@return string[]
 local function switchOrder()
-    local order = {}
-    for index, gameKey in ipairs(addon.Games.ORDER) do order[index] = gameKey end
-    order[#order + 1] = "caught"
+    local order = { "caught" }
+    for _, gameKey in ipairs(addon.Games.ORDER) do order[#order + 1] = gameKey end
     return order
 end
 GamesTab.SwitchOrder = switchOrder

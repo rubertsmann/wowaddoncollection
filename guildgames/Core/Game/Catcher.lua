@@ -250,6 +250,65 @@ function Catcher.Throw(unit)
     return thrown and true or false
 end
 
+-- Why a trap was refused, as text for the player.
+---@param reason string
+---@return string
+local function trapRefusalText(reason)
+    if reason == "tier" then return Text["This trap is too weak for this enemy."] end
+    if reason == "none" then return Text["You have none of these left."] end
+    if reason == "readonly" then return Text["Saved data is read-only in this session."] end
+    if reason == "instance" then return Text["Catching does not work in dungeons and raids."] end
+    if reason == "nounit" then return Text["No target to throw the rope at."] end
+    if reason == "friendly" then return Text["Only hostile NPCs can be caught."] end
+    return throwRefusalText(reason)
+end
+Catcher.TrapRefusalText = trapRefusalText
+
+-- Uses the trap `itemID` on `unit` (default target): caught at once, the trap is used up. Feedback in chat and as
+-- the red error text on a refusal; the trap is kept then.
+---@param unit? string
+---@param itemID string
+---@return boolean caught
+function Catcher.UseTrap(unit, itemID)
+    unit = unit or "target"
+    local function refuse(reason, details)
+        local text = trapRefusalText(reason)
+        Api.ShowOverlay(text)
+        addon.Print(text)
+        AzeCaught.Journal("DEBUG", "trap.refused", "a trap was refused", details or { reason = reason, unit = unit })
+        return false
+    end
+    if Api.InDungeon() then return refuse("instance", { reason = "instance", unit = unit }) end
+    local snapshot = Api.UnitSnapshot(unit)
+    if not snapshot then return refuse("nounit") end
+    if snapshot.hostile == false then return refuse("friendly") end
+    local entry = snapshot.npc and AzeCaught.State().collection[snapshot.npc]
+    local display = snapshot.npc and (not entry or entry.disp == 0) and Catcher.CaptureDisplay(unit) or nil
+    if snapshot.npc then
+        AzeCaught.NoteFound({ npc = snapshot.npc, name = snapshot.name, level = snapshot.level,
+            classification = snapshot.classification, display = display, stats = Api.UnitStats(unit) }, now())
+    end
+    local ok, result = addon.Items.Use(itemID, { myName = me(), now = now(), clock = Api.Clock(),
+        target = { guid = snapshot.guid, health = snapshot.health, name = snapshot.name, level = snapshot.level,
+            classification = snapshot.classification, display = display, tapDenied = snapshot.tapDenied, inRange = snapshot.inRange } })
+    if not ok then return refuse(result, { reason = result, unit = unit, item = itemID }) end
+    local item = addon.Items.Get(itemID)
+    local npcName = addon.Utility.ChatSafe(snapshot.name or "?")
+    Catcher.PlayRopeEffect(unit)
+    addon.Print("|cff66ff66" .. Format(Text["{item}: you caught {name}! (+{gold})"], { item = item.name, name = npcName,
+        gold = money(result.reward) }) .. "|r")
+    if result.companion then
+        addon.Print(Format(Text["{name} is now your companion."], { name = npcName }))
+        Catcher.lastZones = {}
+        Catcher.PublishSoon(true)
+    end
+    Api.PlaySound(Api.SoundKitFor({ "UI_EPICLOOT_TOAST", "LOOTWINDOWCOINSOUND", "IG_QUEST_LIST_COMPLETE" }))
+    addon.Events.Fire("CAUGHT_CHANGED")
+    addon.Events.Fire("ITEMS_CHANGED")
+    Catcher.RefreshIcons()
+    return true
+end
+
 ---@param guid string|nil
 ---@param name string|nil
 function Catcher.OnDeath(guid, name)
@@ -543,6 +602,7 @@ end
 ---@return string|nil
 function Catcher.IconHiddenReason(settings, plate, snapshot, weakEnough)
     if not settings.shown then return "turned off" end
+    if plate == "nameplate" then return "target frame mode" end
     if not snapshot then return "unit unreadable (GUID hidden or no unit)" end
     if not snapshot.npc then return "not an NPC" end
     if snapshot.hostile == false then return "not hostile" end
@@ -551,8 +611,22 @@ function Catcher.IconHiddenReason(settings, plate, snapshot, weakEnough)
     if not weakEnough then
         return snapshot.health == nil and "health hidden and not the target" or "health above the threshold"
     end
-    if not plate then return "no nameplate frame" end
+    if not plate or plate == "nameplate" then return "no nameplate frame" end
     return nil
+end
+
+-- The target frame when the icons go there (settings.atTarget and this client has one), else nil. Without a target
+-- frame the icons stay on the nameplates (journaled once).
+---@param settings table AzeCaught.IconSettings()
+---@return table|nil
+function Catcher.AtTarget(settings)
+    if not settings.atTarget then return nil end
+    local frame = Api.TargetFrameAnchor()
+    if not frame and not Catcher.noTargetFrameNoted then
+        Catcher.noTargetFrameNoted = true
+        AzeCaught.Journal("WARNING", "icon.anchor", "no target frame on this client: the icons stay on the nameplates")
+    end
+    return frame
 end
 
 -- Journals the icon state of a unit when its reason changes (DEBUG; "health above the threshold" is the normal case
@@ -576,23 +650,39 @@ end
 function Catcher.UpdateIcon(unit)
     local button = Catcher.icons[unit]
     local snapshot = Api.UnitSnapshot(unit)
-    local plate = Api.NamePlateFor(unit)
+    local settings = AzeCaught.IconSettings()
+    local targetFrame = Catcher.AtTarget(settings)
+    -- target frame mode: only the "target" unit has an icon (at the target frame); nameplate units have none
+    if unit == "target" and not targetFrame then
+        -- nameplate mode: the target's icon is its nameplate unit's
+        if button then button:Hide() end
+        Catcher.UpdateCatchItems(unit)
+        return
+    end
+    local plate
+    if targetFrame then plate = unit == "target" and targetFrame or "nameplate"
+    else plate = Api.NamePlateFor(unit) end
     -- health hidden (a secret in combat): the icon shows on the current target, and the throw rolls at the threshold
     local weakEnough = snapshot and ((snapshot.health and snapshot.health <= AzeCaught.THROW_HEALTH)
         or (snapshot.health == nil and Api.UnitGuid("target") == snapshot.guid))
-    local settings = AzeCaught.IconSettings()
     local hiddenBecause = Catcher.IconHiddenReason(settings, plate, snapshot, weakEnough)
     Catcher.NoteIconReason(unit, snapshot, hiddenBecause)
     if hiddenBecause then
         if button then button:Hide() end
+        Catcher.UpdateCatchItems(unit)
         return
     end
     button = iconFor(unit)
     button.unit = unit
     local ok, problem = pcall(function()
         button:ClearAllPoints()
-        -- above the plate (the level and name stay readable), moved by the icon settings
-        button:SetPoint("BOTTOM", plate, "TOP", settings.x, settings.y)
+        if targetFrame then
+            -- right of the target frame's portrait, moved by the icon settings
+            button:SetPoint("LEFT", plate, "RIGHT", settings.x, settings.y)
+        else
+            -- above the plate (the level and name stay readable), moved by the icon settings
+            button:SetPoint("BOTTOM", plate, "TOP", settings.x, settings.y)
+        end
         button:SetSize(settings.size, settings.size)
         button.iconSize = settings.size   -- never measured: the button hangs on a nameplate
     end)
@@ -606,6 +696,14 @@ function Catcher.UpdateIcon(unit)
     end
     Catcher.StyleIcon(button, snapshot)
     button:Show()
+    Catcher.UpdateCatchItems(unit)
+end
+
+-- The catch items (UI/CatchItems.lua) follow the target's icon: updated when the target's unit changes.
+---@param unit string
+function Catcher.UpdateCatchItems(unit)
+    local guid = Api.UnitGuid("target")
+    if unit == "target" or (guid and Api.UnitGuid(unit) == guid) then addon.CatchItems.Update() end
 end
 
 -- The ring colour (the chance), the glow (armed: gold; best moment: pulsing in the ring colour, with a ping once per NPC)
@@ -660,6 +758,19 @@ end
 function Catcher.RefreshIcons()
     for unit in pairs(Catcher.icons) do Catcher.UpdateIcon(unit) end
     for _, unit in pairs(Catcher.unitByGuid) do Catcher.UpdateIcon(unit) end
+    Catcher.UpdateIcon("target")
+end
+
+-- The rope icon of the current target when it is shown (its nameplate unit's, or the target frame's), else nil.
+---@return table|nil
+function Catcher.TargetIcon()
+    local guid = Api.UnitGuid("target")
+    if not guid then return nil end
+    local candidates = { Catcher.icons.target, Catcher.icons[Catcher.unitByGuid[guid] or ""] }
+    for _, button in pairs(candidates) do
+        if button and button:IsShown() and button.unit and Api.UnitGuid(button.unit) == guid then return button end
+    end
+    return nil
 end
 
 -- The rope failed (two different effects):
@@ -914,7 +1025,7 @@ end
 
 function onEvent.UNIT_HEALTH(unit)
     if not watchedUnit(unit) then return end
-    if unit:find("^nameplate") then Catcher.UpdateIcon(unit) end
+    if unit:find("^nameplate") or unit == "target" then Catcher.UpdateIcon(unit) end
     if next(AzeCaught.throws) then Catcher.CheckDeath(unit) end
     if next(Catcher.fought) then Catcher.CheckKill(unit) end
 end
@@ -1219,6 +1330,46 @@ function developmentCommands.add()
         printLine("added " .. entry.n .. " (" .. npcInformation.npc .. ")")
     end
     addon.Events.Fire("CAUGHT_CHANGED")
+end
+
+-- /ggd caught setup [items|boost]: one start state for testing. Without a word: a test companion when none is active,
+-- SETUP_GOLD gold, SETUP_ITEMS of every catalog item, the window on the Shop tab. "items": only the items. "boost":
+-- everything plus every booster running.
+local SETUP_GOLD, SETUP_ITEMS = 3000, 3
+function developmentCommands.setup(arguments)
+    local word = ((arguments or ""):match("^%s*(%S*)") or ""):lower()
+    local done = {}
+    if word ~= "items" then
+        if not AzeCaught.Active() then
+            local entry = AzeCaught.NoteFound({ npc = 299, name = "Young Wolf", level = 2, classification = "normal" }, now())
+            if entry then
+                entry.caught = math.max(entry.caught, 1)
+                if AzeCaught.Select(299, now()) then done[#done + 1] = "companion " .. entry.n end
+            end
+        end
+        if addon.Wallet.Earn(me(), SETUP_GOLD * 10000, "dev", now(), "setup") then done[#done + 1] = SETUP_GOLD .. "g" end
+    end
+    local inventory = addon.Items.Inventory()
+    for _, item in ipairs(addon.Items.CATALOG) do
+        inventory[item.id] = math.min(addon.Items.MAXIMUM_STACK, math.max(addon.Items.Count(item.id), SETUP_ITEMS))
+    end
+    done[#done + 1] = SETUP_ITEMS .. "x every item (" .. #addon.Items.CATALOG .. ")"
+    if word == "boost" then
+        for _, item in ipairs(addon.Items.CATALOG) do
+            if item.duration then addon.Items.Boosts()[item.id] = now() + item.duration end
+        end
+        done[#done + 1] = "boosters running"
+    end
+    AzeCaught.Journal("INFORMATION", "dev.setup", "the dev start state was set", { mode = word ~= "" and word or "all" })
+    addon.Events.Fire("CAUGHT_CHANGED")
+    addon.Events.Fire("ITEMS_CHANGED")
+    if word ~= "items" then
+        addon.UI.ShowFull()
+        addon.GamesTab.SelectGame("caught")
+        addon.AzeCaughtPanel.SelectView("shop")
+    end
+    Catcher.RefreshIcons()
+    printLine("setup: " .. table.concat(done, ", "))
 end
 
 addon.SlashCommands.caught = function(arguments)

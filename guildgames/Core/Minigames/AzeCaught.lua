@@ -515,7 +515,8 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
     AzeCaught.lastThrowAt = clockSeconds
     AzeCaught.thrown[target.guid] = clockSeconds
     AzeCaught.throws[target.guid] = { at = clockSeconds, npc = npcID, health = health, playerLevel = playerLevel,
-        level = target.level, classification = AzeCaught.Classification(target.classification), name = target.name }
+        level = target.level, classification = AzeCaught.Classification(target.classification), name = target.name,
+        boosted = addon.Items.CatchBoosted(now) or nil }
     if not addon.Store.db.readonly then AzeCaught.State().throwHintDone = true end
     AzeCaught.Journal("INFORMATION", "throw.armed", "a rope was thrown",
         { npc = npcID, guid = target.guid, hp = healthKnown and round1(health * 100) or "hidden", level = target.level, class = target.classification,
@@ -574,6 +575,37 @@ end
 ---@field reward integer copper paid (0 when not caught)
 ---@field forced boolean
 ---@field first boolean the guaranteed first catch
+---@field boosted? boolean a catch boost (Delicious Meat) made it succeed
+---@field trap? string the item id of the trap that caught it
+---@field companion? boolean the catch became the companion
+
+-- The bookkeeping of a successful catch: counts, the reward for `chance`, and the companion when none is active.
+---@param npcID integer
+---@param chance number the chance the reward is paid for
+---@param myName string|nil
+---@param now integer
+---@param result RollResult filled in: reward, companion
+local function recordCatch(npcID, chance, myName, now, result)
+    local caughtState = AzeCaught.State()
+    caughtState.firstCatchDone = true
+    local entry = caughtState.collection[npcID]
+    if not entry then
+        AzeCaught.Journal("ERROR", "catch", "a caught NPC is missing from the collection", { npc = npcID })
+        return
+    end
+    entry.got = bump(entry.got or entry.caught)
+    entry.caught = math.min(AzeCaught.MAXIMUM_ID, entry.caught + 1)
+    result.reward = AzeCaught.Reward(chance)
+    AzeCaught.Journal("INFORMATION", "catch", "an NPC was caught",
+        { npc = npcID, name = entry.n, timesCaught = entry.caught, reward = result.reward, trap = result.trap })
+    if result.reward > 0 then addon.Wallet.Earn(myName, result.reward, "catch", now, entry.n) end
+    -- without an active companion the catch becomes it at once (also after one died or ran away), so the guild sees it without a trip to the collection
+    if not caughtState.active and AzeCaught.Select(npcID, now) then
+        result.companion = true
+        AzeCaught.Journal("INFORMATION", "companion.auto", "the catch became the companion (none was active)",
+            { npc = npcID, name = entry.n })
+    end
+end
 
 -- A unit died. Rolls ONCE when it was thrown at within CATCH_WINDOW. Returns the roll, or nil and why:
 -- "nothrow", "late", "rolled".
@@ -597,7 +629,6 @@ function AzeCaught.OnDeath(guid, myName, clockSeconds, now, randomFunction)
             { npc = throw.npc, guid = guid, elapsed = round1(elapsed), window = AzeCaught.CATCH_WINDOW })
         return nil, "late"
     end
-    local entry = AzeCaught.State().collection[throw.npc]
     local breakdown = AzeCaught.Chance(throw.health, throw.classification)
     local roll = randomFunction()
     local forced = AzeCaught.forceNextCatch
@@ -605,32 +636,53 @@ function AzeCaught.OnDeath(guid, myName, clockSeconds, now, randomFunction)
     -- the first catch roll a character ever makes succeeds (a player's first companion is never left to luck)
     local caughtState = AzeCaught.State()
     local first = not caughtState.firstCatchDone and not addon.Store.db.readonly
-    local caught = forced or first or roll < breakdown.chance
-    if caught then caughtState.firstCatchDone = true end
+    local boosted = (throw.boosted or addon.Items.CatchBoosted(now)) and roll >= breakdown.chance or nil
+    local caught = forced or first or boosted or roll < breakdown.chance
     local result = { caught = caught, npc = throw.npc, chance = breakdown.chance, roll = roll, reward = 0, forced = forced,
-        first = first }
+        first = first, boosted = boosted }
     AzeCaught.Journal("INFORMATION", "roll", caught and "the catch roll succeeded" or "the catch roll failed",
         { npc = throw.npc, guid = guid, elapsed = round1(elapsed), chance = ("%.4f"):format(breakdown.chance),
           roll = ("%.4f"):format(roll), hp = round1(breakdown.health * 100),
           healthChance = ("%.4f"):format(breakdown.healthChance), class = breakdown.classification, malus = breakdown.malus,
-          forced = forced or nil, first = first or nil })
+          forced = forced or nil, first = first or nil, boosted = boosted })
     if not caught then return result end
-    if entry then
-        entry.got = bump(entry.got or entry.caught)
-        entry.caught = math.min(AzeCaught.MAXIMUM_ID, entry.caught + 1)
-        result.reward = AzeCaught.Reward(breakdown.chance)
-        AzeCaught.Journal("INFORMATION", "catch", "an NPC was caught",
-            { npc = throw.npc, name = entry.n, timesCaught = entry.caught, reward = result.reward })
-        if result.reward > 0 then addon.Wallet.Earn(myName, result.reward, "catch", now, entry.n) end
-        -- without an active companion the catch becomes it at once (also after one died or ran away), so the guild sees it without a trip to the collection
-        if not AzeCaught.State().active and AzeCaught.Select(throw.npc, now) then
-            result.companion = true
-            AzeCaught.Journal("INFORMATION", "companion.auto", "the catch became the companion (none was active)",
-                { npc = throw.npc, name = entry.n })
-        end
-    else
-        AzeCaught.Journal("ERROR", "catch", "a caught NPC is missing from the collection", { npc = throw.npc })
+    recordCatch(throw.npc, breakdown.chance, myName, now, result)
+    return result
+end
+
+-- A Magic Trap on `target`: catches it at once, at any health, without a kill. Same limits as a throw (an NPC, not
+-- rolled, not tagged by others, alive, in range) plus the trap's tier ("tier"; world bosses never). The NPC counts as
+-- rolled afterwards. Pays the reward of a catch at the best moment. Returns the result, or nil and why.
+---@param target ThrowTarget
+---@param item ItemDefinition
+---@param myName string|nil
+---@param clockSeconds number GetTime()
+---@param now integer server time
+---@return RollResult|nil
+---@return string|nil reason
+function AzeCaught.TrapCatch(target, item, myName, clockSeconds, now)
+    local npcID = type(target) == "table" and AzeCaught.NpcIDFromGuid(target.guid)
+    local function refuse(reason)
+        AzeCaught.Journal("DEBUG", "trap.refused", "a trap was refused",
+            { reason = reason, item = item and item.id, guid = type(target) == "table" and tostring(target.guid) or "nil" })
+        return nil, reason
     end
+    if not npcID then return refuse("unknown") end
+    if AzeCaught.rolled[target.guid] then return refuse("rolled") end
+    if target.tapDenied == true then return refuse("tapped") end
+    if type(target.health) == "number" and target.health <= 0 then return refuse("dead") end
+    if target.inRange == false then return refuse("range") end
+    if not addon.Items.TrapAllows(item, target.classification) then return refuse("tier") end
+    AzeCaught.NoteFound({ npc = npcID, name = target.name, level = target.level, classification = target.classification,
+        display = target.display, guid = target.guid }, now)
+    AzeCaught.throws[target.guid] = nil
+    AzeCaught.rolled[target.guid] = clockSeconds
+    AzeCaught.thrown[target.guid] = clockSeconds
+    local classification = AzeCaught.Classification(target.classification)
+    local chance = AzeCaught.Chance(AzeCaught.BEST_HEALTH, classification).chance
+    local result = { caught = true, npc = npcID, chance = chance, roll = 0, reward = 0, forced = false, first = false,
+        trap = item.id }
+    recordCatch(npcID, chance, myName, now, result)
     return result
 end
 
@@ -1382,20 +1434,22 @@ function AzeCaught.SanitizePersisted(savedVariables)
     caught.verbose = caught.verbose == true or nil
     if addon.Wallet.SanitizePersisted(caught) then dropped = dropped + 1 end
     if addon.Arena.SanitizePersisted(caught, savedVariables.me) then dropped = dropped + 1 end
+    if addon.Items.SanitizePersisted(caught) then dropped = dropped + 1 end
     return dropped
 end
 
 ------------------------------------------------------------------ rope icon settings
 
-AzeCaught.ICON_DEFAULTS = { shown = true, x = 0, y = 2, size = 26 }
+-- atTarget: the icons sit at the target frame (current target only) instead of on the nameplates
+AzeCaught.ICON_DEFAULTS = { shown = true, atTarget = false, x = 0, y = 2, size = 26 }
 -- lowest, highest per numeric setting (pixels: offset from the top centre of the nameplate, icon size)
 AzeCaught.ICON_LIMITS = { x = { -80, 80 }, y = { -40, 80 }, size = { 16, 48 } }
 
 ---@param raw any
----@return { shown: boolean, x: number, y: number, size: number }
+---@return { shown: boolean, atTarget: boolean, x: number, y: number, size: number }
 local function cleanIconSettings(raw)
     raw = type(raw) == "table" and raw or {}
-    local clean = { shown = raw.shown ~= false }
+    local clean = { shown = raw.shown ~= false, atTarget = raw.atTarget == true }
     if raw.shown ~= nil and type(raw.shown) ~= "boolean" then clean.shown = true end
     for key, limits in pairs(AzeCaught.ICON_LIMITS) do
         local value = raw[key]
@@ -1406,22 +1460,22 @@ end
 AzeCaught.CleanIconSettings = cleanIconSettings
 
 -- The rope icon settings (db.caught.icon), complete and in range.
----@return { shown: boolean, x: number, y: number, size: number }
+---@return { shown: boolean, atTarget: boolean, x: number, y: number, size: number }
 function AzeCaught.IconSettings()
     local caught = AzeCaught.State()
     caught.icon = cleanIconSettings(caught.icon)
     return caught.icon
 end
 
--- Changes one icon setting ("shown", "x", "y", "size"); numbers are clamped. Returns false for an unknown key.
+-- Changes one icon setting ("shown", "atTarget", "x", "y", "size"); numbers are clamped. Returns false for an unknown key.
 ---@param key string
 ---@param value any
 ---@return boolean
 function AzeCaught.SetIconSetting(key, value)
-    if key ~= "shown" and not AzeCaught.ICON_LIMITS[key] then return false end
+    if key ~= "shown" and key ~= "atTarget" and not AzeCaught.ICON_LIMITS[key] then return false end
     local settings = AzeCaught.IconSettings()
     local before = settings[key]
-    if key == "shown" then settings.shown = value and true or false
+    if key == "shown" or key == "atTarget" then settings[key] = value and true or false
     else
         local limits = AzeCaught.ICON_LIMITS[key]
         settings[key] = clamp(math.floor((tonumber(value) or AzeCaught.ICON_DEFAULTS[key]) + 0.5), limits[1], limits[2])
@@ -1449,7 +1503,7 @@ function AzeCaught.Reset(withWallet)
     caught.collection, caught.active, caught.activeSeconds, caught.peaks = {}, nil, 0, {}
     caught.arena = nil   -- the arena progress, fights and bets
     caught.paidWeek, caught.firstCatchDone, caught.throwHintDone = nil, nil, nil
-    if withWallet then caught.ledger = nil end
+    if withWallet then caught.ledger, caught.items, caught.boosts = nil, nil, nil end
     AzeCaught.throws, AzeCaught.rolled, AzeCaught.thrown = {}, {}, {}
     AzeCaught.counted, AzeCaught.countedCount, AzeCaught.killed, AzeCaught.killedCount = {}, 0, {}, 0
     AzeCaught.lastThrowAt, AzeCaught.forceNextCatch = nil, false

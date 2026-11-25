@@ -1,3 +1,23 @@
+# GuildGames 0.8.0
+
+**English:** AZEcaught has a Shop and an Inventory now. Buy items with your gold: Delicious Meat (50g) makes every
+catch succeed for 20 seconds, with a small clock showing the time left. Magic Traps catch an enemy at once, at any
+health, without a fight: the Magic Trap (500g) catches normal enemies, the Elite Magic Trap (1000g) also elites, the
+Rare Magic Trap (1500g) also rares; never a world boss. A refused trap is kept. While you own catch items, a small bag
+sits next to your target's rope icon: click it, then click the item. If you prefer, the options can show the rope icon
+and the bag next to your target frame instead of on the nameplates. The AZEcaught tabs are icons now (hover for the
+name), and AZEcaught is the first button at the top left. No need for everyone to update at once: nothing changes in
+what the guild sees.
+
+**Deutsch:** AZEcaught hat jetzt einen Laden und ein Inventar. Kaufe Gegenstände mit deinem Gold: Köstliches Fleisch
+(50g) lässt 20 Sekunden lang jeden Fang gelingen, eine kleine Uhr zeigt die Restzeit. Magische Fallen fangen einen
+Gegner sofort, bei jeder Gesundheit, ohne Kampf: die Magische Falle (500g) fängt normale Gegner, die Elite-Magiefalle
+(1000g) auch Elite, die Seltene Magiefalle (1500g) auch seltene; nie einen Weltboss. Eine abgelehnte Falle behältst
+du. Solange du Fanggegenstände hast, sitzt ein kleiner Beutel neben dem Seil-Symbol deines Ziels: anklicken, dann den
+Gegenstand. Wer mag, lässt Seil-Symbol und Beutel in den Optionen neben dem Zielfenster statt auf den
+Namensplaketten anzeigen. Die AZEcaught-Reiter sind jetzt Symbole (Name beim Darüberfahren), und AZEcaught ist der
+erste Knopf oben links. Nicht alle müssen gleichzeitig aktualisieren: Für die Gilde ändert sich nichts.
+
 # GuildGames 0.7.0
 
 **English:** Your companion's fighter now lives right below the pet. In the Companion view you see its arena level,

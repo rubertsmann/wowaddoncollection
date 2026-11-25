@@ -20,11 +20,11 @@ local function apply()
 end
 
 -- toggles or steps one setting (the page's buttons; /gg caught icon sets values directly in Options.Command)
----@param key "shown"|"x"|"y"|"size"
+---@param key "shown"|"atTarget"|"x"|"y"|"size"
 ---@param direction? integer -1 or 1 (numbers)
 function Options.Change(key, direction)
     local settings = AzeCaught.IconSettings()
-    if key == "shown" then AzeCaught.SetIconSetting("shown", not settings.shown)
+    if key == "shown" or key == "atTarget" then AzeCaught.SetIconSetting(key, not settings[key])
     else AzeCaught.SetIconSetting(key, settings[key] + (direction or 1) * STEP[key]) end
     apply()
 end
@@ -38,6 +38,7 @@ function Options.Refresh()
     if not widgets.frame or not addon.db then return end
     local settings = AzeCaught.IconSettings()
     widgets.shownButton:SetLabel(settings.shown and Text["Rope icon: on"] or Text["Rope icon: off"])
+    widgets.atTargetButton:SetLabel(settings.atTarget and Text["At the target frame: on"] or Text["At the target frame: off"])
     widgets.values.x:SetText(tostring(settings.x))
     widgets.values.y:SetText(tostring(settings.y))
     widgets.values.size:SetText(tostring(settings.size))
@@ -176,6 +177,17 @@ function Options.Build()
     note:SetText(Text["The rope icon appears above a weak enemy's nameplate. The key binding and /gg catch work even when it is off."])
     widgets.shownButton = Widgets.CreateButton(frame, "", 200, 24, function() Options.Change("shown") end)
     widgets.shownButton:SetPoint("TOPLEFT", 20, -72)
+    -- less immersive, easier: the icons sit next to the target frame (current target only) instead of on nameplates
+    widgets.atTargetButton = Widgets.CreateButton(frame, "", 200, 24, function() Options.Change("atTarget") end)
+    widgets.atTargetButton:SetPoint("TOPLEFT", 230, -72)
+    widgets.atTargetButton:HookScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(Text["At the target frame"])
+        GameTooltip:AddLine(Text["The rope icon and the catch items show next to the target frame, for your target only, instead of on the nameplates."], 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    widgets.atTargetButton:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
     stepper(frame, -112, "x", Text["Move left / right"])
     stepper(frame, -142, "y", Text["Move down / up"])
     stepper(frame, -172, "size", Text["Size"])
@@ -209,11 +221,13 @@ function Options.Build()
     return frame
 end
 
--- /gg caught icon [on|off|x <n>|y <n>|size <n>|reset]
+-- /gg caught icon [on|off|target on|target off|x <n>|y <n>|size <n>|reset]
 function Options.Command(arguments)
     local word, number = (arguments or ""):match("^%s*(%S*)%s*(%-?%d*)")
     word = (word or ""):lower()
-    if word == "on" or word == "off" then AzeCaught.SetIconSetting("shown", word == "on")
+    local targetSwitch = (arguments or ""):lower():match("^%s*target%s+(%a+)")
+    if word == "target" and (targetSwitch == "on" or targetSwitch == "off") then AzeCaught.SetIconSetting("atTarget", targetSwitch == "on")
+    elseif word == "on" or word == "off" then AzeCaught.SetIconSetting("shown", word == "on")
     elseif (word == "x" or word == "y" or word == "size") and number ~= "" then AzeCaught.SetIconSetting(word, tonumber(number))
     elseif word == "reset" then AzeCaught.ResetIconSettings() end
     apply()

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0 (2026-11-25, protocol 1.3, schema 2, LibGuildSync MINOR 6)
+- Shop and Inventory tabs in AZEcaught (feature 034): Delicious Meat (50g, every catch roll succeeds for 20 s, a clock
+  shows the time left) and Magic Traps (500g normal, 1000g elite, 1500g rare: catch at once without a fight). A bag
+  next to the target's rope icon opens a row of the owned catch items. Option "At the target frame": icons next to the
+  target frame instead of on nameplates. Saved data gains `caught.items` and `caught.boosts` (schema stays 2); nothing new is sent.
+- The AZEcaught tabs are icons (name on hover); AZEcaught is the first button of the game switch.
+- Dev: `/ggd caught setup [items|boost]` sets a test start state in one command.
+- Project skill `guildgames-new-item` (monorepo `.claude/skills`) for adding items; the catalog guard test checks every entry.
+
 ## 0.7.0 (2026-11-25, protocol 1.3, schema 2, LibGuildSync MINOR 6)
 - The fighter moved into the Companion view (feature 033): arena level, W/L and XP under the name, the four stat icons
   with their points (10/25) below the need bars, a click trains. Arena > Fighter is gone (Arena: Guild, Fights).

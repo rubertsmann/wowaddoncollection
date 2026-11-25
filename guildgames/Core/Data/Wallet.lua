@@ -4,7 +4,7 @@ local addonName, addon = ...
 --
 --   balance = STARTING_GRANT + net of every casino game in my record (coin, slots, survivor)
 --           - a survivor stake still pending (booked at the start of a run)
---           + ledger.earned (catch rewards, weekly payouts, dev gifts) - ledger.spent (food, water)
+--           + ledger.earned (catch rewards, weekly payouts, dev gifts) - ledger.spent (food, water, shop)
 --
 -- The casino net is read from my game record (it is already stored there), so nothing is counted twice. The ledger lives
 -- in db.caught.ledger (local only, never sent). Every movement is a ledger entry with the balance after it, and a journal
@@ -21,7 +21,7 @@ Wallet.CASINO_GAMES = { "coin", "slots", "survivor" }
 
 ---@class LedgerEntry
 ---@field t integer server time
----@field k string kind: "catch"|"payout"|"food"|"water"|"dev"
+---@field k string kind: "catch"|"payout"|"food"|"water"|"shop"|"dev"
 ---@field a integer signed copper (+ earned, - spent)
 ---@field b integer balance after the movement
 ---@field note? string short detail (npc name, week key, ...)

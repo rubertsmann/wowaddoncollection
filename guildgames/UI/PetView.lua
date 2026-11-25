@@ -243,15 +243,7 @@ local function savePosition()
     saved().left, saved().top = left, top
 end
 
----@param frame table
----@return boolean
-local function mouseOver(frame)
-    if frame.IsMouseOver then
-        local ok, over = pcall(frame.IsMouseOver, frame)
-        if ok then return over and true or false end
-    end
-    return (MouseIsOver and MouseIsOver(frame)) and true or false
-end
+local mouseOver = addon.UIHelpers.MouseOver
 
 local function build()
     if widgets.frame then return widgets.frame end
@@ -437,20 +429,9 @@ function PetView.BuildTraining(frame, point, at)
         statIcon:HookScript("OnClick", function() PetView.RefreshTraining() end)
         widgets.trainIcons[stat] = statIcon
     end
-    -- closes on a click outside the menu and the button
-    local closer = CreateFrame("Frame", nil, menu)
-    local listens = pcall(closer.RegisterEvent, closer, "GLOBAL_MOUSE_DOWN")
-    if listens then
-        closer:SetScript("OnEvent", function()
-            if menu:IsShown() and not mouseOver(menu) and not mouseOver(button) then PetView.CloseTraining() end
-        end)
-    else
-        local catcher = CreateFrame("Button", nil, UIParent)
-        catcher:SetAllPoints(UIParent); catcher:SetFrameStrata("MEDIUM"); catcher:SetFrameLevel(math.max(0, frame:GetFrameLevel() - 1))
-        catcher:RegisterForClicks("AnyUp"); catcher:SetScript("OnClick", function() PetView.CloseTraining() end)
-        catcher:Hide()
-        widgets.trainCatcher = catcher
-    end
+    local listens, catcher = addon.UIHelpers.CloseOnClickAway(menu, { button }, function() PetView.CloseTraining() end,
+        frame:GetFrameLevel() - 1)
+    widgets.trainCatcher = catcher
     AzeCaught.Journal("DEBUG", "petView.train", "the training menu was built", { globalMouse = listens and true or false })
 end
 

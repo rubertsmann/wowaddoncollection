@@ -441,6 +441,67 @@ return {
                         PetView.CloseTraining()
                         harness.equal(PetView.widgets.trainMenu:IsShown(), false, "and closes")
                         Arena.State().training = nil
+                        -- the Shop and Inventory tabs, the catch items at the target, the target frame mode
+                        do
+                            local Items, ShopView, CatchItems, Catcher, Api = addon.Items, addon.ShopView, addon.CatchItems, addon.Catcher, addon.Api
+                            harness.equal(Panel.RestorableView("fighter"), "companion"); harness.equal(Panel.RestorableView("shop"), "shop")
+                            harness.truthy(pcall(Panel.SelectView, "shop"))
+                            harness.equal(Panel.state.view, "shop")
+                            harness.equal(ShopView.widgets.shop.rows[1].itemID, "meat", "the shop lists the catalog")
+                            harness.equal(ShopView.Buy("trapRare"), false, "too expensive")
+                            addon.Wallet.Earn(me, 2000 * 10000, "dev", addon.Utility.Now())
+                            harness.equal(ShopView.Buy("meat"), true); harness.equal(ShopView.Buy("trap"), true)
+                            harness.equal(Items.Count("meat"), 1)
+                            harness.truthy(pcall(Panel.SelectView, "inventory"))
+                            harness.equal(ShopView.widgets.inventory.rows[1].itemID, "meat", "the inventory lists what I own")
+                            harness.equal(ShopView.widgets.inventory.empty:IsShown(), false)
+                            -- a full-health enemy as the target: the bag shows (traps need no fight)
+                            local savedSnapshot, savedGuid, savedDungeon, savedPlate = Api.UnitSnapshot, Api.UnitGuid, Api.InDungeon, Api.NamePlateFor
+                            local foeTarget = { guid = "Creature-0-1-2-3-4711-AB", npc = 4711, name = "Wolf", level = 10,
+                                classification = "rare", health = 1, hostile = true }
+                            Api.UnitSnapshot = function(unit) if unit == "target" then return foeTarget end end
+                            Api.UnitGuid = function(unit) if unit == "target" then return foeTarget.guid end end
+                            Api.InDungeon = function() return false end
+                            Api.NamePlateFor = function() return stub() end
+                            harness.truthy(pcall(Catcher.RefreshIcons))
+                            harness.truthy(CatchItems.widgets.holder:IsShown() and CatchItems.widgets.bag:IsShown(), "the bag at the target")
+                            harness.truthy(pcall(CatchItems.Toggle))
+                            harness.truthy(CatchItems.widgets.row:IsShown(), "the item row opens")
+                            local trapButton = CatchItems.widgets.itemButtons[2]
+                            harness.equal(trapButton.itemID, "trap")
+                            harness.truthy(trapButton.refusal, "a normal trap is greyed out on a rare enemy")
+                            harness.equal(CatchItems.UseItem("trap"), false, "and refused")
+                            harness.equal(Items.Count("trap"), 1, "the trap is kept")
+                            foeTarget.classification = "normal"
+                            local okTrap, trapped = pcall(CatchItems.UseItem, "trap")
+                            harness.truthy(okTrap and trapped, "trapped: " .. tostring(trapped))
+                            harness.equal(Items.Count("trap"), 0)
+                            harness.truthy((addon.AzeCaught.State().collection[4711].caught or 0) >= 1, "caught without a fight")
+                            harness.equal(CatchItems.widgets.holder:IsShown(), false, "a trapped enemy has no catch items any more")
+                            -- the meat on a new target: the clock with the seconds left
+                            foeTarget.guid, foeTarget.npc = "Creature-0-1-2-3-4712-AB", 4712
+                            harness.truthy(pcall(Catcher.RefreshIcons))
+                            harness.truthy(CatchItems.UseItem("meat"), "the meat is used")
+                            harness.truthy(CatchItems.widgets.clock:IsShown(), "the boost clock")
+                            harness.equal(CatchItems.widgets.clock.count:GetText(), "20")
+                            harness.equal(CatchItems.widgets.bag:IsShown(), false, "no items left: only the clock")
+                            -- target frame mode: the weak target's icon is at the target frame, nameplate icons are hidden
+                            local savedTargetFrame = rawget(_G, "TargetFrame")
+                            rawset(_G, "TargetFrame", stub())
+                            rawget(_G, "TargetFrame").GetObjectType = function() return "Frame" end
+                            addon.AzeCaught.SetIconSetting("atTarget", true)
+                            foeTarget.health = 0.2
+                            harness.truthy(pcall(Catcher.RefreshIcons))
+                            harness.truthy(Catcher.icons.target and Catcher.icons.target:IsShown(), "the rope icon at the target frame")
+                            harness.equal(Catcher.IconHiddenReason(addon.AzeCaught.IconSettings(), "nameplate", foeTarget, true), "target frame mode")
+                            addon.AzeCaught.SetIconSetting("atTarget", false)
+                            harness.truthy(pcall(Catcher.RefreshIcons))
+                            harness.equal(Catcher.icons.target:IsShown(), false, "nameplate mode: no icon for the target unit itself")
+                            rawset(_G, "TargetFrame", savedTargetFrame)
+                            Api.UnitSnapshot, Api.UnitGuid, Api.InDungeon, Api.NamePlateFor = savedSnapshot, savedGuid, savedDungeon, savedPlate
+                            Items.Boosts().meat = nil
+                            harness.truthy(pcall(Catcher.RefreshIcons))
+                        end
                         local foe = { npc = 5, n = "Bear", cls = "elite", disp = 0, ty = 1, al = 3, atk = 30, def = 30, spd = 30, vit = 30, ab = "rend" }
                         local records = { ["Foe-R"] = { name = "Foe-R", caught = { c = { npc = 5 }, weeks = {} },
                             arena = { w = 0, l = 0, ch = {}, an = {}, bt = {} } } }
@@ -638,10 +699,16 @@ return {
                     addon.Api.PlaySoundNamed = savedPlay
                 end
                 if development then
-                    for _, command in ipairs({ "add", "time 30", "give 5", "force", "need hunger 10", "week", "effect", "effect escape", "effect snap target", "hint", "hint" }) do
+                    for _, command in ipairs({ "add", "time 30", "give 5", "force", "need hunger 10", "week", "effect", "effect escape", "effect snap target", "hint", "hint", "setup items", "setup boost", "setup" }) do
                         local okCommand, commandError = pcall(addon.SlashCommands.caught, command)
                         harness.truthy(okCommand, "/ggd caught " .. command .. ": " .. tostring(commandError))
                     end
+                    -- /ggd caught setup: gold, every item, a companion, the boosters with "boost"
+                    harness.truthy(addon.AzeCaught.Active(), "setup leaves a companion")
+                    for _, item in ipairs(addon.Items.CATALOG) do
+                        harness.truthy(addon.Items.Count(item.id) >= 3, "setup gives " .. item.id)
+                    end
+                    harness.truthy(addon.Items.CatchBoosted(addon.Utility.Now()), "setup boost starts the meat")
                     -- "/ggd reset" did nothing (only /ggd caught reset existed); the dev build takes both
                     addon.AzeCaught.State().firstCatchDone, addon.AzeCaught.State().throwHintDone = true, true
                     addon.SlashCommands.reset("")

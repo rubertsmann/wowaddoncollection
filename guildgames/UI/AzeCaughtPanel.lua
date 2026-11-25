@@ -63,7 +63,7 @@ end
 local BAR_WIDTH = 210   -- the label is an icon, so the bar takes the room
 
 ---@class AzeCaughtPanelState
----@field view "companion"|"collection"|"arena"
+---@field view "companion"|"collection"|"arena"|"shop"|"inventory"
 ---@field section "caught"|"seen" the collection's section
 ---@field previewNpc integer|nil collection preview
 ---@field selectedNpc integer|nil the collection row the switch button acts on
@@ -74,6 +74,23 @@ local BAR_WIDTH = 210   -- the label is an icon, so the bar takes the room
 ---@field badgeValues table|nil their values (a rise pulses the badge)
 ---@field guildBadgeOwner string|nil whose stat badges are shown in the guild preview
 Panel.state = { view = "companion", section = "caught" }
+-- the tabs, in this order, and their icons
+Panel.VIEWS = { "companion", "collection", "arena", "shop", "inventory" }
+local VIEW_ICONS = {
+    companion = "Interface\\Icons\\Ability_Hunter_BeastTaming",
+    collection = "Interface\\Icons\\INV_Misc_Book_09",
+    arena = "Interface\\Icons\\Ability_DualWield",
+    shop = "Interface\\Icons\\INV_Misc_Coin_02",
+    inventory = "Interface\\Icons\\INV_Misc_Bag_08",
+}
+
+-- The view a saved `view` opens (an unknown or old one opens the companion).
+---@param view any
+---@return string
+function Panel.RestorableView(view)
+    if view == "collection" or view == "guild" or view == "shop" or view == "inventory" then return view end
+    return "companion"
+end
 
 local widgets = {}
 Panel.widgets = widgets
@@ -377,7 +394,7 @@ end
 
 ------------------------------------------------------------------ views
 
----@param view "companion"|"collection"|"guild"|"arena" "guild": the arena's Guild page
+---@param view "companion"|"collection"|"guild"|"arena"|"shop"|"inventory" "guild": the arena's Guild page
 function Panel.SelectView(view)
     settings().caughtView = view
     if view == "guild" then   -- the guild list lives in the arena
@@ -390,6 +407,7 @@ function Panel.SelectView(view)
     for key, button in pairs(widgets.viewButtons or {}) do
         button:SetEnabled(key ~= view)
         if button.SetSelected then button:SetSelected(key == view) end
+        if button.icon then button.icon:SetAlpha(key == view and 1 or 0.6) end
     end
     AzeCaught.Journal("DEBUG", "ui.view", "a view was selected", { view = view })
     if view == "arena" then Panel.AdvanceGuide("arena") end
@@ -1081,20 +1099,36 @@ function Panel.Build(panel)
     widgets.panel = panel
     widgets.views, widgets.viewButtons = {}, {}
     -- the guild list is a page of the arena
-    local labels = { companion = Text["Companion"], collection = Text["Collection"], arena = Text["Arena"] }
-    for index, view in ipairs({ "companion", "collection", "arena" }) do
+    local labels = { companion = Text["Companion"], collection = Text["Collection"], arena = Text["Arena"], shop = Text["Shop"],
+        inventory = Text["Inventory"] }
+    for index, view in ipairs(Panel.VIEWS) do
         local key = view
         local frame = CreateFrame("Frame", nil, panel)
         frame:SetPoint("TOPLEFT", 0, 0); frame:SetPoint("BOTTOMRIGHT", 0, 0)
         widgets.views[view] = frame
-        local button = Widgets.CreateButton(panel, labels[view], 94, 18, function() Panel.SelectView(key) end)
-        button:SetPoint("TOPLEFT", 4 + (index - 1) * 97, -2)
+        -- an icon per tab (five text labels do not fit), the name on hover
+        local button = Widgets.CreateButton(panel, "", 56, 20, function() Panel.SelectView(key) end)
+        button:SetPoint("TOPLEFT", 4 + (index - 1) * 59, -1)
+        local icon = button:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(16, 16); icon:SetPoint("CENTER", 0, 1); icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        addon.UIHelpers.SetTextureOr(icon, VIEW_ICONS[view], { 1, 0.82, 0.2 })
+        button.icon = icon
+        button.tooltip = labels[view]
+        button:HookScript("OnEnter", function(self)
+            if not GameTooltip then return end
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+            GameTooltip:SetText(self.tooltip)
+            GameTooltip:Show()
+        end)
+        button:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
         widgets.viewButtons[view] = button
     end
     buildCompanionView(widgets.views.companion)
     buildCollectionView(widgets.views.collection)
     addon.ArenaView.Build(widgets.views.arena)
     buildGuildView(addon.ArenaView.widgets.guildPage)
+    addon.ShopView.BuildShop(widgets.views.shop)
+    addon.ShopView.BuildInventory(widgets.views.inventory)
     buildGuideArrow(panel)
     -- the bars move while the panel is visible: redraw twice a second
     local elapsedTotal = 0
@@ -1121,7 +1155,7 @@ function Panel.Build(panel)
     end)
     Panel.state.section = settings().caughtSection == "seen" and "seen" or "caught"
     local view = settings().caughtView
-    Panel.SelectView((view == "collection" or view == "guild") and view or "companion")
+    Panel.SelectView(Panel.RestorableView(view))
     Panel.SelectSection(Panel.state.section)
 end
 
@@ -1339,6 +1373,8 @@ function Panel.RefreshView()
         Panel.RefreshCompanion()
     elseif view == "arena" then
         addon.ArenaView.Refresh()
+    elseif view == "shop" or view == "inventory" then
+        addon.ShopView.Refresh(view)
     elseif view == "collection" then
         local caught = AzeCaught.State()
         local active = caught.active
