@@ -57,6 +57,18 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     **Delicious Meat** (50g: every catch roll succeeds for 20 seconds, everywhere; a small clock shows the seconds
     left), **Magic Trap** (500g: catches a normal enemy at once, at any health, without a fight), **Elite Magic Trap**
     (1000g: normal or elite) and **Rare Magic Trap** (1500g: normal, elite, rare or rare elite; never a world boss).
+    - **Charms** (300g each, owned once): one charm slot in the Inventory (Equip / Take off, free). **Lucky Charm**
+      (catch rewards +10%), **Steady Hand** (the best moment starts at 13% health instead of 10%), **Second Chance** (when the
+      rope slips off because the enemy died too late, you can throw once more at it), **Rare Lure** (elite and rare catches pay +25%).
+    - **Care**: **Feast** (1g: hunger and thirst to full), **Squeaky Toy** (50s: affection to full), **Care Elixir** (5g:
+      hunger, thirst and affection don't drop for 4 hours).
+    - **Arena**: **War Paint** (250g: attack +10% for 3 fights), **Bark Skin** (250g: health +10% for 3 fights), **Swift
+      Tonic** (100g: speed +25% for one fight). A fight is used when your fighter is sent (a challenge, an accept or a
+      counter offer); the buff icons show next to the fighter for everyone.
+    - **Games**: **Dash Shield** (10g: the next Companion Dash run survives one hit) and **Head Start** (5g: the next run
+      starts at 200 m, no gold for those 200 m), armed with the two buttons beside the Start button; **Survivor Bomb**
+      (100g: a button during a Survivor run with a stake of at most 250g, clears every monster on the screen, once per
+      run). Runs that used an item carry a bag icon on the boards and in the feeds.
     Catches with items pay the normal reward (a trap: that of a best-moment catch). While you own catch items, a small
     bag sits next to your target's rope icon (also at full health): click it for a row of your catch items, click one
     to use it (a trap on the target), click anywhere else to close it. A refused trap is kept.

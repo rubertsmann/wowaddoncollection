@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0 (2026-11-25, protocol 1.5, schema 2, LibGuildSync MINOR 6)
+- Item batch (feature 036), 13 new shop items in four new groups:
+  - Charms: Lucky Charm, Steady Hand, Second Chance and Rare Lure, worn in one charm slot.
+  - Care: Feast, Squeaky Toy and Care Elixir.
+  - Arena buffs: War Paint, Bark Skin and Swift Tonic, built into the published fighter's stats.
+  - Games: Dash Shield, Head Start and Survivor Bomb (stake at most 250g).
+- Protocol 1.5, additive: the fighter's `bf` (buff ids), the runner `bi` and recent `it`, and the survivor play `it` (item marks). 1.4 peers drop them and compute the same fights.
+- Saved data gains `caught.equipped` and `caught.arenaBuffs`; schema stays 2.
+
 ## 0.9.1 (2026-11-25, protocol 1.4, schema 2, LibGuildSync MINOR 6)
 - The Arena, Shop and Inventory tabs of AZEcaught open only once a companion is chosen (your next catch becomes it).
 - Pets and monsters show as icons while their model is not drawn (the UI simulator draws no models).

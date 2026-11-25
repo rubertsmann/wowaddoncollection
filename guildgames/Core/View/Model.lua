@@ -78,6 +78,7 @@ end
 ---@field net integer signed net copper of the play
 ---@field t integer server time of the play
 ---@field mine boolean
+---@field item boolean an item was used in the play
 
 -- The newest plays of one game (default "coin") by every player, merged (newest first; same second: by name).
 -- Default limit 15.
@@ -92,7 +93,7 @@ function Model.BuildFlipFeedRows(records, myName, limit, gameKey)
         local section = addon.Games.Section(gameRecord, gameKey)
         for _, entry in ipairs(section and section.recent or {}) do
             rows[#rows + 1] = { name = escape(playerName), nameRaw = playerName, net = addon.Games.EntryNet(entry),
-                t = entry.t, mine = playerName == myName }
+                t = entry.t, mine = playerName == myName, item = entry.it == 1 }
         end
     end
     table.sort(rows, function(left, right)

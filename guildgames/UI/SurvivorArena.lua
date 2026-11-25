@@ -420,6 +420,10 @@ local function handleEvent(event)
         Animate.FloatText("survivor", widgets.floatText, widgets.towerAnchor, 0, 24, label, { 1, 0.85, 0.3 })
         widgets.startButton:SetText(Text["Cash out"])
         addon.Api.PlaySoundNamed({ "LOOT_WINDOW_COIN_SOUND", "UI_EPICLOOT_TOAST" })
+    elseif event.kind == "bomb" then
+        Animate.Ring("survivorBomb", widgets.effects, widgets.towerAnchor, 20, 360, { 1, 0.55, 0.2 }, 0.6)
+        Animate.Shake(widgets.arena, 3, 4)
+        addon.Api.PlaySoundNamed({ "UI_EPICLOOT_TOAST", "IG_MAINMENU_OPTION_CHECKBOX_OFF" })
     elseif event.kind == "levelup" then
         Animate.Ring("survivorLevel", widgets.effects, widgets.towerAnchor, 30, 160, { 1, 0.85, 0.3 }, 0.6)
         addon.Api.PlaySoundNamed({ "LEVELUP", "UI_EPICLOOT_TOAST" })
@@ -491,6 +495,37 @@ local function selectTarget(index)
     showHint(addon.Survivor.Target(index))
 end
 
+-- The bomb button: shown during a run while I own a bomb; greyed out with the reason when it cannot be used.
+local function paintBomb()
+    local button = widgets.bombButton
+    if not button then return end
+    local run = SurvivorArena.state.run
+    local Items = addon.Items
+    button:SetShown(run ~= nil and Items.Count("bomb") > 0)
+    if not run then return end
+    button.blocked = nil
+    if run.stake > Items.BOMB_MAXIMUM_STAKE then
+        button.blocked = Format(Text["Only in runs with a stake of at most {gold}."], { gold = addon.Model.MoneyText(Items.BOMB_MAXIMUM_STAKE) })
+    elseif run.bombed then
+        button.blocked = Text["Used in this run."]
+    end
+    button:Paint(false)
+end
+
+-- Uses a Survivor Bomb in the open run.
+---@return boolean used
+function SurvivorArena.UseBomb()
+    local run = SurvivorArena.state.run
+    if not run or run.choices then return false end
+    local ok = addon.Items.Use("bomb", { myName = addon.Utility.Me(), now = addon.Utility.Now(), survivorRun = run })
+    if ok then
+        for _, event in ipairs(addon.Survivor.TakeEvents(run)) do handleEvent(event) end
+        addon.Events.Fire("ITEMS_CHANGED")
+    end
+    paintBomb()
+    return ok and true or false
+end
+
 ---@param run SurvivorRun
 local function finish(run)
     local state = SurvivorArena.state
@@ -526,6 +561,7 @@ local function finish(run)
     end)
     setControls(false)
     showHint(run.target)
+    paintBomb()
     addon.GamesTab.SetBusy(false)   -- the run is over: the leaderboard may show it now
 end
 
@@ -589,6 +625,7 @@ function SurvivorArena.Start()
     addon.Api.PlaySoundNamed({ "IG_MAINMENU_OPTION_CHECKBOX_ON" })
     addon.Log.Debug("games.survivor", "a survivor run started", { stake = stake, target = run.target.seconds })
     drawHud(run)
+    paintBomb()
     return run
 end
 
@@ -794,6 +831,10 @@ function SurvivorArena.Build(panel)
     widgets.bannerText:SetPoint("CENTER", arena, "CENTER", 0, 56); widgets.bannerText:SetTextColor(1, 0.9, 0.3)
     widgets.hintText = Widgets.CreateFontString(effects, "GameFontHighlightSmall", "CENTER")
     widgets.hintText:SetPoint("BOTTOM", arena, "BOTTOM", 0, 22); widgets.hintText:SetWidth(ARENA_WIDTH - 20)
+    widgets.bombButton = addon.UIHelpers.CreateItemButton(effects, 26, "bomb", function() SurvivorArena.UseBomb() end)
+    widgets.bombButton:SetPoint("BOTTOMLEFT", arena, "BOTTOMLEFT", 8, 8)
+    widgets.bombButton.hint = Text["Click: clear every monster on the screen."]
+    widgets.bombButton:Hide()
 
     buildHud(arena)
 

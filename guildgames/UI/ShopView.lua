@@ -2,7 +2,8 @@ local addonName, addon = ...
 
 -- The AZEcaught Shop and Inventory views (two tabs of the AZEcaught panel). Shop: every catalog item by group, with
 -- price, owned count and a Buy button. Inventory: the owned items by group with a Use button (a trap is used on the
--- current target). Refusals and results show in the view's status line. Logic: Core/Minigames/Items.lua.
+-- current target, a charm is equipped in the one charm slot, a game item is used in its game). Refusals and results
+-- show in the view's status line. Logic: Core/Minigames/Items.lua.
 ---@class ShopViewModule
 local ShopView = {}
 addon.ShopView = ShopView
@@ -20,12 +21,34 @@ ShopView.widgets = widgets
 ---@return string
 local function buyRefusalText(reason)
     if reason == "funds" then return Text["Not enough gold."] end
-    if reason == "stack" then return Format(Text["You cannot carry more than {n}."], { n = Items.MAXIMUM_STACK }) end
+    if reason == "stack" then return Text["You cannot carry more of it."] end
     if reason == "readonly" then return Text["Saved data is read-only in this session."] end
     return Text["This item is not sold."]
 end
 ShopView.BuyRefusalText = buyRefusalText
 
+-- Why an item of the inventory could not be used (the care, arena and game items; catch items explain themselves).
+---@param reason string|nil
+---@return string
+local function useRefusalText(reason)
+    if reason == "none" then return Text["You have no companion."] end
+    if reason == "asleep" then return Text["Your companion is asleep."] end
+    if reason == "full" then return Text["Your companion needs nothing of it now."] end
+    if reason == "running" then return Text["It is still running."] end
+    if reason == "readonly" then return Text["Saved data is read-only in this session."] end
+    return Text["This item cannot be used here."]
+end
+ShopView.UseRefusalText = useRefusalText
+
+-- Where an item is used when not from the inventory (nil: the inventory's button uses it).
+---@param item ItemDefinition
+---@return string|nil
+local function usedElsewhere(item)
+    if item.kind == "runner" then return Text["Choose it beside the Start button of Companion Dash."] end
+    if item.kind == "survivor" then return Text["Use it during a Survivor run."] end
+    if item.kind == "trap" then return Text["Use it with your target selected."] end
+    return nil
+end
 ---@param view "shop"|"inventory"
 ---@param text string
 function ShopView.ShowStatus(view, text)
@@ -63,7 +86,8 @@ local function createRow(parent, view)
         GameTooltip:SetText(item.name)
         GameTooltip:AddLine(Items.EffectText(item), 1, 1, 1, true)
         GameTooltip:AddLine(Format(Text["Price: {gold}"], { gold = money(item.price) }), 1, 0.82, 0)
-        if item.kind == "trap" then GameTooltip:AddLine(Text["Use it with your target selected."], 0.7, 0.7, 0.7, true) end
+        local where = usedElsewhere(item)
+        if where then GameTooltip:AddLine(where, 0.7, 0.7, 0.7, true) end
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -150,7 +174,14 @@ function ShopView.Refresh(view)
             local header = parts.headers[headerIndex] or createHeader(parts.content)
             parts.headers[headerIndex] = header
             header:ClearAllPoints(); header:SetPoint("TOPLEFT", 4, -y)
-            header:SetText(entry.header.name); header:Show()
+            local title = entry.header.name
+            if view == "inventory" and entry.header.id == "charms" then
+                -- the charm group is the one charm slot: what is equipped
+                local equipped = Items.Equipped()
+                title = title .. "  |cffb0b0b0" .. (equipped and Format(Text["Equipped: {item}"], { item = equipped.name })
+                    or Text["Nothing equipped (one slot)"]) .. "|r"
+            end
+            header:SetText(title); header:Show()
             y = y + HEADER_HEIGHT
         else
             rowIndex = rowIndex + 1
@@ -167,9 +198,20 @@ function ShopView.Refresh(view)
                 row.detail:SetText(money(item.price))
                 row.action:SetEnabled(Items.BuyRefusal(item.id, myName) == nil)
             else
-                row.name:SetText(item.name)
+                local suffix = ""
+                if item.kind == "charm" and Items.Equipped() == item then
+                    suffix = " |cff66ff66" .. Text["(equipped)"] .. "|r"
+                elseif item.kind == "arenaBuff" and (Items.ArenaBuffs()[item.id] or 0) > 0 then
+                    suffix = " |cff66ff66" .. Format(Text["({n} fights left)"], { n = Items.ArenaBuffs()[item.id] }) .. "|r"
+                end
+                row.name:SetText(item.name .. suffix)
                 row.detail:SetText("x" .. entry.count)
-                row.action:SetEnabled(true)
+                if item.kind == "charm" then
+                    row.action:SetLabel(Items.Equipped() == item and Text["Take off"] or Text["Equip"])
+                else
+                    row.action:SetLabel(Text["Use"])
+                end
+                row.action:SetEnabled(item.kind ~= "runner" and item.kind ~= "survivor")
             end
             row:Show()
             y = y + ROW_HEIGHT + 2
@@ -208,10 +250,32 @@ end
 function ShopView.Use(itemID)
     local item = Items.Get(itemID)
     if not item then return false end
-    local used = addon.CatchItems.UseItem(itemID)
-    ShopView.ShowStatus("inventory", used and ("|cff66ff66" .. Format(Text["Used {item}."], { item = item.name }) .. "|r") or "")
+    if item.group == "catch" then
+        local used = addon.CatchItems.UseItem(itemID)
+        ShopView.ShowStatus("inventory", used and ("|cff66ff66" .. Format(Text["Used {item}."], { item = item.name }) .. "|r") or "")
+        ShopView.Refresh("inventory")
+        return used
+    end
+    local where = usedElsewhere(item)
+    if where then
+        ShopView.ShowStatus("inventory", where)
+        return false
+    end
+    local ok, result = Items.Use(itemID, { myName = addon.Utility.Me(), now = addon.Utility.Now() })
+    if ok then
+        local text = Format(Text["Used {item}."], { item = item.name })
+        if item.kind == "charm" then
+            text = result.equipped and Format(Text["Equipped: {item}"], { item = item.name }) or Format(Text["Took off {item}."], { item = item.name })
+        end
+        ShopView.ShowStatus("inventory", "|cff66ff66" .. text .. "|r")
+        addon.Api.PlaySound(addon.Api.SoundKitFor({ "IG_ABILITY_ICON_DROP", "IG_MAINMENU_OPTION_CHECKBOX_ON" }))
+        addon.Events.Fire("ITEMS_CHANGED")
+        if item.kind == "care" or item.boost == "care" then addon.Events.Fire("CAUGHT_CHANGED") end
+    else
+        ShopView.ShowStatus("inventory", "|cffff4040" .. useRefusalText(result) .. "|r")
+    end
     ShopView.Refresh("inventory")
-    return used
+    return ok and true or false
 end
 
 addon.Events.On("ITEMS_CHANGED", function()

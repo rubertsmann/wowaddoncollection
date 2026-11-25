@@ -1,3 +1,26 @@
+# GuildGames 0.10.0
+
+**English:** Thirteen new items in the AZEcaught shop. **Charms** (bought once, worn in one charm slot, swapped for
+free in the Inventory): Lucky Charm (+10% catch rewards), Steady Hand (a longer best moment), Second Chance (when the
+rope slips off, you can throw once more at the same enemy) and Rare Lure (+25% for elite and rare catches). **Care:**
+Feast (hunger and thirst to full), Squeaky Toy (affection to full) and Care Elixir (the needs don't drop for 4 hours).
+**Arena:** War Paint (+10% attack for 3 fights), Bark Skin (+10% health for 3 fights) and Swift Tonic (+25% speed for
+one fight); their icons show next to your fighter for both sides. **Games:** Dash Shield (Companion Dash survives one
+hit), Head Start (the run starts at 200 m) and Survivor Bomb (clears the screen once per run, stakes up to 250g).
+Runs that used an item carry a bag icon on the boards. Prices may still change. Guild members on an older version
+see the same fight results; they just don't see the buff icons and bag marks.
+
+**Deutsch:** Dreizehn neue Gegenstände im AZEcaught-Laden. **Talismane** (einmal gekauft, in einem Talisman-Platz
+getragen, im Inventar kostenlos wechselbar): Glücksbringer (+10 % Fangbelohnung), Ruhige Hand (ein längerer bester
+Moment), Zweite Chance (rutscht das Seil ab, darfst du noch einmal auf denselben Gegner werfen) und Seltener Köder
+(+25 % für Elite- und seltene Fänge). **Pflege:** Festmahl (Hunger und Durst voll), Quietschspielzeug (Zuneigung voll)
+und Pflegeelixier (die Bedürfnisse sinken 4 Stunden lang nicht). **Arena:** Kriegsbemalung (+10 % Angriff für 3 Kämpfe),
+Baumrinde (+10 % Leben für 3 Kämpfe) und Flinkes Tonikum (+25 % Tempo für einen Kampf); ihre Symbole stehen für beide
+Seiten neben deinem Kämpfer. **Spiele:** Sprintschild (Begleiter-Sprint übersteht einen Treffer), Vorsprung (der Lauf
+beginnt bei 200 m) und Überlebensbombe (räumt einmal pro Lauf den Bildschirm, Einsatz bis 250g). Läufe mit einem
+Gegenstand tragen ein Taschensymbol in den Bestenlisten. Die Preise können sich noch ändern. Gildenmitglieder mit einer
+älteren Version sehen dieselben Kampfergebnisse, nur ohne Buff-Symbole und Taschen-Markierung.
+
 # GuildGames 0.9.1
 
 **English:** The Arena, Shop and Inventory tabs of AZEcaught now open only once you have a companion; until then

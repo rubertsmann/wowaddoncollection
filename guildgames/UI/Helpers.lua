@@ -26,6 +26,51 @@ function UIHelpers.SetTextureOr(texture, path, fallback)
     return false
 end
 
+-- A square button for one shop item outside the inventory (a game's item slot): the icon, the owned count, a gold frame
+-- while `button:Paint(armed)` says it is armed, greyed out while none is owned or `button.blocked` names why not.
+---@param parent table
+---@param size number
+---@param itemID string
+---@param onClick fun(button: table)
+---@return table button
+function UIHelpers.CreateItemButton(parent, size, itemID, onClick)
+    local Items, Text, Format = addon.Items, addon.Text, addon.Locale.Format
+    local item = Items.Get(itemID)
+    local button = CreateFrame("Button", nil, parent)
+    button:SetSize(size, size)
+    button.itemID = itemID
+    button.frame = button:CreateTexture(nil, "BACKGROUND")
+    button.frame:SetPoint("TOPLEFT", -2, 2); button.frame:SetPoint("BOTTOMRIGHT", 2, -2)
+    button.icon = button:CreateTexture(nil, "ARTWORK"); button.icon:SetAllPoints()
+    button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    UIHelpers.SetTextureOr(button.icon, item.icon, { 0.8, 0.6, 0.3 })
+    button.count = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    button.count:SetPoint("BOTTOMRIGHT", -1, 1)
+    function button:Paint(armed)
+        local count = Items.Count(self.itemID)
+        local usable = count > 0 and not self.blocked
+        self.armed = armed and true or false
+        self.count:SetText(tostring(count))
+        if armed then self.frame:SetColorTexture(1, 0.82, 0.2, 0.95) else self.frame:SetColorTexture(0, 0, 0, 0.6) end
+        if self.icon.SetDesaturated then self.icon:SetDesaturated(not usable) end
+        self.icon:SetAlpha(usable and 1 or 0.4)
+    end
+    button:SetScript("OnClick", function(self) onClick(self) end)
+    button:SetScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText(item.name)
+        GameTooltip:AddLine(Items.EffectText(item), 1, 1, 1, true)
+        GameTooltip:AddLine(Format(Text["You have {n}."], { n = Items.Count(self.itemID) }), 0.7, 0.7, 0.7)
+        if self.hint then GameTooltip:AddLine(self.hint, 1, 0.82, 0, true) end
+        if self.blocked then GameTooltip:AddLine(self.blocked, 1, 0.3, 0.3, true) end
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    button:Paint(false)
+    return button
+end
+
 -- Whether the mouse is over `frame` (IsMouseOver, else MouseIsOver).
 ---@param frame table
 ---@return boolean

@@ -93,6 +93,7 @@ AzeCaught.MAXIMUM_STAT = 2000000000
 AzeCaught.throws = {}
 AzeCaught.rolled = {}
 AzeCaught.thrown = {}   -- GUID -> clock of its throw: one throw per enemy
+AzeCaught.again = {}    -- GUID -> clock: the Second Chance charm allows one more throw at it (its first rope slipped off)
 AzeCaught.lastThrowAt = nil
 AzeCaught.forceNextCatch = false
 -- runtime only: GUIDs already counted as an encounter / a kill (each enemy counts once; cleared past MAXIMUM_COUNTED)
@@ -245,7 +246,8 @@ end
 ---@field best boolean at or below BEST_HEALTH: the best moment this NPC can have
 
 -- The catch chance: CHANCE_AT_THROW_HEALTH at THROW_HEALTH rising linearly to CHANCE_AT_BEST at BEST_HEALTH, flat below, minus the rarity
--- malus, at least MINIMUM_CHANCE. A hidden health counts as THROW_HEALTH (the worst case).
+-- malus, at least MINIMUM_CHANCE. A hidden health counts as THROW_HEALTH (the worst case). An equipped "best" charm
+-- moves BEST_HEALTH up.
 ---@param healthFraction number|nil
 ---@param classification string|nil
 ---@return ChanceBreakdown
@@ -253,12 +255,30 @@ function AzeCaught.Chance(healthFraction, classification)
     local health = tonumber(healthFraction)
     if not health or health ~= health then health = AzeCaught.THROW_HEALTH end
     health = clamp(health, 0, 1)
-    local progress = clamp((AzeCaught.THROW_HEALTH - health) / (AzeCaught.THROW_HEALTH - AzeCaught.BEST_HEALTH), 0, 1)
+    local bestHealth = AzeCaught.BestHealth()
+    local progress = clamp((AzeCaught.THROW_HEALTH - health) / (AzeCaught.THROW_HEALTH - bestHealth), 0, 1)
     local healthChance = AzeCaught.CHANCE_AT_THROW_HEALTH + (AzeCaught.CHANCE_AT_BEST - AzeCaught.CHANCE_AT_THROW_HEALTH) * progress
     local rarity = AzeCaught.Classification(classification)
     local malus = AzeCaught.RARITY_MALUS[rarity]
     return { chance = math.max(AzeCaught.MINIMUM_CHANCE, healthChance - malus), health = health, healthChance = healthChance,
-        malus = malus, classification = rarity, best = health <= AzeCaught.BEST_HEALTH }
+        malus = malus, classification = rarity, best = health <= bestHealth }
+end
+
+-- The health fraction at which the best moment starts: BEST_HEALTH, or the equipped "best" charm's value.
+---@return number
+function AzeCaught.BestHealth()
+    return math.min(addon.Items.CharmValue("best") or AzeCaught.BEST_HEALTH, AzeCaught.THROW_HEALTH - 0.01)
+end
+
+-- The factor the equipped charm puts on the reward of catching an NPC of `classification` (1 without one).
+---@param classification string|nil
+---@return number
+function AzeCaught.CharmRewardFactor(classification)
+    local Items = addon.Items
+    local factor = Items.CharmValue("reward") or 1
+    local rarity = AzeCaught.Classification(classification)
+    if rarity == "elite" or rarity == "rare" or rarity == "rareelite" then factor = factor * (Items.CharmValue("lure") or 1) end
+    return factor
 end
 
 -- How good a moment to throw is, for the icon ring: 0 at MINIMUM_CHANCE (red), 1 at CHANCE_AT_BEST (green). Second
@@ -516,7 +536,8 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
     AzeCaught.thrown[target.guid] = clockSeconds
     AzeCaught.throws[target.guid] = { at = clockSeconds, npc = npcID, health = health, playerLevel = playerLevel,
         level = target.level, classification = AzeCaught.Classification(target.classification), name = target.name,
-        boosted = addon.Items.CatchBoosted(now) or nil }
+        boosted = addon.Items.CatchBoosted(now) or nil, second = AzeCaught.again[target.guid] and true or nil }
+    AzeCaught.again[target.guid] = nil
     if not addon.Store.db.readonly then AzeCaught.State().throwHintDone = true end
     AzeCaught.Journal("INFORMATION", "throw.armed", "a rope was thrown",
         { npc = npcID, guid = target.guid, hp = healthKnown and round1(health * 100) or "hidden", level = target.level, class = target.classification,
@@ -525,22 +546,29 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
 end
 
 -- Armed throws whose CATCH_WINDOW has passed without a death (the icon disappears with a burst). Each is disarmed, counts as rolled (no second throw at that NPC) and
--- is journaled. Returns them oldest first: { guid, npc, name }.
+-- is journaled. With the Second Chance charm equipped a first throw does not count as rolled: the NPC may be thrown at
+-- once more (`again` = true). Returns them oldest first: { guid, npc, name, again }.
 ---@param clockSeconds number GetTime()
----@return { guid: string, npc: integer, name: string|nil }[]
+---@return { guid: string, npc: integer, name: string|nil, again: boolean|nil }[]
 function AzeCaught.EndLateThrows(clockSeconds)
     local ended = {}
     for guid, throw in pairs(AzeCaught.throws) do
         if clockSeconds - throw.at > AzeCaught.CATCH_WINDOW then
-            ended[#ended + 1] = { guid = guid, npc = throw.npc, name = throw.name, at = throw.at }
+            ended[#ended + 1] = { guid = guid, npc = throw.npc, name = throw.name, at = throw.at,
+                again = (not throw.second and addon.Items.CharmValue("second") ~= nil) or nil }
         end
     end
     table.sort(ended, function(left, right) return left.at < right.at end)
     for _, late in ipairs(ended) do
         AzeCaught.throws[late.guid] = nil
-        AzeCaught.rolled[late.guid] = clockSeconds
+        if late.again then
+            AzeCaught.thrown[late.guid], AzeCaught.again[late.guid] = nil, clockSeconds
+        else
+            AzeCaught.rolled[late.guid] = clockSeconds
+        end
         AzeCaught.Journal("INFORMATION", "roll.late", "the catch window ended before the NPC died",
-            { npc = late.npc, guid = late.guid, elapsed = round1(clockSeconds - late.at), window = AzeCaught.CATCH_WINDOW })
+            { npc = late.npc, guid = late.guid, elapsed = round1(clockSeconds - late.at), window = AzeCaught.CATCH_WINDOW,
+              again = late.again })
     end
     return ended
 end
@@ -565,6 +593,9 @@ function AzeCaught.ExpireThrows(clockSeconds)
     for guid, at in pairs(AzeCaught.thrown) do
         if clockSeconds - at > 600 then AzeCaught.thrown[guid] = nil end
     end
+    for guid, at in pairs(AzeCaught.again) do
+        if clockSeconds - at > 600 then AzeCaught.again[guid] = nil end
+    end
 end
 
 ---@class RollResult
@@ -576,6 +607,7 @@ end
 ---@field forced boolean
 ---@field first boolean the guaranteed first catch
 ---@field boosted? boolean a catch boost (Delicious Meat) made it succeed
+---@field second? boolean the roll of a second throw (Second Chance charm)
 ---@field trap? string the item id of the trap that caught it
 ---@field companion? boolean the catch became the companion
 
@@ -595,7 +627,7 @@ local function recordCatch(npcID, chance, myName, now, result)
     end
     entry.got = bump(entry.got or entry.caught)
     entry.caught = math.min(AzeCaught.MAXIMUM_ID, entry.caught + 1)
-    result.reward = AzeCaught.Reward(chance)
+    result.reward = math.min(AzeCaught.MAXIMUM_REWARD, math.floor(AzeCaught.Reward(chance) * AzeCaught.CharmRewardFactor(entry.cls) + 0.5))
     AzeCaught.Journal("INFORMATION", "catch", "an NPC was caught",
         { npc = npcID, name = entry.n, timesCaught = entry.caught, reward = result.reward, trap = result.trap })
     if result.reward > 0 then addon.Wallet.Earn(myName, result.reward, "catch", now, entry.n) end
@@ -639,12 +671,12 @@ function AzeCaught.OnDeath(guid, myName, clockSeconds, now, randomFunction)
     local boosted = (throw.boosted or addon.Items.CatchBoosted(now)) and roll >= breakdown.chance or nil
     local caught = forced or first or boosted or roll < breakdown.chance
     local result = { caught = caught, npc = throw.npc, chance = breakdown.chance, roll = roll, reward = 0, forced = forced,
-        first = first, boosted = boosted }
+        first = first, boosted = boosted, second = throw.second }
     AzeCaught.Journal("INFORMATION", "roll", caught and "the catch roll succeeded" or "the catch roll failed",
         { npc = throw.npc, guid = guid, elapsed = round1(elapsed), chance = ("%.4f"):format(breakdown.chance),
           roll = ("%.4f"):format(roll), hp = round1(breakdown.health * 100),
           healthChance = ("%.4f"):format(breakdown.healthChance), class = breakdown.classification, malus = breakdown.malus,
-          forced = forced or nil, first = first or nil, boosted = boosted })
+          forced = forced or nil, first = first or nil, boosted = boosted, second = throw.second })
     if not caught then return result end
     recordCatch(throw.npc, breakdown.chance, myName, now, result)
     return result
@@ -987,10 +1019,14 @@ local function isCriticalOrEmpty(zone) return zone == "critical" or zone == "emp
 ---@param companion CompanionState
 ---@param elapsedSeconds number
 ---@return boolean wokeUp
-local function decayNeedsAndSleep(companion, elapsedSeconds)
+local function decayNeedsAndSleep(companion, elapsedSeconds, now)
     local asleepFactor = companion.asleep and AzeCaught.ASLEEP_DECAY or 1
+    -- a running care boost (Care Elixir) keeps hunger, thirst and affection where they are
+    local cared = now ~= nil and addon.Items.ActiveBoost("care", now) ~= nil
     for _, need in ipairs({ "hunger", "thirst", "affection" }) do
-        companion[need] = clamp(companion[need] - elapsedSeconds * AzeCaught.DecayPerSecond(need, companion) * asleepFactor, 0, 100)
+        if not cared then
+            companion[need] = clamp(companion[need] - elapsedSeconds * AzeCaught.DecayPerSecond(need, companion) * asleepFactor, 0, 100)
+        end
     end
     if not companion.asleep then
         companion.energy = clamp(companion.energy - elapsedSeconds * AzeCaught.DecayPerSecond("energy", companion), 0, 100)
@@ -1101,7 +1137,7 @@ function AzeCaught.Tick(elapsedSeconds, now)
     local companion = caught.active
     if not companion then return result end
     local heartsBefore = companion.hearts
-    if decayNeedsAndSleep(companion, elapsedSeconds) then result.changed = true end
+    if decayNeedsAndSleep(companion, elapsedSeconds, now) then result.changed = true end
     local anyCritical, anyZoneChanged = updateZones(companion)
     if anyZoneChanged then result.changed = true end
     if anyCritical then loseHeartsToNeglect(companion, elapsedSeconds) end
@@ -1215,6 +1251,31 @@ function AzeCaught.Care(action, myName, now)
     changeHearts(companion, hearts, action)
     companion.zones[need] = AzeCaught.ZoneOf(companion, need)
     return { action = action, hearts = hearts, cost = cost, balance = balance }
+end
+
+-- A care item: fills `needs` of the companion to full, free and without hearts or streaks. Returns the needs it
+-- filled, or nil and why: "none" (no companion), "asleep", "full" (nothing to fill), "readonly".
+---@param needs string[]
+---@param now integer
+---@return { filled: string[] }|nil
+---@return string|nil reason
+function AzeCaught.CareItem(needs, now)
+    local companion = AzeCaught.Active()
+    if not companion then return nil, "none" end
+    if addon.Store.db.readonly then return nil, "readonly" end
+    if companion.asleep then return nil, "asleep" end
+    local intervals = AzeCaught.ProfileOf(companion).intervals
+    local filled = {}
+    for _, need in ipairs(needs or {}) do
+        if intervals[need] and companion[need] < AzeCaught.FULL_LEVEL then filled[#filled + 1] = need end
+    end
+    if #filled == 0 then return nil, "full" end
+    for _, need in ipairs(filled) do
+        companion[need] = 100
+        companion.zones[need] = AzeCaught.ZoneOf(companion, need)
+    end
+    AzeCaught.Journal("INFORMATION", "care.item", "a care item was used", { npc = companion.npc, needs = table.concat(filled, ","), at = now })
+    return { filled = filled }
 end
 
 ------------------------------------------------------------------ guild record section and sanitizing
@@ -1503,8 +1564,8 @@ function AzeCaught.Reset(withWallet)
     caught.collection, caught.active, caught.activeSeconds, caught.peaks = {}, nil, 0, {}
     caught.arena = nil   -- the arena progress, fights and bets
     caught.paidWeek, caught.firstCatchDone, caught.throwHintDone = nil, nil, nil
-    if withWallet then caught.ledger, caught.items, caught.boosts = nil, nil, nil end
-    AzeCaught.throws, AzeCaught.rolled, AzeCaught.thrown = {}, {}, {}
+    if withWallet then caught.ledger, caught.items, caught.boosts, caught.equipped, caught.arenaBuffs = nil, nil, nil, nil, nil end
+    AzeCaught.throws, AzeCaught.rolled, AzeCaught.thrown, AzeCaught.again = {}, {}, {}, {}
     AzeCaught.counted, AzeCaught.countedCount, AzeCaught.killed, AzeCaught.killedCount = {}, 0, {}, 0
     AzeCaught.lastThrowAt, AzeCaught.forceNextCatch = nil, false
     AzeCaught.Journal("INFORMATION", "dev.reset", "AZEcaught was reset", summary)

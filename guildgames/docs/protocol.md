@@ -1,6 +1,6 @@
 # GuildGames wire protocol and stored data
 
-Protocol **1.4**, schema **2** (1.4 since the runner section; 1.3 since arena counter offers; 1.2 since the companion arena, 0.3.0; 1.1 since 0.2.0; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Base/Init.lua` (versions, prefix), `Core/Net/Sync.lua`
+Protocol **1.5**, schema **2** (1.5 since the item marks; 1.4 since the runner section; 1.3 since arena counter offers; 1.2 since the companion arena, 0.3.0; 1.1 since 0.2.0; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Base/Init.lua` (versions, prefix), `Core/Net/Sync.lua`
 (messages), `Core/Data/Games.lua` (record, validation), `Core/Data/Store.lua` (schema). The transport, chunk header, compatibility
 rules, guild gate and record-pull engine are LibGuildSync-1.0's (`Libs/LibGuildSync`, documented in the libguildsync repo).
 Tests: `tests/test_games_sync.lua`, `tests/test_games.lua`, `tests/test_store_and_locale.lua`.
@@ -67,6 +67,13 @@ protocol, so ProfessionShare and GuildGames never read each other's messages.
   `recent = { {d = meters, g = gold paid 0..50, t} }` (<= 10, newest first). A bad section is dropped alone (the record
   stays); 1.3 peers drop the unknown key (allow-list copy). Written by `Games.SetSection("runner")` after every finished run.
   Local only: `runner.day` and `runner.paid` (the 50g daily cap, server day = time / 86400).
+- **Item marks (protocol 1.5, feature 036), all optional and additive:**
+  - Arena fighter `f.bf`: the ids of the arena buffs (War Paint, Bark Skin, Swift Tonic) used for this fighter.
+    - The list holds known `arenaBuff` items only, no repeats, at most 3; anything else is dropped from the list and the fighter stays.
+    - The buffs are already part of `atk`/`vit`/`spd`, so a 1.4 peer that drops `bf` computes the same fight.
+  - Runner section `bi = 1`: the best run used an item.
+  - Runner recent entries and survivor play entries `it = 1`: the run used an item (Dash Shield, Head Start, Survivor Bomb).
+  - Any other value of `bi` or `it` counts as unmarked. Peers on 1.4 or older drop these fields (allow-list copy).
 - **Money pool (local only, never sent):** `balance = 20g + casino net (coin + slots + survivor) - pending survivor stake
   + ledger.earned - ledger.spent` (runner payouts are ledger earnings, kind `runner`). Every casino play START (flip, spin, survivor run) is refused with `funds` when the stake
   is above the balance; settling a run never is.
@@ -77,7 +84,8 @@ protocol, so ProfessionShare and GuildGames never read each other's messages.
   Results are self-reported (trust model): bounds and consistency are checked, truth is not.
 - **Stored data (schema 2, `GuildGamesDB`):** `caught` (AZEcaught: `collection[npcId] = {n, lvl, cls, disp, seen, caught, st?, cnt?, last?, kills?, thr?, got?}`
   (<= 2000), `active` companion state, `activeSeconds`, `peaks`, `paidWeek`, `ledger = {earned, spent, entries}` (<= 60),
-  `journal` (<= 400 log lines), `notify`, `verbose`, `arena` = local arena state: per NPC `{xp, w, l, tr}`, the running
+  `journal` (<= 400 log lines), `notify`, `verbose`, `items` (id -> count), `boosts` (id -> end time), `equipped` (the charm
+  in the one slot, only while owned), `arenaBuffs` (id -> fights left, 1..3), `arena` = local arena state: per NPC `{xp, w, l, tr}`, the running
   training, my `ch`/`an`/`bt`, `settled`, `noticed`, `history` (<= 30)); migration 1 -> 2 adds it empty; re-validated on every load and kept
   by `/gg clean`. `games[name]`, re-validated on every load,
   emptied by `/gg clean`, pruned with players who left the guild. A newer schema on disk is left untouched (read-only session).

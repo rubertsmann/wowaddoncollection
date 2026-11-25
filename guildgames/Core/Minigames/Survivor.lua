@@ -95,6 +95,7 @@ local addonName, addon = ...
 ---@field shield number barrier points left
 ---@field shieldPause number seconds until the barrier refills
 ---@field net? integer set by Settle
+---@field bombed? boolean a Survivor Bomb was used (the play is marked)
 
 ---@class SurvivorModule
 local Survivor = {}
@@ -420,6 +421,22 @@ local function hurtEnemy(run, enemy, damage)
     else
         emit(run, { kind = "hit", x = enemy.x, y = enemy.y })
     end
+end
+
+-- A Survivor Bomb: every living enemy dies at once (kills and experience count). Returns how many it killed.
+---@param run SurvivorRun
+---@return { killed: integer }
+function Survivor.Bomb(run)
+    local killed = 0
+    for _, enemy in ipairs(run.enemies) do
+        if enemy.hp > 0 then
+            hurtEnemy(run, enemy, enemy.hp)
+            killed = killed + 1
+        end
+    end
+    run.bombed = true
+    emit(run, { kind = "bomb" })
+    return { killed = killed }
 end
 
 -- Up to three different items that can still level up, drawn at random; "vitality" (a heal) when everything is maxed.
@@ -816,7 +833,7 @@ function Survivor.Settle(run, now)
     run.finished = run.finished or "lost"
     local net = Survivor.Net(run)
     run.net = net
-    addon.Games.RecordPlay(run.name, "survivor", run.stake, net, now)
+    addon.Games.RecordPlay(run.name, "survivor", run.stake, net, now, run.bombed)
     return net
 end
 

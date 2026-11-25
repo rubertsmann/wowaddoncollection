@@ -47,7 +47,7 @@ local LAYERS = {
 ---@field input { jump: boolean, duck: boolean }
 ---@field scroll number distance shown while idle
 ---@field lastResult RunnerResult|nil
-RunnerView.state = { run = nil, input = { jump = false, duck = false }, scroll = 0, lastResult = nil }
+RunnerView.state = { run = nil, input = { jump = false, duck = false }, scroll = 0, lastResult = nil, armed = {} }
 
 ---@type table widgets (nil fields until Build ran)
 local widgets = {}
@@ -191,6 +191,19 @@ local function statsText()
         { meters = state.b, gold = paid, cap = Runner.DAILY_CAP_GOLD })
 end
 
+-- the item toggles beside the Start button, in this order
+local RUN_ITEMS = { "dashShield", "headStart" }
+
+-- The item toggles: armed ones are used when the next run starts (an item no longer owned is disarmed).
+local function paintItems()
+    local armed = RunnerView.state.armed
+    for _, button in ipairs(widgets.itemButtons or {}) do
+        if addon.Items.Count(button.itemID) < 1 then armed[button.itemID] = nil end
+        button:Paint(armed[button.itemID])
+        button:SetEnabled(RunnerView.state.run == nil)
+    end
+end
+
 -- The panel's state: locked without a companion, else the stats and the start hint.
 function RunnerView.Refresh()
     if not widgets.area then return end
@@ -199,6 +212,7 @@ function RunnerView.Refresh()
     widgets.lockText:SetShown(locked)
     widgets.startButton:SetEnabled(not locked)
     widgets.statsText:SetText(statsText())
+    paintItems()
     if not RunnerView.state.run then
         widgets.hintText:SetShown(not locked)
         local loaded = addon.CompanionModel.Load(widgets.runner, companion)
@@ -221,6 +235,7 @@ local function showResult(result, crashedName)
     if result.best and result.meters > 0 then lines[#lines + 1] = "|cffffd200" .. Text["New best!"] .. "|r" end
     if result.capped then lines[#lines + 1] = "|cff999999" .. Text["Today's gold limit is reached; runs still count for the board."] .. "|r" end
     if crashedName then lines[#lines + 1] = "|cff999999" .. Format(Text["Stopped by {name}"], { name = addon.Utility.Escape(crashedName) }) .. "|r" end
+    if result.item then lines[#lines + 1] = "|cff999999" .. Text["An item was used: the run is marked on the board."] .. "|r" end
     widgets.resultText:SetText(table.concat(lines, "\n"))
     addon.Animate.FadeIn(widgets.resultText, 0.3)
 end
@@ -233,6 +248,7 @@ local function finish(run)
     if widgets.area.EnableKeyboard then pcall(widgets.area.EnableKeyboard, widgets.area, false) end
     local crashed = run.crashedInto and run.pool[run.crashedInto.pick]
     local result = Runner.Finish(run, addon.Utility.Me(), addon.Utility.Now())
+    result.item = run.item
     state.lastResult = result
     addon.CompanionModel.Play(widgets.runner, addon.CompanionModel.ANIMATION.hurt, true)
     addon.Animate.Flash("runnerCrash", widgets.crashFlash, 0.35, 0.35)
@@ -252,8 +268,19 @@ function RunnerView.Start()
     local companion = addon.AzeCaught.Active()
     if state.run or not companion or not widgets.area then return nil end
     local pool = Runner.BuildPool(addon.AzeCaught.State().collection)
-    local run = Runner.New(pool, math.floor(addon.Api.Random() * 2147483646) + 1)
+    -- the armed items are used now; one that cannot be used (gone meanwhile) is simply left out
+    local options = {}
+    for _, itemID in ipairs(RUN_ITEMS) do
+        if state.armed[itemID] then
+            local ok, result = addon.Items.Use(itemID, { myName = addon.Utility.Me(), now = addon.Utility.Now(), runStart = true })
+            if ok then options[result.run] = true end
+        end
+    end
+    state.armed = {}
+    local run = Runner.New(pool, math.floor(addon.Api.Random() * 2147483646) + 1, options)
     state.run = run
+    if options.shield or options.start then addon.Events.Fire("ITEMS_CHANGED") end
+    paintItems()
     state.input.jump, state.input.duck = false, false
     widgets.resultText:SetText(""); widgets.hintText:Hide()
     for _, slot in ipairs(widgets.obstacles) do slot.id = nil; slot.model:Hide(); slot.shadow:Hide() end
@@ -273,6 +300,10 @@ local function handleEvent(event)
         CompanionModel.Play(widgets.runner, CompanionModel.ANIMATION.jump, true)
     elseif event.kind == "land" then
         CompanionModel.Play(widgets.runner, CompanionModel.ANIMATION.run, true)
+    elseif event.kind == "shield" then
+        addon.Animate.FloatText("runner", widgets.floatText, widgets.runner, 0, 20, Text["Shield!"], { 0.45, 0.75, 1 })
+        addon.Animate.Flash("runnerCrash", widgets.crashFlash, 0.2, 0.2)
+        addon.Api.PlaySoundNamed({ "IG_MAINMENU_OPTION_CHECKBOX_OFF" })
     elseif event.kind == "milestone" then
         addon.Animate.FloatText("runner", widgets.floatText, widgets.runner, 0, 20, Format(Text["{meters} m"], { meters = event.meters }),
             { 1, 0.85, 0.3 })
@@ -391,6 +422,23 @@ function RunnerView.Build(panel)
     widgets.startButton = Widgets.CreateButton(panel, Text["Start"], 180, 28, function() RunnerView.Start() end)
     widgets.startButton:SetPoint("TOP", panel, "TOP", 0, -214)
     if Widgets.MakePrimary then Widgets.MakePrimary(widgets.startButton) end
+    widgets.itemButtons = {}
+    for index, itemID in ipairs(RUN_ITEMS) do
+        local button = addon.UIHelpers.CreateItemButton(panel, 26, itemID, function(self)
+            local armed = RunnerView.state.armed
+            if RunnerView.state.run or addon.Items.Count(self.itemID) < 1 then return end
+            armed[self.itemID] = not armed[self.itemID] or nil
+            addon.Api.PlaySoundNamed({ armed[self.itemID] and "IG_MAINMENU_OPTION_CHECKBOX_ON" or "IG_MAINMENU_OPTION_CHECKBOX_OFF" })
+            paintItems()
+        end)
+        button.hint = Text["Click: use it in the next run (buy it in the AZEcaught shop)."]
+        if index == 1 then
+            button:SetPoint("RIGHT", widgets.startButton, "LEFT", -10, 0)
+        else
+            button:SetPoint("LEFT", widgets.startButton, "RIGHT", 10, 0)
+        end
+        widgets.itemButtons[index] = button
+    end
     widgets.statsText = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
     widgets.statsText:SetPoint("TOP", panel, "TOP", 0, -250); widgets.statsText:SetWidth(290)
     widgets.resultText = Widgets.CreateFontString(panel, "GameFontNormal", "CENTER")
@@ -403,3 +451,4 @@ function RunnerView.Build(panel)
 end
 
 addon.Events.On("CAUGHT_CHANGED", function() if not RunnerView.state.run then RunnerView.Refresh() end end)
+addon.Events.On("ITEMS_CHANGED", function() if widgets.area then paintItems() end end)

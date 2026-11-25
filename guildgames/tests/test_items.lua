@@ -50,9 +50,23 @@ return {
             harness.truthy(type(item.icon) == "string" and item.icon:find("^Interface\\"), label .. ": icon")
             if item.kind == "booster" then
                 harness.truthy(addon.Utility.SafeInteger(item.duration, 1, 86400), label .. ": booster duration")
-                harness.truthy(item.boost == "catch", label .. ": unknown boost " .. tostring(item.boost))
+                harness.truthy(item.boost == "catch" or item.boost == "care", label .. ": unknown boost " .. tostring(item.boost))
             elseif item.kind == "trap" then
                 harness.truthy(Items.TIER_RANK[item.tier], label .. ": trap tier")
+            elseif item.kind == "charm" then
+                local known = { reward = true, best = true, second = true, lure = true }
+                harness.truthy(known[item.charm] and type(item.value) == "number" and item.stack == 1, label .. ": charm fields")
+            elseif item.kind == "care" then
+                harness.truthy(type(item.fills) == "table" and #item.fills > 0, label .. ": care fills")
+                for _, need in ipairs(item.fills or {}) do
+                    harness.truthy(need == "hunger" or need == "thirst" or need == "affection", label .. ": unknown need " .. tostring(need))
+                end
+            elseif item.kind == "arenaBuff" then
+                local stats = { atk = true, def = true, spd = true, vit = true }
+                harness.truthy(stats[item.stat] and type(item.factor) == "number" and item.factor > 1, label .. ": buff stat and factor")
+                harness.truthy(addon.Utility.SafeInteger(item.fights, 1, 3), label .. ": buff fights")
+            elseif item.kind == "runner" then
+                harness.truthy(item.run == "shield" or item.run == "start", label .. ": runner effect")
             end
             harness.truthy(type(item.name) == "string" and item.name ~= "", label .. ": name")
             harness.truthy(type(item.effect) == "string" and item.effect ~= "", label .. ": effect")

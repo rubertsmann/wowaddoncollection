@@ -170,7 +170,8 @@ end
 ---@field ab string ability key
 
 -- The fighter snapshot of a companion: combat stats + vitality, x training, x arena level, x morale (hearts), attack
--- -10% when hungry or thirsty. Nil without a collection entry.
+-- -10% when hungry or thirsty, x the running arena buffs (their ids in `bf`). Nil without a collection entry. The buffs
+-- are part of the stats, so a client that does not know `bf` computes the same fight.
 ---@param companion CompanionState
 ---@return Fighter|nil
 function Arena.Fighter(companion)
@@ -194,8 +195,34 @@ function Arena.Fighter(companion)
     if (zones.hunger and zones.hunger ~= "ok") or (zones.thirst and zones.thirst ~= "ok") then
         fighter.atk = math.max(1, math.floor(fighter.atk * 0.9 + 0.5))
     end
+    local buffs = addon.Items.RunningArenaBuffs()
+    for _, item in ipairs(buffs) do
+        fighter[item.stat] = math.max(1, math.min(Arena.MAXIMUM_STAT, math.floor(fighter[item.stat] * item.factor + 0.5)))
+    end
+    if #buffs > 0 then
+        fighter.bf = {}
+        for index, item in ipairs(buffs) do fighter.bf[index] = item.id end
+    end
     fighter.ab = Arena.ABILITY_BY_TYPE[fighter.ty] or "strike"
     return fighter
+end
+
+Arena.MAXIMUM_BUFFS = 3
+
+-- A clean list of arena buff ids (known arenaBuff items, no repeats, at most MAXIMUM_BUFFS), or nil when none is left.
+---@param raw any
+---@return string[]|nil
+function Arena.SanitizeBuffs(raw)
+    if type(raw) ~= "table" then return nil end
+    local clean, seen = {}, {}
+    for index = 1, math.min(#raw, Arena.MAXIMUM_BUFFS) do
+        local item = addon.Items.Get(raw[index])
+        if item and item.kind == "arenaBuff" and not seen[item.id] then
+            seen[item.id] = true
+            clean[#clean + 1] = item.id
+        end
+    end
+    return #clean > 0 and clean or nil
 end
 
 -- A clean copy of a peer's fighter or nil.
@@ -213,6 +240,7 @@ function Arena.SanitizeFighter(raw)
     for _, key in ipairs({ "npc", "n", "cls", "disp", "ty", "al", "ab", "atk", "def", "spd", "vit" }) do
         if clean[key] == nil then return nil end
     end
+    clean.bf = Arena.SanitizeBuffs(raw.bf)
     return clean
 end
 
@@ -620,6 +648,7 @@ function Arena.Challenge(records, myName, opponent, wager, now)
         if refusal then return nil, refusal end
     end
     state.ch[id] = { to = opponent, at = at, wg = wager, f = fighter }
+    addon.Items.SpendArenaBuffs(fighter.bf)
     addon.AzeCaught.Journal("INFORMATION", "arena.challenge", "a challenge was sent", { id = id, to = opponent, wager = wager })
     return id
 end
@@ -648,6 +677,7 @@ function Arena.Answer(records, myName, id, accept, now)
         if refusal then return nil, refusal end
     end
     state.an[id] = { ok = true, at = now, f = fighter }
+    addon.Items.SpendArenaBuffs(fighter.bf)
     addon.AzeCaught.Journal("INFORMATION", "arena.accept", "a challenge was accepted", { id = id, wager = fight.wager })
     return true
 end
@@ -676,6 +706,7 @@ function Arena.Counter(records, myName, id, wager, now)
         if refusal then return nil, refusal end
     end
     state.co[id] = { wg = wager, at = now, f = fighter }
+    addon.Items.SpendArenaBuffs(fighter.bf)
     addon.AzeCaught.Journal("INFORMATION", "arena.counter", "a counter offer was made", { id = id, wager = wager, offered = fight.wager })
     return true
 end

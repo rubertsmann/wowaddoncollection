@@ -237,7 +237,8 @@ function ArenaView.RefreshFighter()
     if not current then return end
     local level, into, needed = addon.Arena.Level(current.npc.xp)
     addon.UI.Widgets.FitText(widgets.fighterLevel, Format(Text["Arena level {level}"], { level = level })
-        .. "  |cff999999" .. Format(Text["{wins}W {losses}L"], { wins = current.npc.w, losses = current.npc.l }) .. "|r", 0.7)
+        .. "  |cff999999" .. Format(Text["{wins}W {losses}L"], { wins = current.npc.w, losses = current.npc.l }) .. "|r"
+        .. (current.fighter.bf and ("  " .. ArenaView.BuffIcons(current.fighter.bf)) or ""), 0.7)
     widgets.xpBar:SetValue(needed > 0 and into / needed or 1)
 end
 
@@ -441,11 +442,25 @@ function ArenaView.Bet(side)
     showResult(odds, reason, odds and Format(Text["Bet placed at {odds}x."], { odds = ("%.2f"):format(odds / 100) }))
 end
 
+-- The arena buffs of a fighter (`bf`, already sanitized) as small inline icons, "" without any.
+---@param buffs string[]|nil
+---@return string
+function ArenaView.BuffIcons(buffs)
+    local icons = {}
+    for _, id in ipairs(buffs or {}) do
+        local item = addon.Items.Get(id)
+        if item then icons[#icons + 1] = "|T" .. item.icon .. ":14:14|t" end
+    end
+    return table.concat(icons, "")
+end
+
 ---@param fighter Fighter|nil
 ---@return string
 local function fighterLine(fighter)
     if not fighter then return "?" end
-    return ("%s |cff999999(%s %d, %s)|r"):format(addon.Utility.Escape(fighter.n), Text["Lv"], fighter.al, ABILITY_NAME[fighter.ab])
+    local buffs = ArenaView.BuffIcons(fighter.bf)
+    return ("%s |cff999999(%s %d, %s)|r%s"):format(addon.Utility.Escape(fighter.n), Text["Lv"], fighter.al, ABILITY_NAME[fighter.ab],
+        buffs ~= "" and (" " .. buffs) or "")
 end
 
 function ArenaView.RefreshFights()
@@ -920,7 +935,8 @@ function ArenaView.ShowChallengeStep(step)
             local level = addon.Arena.Level(addon.Arena.Npc(companion.npc).xp)
             mine.text:SetText(("|cffffd100%s|r\n%s\n%s %d · %s %d\n%s %d · %s %d\n|cff999999%s|r"):format(addon.Utility.Escape(addon.Utility.ShortText(fighter.n, 18)),
                 Format(Text["Arena level {level}"], { level = level }), Text["Attack"], fighter.atk, Text["Defense"], fighter.def,
-                Text["Speed"], fighter.spd, Text["Vitality"], fighter.vit, ABILITY_NAME[fighter.ab]))
+                Text["Speed"], fighter.spd, Text["Vitality"], fighter.vit, ABILITY_NAME[fighter.ab])
+                .. (fighter.bf and ("\n" .. ArenaView.BuffIcons(fighter.bf) .. " |cff66ff66" .. Text["Buffs used in this fight"] .. "|r") or ""))
         else
             addon.AzeCaughtPanel.ShowModel(mine.model, nil, "challenge")
             mine.text:SetText("|cffff6060" .. Text["You have no companion."] .. "|r")

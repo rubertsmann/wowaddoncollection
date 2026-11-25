@@ -20,6 +20,7 @@ local addonName, addon = ...
 ---@field r? "W"|"L" coin flip entries
 ---@field n? integer signed net copper (entries of the other games: -c, or c..factor*c)
 ---@field t integer server time of the play
+---@field it? integer 1: an item was used in the play (not the coin flip)
 
 ---@class GameSection one game's results (the coin flip's section is the record itself)
 ---@field total GameTotals
@@ -183,7 +184,8 @@ function Games.IsPeriodKey(periodKey)
     return year ~= nil and year >= 2020 and year <= 2100 and week >= 1 and week <= 53
 end
 
--- A clean copy of one recent entry, or nil. Coin: { c, r, t }; other games: { c, n, t } with n = -c or c..factor*c.
+-- A clean copy of one recent entry, or nil. Coin: { c, r, t }; other games: { c, n, t, it? } with n = -c or c..factor*c
+-- (`it` = 1: an item was used in the play, protocol 1.5).
 ---@param entry any
 ---@param gameKey GameKey
 ---@param horizon number
@@ -199,7 +201,7 @@ local function sanitizeEntry(entry, gameKey, horizon)
     end
     local net = SafeInteger(entry.n, -entry.c, entry.c * Games.KINDS[gameKey].maximumWinFactor)
     if not net or (net < 0 and net ~= -entry.c) or (net >= 0 and net < entry.c) then return nil end
-    return { c = entry.c, n = net, t = entry.t }
+    return { c = entry.c, n = net, t = entry.t, it = entry.it == 1 and 1 or nil }
 end
 
 -- A clean copy of one game section { total, weeks, recent }, or nil when any part is bad.
@@ -438,10 +440,10 @@ end
 ---@param now integer
 ---@return boolean stored
 ---@return FlipRefusal|nil
-function Games.RecordPlay(myName, gameKey, stake, net, now)
+function Games.RecordPlay(myName, gameKey, stake, net, now, usedItem)
     local refused = refusal(myName, stake)
     if refused then return false, refused end
-    local entry = sanitizeEntry({ c = stake, n = net, t = now }, gameKey, math.huge)
+    local entry = sanitizeEntry({ c = stake, n = net, t = now, it = usedItem and 1 or nil }, gameKey, math.huge)
     if gameKey == "coin" or not entry then error("invalid play for " .. tostring(gameKey) .. ": net " .. tostring(net)) end
     record(myName, gameKey, entry, now)
     return true

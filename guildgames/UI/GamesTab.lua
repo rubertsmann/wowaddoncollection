@@ -571,6 +571,7 @@ local function showRowTooltip(row)
     if entry.meters then
         GameTooltip:AddDoubleLine(Text["Best"], Format(Text["{meters} m"], { meters = entry.meters }), 1, 1, 1, 1, 1, 1)
         GameTooltip:AddDoubleLine(Text["Runs"], tostring(entry.runs), 1, 1, 1, 1, 1, 1)
+        if entry.item then GameTooltip:AddLine(Text["The best run used an item."], 0.7, 0.7, 0.7, true) end
         GameTooltip:Show()
         return
     end
@@ -598,6 +599,9 @@ local function createLeaderboardRow(parent)
     return row
 end
 
+-- after a play or best distance that used an item (Dash Shield, Head Start, Survivor Bomb)
+local ITEM_MARK = " |TInterface\\Icons\\INV_Misc_Bag_10:12:12|t"
+
 ---@param row table
 ---@param entry LeaderboardRow
 local function fillLeaderboardRow(row, entry)
@@ -609,7 +613,7 @@ local function fillLeaderboardRow(row, entry)
     row.name:SetText(displayName(entry.nameRaw, entry.name))
     if medal then row.name:SetTextColor(medal[1], medal[2], medal[3]) else row.name:SetTextColor(1, 1, 1) end
     if entry.meters then
-        row.net:SetText(Format(Text["{meters} m"], { meters = entry.meters }))
+        row.net:SetText(Format(Text["{meters} m"], { meters = entry.meters }) .. (entry.item and ITEM_MARK or ""))
         row.flips:SetText(tostring(entry.runs))
         return
     end
@@ -633,9 +637,9 @@ local function fillFeedRow(row, entry)
     row.name:SetText(displayName(entry.nameRaw, entry.name))
     if entry.meters then
         row.net:SetText(Format(Text["{meters} m"], { meters = entry.meters })
-            .. (entry.gold > 0 and (" |cff33ff99+" .. entry.gold .. "g|r") or ""))
+            .. (entry.gold > 0 and (" |cff33ff99+" .. entry.gold .. "g|r") or "") .. (entry.item and ITEM_MARK or ""))
     else
-        row.net:SetText(signedGold(entry.net))
+        row.net:SetText(signedGold(entry.net) .. (entry.item and ITEM_MARK or ""))
     end
     row.when:SetText("|cff999999" .. addon.UI.Widgets.TimeAgo(entry.t) .. "|r")
 end

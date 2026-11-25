@@ -176,7 +176,9 @@ function Catcher.PollThrows()
         end
     end
     -- killed too slow: at the window's end the rope snaps (icon gone with a burst)
-    for _, late in ipairs(AzeCaught.EndLateThrows(clock)) do Catcher.OnTooSlow(late.guid, late.name) end
+    for _, late in ipairs(AzeCaught.EndLateThrows(clock)) do
+        if late.again then Catcher.OnSecondChance(late.guid, late.name) else Catcher.OnTooSlow(late.guid, late.name) end
+    end
     if any and C_Timer then pollRunning = true; C_Timer.After(0.2, function()
         addon.Log.Protected("caught.poll", "the throw poll failed", Catcher.PollThrows)
     end) end
@@ -346,6 +348,16 @@ function Catcher.OnTooSlow(guid, name, died)
     addon.Print(Format(Text["Too slow: the rope slipped off {name}."], { name = addon.Utility.ChatSafe(name or "?") }))
     Catcher.PlayFailEffect("snap", Catcher.UnitFor(guid))
     AzeCaught.Journal("DEBUG", "throw.snap", "the rope snapped (killed too slow)", { guid = guid, died = died == true })
+    Catcher.RefreshIcons()
+end
+
+-- The rope slipped off, but the Second Chance charm allows one more throw at the same NPC: the icon comes back.
+---@param guid string
+---@param name string|nil
+function Catcher.OnSecondChance(guid, name)
+    addon.Print(Format(Text["Second Chance: throw once more at {name}."], { name = addon.Utility.ChatSafe(name or "?") }))
+    Catcher.PlayFailEffect("snap", Catcher.UnitFor(guid))
+    AzeCaught.Journal("DEBUG", "throw.again", "the rope slipped off, a second throw is allowed", { guid = guid })
     Catcher.RefreshIcons()
 end
 

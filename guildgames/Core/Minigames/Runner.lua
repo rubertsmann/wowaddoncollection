@@ -83,6 +83,10 @@ Runner.FALLBACK_POOL = {
 ---@field milestones integer
 ---@field finished boolean
 ---@field crashedInto RunnerObstacle|nil
+---@field shield integer hits a Dash Shield still absorbs
+---@field graceLeft number seconds without crashes after a shield absorbed a hit
+---@field startMeters integer meters a Head Start skipped (no gold for them)
+---@field item boolean an item was used in this run (the run is marked on the boards)
 ---@field events table[]
 ---@field carry number simulation time not stepped yet
 
@@ -129,15 +133,32 @@ end
 
 ------------------------------------------------------------------ a run
 
+Runner.HEAD_START_METERS = 200
+Runner.SHIELD_GRACE = 1   -- seconds without crashes after the shield absorbed a hit
+
+-- A new run. `options.shield`: one hit is absorbed; `options.start`: the run starts at HEAD_START_METERS (at the
+-- speed it would have there).
 ---@param pool table[]
 ---@param seed integer
+---@param options? { shield: boolean, start: boolean }
 ---@return RunnerRun
-function Runner.New(pool, seed)
+function Runner.New(pool, seed, options)
+    options = options or {}
     local run = { pool = pool, seed = math.floor(math.abs(tonumber(seed) or 1)) % 2147483648, time = 0, distance = 0,
         speed = Runner.START_SPEED, y = 0, vy = 0, grounded = true, ducking = false, holdLeft = 0, jumpHeld = false,
         bufferLeft = 0, obstacles = {}, nextID = 0, spawnIn = Runner.START_SPEED * 1.2, milestones = 0, finished = false,
-        events = {}, carry = 0 }
+        events = {}, carry = 0, shield = options.shield and 1 or 0, graceLeft = 0, startMeters = 0,
+        item = (options.shield or options.start) and true or false }
     if run.seed == 0 then run.seed = 1 end
+    if options.start then
+        -- distance = v0 t + a t^2 / 2 solved for t: the time a run needs to reach the head start
+        local pixels = Runner.HEAD_START_METERS * Runner.PIXELS_PER_METER
+        local a, v0 = Runner.ACCELERATION, Runner.START_SPEED
+        run.time = (math.sqrt(v0 * v0 + 2 * a * pixels) - v0) / a
+        run.speed = math.min(Runner.MAXIMUM_SPEED, v0 + a * run.time)
+        run.distance, run.startMeters = pixels, Runner.HEAD_START_METERS
+        run.milestones = math.floor(Runner.HEAD_START_METERS / Runner.MILESTONE_METERS)
+    end
     return run
 end
 
@@ -288,10 +309,20 @@ local function stepWorld(run, dt)
 end
 
 ---@param run RunnerRun
-local function checkCrash(run)
+local function checkCrash(run, dt)
+    if run.graceLeft > 0 then
+        run.graceLeft = math.max(0, run.graceLeft - dt)
+        return
+    end
     local left, bottom, right, top = Runner.RunnerBox(run)
-    for _, obstacle in ipairs(run.obstacles) do
+    for index, obstacle in ipairs(run.obstacles) do
         if Runner.Overlaps(left, bottom, right, top, Runner.ObstacleBox(obstacle)) then
+            if run.shield > 0 then
+                run.shield, run.graceLeft = run.shield - 1, Runner.SHIELD_GRACE
+                table.remove(run.obstacles, index)
+                emit(run, { kind = "shield", obstacle = obstacle })
+                return
+            end
             run.finished, run.crashedInto = true, obstacle
             emit(run, { kind = "crash", obstacle = obstacle })
             return
@@ -312,7 +343,7 @@ function Runner.Step(run, elapsedSeconds, input)
         stepInput(run, input)
         stepPhysics(run, Runner.TICK)
         stepWorld(run, Runner.TICK)
-        checkCrash(run)
+        checkCrash(run, Runner.TICK)
     end
 end
 
@@ -324,7 +355,8 @@ end
 ---@field b integer best distance in meters
 ---@field n integer runs
 ---@field weeks table<string, integer> period key -> best meters that week
----@field recent { d: integer, g: integer, t: integer }[] newest first
+---@field recent { d: integer, g: integer, t: integer, it?: integer }[] newest first (`it` = 1: an item was used)
+---@field bi? integer 1: the best run used an item
 
 ---@return RunnerState
 function Runner.State()
@@ -390,20 +422,21 @@ function Runner.Finish(run, myName, now)
     local state = Runner.State()
     local day = dayOf(now)
     if state.day ~= day then state.day, state.paid = day, 0 end
-    local gold = Runner.Payout(meters, state.paid)
-    result.capped = gold < math.floor(meters / Runner.MILESTONE_METERS) * Runner.GOLD_PER_MILESTONE
+    local paidMeters = math.max(0, meters - (run.startMeters or 0))
+    local gold = Runner.Payout(paidMeters, state.paid)
+    result.capped = gold < math.floor(paidMeters / Runner.MILESTONE_METERS) * Runner.GOLD_PER_MILESTONE
     if gold > 0 and addon.Wallet.Earn(myName, gold * addon.Games.COPPER_PER_GOLD, "runner", now, meters .. " m") then
         state.paid = state.paid + gold
         result.gold = gold
     end
     result.paidToday = state.paid
     result.best = meters > state.b
-    if result.best then state.b = meters end
+    if result.best then state.b, state.bi = meters, run.item and 1 or nil end
     state.n = math.min(Runner.MAXIMUM_RUNS, state.n + 1)
     local periodKey = addon.Games.PeriodKey(now)
     if meters > (state.weeks[periodKey] or 0) then state.weeks[periodKey] = meters end
     pruneWeeks(state.weeks)
-    table.insert(state.recent, 1, { d = meters, g = result.gold, t = now })
+    table.insert(state.recent, 1, { d = meters, g = result.gold, t = now, it = run.item and 1 or nil })
     for index = #state.recent, Runner.MAXIMUM_RECENT + 1, -1 do state.recent[index] = nil end
     Runner.Publish(myName, now)
     return result
@@ -411,13 +444,13 @@ end
 
 ------------------------------------------------------------------ guild section
 
--- My section for the guild: { b, n, weeks, recent } (protocol 1.4).
+-- My section for the guild: { b, bi?, n, weeks, recent } (protocol 1.4; `bi` and the recent `it` since 1.5).
 ---@return table
 function Runner.BuildSection()
     local state = Runner.State()
-    local section = { b = state.b, n = state.n, weeks = {}, recent = {} }
+    local section = { b = state.b, bi = state.bi, n = state.n, weeks = {}, recent = {} }
     for periodKey, meters in pairs(state.weeks) do section.weeks[periodKey] = meters end
-    for index, entry in ipairs(state.recent) do section.recent[index] = { d = entry.d, g = entry.g, t = entry.t } end
+    for index, entry in ipairs(state.recent) do section.recent[index] = { d = entry.d, g = entry.g, t = entry.t, it = entry.it } end
     return section
 end
 
@@ -439,7 +472,7 @@ function Runner.SanitizeSection(section, horizon)
     local best = SafeInteger(section.b, 0, Runner.MAXIMUM_METERS)
     local runs = SafeInteger(section.n, 0, Runner.MAXIMUM_RUNS)
     if not best or not runs then return nil end
-    local clean = { b = best, n = runs, weeks = {}, recent = {} }
+    local clean = { b = best, bi = section.bi == 1 and 1 or nil, n = runs, weeks = {}, recent = {} }
     local latestKey = horizon ~= math.huge and addon.Games.PeriodKey(horizon) or nil
     local weekCount = 0
     for periodKey, meters in pairs(section.weeks) do
@@ -457,7 +490,7 @@ function Runner.SanitizeSection(section, horizon)
         local meters, gold = SafeInteger(entry.d, 0, Runner.MAXIMUM_METERS), SafeInteger(entry.g, 0, Runner.DAILY_CAP_GOLD)
         local playTime = SafeInteger(entry.t, 0, horizon)
         if not meters or not gold or not playTime then return nil end
-        clean.recent[index] = { d = meters, g = gold, t = playTime }
+        clean.recent[index] = { d = meters, g = gold, t = playTime, it = entry.it == 1 and 1 or nil }
     end
     return clean
 end
@@ -470,7 +503,7 @@ function Runner.SanitizePersisted(savedVariables)
     if saved == nil then return false end
     local SafeInteger = addon.Utility.SafeInteger
     local horizon = addon.Store.Horizon()
-    local section = type(saved) == "table" and Runner.SanitizeSection({ b = saved.b, n = saved.n,
+    local section = type(saved) == "table" and Runner.SanitizeSection({ b = saved.b, bi = saved.bi, n = saved.n,
         weeks = type(saved.weeks) == "table" and saved.weeks or {}, recent = type(saved.recent) == "table" and saved.recent or {} }, horizon)
     local clean = section or { b = 0, n = 0, weeks = {}, recent = {} }
     clean.day = type(saved) == "table" and SafeInteger(saved.day, 0, 1000000) or 0
@@ -489,6 +522,7 @@ end
 ---@field meters integer best in the scope
 ---@field runs integer all-time runs
 ---@field mine boolean
+---@field item boolean the all-time best used an item
 
 -- Best distances of every player with a runner section, in `scope` ("week": this week's best, "all": all-time best).
 ---@param records table<string, GameRecord>
@@ -504,7 +538,7 @@ function Runner.BoardRows(records, scope, periodKey, myName)
             local meters = scope == "week" and (type(section.weeks) == "table" and section.weeks[periodKey]) or section.b
             if type(meters) == "number" and meters > 0 then
                 rows[#rows + 1] = { name = addon.Utility.Escape(playerName), nameRaw = playerName, meters = meters,
-                    runs = tonumber(section.n) or 0, mine = playerName == myName }
+                    runs = tonumber(section.n) or 0, mine = playerName == myName, item = scope == "all" and section.bi == 1 }
             end
         end
     end
@@ -520,14 +554,14 @@ end
 ---@param records table<string, GameRecord>
 ---@param myName string|nil
 ---@param limit? integer
----@return { name: string, nameRaw: string, meters: integer, gold: integer, t: integer, mine: boolean }[]
+---@return { name: string, nameRaw: string, meters: integer, gold: integer, t: integer, mine: boolean, item: boolean }[]
 function Runner.FeedRows(records, myName, limit)
     local rows = {}
     for playerName, gameRecord in pairs(records or {}) do
         local section = type(gameRecord) == "table" and gameRecord.runner
         for _, entry in ipairs(type(section) == "table" and type(section.recent) == "table" and section.recent or {}) do
             rows[#rows + 1] = { name = addon.Utility.Escape(playerName), nameRaw = playerName, meters = entry.d, gold = entry.g,
-                t = entry.t, mine = playerName == myName }
+                t = entry.t, mine = playerName == myName, item = entry.it == 1 }
         end
     end
     table.sort(rows, function(left, right)
