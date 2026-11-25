@@ -1158,6 +1158,38 @@ function commands.identity(arguments)
     for _, key in ipairs(addon.Utility.SortedKeys(values)) do printLine(("  %s = %s"):format(key, values[key])) end
 end
 
+-- /gg caught model: what the game models can do here (the runner's animations, the camera for the Survivor top view).
+-- Shows the companion from above in the middle of the screen for 15 s (screenshot it); results go to chat and journal.
+function commands.model()
+    local companion = AzeCaught.Active()
+    if not companion then printLine("model: no companion") return end
+    local frame = CreateFrame("Frame", nil, UIParent)
+    frame:SetSize(160, 160); frame:SetPoint("CENTER", UIParent, "CENTER", 0, 80); frame:SetFrameStrata("DIALOG")
+    local plate = frame:CreateTexture(nil, "BACKGROUND"); plate:SetAllPoints(); plate:SetColorTexture(0, 0, 0, 0.6)
+    local model = addon.CompanionModel.Create(frame, 160, 160)
+    model:SetAllPoints()
+    local loaded = addon.CompanionModel.Load(model, companion)
+    local methods = {}
+    for _, name in ipairs({ "HasAnimation", "SetAnimation", "MakeCurrentCameraCustom", "SetCameraPosition", "SetCameraTarget",
+        "SetCameraFacing", "SetPitch", "SetModelScale", "SetCamDistanceScale" }) do
+        methods[#methods + 1] = name .. "=" .. tostring(model[name] ~= nil)
+    end
+    local camera = model.MakeCurrentCameraCustom ~= nil and pcall(model.MakeCurrentCameraCustom, model)
+        and pcall(model.SetCameraTarget, model, 0, 0, 0) and pcall(model.SetCameraPosition, model, 0.01, 0, 4)
+    local animations = {}
+    if model.HasAnimation then
+        for _, animationID in ipairs({ 0, 1, 4, 5, 9, 16, 17, 26, 37, 38, 39, 40 }) do
+            local ok, has = pcall(model.HasAnimation, model, animationID)
+            animations[#animations + 1] = animationID .. "=" .. (ok and tostring(has) or "error")
+        end
+    end
+    local line = ("model: loaded %s, top camera %s | %s | animations %s"):format(tostring(loaded), tostring(camera),
+        table.concat(methods, " "), #animations > 0 and table.concat(animations, " ") or "unknown")
+    printLine(line)
+    AzeCaught.Journal("INFORMATION", "probe.model", "model capabilities", { line = line })
+    if C_Timer then C_Timer.After(15, function() frame:Hide() end) end
+end
+
 -- What this client can do: S1 display capture, S2 model animations, S3 nameplate icons (results also go to the journal).
 function commands.probe()
     local targetSnapshot = Api.UnitSnapshot("target")

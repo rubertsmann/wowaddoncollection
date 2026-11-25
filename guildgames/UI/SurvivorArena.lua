@@ -1,7 +1,7 @@
 local addonName, addon = ...
 
 -- Survivor panel (third game). Rules and simulation: Core/Minigames/Survivor.lua. Everything here is presentation:
---   arena (an almost clear overlay): the tower in the middle with its health bar and a glow, monsters drawn from a pool,
+--   arena (a grass field seen from above, clipped at its edges): the tower in the middle with its health bar and a glow, monsters drawn from a pool,
 --     projectiles (item icons or sparks with a short trail), the cleave as a sword sweeping round the tower plus a
 --     shockwave, the nova as a frost ring, blast rings, lightning, death puffs, a red flash when the tower is hurt
 --   HUD: timer against the bet target, a progress line, experience bar, level, the owned items with their levels
@@ -28,6 +28,16 @@ local ICON_PROJECTILES = { arrows = "point", knives = "point", axe = "spin" }
 local MAXIMUM_DRAWN_ENEMIES = 120
 local SWORD_TEXTURE = "Interface\\Icons\\INV_Sword_04"
 local CARD_WIDTH, CARD_HEIGHT = 88, 104
+-- the companion in the tower's place: seen from above when the client lets the model camera be placed, else from the
+-- front; it turns to the nearest monster and attacks whenever a weapon fires
+local PET_MODEL_SIZE = 64
+local TOP_CAMERA_HEIGHT = 4
+local FACING_OFFSET_TOP, FACING_OFFSET_SIDE = -math.pi / 2, math.pi / 2
+local ATTACK_EVENTS = { shot = true, zap = true, cleave = true, nova = true, blast = true }
+local ATTACK_SECONDS, ATTACK_GAP = 0.45, 0.3
+local GRASS_DISC = "Interface\\AddOns\\" .. addonName .. "\\UI\\Textures\\Disc"
+---@type { topView: boolean, attackReadyAt: number, attackUntil: number|nil }
+local petState = { topView = false, attackReadyAt = 0, attackUntil = nil }
 
 ---@class SurvivorArenaState
 ---@field run SurvivorRun|nil the open run
@@ -325,9 +335,61 @@ local function cleaveSwing(radius)
     addon.Animate.Ring("survivorCleave", widgets.effects, widgets.towerAnchor, 20, radius * 2.4, { 0.9, 0.9, 1 }, 0.3)
 end
 
+------------------------------------------------------------------ the companion in the tower's place
+
+-- Tries to look at the model from straight above (a custom camera). Returns true when the client allowed it.
+---@param model table
+---@return boolean
+local function lookFromAbove(model)
+    if not (model.MakeCurrentCameraCustom and model.SetCameraPosition and model.SetCameraTarget) then return false end
+    return pcall(model.MakeCurrentCameraCustom, model) and pcall(model.SetCameraTarget, model, 0, 0, 0)
+        and pcall(model.SetCameraPosition, model, 0.01, 0, TOP_CAMERA_HEIGHT) or false
+end
+
+-- Shows my companion instead of the tower icon (the icon stays without a companion or when no model loads).
+function SurvivorArena.RefreshPet()
+    local model = widgets.pet
+    if not model then return end
+    local loaded = addon.CompanionModel.Load(model, addon.AzeCaught.Active())
+    model:SetShown(loaded)
+    widgets.tower:SetShown(not loaded)
+    if loaded then addon.CompanionModel.Play(model, addon.CompanionModel.ANIMATION.ready) end
+end
+
+-- Turns the companion to the nearest alive monster and plays an attack (at most one every ATTACK_GAP seconds).
+---@param run SurvivorRun
+local function petAttack(run)
+    local model = widgets.pet
+    if not model or not model:IsShown() then return end
+    local clock = addon.Api.Clock()
+    if clock < petState.attackReadyAt then return end
+    petState.attackReadyAt, petState.attackUntil = clock + ATTACK_GAP, clock + ATTACK_SECONDS
+    local nearest, nearestDistance = nil, math.huge
+    for _, enemy in ipairs(run.enemies) do
+        local distance = enemy.x * enemy.x + enemy.y * enemy.y
+        if enemy.hp > 0 and distance < nearestDistance then nearest, nearestDistance = enemy, distance end
+    end
+    if nearest then
+        local angle = math.atan2(nearest.y, nearest.x)
+        addon.CompanionModel.Face(model, petState.topView and (angle + FACING_OFFSET_TOP) or (FACING_OFFSET_SIDE - angle))
+    end
+    addon.CompanionModel.Play(model, addon.CompanionModel.ANIMATION.attack, true)
+end
+
+-- back to the ready stance once an attack has played
+local function petSettle()
+    local model = widgets.pet
+    if model and petState.attackUntil and addon.Api.Clock() >= petState.attackUntil then
+        petState.attackUntil = nil
+        addon.CompanionModel.Play(model, addon.CompanionModel.ANIMATION.ready)
+    end
+end
+
 ---@param event SurvivorEvent
 local function handleEvent(event)
     local Animate = addon.Animate
+    local run = SurvivorArena.state.run
+    if run and ATTACK_EVENTS[event.kind] then petAttack(run) end
     if event.kind == "blast" then
         local item = addon.Survivor.ITEM_BY_KEY[event.weapon]
         local color = item and item.color or { 1, 0.8, 0.3 }
@@ -475,6 +537,7 @@ function SurvivorArena.Update(elapsedSeconds)
         addon.Survivor.Advance(run, elapsedSeconds * addon.Animate.speed)
         for _, event in ipairs(addon.Survivor.TakeEvents(run)) do handleEvent(event) end
         drawEnemies(run); drawProjectiles(run); drawHud(run)
+        petSettle()
         if run.finished then
             finish(run)
         elseif run.choices and not hadChoices then
@@ -590,6 +653,51 @@ local function buildHud(arena)
     end
 end
 
+-- The arena floor seen from above: a grass field (patches of darker and lighter grass, tufts, flowers, a few stones),
+-- trodden earth under the tower and darker edges. Same shapes as the runner's landscape (the addon's disc texture and
+-- colour textures); the scatter comes from a fixed seed, so the field looks the same every time.
+---@param arena table
+local function buildGrass(arena)
+    local base = arena:CreateTexture(nil, "BACKGROUND", nil, 0)
+    base:SetAllPoints(); base:SetColorTexture(0.21, 0.37, 0.16, 1)
+    local seed = 20251
+    local function random()
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        return seed / 2147483648
+    end
+    local function disc(subLevel, x, y, width, height, color, alpha)
+        local texture = arena:CreateTexture(nil, "BACKGROUND", nil, subLevel)
+        addon.UIHelpers.SetTextureOr(texture, GRASS_DISC, color)
+        texture:SetVertexColor(color[1], color[2], color[3]); texture:SetAlpha(alpha or 1)
+        texture:SetSize(width, height); texture:SetPoint("CENTER", arena, "CENTER", x, y)
+        return texture
+    end
+    local halfWidth, halfHeight = ARENA_WIDTH / 2, ARENA_HEIGHT / 2
+    for index = 1, 16 do   -- large patches, darker and lighter by turns
+        local color = index % 2 == 0 and { 0.16, 0.30, 0.12 } or { 0.27, 0.45, 0.20 }
+        disc(1, (random() * 2 - 1) * halfWidth, (random() * 2 - 1) * halfHeight, 40 + random() * 60, 24 + random() * 36, color, 0.55)
+    end
+    for _ = 1, 34 do       -- grass tufts
+        disc(2, (random() * 2 - 1) * halfWidth, (random() * 2 - 1) * halfHeight, 3 + random() * 4, 3 + random() * 4, { 0.11, 0.22, 0.08 }, 0.9)
+    end
+    for index = 1, 10 do   -- flowers
+        local color = index % 3 == 0 and { 0.95, 0.95, 0.9 } or { 1, 0.85, 0.25 }
+        disc(3, (random() * 2 - 1) * halfWidth, (random() * 2 - 1) * halfHeight, 3, 3, color, 0.9)
+    end
+    for _ = 1, 5 do        -- stones
+        local size = 4 + random() * 5
+        disc(3, (random() * 2 - 1) * halfWidth, (random() * 2 - 1) * halfHeight, size * 1.3, size, { 0.52, 0.50, 0.46 }, 0.95)
+    end
+    disc(4, 0, 0, 84, 70, { 0.36, 0.27, 0.15 }, 0.75)   -- trodden earth under the tower
+    disc(4, 0, 0, 56, 46, { 0.44, 0.33, 0.19 }, 0.8)
+    for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 10 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 10 },
+        { "TOPLEFT", "BOTTOMLEFT", 10, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 10, nil } }) do
+        local edge = arena:CreateTexture(nil, "BACKGROUND", nil, 5)
+        edge:SetPoint(side[1]); edge:SetPoint(side[2]); edge:SetColorTexture(0, 0, 0, 0.22)
+        if side[3] then edge:SetWidth(side[3]) else edge:SetHeight(side[4]) end
+    end
+end
+
 ---@param panel table the Games tab's survivor panel (300 wide)
 function SurvivorArena.Build(panel)
     local Widgets = addon.UI.Widgets
@@ -600,8 +708,9 @@ function SurvivorArena.Build(panel)
     local arena = CreateFrame("Frame", nil, panel)
     arena:SetSize(ARENA_WIDTH, ARENA_HEIGHT); arena:SetPoint("TOP", panel, "TOP", 0, -2)
     widgets.arena = arena
-    local plate = arena:CreateTexture(nil, "BACKGROUND")
-    plate:SetAllPoints(); plate:SetColorTexture(0, 0, 0, 0.22)
+    buildGrass(arena)
+    -- projectiles, monsters and their effects stay inside the arena
+    if arena.SetClipsChildren then pcall(arena.SetClipsChildren, arena, true) end
     local ground = arena:CreateTexture(nil, "BACKGROUND", nil, 1)
     ground:SetSize(150, 150); ground:SetPoint("CENTER"); ground:SetTexture(addon.GamesTab.GLOW_TEXTURE)
     ground:SetVertexColor(1, 0.8, 0.3); ground:SetAlpha(0.18); pcall(ground.SetBlendMode, ground, "ADD")
@@ -632,6 +741,12 @@ function SurvivorArena.Build(panel)
     addon.UIHelpers.SetTextureOr(widgets.tower, addon.Survivor.TOWER_ICON, { 1, 0.85, 0.3 })
     widgets.tower:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     addon.GamesTab.MaskCircle(towerLayer, widgets.tower)
+    widgets.pet = addon.CompanionModel.Create(towerLayer, PET_MODEL_SIZE, PET_MODEL_SIZE, { afterLoad = function(model)
+        petState.topView = lookFromAbove(model)
+        addon.AzeCaught.Journal("DEBUG", "model.survivor", "the survivor companion was framed", { topView = petState.topView })
+    end })
+    widgets.pet:SetPoint("CENTER", arena, "CENTER", 0, 4)
+    widgets.pet:Hide()
     local hpBack = towerLayer:CreateTexture(nil, "ARTWORK", nil, 1)
     hpBack:SetSize(44, 4); hpBack:SetPoint("TOP", widgets.tower, "BOTTOM", 0, -3); hpBack:SetColorTexture(0, 0, 0, 0.7)
     widgets.hpFill = towerLayer:CreateTexture(nil, "ARTWORK", nil, 2)
@@ -718,7 +833,12 @@ function SurvivorArena.Build(panel)
         end
     end)
 
+    panel:HookScript("OnShow", function() SurvivorArena.RefreshPet() end)
+    SurvivorArena.RefreshPet()
+
     local savedTarget = addon.UIHelpers.Settings().survivorTarget
     state.targetIndex = addon.Survivor.Target(savedTarget) and savedTarget or DEFAULT_TARGET
     selectTarget(state.targetIndex)
 end
+
+addon.Events.On("CAUGHT_CHANGED", function() if not SurvivorArena.state.run then SurvivorArena.RefreshPet() end end)

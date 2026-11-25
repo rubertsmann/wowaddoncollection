@@ -27,14 +27,16 @@ local FEED_ROWS = 8
 local GAME_ICONS = { coin = "Interface\\Icons\\INV_Misc_Coin_01",
     slots = "Interface\\Icons\\INV_Misc_Head_Dragon_01",
     survivor = "Interface\\Icons\\Spell_Holy_DivineIntervention",
-    caught = "Interface\\Icons\\Ability_Hunter_BeastTaming" }
+    caught = "Interface\\Icons\\Ability_Hunter_BeastTaming",
+    runner = "Interface\\Icons\\Ability_Rogue_Sprint" }
 GamesTab.GAME_ICONS = GAME_ICONS
 -- the game switch: AZEcaught first (its own panel with its own guild view; not a casino game, so not in Games.ORDER),
--- then the casino games (Games.ORDER, each with a casino leaderboard)
+-- then the casino games (Games.ORDER, each with a casino leaderboard), then the runner (free play, distance board)
 ---@return string[]
 local function switchOrder()
     local order = { "caught" }
     for _, gameKey in ipairs(addon.Games.ORDER) do order[#order + 1] = gameKey end
+    order[#order + 1] = "runner"
     return order
 end
 GamesTab.SwitchOrder = switchOrder
@@ -289,7 +291,8 @@ GamesTab.RefusalText = refusalText
 -- Whether any game is animating (the board waits, the game selector is locked).
 ---@return boolean
 function GamesTab.IsBusy()
-    return GamesTab.state.flipping or addon.SlotMachine.state.spinning or addon.SurvivorArena.state.run ~= nil or false
+    return GamesTab.state.flipping or addon.SlotMachine.state.spinning or addon.SurvivorArena.state.run ~= nil
+        or addon.RunnerView.state.run ~= nil or false
 end
 
 -- The Flip button: decide and store the flip, announce it, then animate the reveal. Nothing happens while a coin flies.
@@ -492,6 +495,20 @@ function GamesTab.Refresh()
         addon.AzeCaughtPanel.Refresh()
         return
     end
+    if widgets.netHeader then widgets.netHeader:SetText(gameKey == "runner" and Text["Best"] or Text["Net"]) end
+    if gameKey == "runner" then
+        -- the runner: best distances, recent runs, last week's longest run
+        local Runner = addon.Runner
+        local rows = Runner.BoardRows(records, GamesTab.state.scope, addon.Games.PeriodKey(now), myName)
+        widgets.leaderboardList:SetData(rows)
+        widgets.emptyText:SetText(Text["No runs yet"]); widgets.emptyText:SetShown(#rows == 0)
+        widgets.feedTitle:SetText(Text["Recent runs"]); widgets.playsHeader:SetText(Text["Runs"])
+        widgets.feedList:SetData(Runner.FeedRows(records, myName, 15))
+        local top = Runner.BoardRows(records, "week", addon.Games.PreviousPeriodKey(now), nil)[1]
+        widgets.winnerText:SetText(top and Format(Text["Last week's longest run: {name} ({meters} m)"],
+            { name = displayName(top.nameRaw, top.name), meters = top.meters }) or "")
+        return
+    end
     local labels = boardLabels(gameKey)
     local rows = addon.Model.BuildLeaderboardRows(records, GamesTab.state.scope, addon.Games.PeriodKey(now), myName, gameKey)
     widgets.leaderboardList:SetData(rows)
@@ -551,6 +568,12 @@ local function showRowTooltip(row)
     if not entry or not GameTooltip then return end
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
     GameTooltip:SetText(displayName(entry.nameRaw, entry.name))
+    if entry.meters then
+        GameTooltip:AddDoubleLine(Text["Best"], Format(Text["{meters} m"], { meters = entry.meters }), 1, 1, 1, 1, 1, 1)
+        GameTooltip:AddDoubleLine(Text["Runs"], tostring(entry.runs), 1, 1, 1, 1, 1, 1)
+        GameTooltip:Show()
+        return
+    end
     GameTooltip:AddDoubleLine(Text["Won"], money(entry.won), 1, 1, 1, 1, 1, 1)
     GameTooltip:AddDoubleLine(Text["Lost"], money(entry.lost), 1, 1, 1, 1, 1, 1)
     GameTooltip:AddDoubleLine(Text["Net"], signedGold(entry.net), 1, 1, 1, 1, 1, 1)
@@ -585,6 +608,11 @@ local function fillLeaderboardRow(row, entry)
     if medal then row.rank:SetTextColor(medal[1], medal[2], medal[3]) else row.rank:SetTextColor(0.6, 0.6, 0.6) end
     row.name:SetText(displayName(entry.nameRaw, entry.name))
     if medal then row.name:SetTextColor(medal[1], medal[2], medal[3]) else row.name:SetTextColor(1, 1, 1) end
+    if entry.meters then
+        row.net:SetText(Format(Text["{meters} m"], { meters = entry.meters }))
+        row.flips:SetText(tostring(entry.runs))
+        return
+    end
     row.net:SetText(signedGold(entry.net))
     row.flips:SetText(entry.wins .. "/" .. entry.losses)
 end
@@ -603,7 +631,12 @@ end
 ---@param entry FlipFeedRow
 local function fillFeedRow(row, entry)
     row.name:SetText(displayName(entry.nameRaw, entry.name))
-    row.net:SetText(signedGold(entry.net))
+    if entry.meters then
+        row.net:SetText(Format(Text["{meters} m"], { meters = entry.meters })
+            .. (entry.gold > 0 and (" |cff33ff99+" .. entry.gold .. "g|r") or ""))
+    else
+        row.net:SetText(signedGold(entry.net))
+    end
     row.when:SetText("|cff999999" .. addon.UI.Widgets.TimeAgo(entry.t) .. "|r")
 end
 
@@ -671,12 +704,13 @@ function GamesTab.Build(stage, sidebar, header)
     local state = GamesTab.state
     sidebar, header = sidebar or stage, header or stage
     state.scope = (settings().gamesScope == "all") and "all" or "week"
-    state.game = (addon.Games.KINDS[settings().gameKey or ""] or settings().gameKey == "caught") and settings().gameKey or "coin"
+    state.game = (addon.Games.KINDS[settings().gameKey or ""] or settings().gameKey == "caught" or settings().gameKey == "runner") and settings().gameKey or "coin"
 
     -- game switch (header) and one panel per game (stage)
     widgets.gameButtons, widgets.panels = {}, {}
     -- the switch shows one icon per game; the name is its tooltip
-    local gameLabels = { coin = Text["Coin flip"], slots = Text["Slots"], survivor = Text["Survivor"], caught = Text["AZEcaught"] }
+    local gameLabels = { coin = Text["Coin flip"], slots = Text["Slots"], survivor = Text["Survivor"], caught = Text["AZEcaught"],
+        runner = Text["Companion Dash"] }
     local previousButton
     for _, gameKey in ipairs(switchOrder()) do
         local key = gameKey
@@ -703,6 +737,7 @@ function GamesTab.Build(stage, sidebar, header)
     addon.Log.Protected("games.slots", "building the slot machine failed", addon.SlotMachine.Build, widgets.panels.slots)
     addon.Log.Protected("games.survivor", "building the survivor arena failed", addon.SurvivorArena.Build, widgets.panels.survivor)
     addon.Log.Protected("caught.ui", "building the AZEcaught panel failed", addon.AzeCaughtPanel.Build, widgets.panels.caught)
+    addon.Log.Protected("games.runner", "building the runner failed", addon.RunnerView.Build, widgets.panels.runner)
     -- the money pool, right of the game switch
     widgets.balanceText = Widgets.CreateFontString(header, "GameFontHighlightSmall", "LEFT")
     widgets.balanceText:SetPoint("LEFT", previousButton, "RIGHT", 8, 0)
@@ -723,6 +758,7 @@ function GamesTab.Build(stage, sidebar, header)
         local headerText = column(columnHeader, COLUMNS[columnKey][2], columnKey == "name" and "LEFT" or "RIGHT", COLUMNS[columnKey][1])
         headerText:SetFontObject("GameFontNormalSmall"); headerText:SetText(label)
         if columnKey == "flips" then widgets.playsHeader = headerText end
+        if columnKey == "net" then widgets.netHeader = headerText end
     end
 
     widgets.leaderboardList = Widgets.CreateScrollList(sidebar, 330, Widgets.ROW_HEIGHT * 7, createLeaderboardRow, fillLeaderboardRow)

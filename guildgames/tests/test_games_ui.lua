@@ -75,7 +75,7 @@ local function setup(harness, options)
         TimeAgo = function() return "1m" end,
     } }
     addon.AzeCaughtPanel = { Build = function() end, Refresh = function() end }   -- not loaded here (tests/test_load.lua builds it)
-    for _, path in ipairs({ "UI/Helpers.lua", "UI/Animate.lua", "UI/GamesTab.lua", "UI/SlotMachine.lua", "UI/SurvivorArena.lua" }) do assert(loadfile(path))("GuildGames", addon) end
+    for _, path in ipairs({ "UI/Helpers.lua", "UI/Animate.lua", "UI/GamesTab.lua", "UI/SlotMachine.lua", "UI/CompanionModel.lua", "UI/SurvivorArena.lua", "UI/RunnerView.lua" }) do assert(loadfile(path))("GuildGames", addon) end
     world.restore = function() for key, value in pairs(saved) do _G[key] = value end end
     return addon, world
 end

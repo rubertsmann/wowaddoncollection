@@ -1,3 +1,21 @@
+# GuildGames 0.9.0
+
+**English:** A new game: **Companion Dash**. Your companion runs through a scrolling landscape while the monsters you
+have found or caught come at it. Click the top half of the play area to jump (hold for a higher jump) and hold the
+bottom half to duck under flying monsters; Space and the arrow keys work too. The speed keeps rising and one hit ends
+the run. There is no stake: every 100 m pays 1g into your gold, up to 50g a day, and the guild board shows the longest
+runs of the week and of all time. You need a companion to play. In Survivor your companion now stands in the middle
+and attacks the monsters, on a grass field, and shots no longer fly out of the window. Guild members without this
+version simply do not see the runner board; nothing breaks for them.
+
+**Deutsch:** Ein neues Spiel: **Begleiter-Sprint**. Dein Begleiter läuft durch eine vorbeiziehende Landschaft, und die
+Monster, die du gefunden oder gefangen hast, kommen ihm entgegen. Klick in die obere Hälfte springt (halten: höher),
+die untere Hälfte halten duckt unter fliegenden Monstern durch; Leertaste und Pfeiltasten gehen auch. Das Tempo
+steigt, ein Treffer beendet den Lauf. Ohne Einsatz: Alle 100 m gibt es 1g, bis zu 50g am Tag, und die Gildenrangliste
+zeigt die längsten Läufe der Woche und aller Zeiten. Du brauchst einen Begleiter. In Survivor steht jetzt dein Begleiter
+in der Mitte und greift die Monster an, auf einer Wiese, und Geschosse fliegen nicht mehr aus dem Fenster. Wer diese
+Version nicht hat, sieht die Läufer-Rangliste einfach nicht; es geht nichts kaputt.
+
 # GuildGames 0.8.0
 
 **English:** AZEcaught has a Shop and an Inventory now. Buy items with your gold: Delicious Meat (50g) makes every

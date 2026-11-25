@@ -461,5 +461,20 @@ addon.Locale.Register("deDE", {
         ["At the target frame: off"] = "Am Zielfenster: aus",
         ["The rope icon and the catch items show next to the target frame, for your target only, instead of on the nameplates."] =
             "Das Seil-Symbol und die Fanggegenstände erscheinen neben dem Zielfenster, nur für dein Ziel, statt auf den Namensplaketten.",
+        -- runner game
+        ["Companion Dash"] = "Begleiter-Sprint",
+        ["Best"] = "Bestwert",
+        ["Best: {meters} m   Gold today: {gold}/{cap}"] = "Bestwert: {meters} m   Gold heute: {gold}/{cap}",
+        ["Catch a companion in AZEcaught first: it is the runner."] = "Fang zuerst in AZEcaught einen Begleiter: Er ist der Läufer.",
+        ["Click the top half to jump (hold: higher), hold the bottom half to duck. Space and the arrow keys work too."] =
+            "Klick in die obere Hälfte springt (halten: höher), die untere Hälfte halten duckt. Leertaste und Pfeiltasten gehen auch.",
+        ["Last week's longest run: {name} ({meters} m)"] = "Längster Lauf letzte Woche: {name} ({meters} m)",
+        ["New best!"] = "Neuer Bestwert!",
+        ["Run again"] = "Nochmal laufen",
+        ["Stopped by {name}"] = "Gestoppt von {name}",
+        ["Today's gold limit is reached; runs still count for the board."] =
+            "Das Gold-Limit für heute ist erreicht; Läufe zählen weiter für die Rangliste.",
+        ["{meters} m"] = "{meters} m",
+        ["{meters} m: +{gold}"] = "{meters} m: +{gold}",
     },
 })

@@ -37,6 +37,7 @@ local addonName, addon = ...
 ---@field caught? table AZEcaught: { c = current companion | nil, weeks = { [periodKey] = peak level } } (protocol 1.1;
 ---  1.0 peers drop it). Not a GameSection: not in Games.ORDER, sanitized by AzeCaught.SanitizeSection.
 ---@field arena? table companion arena (protocol 1.2), sanitized by Arena.SanitizeSection.
+---@field runner? table runner game { b, n, weeks, recent } (protocol 1.4), sanitized by Runner.SanitizeSection.
 
 ---@class FlipResult
 ---@field outcome "H"|"T"
@@ -271,6 +272,15 @@ function Games.Sanitize(gameRecord)
             addon.AzeCaught.Journal("WARNING", "sanitize", "an arena section was invalid and dropped", { owner = gameRecord.name })
         end
     end
+    -- runner: a bad runner section is dropped alone too
+    if gameRecord.runner ~= nil then
+        local section = addon.Runner.SanitizeSection(gameRecord.runner, horizon)
+        if section then
+            clean.runner = section
+        else
+            addon.AzeCaught.Journal("WARNING", "sanitize", "a runner section was invalid and dropped", { owner = gameRecord.name })
+        end
+    end
     return clean
 end
 
@@ -437,14 +447,17 @@ function Games.RecordPlay(myName, gameKey, stake, net, now)
     return true
 end
 
--- Replaces one non-play section of my record ("caught" or "arena") and commits a new rev. Returns true when stored.
+local NON_PLAY_SECTIONS = { caught = true, arena = true, runner = true }
+
+-- Replaces one non-play section of my record ("caught", "arena" or "runner") and commits a new rev. Returns true when
+-- stored.
 ---@param myName string
----@param key "caught"|"arena"
+---@param key "caught"|"arena"|"runner"
 ---@param section table
 ---@param now integer
 ---@return boolean
 function Games.SetSection(myName, key, section, now)
-    if database().readonly or not addon.Utility.IsSafeName(myName) or (key ~= "caught" and key ~= "arena") then return false end
+    if database().readonly or not addon.Utility.IsSafeName(myName) or not NON_PLAY_SECTIONS[key] then return false end
     local previousRecord = database().games[myName]
     local gameRecord = previousRecord and addon.Utility.DeepCopy(previousRecord) or emptyRecord(myName)
     gameRecord[key] = section

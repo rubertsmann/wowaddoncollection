@@ -83,7 +83,7 @@ return {
                 harness.equal(addon.IS_DEVELOPMENT_BUILD, development)
                 harness.equal(addon.PREFIX, development and "GGamesDev" or "GGames")
                 harness.equal(addon.SAVED_VARIABLES_NAME, development and "GuildGamesDevDB" or "GuildGamesDB")
-                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 3); harness.equal(addon.Store.SCHEMA, 2)
+                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 4); harness.equal(addon.Store.SCHEMA, 2)
                 -- the key binding's globals carry this build's names (live + dev installed together)
                 local binding = addon.Catcher.BindingNames(development)
                 harness.equal(binding.name, development and "AZECAUGHT_THROW_DEV" or "AZECAUGHT_THROW")
@@ -125,6 +125,34 @@ return {
                 end)
                 harness.truthy(okRun, "the survivor run failed: " .. tostring(runError))
                 harness.truthy(addon.Games.Get("A-R").survivor, "the run was stored")
+                harness.truthy(addon.SurvivorArena.widgets.pet, "the survivor companion model was built")
+                -- the runner: locked without a companion; a run without input crashes and is booked
+                addon.GamesTab.SelectGame("runner")
+                harness.equal(addon.GamesTab.state.game, "runner")
+                harness.truthy(addon.RunnerView.widgets.startButton, "the runner was not built (see Log: games.runner)")
+                local selectedForDash = false
+                local okDash, dashError = pcall(function()
+                    local AzeCaught = addon.AzeCaught
+                    if not AzeCaught.Active() then
+                        selectedForDash = true
+                        assert(addon.RunnerView.Start() == nil, "a run started without a companion")
+                        local entry = AzeCaught.NoteFound({ npc = 299, name = "Young Wolf", level = 2, classification = "normal" }, addon.Utility.Now())
+                        entry.caught = 1
+                        assert(AzeCaught.Select(299, 1))
+                    end
+                    assert(addon.RunnerView.Start(), "no run")
+                    assert(addon.GamesTab.IsBusy(), "the switch is locked during a run")
+                    for _ = 1, 400 do
+                        addon.RunnerView.Update(0.05)
+                        if not addon.RunnerView.state.run then break end
+                    end
+                end)
+                harness.truthy(okDash, "the runner run failed: " .. tostring(dashError))
+                harness.equal(addon.RunnerView.state.run, nil, "a run without input ends")
+                harness.truthy(addon.Games.Get("A-R").runner, "the runner section was stored")
+                harness.equal(addon.GamesTab.IsBusy(), false)
+                harness.truthy(pcall(addon.GamesTab.Refresh), "the runner board refreshes")
+                if selectedForDash then addon.AzeCaught.State().active = nil; addon.AzeCaught.State().collection[299] = nil end
                 harness.truthy(pcall(addon.UI.Refresh), "refreshing failed")
                 harness.truthy(addon.UI.parts.sidebar and addon.UI.parts.stage, "the overlay window has a stage and a sidebar")
                 harness.truthy(addon.UI.parts.grip and addon.UI.parts.mover, "the scale grip or move handle was not built (see Log: window.grip)")
@@ -263,7 +291,7 @@ return {
                 harness.truthy(dumpLine:find("creatureType=Beast", 1, true) and dumpLine:find("roll=0.0500", 1, true), "catch dump: " .. dumpLine)
                 harness.equal(addon.Catcher.dumps["Creature-0-1-2-3-4711-AB"], nil, "a logged dump is released")
                 for _, command in ipairs({ "state", "log 5", "log 5 care", "wallet", "chance", "collection", "verbose on", "verbose off",
-                    "notify off", "notify on", "export", "probe", "dump", "", "nonsense" }) do
+                    "notify off", "notify on", "export", "probe", "model", "dump", "", "nonsense" }) do
                     local okCommand, commandError = pcall(addon.SlashCommands.caught, command)
                     harness.truthy(okCommand, "/gg caught " .. command .. ": " .. tostring(commandError))
                 end

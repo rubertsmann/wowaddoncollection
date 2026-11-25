@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 (2026-11-25, protocol 1.4, schema 2, LibGuildSync MINOR 6)
+- Companion Dash (feature 035): a runner game. Your companion jumps over and ducks under monsters from your collection in
+  front of a parallax landscape; mouse (top half jump, bottom half duck) or Space / arrow keys; the speed ramps up and one
+  hit ends the run. 1g per 100 m, at most 50g a day. Guild board of best distances: new optional record section
+  `runner = { b, n, weeks, recent }`, protocol 1.4 (additive; 1.3 peers drop it). Saved data gains `runner` (schema stays 2).
+- Survivor: the companion stands in the tower's place (from above when the client allows the model camera) and attacks
+  whenever a weapon fires; the tower icon stays without a companion. The arena is a grass field seen from above and
+  clips projectiles and monsters at its edge.
+- Dev: `/gg caught model` reports the model's animations and camera calls and shows the top view for 15 s.
+
 ## 0.8.0 (2026-11-25, protocol 1.3, schema 2, LibGuildSync MINOR 6)
 - Shop and Inventory tabs in AZEcaught (feature 034): Delicious Meat (50g, every catch roll succeeds for 20 s, a clock
   shows the time left) and Magic Traps (500g normal, 1000g elite, 1500g rare: catch at once without a fight). A bag

@@ -1,6 +1,6 @@
 # GuildGames wire protocol and stored data
 
-Protocol **1.3**, schema **2** (1.3 since arena counter offers; 1.2 since the companion arena, 0.3.0; 1.1 since 0.2.0; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Base/Init.lua` (versions, prefix), `Core/Net/Sync.lua`
+Protocol **1.4**, schema **2** (1.4 since the runner section; 1.3 since arena counter offers; 1.2 since the companion arena, 0.3.0; 1.1 since 0.2.0; 0.1.0 was protocol 1.0, schema 1). Source of truth in code: `Core/Base/Init.lua` (versions, prefix), `Core/Net/Sync.lua`
 (messages), `Core/Data/Games.lua` (record, validation), `Core/Data/Store.lua` (schema). The transport, chunk header, compatibility
 rules, guild gate and record-pull engine are LibGuildSync-1.0's (`Libs/LibGuildSync`, documented in the libguildsync repo).
 Tests: `tests/test_games_sync.lua`, `tests/test_games.lua`, `tests/test_store_and_locale.lua`.
@@ -62,8 +62,13 @@ protocol, so ProfessionShare and GuildGames never read each other's messages.
   `fightAt = ca + 5 min`. A 1.2 peer copies only `ch/an/bt` (it ignores `co`, `ca`, `cd` and keeps the section), so it
   sees the challenge as unanswered and cannot bet on a counter fight. Local only (never sent): `watched[id]`, the
   fights whose replay I watched; a fight's money is settled after that or 24 h after the fight time.
+- **Runner section (optional, protocol 1.4, feature 035) `runner = { b, n, weeks, recent }`:** my best distance in
+  meters (0..1e6), my run count (0..1e9), `weeks = { ["YYYY-Www"] = best meters }` (<= 4 keys, same key rules as above),
+  `recent = { {d = meters, g = gold paid 0..50, t} }` (<= 10, newest first). A bad section is dropped alone (the record
+  stays); 1.3 peers drop the unknown key (allow-list copy). Written by `Games.SetSection("runner")` after every finished run.
+  Local only: `runner.day` and `runner.paid` (the 50g daily cap, server day = time / 86400).
 - **Money pool (local only, never sent):** `balance = 20g + casino net (coin + slots + survivor) - pending survivor stake
-  + ledger.earned - ledger.spent`. Every casino play START (flip, spin, survivor run) is refused with `funds` when the stake
+  + ledger.earned - ledger.spent` (runner payouts are ledger earnings, kind `runner`). Every casino play START (flip, spin, survivor run) is refused with `funds` when the stake
   is above the balance; settling a run never is.
 - **Validation (whole record rejected on one bad entry):** safe name equal to the sender (canonical form); `rev` in
   `[0, now + 1 day]`; totals integers with `won, lost <= 2e13` copper, `wins, losses <= 1 000 000` and consistent

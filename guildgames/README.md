@@ -1,13 +1,13 @@
 # GuildGames
 
-A coin flip, a slot machine, a survivor game and AZEcaught (catch and raise a companion) for your guild, each with its own guild leaderboard (this week and all time), the
+A coin flip, a slot machine, a survivor game, the runner Companion Dash and AZEcaught (catch and raise a companion) for your guild, each with its own guild leaderboard (this week and all time), the
 latest plays and last week's winner. **For fun only:** the addon never reads, checks or moves real gold. Stakes are
 bookkeeping.
 
 WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved here with TalentShare 0.7.0.
 
 ## Use
-- `/gg` opens the window. The buttons at the top left choose the game: AZEcaught (your companion) first, then the coin flip, slots and survivor. They are locked while a game animates.
+- `/gg` opens the window. The buttons at the top left choose the game: AZEcaught (your companion) first, then the coin flip, slots, survivor and Companion Dash. They are locked while a game animates.
 - **Minimal view:** `/gg` and the minimap button open, by default, a small view with only your AZEcaught companion and
   no text. The round pet sits in the middle, with four round care buttons around its lower half: feed, water, pet and
   sleep. The ring around each button fills clockwise with that need (half a ring = 50%) and is green, yellow or red by
@@ -37,6 +37,12 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
   Closing the window pauses the run.
   **Endless** mode has no end time: every full minute doubles the payout (1:00 x2, 2:00 x4, 3:00 x8, up to x64), and
   **Cash out** takes it at any time. If the tower falls, the last minute reached is still paid; before 1:00 the stake is lost.
+  With a companion, your companion stands in the tower's place and attacks whenever a weapon fires.
+- **Companion Dash:** your companion runs through a scrolling landscape; the monsters you have found or caught come at
+  it. Click the top half of the play area to jump (hold for a higher jump), hold the bottom half to duck under flying
+  monsters (Space / Up and Down work too). The speed keeps rising; one hit ends the run. No stake: every full 100 m
+  pays 1g into your money pool, at most 50g a day. The guild board shows the best distances (this week and all time)
+  and the recent runs. Needs an active companion.
 - **AZEcaught:** catch NPCs and raise one as a companion.
   - Every hostile NPC you fight lands in your **collection**. When one is below 35% health, a rope icon shows on its
     nameplate. Throw the rope (click the icon, bind "AZEcaught: throw rope" in the key bindings, or `/gg catch` in a
@@ -88,7 +94,7 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
   reset the size. Position and size are saved.
 - `/gg version | comm | hello | debug [n] | trace [n] [problems] | clean [confirm] | locale [code|auto]`
 - AZEcaught diagnostics: `/gg caught state | log [n] [filter] | wallet | chance | collection | dump [unit] | verbose on|off |
-  notify on|off | export | probe`. Every catch logs everything the client tells about the NPC (`/gg caught log 1 catch.dump`). The journal keeps the last 400 AZEcaught steps (throws, rolls with every factor, care, hearts, money).
+  notify on|off | export | probe | model` (`model`: the companion model's animations and camera, shown for 15 s). Every catch logs everything the client tells about the NPC (`/gg caught log 1 catch.dump`). The journal keeps the last 400 AZEcaught steps (throws, rolls with every factor, care, hearts, money).
 
 ## How it syncs
 Every guild member running GuildGames shares one record of results (copper amounts, the last 4 weeks and the 20 latest
