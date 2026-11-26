@@ -1,6 +1,6 @@
 # 030 Compact pet view: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-24
 - Target version: GuildGames 0.5.0 (protocol unchanged, schema unchanged)
 - Owner: claude

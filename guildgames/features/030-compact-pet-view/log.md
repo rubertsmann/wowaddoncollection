@@ -50,3 +50,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: offline green
 - Evidence: luajit tests/run.lua -> 147 passed, 0 failed
 - Next: user checks in game (/reload is enough): /ggd caught emote
+
+## 2026-11-24 22:01 | DONE | confirmed in game, released in 0.5.0
+- Did: verify.md rows R1-R11 and RF3-RF5 set to IN-GAME from the user report; checklist ticked; doc.md written; status done in spec.md and INDEX.md (release commit e1b5237, tag guildgames/v0.5.0, CurseForge file 9798911)
+- Result: done
+- Evidence: user: "every uncofirmed feature seems to be working as expected"
+- Next: none
