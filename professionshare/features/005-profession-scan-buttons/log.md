@@ -37,3 +37,45 @@ Append only. Newest entry at the bottom. The last entry must say what to do next
 - Result: the label disappears as soon as one profession has a stored recipe (the counters refresh after every scan)
 - Evidence: `luajit tests/run.lua` -> 55 passed, 0 failed; the label's look and position are NOT-VERIFIED in game
 - Next: user checks the label in game; Skinning diagnosis still waits for the debug log (previous entry)
+
+## 2026-11-26 16:36 | BUILD | profession buttons cast the window spell by id; dev spell probe to check it per profession
+- Did: bug report (guild feedback + user): the Skinning button does not open the Skinning recipe window. Debug log: Skinning has 2 spellbook entries, `Sonnen#1278068` (Forever) and `Kürschnerei#8618` (classic Skinning, the gathering spell, same name as the profession); the button ran `/cast Kürschnerei` + `/cast Sonnen` by name. New static table `Core/Data/ProfessionSpells.lua` (skill line -> window spell ids of every rank, plus gathering ids that never open a window); `Model.OpenAction` picks the spell by id (static, else first non-gathering non-passive entry, else the old name macro); profession buttons and the Craft button use `type=spell, spell=<id>`; `/ps i18n` prints what each button casts. Temporary dev probe `/psd spellprobe` (Dev tools -> Probes): a secure button that casts every spellbook spell of every own profession by id, plus `/cast <profession>` by name, one per click, reads the open window 1.5 s later and compares it with the static table; result in `devChecks.spellProbe`
+- Result: language-independent selection; Skinning -> 1278068 is an ASSUMPTION (first spellbook entry) until the probe confirms it
+- Evidence: `luajit tests/run.lua` -> 336 passed, 0 failed (tests/test_profession_spells.lua; spell probe candidates in tests/test_load.lua)
+- Next: user restarts the game (new file in the TOC, /reload is not enough), runs `/psd spellprobe`, clicks through every test (Esc between clicks), then `/reload`; Claude reads `devChecks.spellProbe` from ProfessionShare-Dev.lua, fixes the static table where it differs, then removes the probe
+
+## 2026-11-26 16:55 | VERIFY | spell probe run 1: every click casts twice; Sonnen is a camp spell; the window spells are hidden spells
+- Did: read `devChecks.spellProbe` (2026-11-26 16:52, 1.4.2-dev) from ProfessionShare-Dev.lua
+- Result: (1) secure buttons registered for AnyUp+AnyDown cast TWICE per click (2x UNIT_SPELLCAST_SUCCEEDED; the second cast toggles the window closed: Cooking ended with no window). (2) `Sonnen` 1278068 is "adds functions to a wilderness camp", not the Skinning window; the old macro opened Skinning with line 1 and closed it with line 2. (3) `/cast <profession name>` resolves to hidden spells not in the spellbook: Leatherworking 1240961, Skinning 1240974 (opened Kürschnerei, 2 recipes), Cooking 1240956. Spellbook spell 8618 cast nothing
+- Evidence: devChecks.spellProbe results 1-7 (events per click)
+- Next: static table = these hidden ids, one cast per click (next entry)
+
+## 2026-11-26 16:55 | BUILD | static window spells by id, one cast per click, probe run 2
+- Did: `Core/Data/ProfessionSpells.lua` now maps skill line -> window spell (165 1240961, 185 1240956, 393 1240974); spellbook guessing removed; other professions fall back to a ONE-line `/cast <profession name>` (`Model.CastMacro`). Profession, Craft and probe buttons `RegisterForClicks("AnyUp")` only. Probe now tests per profession the static id and the name macro, and records which spell id each click cast (`castSpellIDs`) so new professions can be added to the table
+- Result: offline green; in game NOT-VERIFIED
+- Evidence: `luajit tests/run.lua` -> 334 passed, 0 failed
+- Next: user `/reload`, `/psd spellprobe` (6 clicks, Esc between), click the real Skinning button, `/reload`; Claude reads devChecks.spellProbe; then remove the probe
+
+## 2026-11-26 17:06 | VERIFY | spell probe run 2: an "AnyUp"-only secure button casts nothing
+- Did: read devChecks.spellProbe (2026-11-26 17:05): 6 clicks recorded (PreClick ran), 0 UNIT_SPELLCAST events, no window, also for the name macro that worked in run 1
+- Result: on Forever the secure action runs on the press; with only "AnyUp" registered nothing is cast. Run 1 (AnyUp+AnyDown) cast twice. Switched profession, Craft and probe buttons to RegisterForClicks("AnyDown")
+- Evidence: `luajit tests/run.lua` -> 334 passed, 0 failed; user: "long pressed each time no window was shown"
+- Next: user `/reload`, `/psd spellprobe` again (6 clicks, normal click, Esc between), click the real Skinning button, `/reload`
+
+## 2026-11-26 17:08 | VERIFY | spell probe run 3: every profession opens by its static id, one cast per click; probe removed
+- Did: read devChecks.spellProbe (2026-11-26 17:07, AnyDown only): Leatherworking 1240961, Skinning 1240974 (window Kürschnerei, 2 recipes), Cooking 1240956 (12 recipes) each cast exactly once by id; the name macro resolved to the same ids. Leatherworking by id: cast and TRADE_SKILL_SHOW, then closed within 1.5 s (user's Esc before the read); the name cast of the same id kept it open (42 recipes). Removed the temporary probe (DevProbe section, menu entry, /psd spellprobe, its load test); `ProfessionSpells` keeps only the static WINDOW table
+- Result: R1 for Skinning IN-GAME via the probe's secure button (same attributes and click registration as the profession buttons); the real profession buttons themselves were not clicked after the change
+- Evidence: devChecks.spellProbe in ProfessionShare-Dev.lua; `luajit tests/run.lua` -> 334 passed, 0 failed
+- Next: user clicks the real Skinning, Leatherworking and Cooking buttons and the Craft button's "Open profession" once (one window each, stays open); then release
+
+## 2026-11-26 17:16 | BUILD | members report their window spells in the HELLO; prod data and web have no ids
+- Did: user asked for the other professions' ids from the web, the prod data, or a report like the build tag. Web: Wowhead has no page for 1240956/1240961/1240974 (404, Forever-only spells). Prod data (ProfessionShare.lua): 14 members, skill lines 129 164 165 171 182 185 186 197 202 333 356 393, recipes stored for all but Herbalism (Fishing has 1, Mining 14), but no spell ids anywhere. Built: `Events.lua` notes (skill line, spell) when a profession window opens within 2 s after my own cast (`db.windowSpells`, any way of opening counts); `Sync.lua` HELLO hook sends it as `wsp` (protocol stays 2.8, docs/protocol.md section 17); `Communication.lua` keeps peers' pairs only on the developer's client (`db.windowSpellReports`); `/ps spellids` lists them against `ProfessionSpells.WINDOW`
+- Result: the table is filled by hand from the reports; the buttons never use reported ids
+- Evidence: `luajit tests/run.lua` -> 338 passed, 0 failed (tests/test_profession_spells.lua: note/encode/decode bounds, collection, HELLO round trip)
+- Next: release with this; after members opened their profession windows, user runs `/ps spellids` (or Claude reads windowSpellReports from ProfessionShare.lua) and the new ids go into WINDOW
+
+## 2026-11-26 17:17 | NOTE | released in ProfessionShare 1.4.3
+- Did: version 1.4.3 (protocol 2.8, schema 9), CHANGELOG + RELEASE_NOTES (EN/DE), tag professionshare/v1.4.3
+- Result: shipped; the real profession buttons were not clicked in game after the AnyDown change (the probe's secure button with the same setup was)
+- Evidence: `luajit tests/run.lua` -> 338 passed, 0 failed
+- Next: user clicks Skinning/Leatherworking/Cooking and the Craft button once; after members played a few days, read windowSpellReports (`/ps spellids`) and add the new ids to ProfessionSpells.WINDOW

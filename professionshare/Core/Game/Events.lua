@@ -275,9 +275,33 @@ end
 
 function onGameEvent.PLAYER_GUILD_UPDATE() addon.Communication.Start() end
 function onGameEvent.PLAYER_LEVEL_UP() scheduleProfessionScan(2) end
+-- My last successful cast; a profession window that opens right after it was opened by that spell. The pair is noted in
+-- db.windowSpells and sent in the HELLO (ProfessionSpells), so the developer learns the window spells of every
+-- profession without asking anyone.
+local WINDOW_SPELL_SECONDS = 2   -- a window opening later than this after the cast was not opened by it
+local lastPlayerCast = nil
+
+-- Reads which profession window is open (after the window has loaded) and notes the spell that opened it.
+---@param spellID integer
+local function noteWindowSpell(spellID)
+    C_Timer.After(1.5, function()
+        local openProfession = addon.Api.GetOpenProfession()
+        if not (openProfession and openProfession.id and addon.db) then return end
+        if addon.ProfessionSpells.Note(addon.db.windowSpells, openProfession.id, spellID) then
+            addon.Log.Information("events.windowSpell", "a spell that opens a profession window was learned",
+                { skillLine = openProfession.id, spellID = spellID, profession = openProfession.name })
+            addon.Communication.RequestHelloSoon()
+        end
+    end)
+end
+
 function onGameEvent.TRADE_SKILL_SHOW()
     -- a profession window really opened (after a click on a profession button)
     addon.Log.Debug("events.tradeSkill", "a profession window opened")
+    if lastPlayerCast and GetTime and GetTime() - lastPlayerCast.at <= WINDOW_SPELL_SECONDS then
+        addon.Log.Protected("events.windowSpell", "noting the window spell failed", noteWindowSpell, lastPlayerCast.spellID)
+    end
+    lastPlayerCast = nil
     addon.Api.open.tradeskill = true
     scheduleProfessionScan(1.5)
     scheduleCooldownRead(1.5)
@@ -349,6 +373,7 @@ end
 function onGameEvent.BAG_UPDATE_COOLDOWN() scheduleCooldownRead(2) end
 function onGameEvent.UNIT_SPELLCAST_SUCCEEDED(unit, _, spellID)
     if unit ~= "player" then return end
+    if type(spellID) == "number" and GetTime then lastPlayerCast = { spellID = spellID, at = GetTime() } end
     local group = addon.CraftCooldowns.GroupOfCast(spellID)
     if group then
         addon.Log.Information("events.cooldownCast", "a timegated craft was cast", { group = group.key, spellID = spellID })
@@ -357,6 +382,20 @@ function onGameEvent.UNIT_SPELLCAST_SUCCEEDED(unit, _, spellID)
 end
 -- an attunement quest was handed in (the completed-quest flag is set a moment later)
 function onGameEvent.QUEST_TURNED_IN() scheduleItemScan(3) end
+
+-- /ps spellids: the spells that opened my profession windows, and on the developer's client what guild members reported,
+-- compared with the static table (ProfessionSpells.WINDOW). Plain English: a developer report, not localized.
+addon.SlashCommands.spellids = function()
+    local database = addon.db or {}
+    addon.Print("window spells I noted: " .. tostring(addon.ProfessionSpells.Encode(database.windowSpells) or "none yet (open a profession window)"))
+    local rows = addon.ProfessionSpells.ReportRows(database.windowSpellReports)
+    if #rows == 0 then addon.Print("no reports from guild members yet") return end
+    local verdicts = { same = "in the table", other = "|cffff5555the table has another id|r", new = "|cff33ff99not in the table|r" }
+    for _, row in ipairs(rows) do
+        addon.Print(("  %s (skill line %d): spell %d, %d members, %s"):format(addon.Names.Profession(row.skillLine),
+            row.skillLine, row.spellID, row.reporters, verdicts[row.static]))
+    end
+end
 
 -- /ps offers [scan]: what the item scan can see on this client and what my offers record holds (also the in-game probe)
 addon.SlashCommands.offers = function(arguments)

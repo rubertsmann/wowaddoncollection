@@ -247,3 +247,15 @@ Additive minor change: a 2.7 peer ignores `crev` and drops `WANTC`/`CDS` as unkn
 - Stored: `cds[name]` (schema 9, migration 8 -> 9 creates the table) in the receiver's clock, plus `seen` (receiver's
   time of arrival, local only, never sent); re-validated on every load, dropped for members who left the guild,
   emptied by `/ps clean`, dropped for peers by the version reset like `rep`.
+
+## 17. Profession window spells in HELLO (protocol stays 2.8, schema unchanged; feature 005)
+Diagnosis only, like `ver` (section 11): a 2.8 peer without it ignores the unknown HELLO field.
+- **`HELLO` field `wsp` (optional):** `"skillLine:spellID,..."` sorted, at most 200 bytes, the spells that opened my
+  profession windows (a `TRADE_SKILL_SHOW` within 2 s after my own `UNIT_SPELLCAST_SUCCEEDED`, the open window's skill
+  line). At most 16 skill lines and 4 spells each. Omitted when I have noted none.
+- Receiver: `ProfessionSpells.Decode` accepts only digits, `:` and `,`, ids 1..99 999 999; anything else is ignored with
+  a trace note. Only the developer's client (`Feedback.IsReader`) keeps it: `windowSpellReports[skillLine][spellID] =
+  { by = { [sender] = true } (<= 10), at }`, bounded to 64 skill lines and 16 spells each. Never used for decisions:
+  `/ps spellids` compares it with the static `ProfessionSpells.WINDOW`, which is edited by hand.
+- Stored: `windowSpells` (mine) and `windowSpellReports` (developer only), created empty by `withAllTables`, kept
+  through `/ps clean` and the version reset.

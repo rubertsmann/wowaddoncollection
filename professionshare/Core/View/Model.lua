@@ -150,22 +150,32 @@ function Model.NeedsScanHint(professionRows)
     return true
 end
 
--- Macro text of a profession button: the profession's own name first, then every other spellbook entry of that
--- profession (e.g. Skinning has a second one on Forever; `/cast` of a passive or unusable spell just fails and the
--- next line runs). Names only, no duplicates, at most 3 lines, nothing with line breaks (they come from our own client).
----@param professionRow { spellName: string|nil, spells: string[]|nil }
+-- Macro text of a profession button whose window spell is not known: "/cast <profession name>" (the client resolves the
+-- name to its window spell). One line only: casting a second spell of the profession can toggle the window closed
+-- again. Empty when the name is missing or has a line break (it comes from our own client, but is never trusted).
+---@param professionRow { spellName: string|nil }
 ---@return string
 function Model.CastMacro(professionRow)
-    local macroLines, seenNames = {}, {}
-    local function addCast(spellName)
-        if type(spellName) == "string" and spellName ~= "" and not spellName:find("[\r\n]") and not seenNames[spellName] and #macroLines < 3 then
-            seenNames[spellName] = true
-            macroLines[#macroLines + 1] = "/cast " .. spellName
-        end
-    end
-    addCast(professionRow.spellName)
-    for _, spellName in ipairs(professionRow.spells or {}) do addCast(spellName) end
-    return table.concat(macroLines, "\n")
+    local spellName = professionRow.spellName
+    if type(spellName) ~= "string" or spellName == "" or spellName:find("[\r\n]") then return "" end
+    return "/cast " .. spellName
+end
+
+-- What a profession button does: cast the window spell by id (ProfessionSpells), or "/cast <name>" when it is not known.
+---@param professionRow { id: integer|nil, spellName: string|nil }
+---@return { type: "spell"|"macro", spell: integer|nil, macrotext: string|nil, source: string }
+function Model.OpenAction(professionRow)
+    local spellID = addon.ProfessionSpells.WindowSpellID(professionRow.id)
+    if spellID then return { type = "spell", spell = spellID, source = "static" } end
+    return { type = "macro", macrotext = Model.CastMacro(professionRow), source = "name" }
+end
+
+-- One line for the log: what the button casts.
+---@param openAction { type: string, spell: integer|nil, macrotext: string|nil, source: string }
+---@return string
+function Model.DescribeOpenAction(openAction)
+    if openAction.type == "spell" then return ("spell %d (%s)"):format(openAction.spell, openAction.source) end
+    return "macro " .. (tostring(openAction.macrotext):gsub("\n", " / "))
 end
 
 ------------------------------------------------------------------ item categories + free-text search

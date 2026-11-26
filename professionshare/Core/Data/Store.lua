@@ -15,6 +15,8 @@ local addonName, addon = ...
 --   feedbackState[messageKey] = the developer's status of a message (that client only; see Feedback.lua)
 --   feedbackDelivered[sentAt] = true: one of my messages the developer's client has asked for (this client only)
 --   profNames, itemText = profession names and item tooltip texts this client reported (this client only)
+--   windowSpells, windowSpellReports = which spell opened which profession window: mine, and the guild's reports on the
+--                         developer's client (Core/Data/ProfessionSpells.lua)
 --   debug, trace        = the log and the network trace rings; ui = window settings; me = my canonical name
 
 ---@class ProfessionEntry
@@ -100,6 +102,10 @@ local function withAllTables(savedVariables)
     if type(savedVariables.profNames) ~= "table" then savedVariables.profNames = {} end
     -- { locale, items = { [itemID] = tooltip text } }, this client only (Core/View/ItemText.lua)
     if type(savedVariables.itemText) ~= "table" then savedVariables.itemText = {} end
+    -- window spells: mine (skill line -> spell ids that opened it) and, on the developer's client, the guild's reports
+    -- (Core/Data/ProfessionSpells.lua); kept through /ps clean
+    if type(savedVariables.windowSpells) ~= "table" then savedVariables.windowSpells = {} end
+    if type(savedVariables.windowSpellReports) ~= "table" then savedVariables.windowSpellReports = {} end
     return savedVariables
 end
 

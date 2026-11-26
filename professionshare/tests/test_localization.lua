@@ -181,13 +181,13 @@ return {
         harness.equal(M.NeedsScanHint({ { count = 11 } }), false)
     end,
 
-    ["model: profession button macro casts the profession name first, then its other spellbook entries"] = function(harness)
+    ["model: profession button macro casts only the profession name (a second cast toggles the window closed)"] = function(harness)
         local M = viewer(harness, "deDE").Model
         harness.equal(M.CastMacro({ spellName = "Kochkunst" }), "/cast Kochkunst")
-        harness.equal(M.CastMacro({ spellName = "Kochkunst", spells = { "Kochkunst" } }), "/cast Kochkunst", "no duplicate line")
-        harness.equal(M.CastMacro({ spellName = "Kürschnerei", spells = { "Kürschnerei", "Lagerstuhl" } }), "/cast Kürschnerei\n/cast Lagerstuhl")
-        harness.equal(M.CastMacro({ spellName = "A", spells = { "B", "C", "D", "E" } }), "/cast A\n/cast B\n/cast C", "at most 3 lines")
-        harness.equal(M.CastMacro({ spellName = "A", spells = { "B\n/run evil()", 5, "" } }), "/cast A", "line breaks, non-strings and empty names are dropped")
+        harness.equal(M.CastMacro({ spellName = "Kürschnerei", spells = { "Sonnen", "Kürschnerei" } }), "/cast Kürschnerei",
+            "other spellbook entries are never cast")
+        harness.equal(M.CastMacro({ spellName = "A\n/run evil()" }), "", "a name with a line break is not cast")
+        harness.equal(M.CastMacro({ spellName = "" }), ""); harness.equal(M.CastMacro({}), "")
         local addon = viewer(harness, "deDE")
         local rows = addon.Model.OwnProfessions(addon.Store, "X-R", { { name = "Kürschnerei", id = 393, rank = 1, max = 2, spells = { "Kürschnerei", "Lagerstuhl" } } })
         harness.equal(rows[1].spells[2], "Lagerstuhl")

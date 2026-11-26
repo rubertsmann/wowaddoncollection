@@ -2,7 +2,7 @@
 ## Title: ProfessionShare
 ## Notes: Shares guild members' professions, recipes and reagents, plus a crafting order board.
 ## Author: rubertsmann
-## Version: 1.4.2
+## Version: 1.4.3
 ## SavedVariables: ProfessionShareDB
 ## IconTexture: Interface\Icons\INV_Misc_Note_01
 ## X-Category: Professions
@@ -37,6 +37,7 @@ Core\Data\CraftCooldowns.lua
 Core\Data\RecipeCheck.lua
 Core\Data\RecipeDrops.lua
 Core\Data\Feedback.lua
+Core\Data\ProfessionSpells.lua
 Core\Net\Sync.lua
 Core\View\Model.lua
 Core\View\ColumnTable.lua

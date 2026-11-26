@@ -293,10 +293,10 @@ addon.SlashCommands.i18n = function()
         local staticNames = addon.Locale.professions[Api.GetLocale()]
         report(("profession %s id=%s | static name: %s"):format(playerProfession.name, tostring(playerProfession.id),
             tostring(staticNames and staticNames[playerProfession.id])))
-        -- spellbook entries of this profession and the macro its button runs (why does Skinning not open a window?)
-        report(("  spellOffset=%s spellCount=%s spells=[%s] macro: %s"):format(tostring(playerProfession.spellOffset),
+        -- spellbook entries of this profession and what its button casts
+        report(("  spellOffset=%s spellCount=%s spells=[%s] button casts: %s"):format(tostring(playerProfession.spellOffset),
             tostring(playerProfession.spellCount), table.concat(playerProfession.spells or {}, ", "),
-            (addon.Model.CastMacro({ spellName = playerProfession.name, spells = playerProfession.spells }):gsub("\n", " | "))))
+            addon.Model.DescribeOpenAction(addon.Model.OpenAction({ id = playerProfession.id, spellName = playerProfession.name }))))
         local firstIndex = (playerProfession.spellOffset or 0) + 1
         for spellBookIndex = firstIndex, firstIndex - 1 + math.min(playerProfession.spellCount or 0, 3) do
             local spellBookEntry = Api.SpellBookEntry(spellBookIndex)

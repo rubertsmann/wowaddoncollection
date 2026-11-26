@@ -187,6 +187,15 @@ local function showProfessionButtonTooltip(professionButton)
     GameTooltip:Show()
 end
 
+-- Puts a Model.OpenAction on a secure button (out of combat only; the caller checks).
+---@param secureButton table
+---@param openAction { type: string, spell: integer|nil, macrotext: string|nil }
+local function applyOpenAction(secureButton, openAction)
+    secureButton:SetAttribute("type", openAction.type)
+    secureButton:SetAttribute("spell", openAction.spell)
+    secureButton:SetAttribute("macrotext", openAction.macrotext)
+end
+
 ---@param parent table
 ---@param buttonIndex integer
 ---@return table|nil
@@ -198,7 +207,7 @@ local function createProfessionButton(parent, buttonIndex)
         return nil
     end
     professionButton:SetSize(24, 24)
-    professionButton:RegisterForClicks("AnyUp", "AnyDown")
+    professionButton:RegisterForClicks("AnyDown")   -- one cast per click (a second cast toggles the window closed); on Forever a secure action runs on the press, an "AnyUp"-only button casts nothing
     professionButton.icon = professionButton:CreateTexture(nil, "ARTWORK"); professionButton.icon:SetAllPoints()
     professionButton.recipeCountText = createFontString(professionButton, "GameFontNormalSmall", "RIGHT")
     professionButton.recipeCountText:SetPoint("BOTTOMRIGHT", 0, 1)
@@ -211,7 +220,7 @@ local function createProfessionButton(parent, buttonIndex)
         local professionRow = self.professionRow
         addon.Log.Debug("window.professionBar", "a profession button was clicked", {
             profession = professionRow and professionRow.name,
-            macro = professionRow and (addon.Model.CastMacro(professionRow):gsub("\n", " / ")) })
+            casts = professionRow and addon.Model.DescribeOpenAction(addon.Model.OpenAction(professionRow)) })
     end)
     professionButton:Hide()
     local previousButton = professionBar.buttons[buttonIndex - 1]
@@ -272,8 +281,7 @@ local function refreshProfessionBar()
                     professionButton.recipeCountText:SetTextColor(1, 0.3, 0.3); professionButton.icon:SetVertexColor(1, 0.55, 0.55)
                 end
                 if not inCombat then
-                    professionButton:SetAttribute("type", "macro")
-                    professionButton:SetAttribute("macrotext", addon.Model.CastMacro(professionRow))
+                    applyOpenAction(professionButton, addon.Model.OpenAction(professionRow))
                     professionButton:Show()
                 end
             elseif not inCombat then
@@ -420,8 +428,7 @@ local function refreshCraftButton(selectedOrderRow)
         craftButton:SetLabel(Format(Text["Craft {qty}x"], { qty = selectedOrderRow.qty }))
     else
         craftState.mode = "open"
-        craftButton:SetAttribute("type", "macro")
-        craftButton:SetAttribute("macrotext", addon.Model.CastMacro(craftTarget))
+        applyOpenAction(craftButton, addon.Model.OpenAction(craftTarget))
         craftButton:SetLabel(Text["Open profession"])
     end
     craftButton:Enable()
@@ -1458,7 +1465,7 @@ local function buildOrdersTab(ordersTab)
     if craftTemplateOk and craftButton then
         craftButton:SetSize(110, 24)
         craftButton.minimumWidth, craftButton.SetLabel = 110, setButtonLabel
-        craftButton:RegisterForClicks("AnyUp", "AnyDown")
+        craftButton:RegisterForClicks("AnyDown")   -- one cast per click, see the profession buttons
         craftButton:HookScript("PostClick", onCraftButtonPostClick)
         craftButton:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")

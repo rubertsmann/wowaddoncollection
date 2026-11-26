@@ -41,6 +41,14 @@ local Communication = library.Channel.New({
             me = me,   -- a function: read at use time
             onChange = function(kind) addon.Events.Fire("DATA_CHANGED", kind) end,
             onRecipeDrop = function(sender, itemID) if addon.Drops then addon.Drops.OnDrop(sender, itemID) end end,
+            windowSpells = function() return addon.ProfessionSpells.Encode(addon.db and addon.db.windowSpells) end,
+            onWindowSpells = function(sender, decoded)
+                if not (addon.db and addon.Feedback.IsReader(me())) then return end
+                if addon.ProfessionSpells.AddReport(addon.db.windowSpellReports, decoded, sender, addon.Utility.Now()) then
+                    addon.Log.Information("communication.windowSpells", "a member reported profession window spells",
+                        { sender = sender, pairs = #decoded })
+                end
+            end,
         })
     end,
     onIncompatible = function(kind)

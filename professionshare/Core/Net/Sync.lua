@@ -18,6 +18,8 @@ local addonName, addon = ...
 --                               it answered, so the receiver converts the ready times to its own clock (2.8+)
 --   HELLO.frev, WANTF {names, via?}, FEEDBACK {feedback}   a character's messages for the developer (2.5+); only the
 --                               developer's client pulls them (Feedback.IsReader)
+--   HELLO.wsp                   "skillLine:spellID,..." the spells that opened my profession windows; diagnosis only,
+--                               kept by the developer's client (ProfessionSpells); protocol stays 2.8 (like `ver`)
 -- Protocol 2.3 also had HELLO.grev, WANTG and GAMES (guild games, 0.6.0). They moved to the GuildGames addon: a 0.6
 -- peer's grev is ignored, its WANTG/GAMES are dropped as unknown message types.
 -- A peer can only author its OWN record (SNAP char.name / OFFERS name must equal the sender). Every player name from the
@@ -31,6 +33,8 @@ local addonName, addon = ...
 ---@field orders OrderBoard
 ---@field onChange fun(kind: "chars"|"offers"|"orders"|"access"|"rep"|"cds"|"feedback")
 ---@field me string|fun(): string|nil my canonical name, or a function returning it
+---@field windowSpells? fun(): string|nil my HELLO.wsp
+---@field onWindowSpells? fun(sender: string, decoded: table) a peer's HELLO.wsp, decoded
 
 ---@class SyncModule
 local Sync = {}
@@ -246,6 +250,22 @@ local function ordersHelloHook(environment)
     }
 end
 
+-- HELLO.wsp: which spell opened which of my profession windows (sent like the build tag; never used for decisions).
+---@param environment ProfessionShareSyncEnvironment
+---@return table
+local function windowSpellsHelloHook(environment)
+    return {
+        build = function(_, message) message.wsp = environment.windowSpells and environment.windowSpells() or nil end,
+        handle = function(_, message, sender, notes)
+            if message.wsp == nil then return end
+            local decoded = addon.ProfessionSpells.Decode(message.wsp)
+            if not decoded then notes[#notes + 1] = "window spells: invalid, ignored" return end
+            notes[#notes + 1] = "window spells " .. #decoded
+            if environment.onWindowSpells then environment.onWindowSpells(sender, decoded) end
+        end,
+    }
+end
+
 ---@param sync table
 ---@param message table
 local function onOrderPush(sync, message)
@@ -315,6 +335,7 @@ function Sync.New(environment)
     sync.wantedCooldowns = sync:AddRecordKind(cooldownKind())
     sync.wantedFeedback = sync:AddRecordKind(feedbackKind())
     sync:AddHelloHook(ordersHelloHook(environment))
+    sync:AddHelloHook(windowSpellsHelloHook(environment))
     sync:AddHandler("OPUSH", onOrderPush)
     sync:AddHandler("ORDER", onOrder)
     sync:AddHandler("DROP", onRecipeDrop)

@@ -1,3 +1,18 @@
+# ProfessionShare 1.4.3
+
+**English:** The profession buttons at the top right now open the right window with one click. The Skinning button
+opened nothing before, so your Skinning recipes were never shared; click it once after the update. All buttons used to
+fire twice per click, which sometimes closed the window right away; that is fixed too. The addon now also tells the
+developer which spell opens each profession window, so the buttons for the remaining professions can be made just as
+reliable. No need for everyone to update at the same time: members on 1.4.x work together as before.
+
+**Deutsch:** Die Berufsknöpfe oben rechts öffnen jetzt mit einem Klick das richtige Fenster. Der Kürschnerei-Knopf hat
+vorher nichts geöffnet, deshalb wurden deine Kürschnerei-Rezepte nie geteilt; klicke ihn nach dem Update einmal an.
+Alle Knöpfe haben bisher pro Klick zweimal ausgelöst und das Fenster dadurch manchmal sofort wieder geschlossen; auch
+das ist behoben. Das Addon meldet dem Entwickler jetzt außerdem, welcher Zauber welches Berufsfenster öffnet, damit die
+Knöpfe der übrigen Berufe genauso zuverlässig werden. Nicht alle müssen gleichzeitig updaten: Mitglieder mit 1.4.x
+arbeiten wie gewohnt zusammen.
+
 # ProfessionShare 1.4.2
 
 **English:** Misc Items -> Keys now lists every main dungeon key, also the ones nobody in the guild holds yet (greyed

@@ -2,6 +2,18 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.4.3 (2026-11-26, protocol 2.8, schema 9)
+- Profession buttons (and the Craft button's "Open profession"): the Skinning button opened no window. On WoW Forever a
+  profession's recipe window is opened by a hidden spell (not in the spellbook); the old macro cast the profession name
+  and then Skinning's second spellbook spell, a wilderness camp spell, which closed the window again. The buttons now
+  cast the window spell by id from the static table `Core/Data/ProfessionSpells.lua` (Leatherworking 1240961, Cooking
+  1240956, Skinning 1240974, read in game); other professions cast only `/cast <profession name>` (one line).
+- The secure buttons react to the mouse press only: registered for press and release they cast twice per click, and the
+  second cast toggled the window closed. A release-only button casts nothing on Forever.
+- Window spell reports: a client notes which spell opened which profession window and sends the pairs in its HELLO
+  (optional field `wsp`, diagnosis only like `ver`; docs/protocol.md section 17). Only the developer's client keeps
+  them; `/ps spellids` lists them against the static table. No protocol or schema change.
+
 ## 1.4.2 (2026-11-24, protocol 2.8, schema 9)
 - Misc Items -> Keys: every main key has a row, also when nobody in the guild holds it (greyed out, 0 holders). The
   Dalaran sewer key (Forever) is listed for Dalaran. The key ids were checked on Forever. No protocol or schema change.
