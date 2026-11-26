@@ -200,7 +200,7 @@ local function throwRefusalText(reason)
     if reason == "dead" then return Text["It is already dead."] end
     if reason == "thrown" then return Text["You already threw the rope at this one."] end
     if reason == "tapped" then return Text["Someone else tagged this one: only your own kills can be caught."] end
-    if reason == "range" then return Text["Too far away: get within 28 yards to throw the rope."] end
+    if reason == "nofight" then return Text["It is not fighting you: attack it first."] end
     return Text["Only NPCs can be caught."]
 end
 
@@ -235,7 +235,7 @@ function Catcher.Throw(unit)
     end
     local thrown, reason = AzeCaught.Throw({ guid = snapshot.guid, health = snapshot.health, name = snapshot.name,
         level = snapshot.level, classification = snapshot.classification, display = display,
-        tapDenied = snapshot.tapDenied, inRange = snapshot.inRange }, Api.PlayerLevel(), Api.Clock(), now())
+        tapDenied = snapshot.tapDenied, fighting = snapshot.fighting }, Api.PlayerLevel(), Api.Clock(), now())
     local name = addon.Utility.ChatSafe(snapshot.name or AzeCaught.State().collection[snapshot.npc or 0] and AzeCaught.State().collection[snapshot.npc].n or "?")
     if thrown then
         Catcher.PlayRopeEffect(unit)
@@ -293,7 +293,7 @@ function Catcher.UseTrap(unit, itemID)
     end
     local ok, result = addon.Items.Use(itemID, { myName = me(), now = now(), clock = Api.Clock(),
         target = { guid = snapshot.guid, health = snapshot.health, name = snapshot.name, level = snapshot.level,
-            classification = snapshot.classification, display = display, tapDenied = snapshot.tapDenied, inRange = snapshot.inRange } })
+            classification = snapshot.classification, display = display, tapDenied = snapshot.tapDenied, fighting = snapshot.fighting } })
     if not ok then return refuse(result, { reason = result, unit = unit, item = itemID }) end
     local item = addon.Items.Get(itemID)
     local npcName = addon.Utility.ChatSafe(snapshot.name or "?")
@@ -493,6 +493,7 @@ local function iconFor(unit)
         if not GameTooltip then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(Text["Throw the rope"])
+        if self.notFighting then GameTooltip:AddLine(Text["It is not fighting you: attack it first."], 1, 0.3, 0.3, true) end
         if self.chance then
             GameTooltip:AddLine(Format(Text["Catch chance now: {percent}%"], { percent = math.floor(self.chance * 100 + 0.5) }),
                 AzeCaught.QualityColor(self.quality))
@@ -619,8 +620,8 @@ function Catcher.IconHiddenReason(settings, plate, snapshot, weakEnough)
     if not snapshot then return "unit unreadable (GUID hidden or no unit)" end
     if not snapshot.npc then return "not an NPC" end
     if snapshot.hostile == false then return "not hostile" end
-    if snapshot.dead == true then return "dead" end
-    if AzeCaught.rolled[snapshot.guid] then return "already tried" end
+    if snapshot.dead == true or snapshot.health == 0 then return "dead" end
+    if AzeCaught.Tried(snapshot.guid) then return "already tried" end
     if not weakEnough then
         return snapshot.health == nil and "health hidden and not the target" or "health above the threshold"
     end
@@ -734,6 +735,10 @@ function Catcher.StyleIcon(button, snapshot)
         addon.UIHelpers.SetTextureOr(button.texture, iconPath, armed and ROPE_ICON or ROPE_FALLBACK)
     end
     if not armed then Catcher.ShakeIcon(button, 0) end
+    -- not fighting me (yet): greyed out; a click explains the refusal
+    button.notFighting = snapshot.fighting == false and not armed
+    pcall(button.texture.SetDesaturated, button.texture, button.notFighting)
+    button:SetAlpha(button.notFighting and 0.5 or 1)
     local quality, best = AzeCaught.ThrowQuality(snapshot.health, snapshot.classification)
     button.quality = quality
     button.chance = quality and AzeCaught.Chance(snapshot.health, snapshot.classification).chance or nil
@@ -1044,7 +1049,9 @@ function onEvent.UNIT_HEALTH(unit)
 end
 
 function onEvent.UNIT_THREAT_LIST_UPDATE(unit)
-    if watchedUnit(unit) then Catcher.NoteIfFighting(unit) end
+    if not watchedUnit(unit) then return end
+    Catcher.NoteIfFighting(unit)
+    if unit:find("^nameplate") or unit == "target" then Catcher.UpdateIcon(unit) end   -- greyed until it fights me
 end
 
 function onEvent.PLAYER_TARGET_CHANGED()

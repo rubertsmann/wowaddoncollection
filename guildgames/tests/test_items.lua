@@ -18,7 +18,7 @@ local function constant(value) return function() return value end end
 local function target(options)
     options = options or {}
     return { guid = options.guid or GUID, health = options.health == nil and 1 or options.health, name = "Wolf", level = 10,
-        classification = options.cls or "normal", tapDenied = options.tapDenied, inRange = options.inRange }
+        classification = options.cls or "normal", tapDenied = options.tapDenied, fighting = options.fighting }
 end
 
 local function slurp(path)
@@ -141,7 +141,7 @@ return {
         harness.equal(select(2, use("trap", { cls = "elite" })), "tier"); harness.equal(Items.Count("trap"), 2)
         harness.equal(select(2, use("trapRare", { cls = "worldboss" })), "tier")
         harness.equal(select(2, use("trap", { tapDenied = true })), "tapped")
-        harness.equal(select(2, use("trap", { inRange = false })), "range")
+        harness.equal(select(2, use("trap", { fighting = false })), "nofight")
         harness.equal(select(2, use("trap", { health = 0 })), "dead")
         harness.equal(select(2, use("trap", { guid = "Player-1-0001" })), "unknown")
         harness.equal(select(2, Items.Use("trap", { myName = ME, now = NOW })), "notarget")

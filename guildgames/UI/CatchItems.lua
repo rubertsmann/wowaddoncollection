@@ -141,8 +141,8 @@ end
 ---@return UnitSnapshot|nil
 function CatchItems.Target()
     local snapshot = Api.UnitSnapshot("target")
-    if not snapshot or not snapshot.npc or snapshot.hostile == false or snapshot.dead == true then return nil end
-    if AzeCaught.rolled[snapshot.guid] then return nil end
+    if not snapshot or not snapshot.npc or snapshot.hostile == false or snapshot.dead == true or snapshot.health == 0 then return nil end
+    if AzeCaught.Tried(snapshot.guid) then return nil end
     return snapshot
 end
 

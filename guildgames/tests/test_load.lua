@@ -704,6 +704,12 @@ return {
                     harness.equal(Reason(on, {}, { guid = npc.guid, npc = 77, health = 0.5 }, false), "health above the threshold")
                     harness.equal(Reason(on, {}, { guid = npc.guid, npc = 77 }, nil), "health hidden and not the target")
                     harness.equal(Reason(on, nil, npc, true), "no nameplate frame")
+                    harness.equal(Reason(on, {}, { guid = npc.guid, npc = 77, health = 0 }, true), "dead", "health 0 with a hidden dead flag")
+                    addon.AzeCaught.thrown[npc.guid] = 1
+                    harness.equal(Reason(on, {}, npc, true), "already tried", "a failed throw hides the icon")
+                    addon.AzeCaught.throws[npc.guid] = { at = 1, npc = 77 }
+                    harness.equal(Reason(on, {}, npc, true), nil, "an armed throw keeps the icon")
+                    addon.AzeCaught.thrown[npc.guid], addon.AzeCaught.throws[npc.guid] = nil, nil
                     harness.equal(Reason(on, {}, npc, true), nil)
                     local before = #addon.AzeCaught.State().journal
                     addon.Catcher.NoteIconReason("nameplate9", nil, "unit unreadable (GUID hidden or no unit)")
@@ -716,7 +722,8 @@ return {
                 do
                     local shownPaths = {}
                     local picture = stub(); rawset(picture, "SetTexture", function(_, path) shownPaths[#shownPaths + 1] = path return true end)
-                    local button = { border = stub(), glow = stub(), arrow = stub(), arrowGlow = stub(), iconSize = 26, texture = picture }
+                    local button = { border = stub(), glow = stub(), arrow = stub(), arrowGlow = stub(), iconSize = 26, texture = picture,
+                        SetAlpha = function(self, alpha) self.alpha = alpha end }
                     local pings, savedPlay = 0, addon.Api.PlaySoundNamed
                     addon.Api.PlaySoundNamed = function() pings = pings + 1 end
                     local caughtState = addon.AzeCaught.State()

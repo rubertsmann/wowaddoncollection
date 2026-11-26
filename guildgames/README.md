@@ -48,7 +48,7 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     nameplate. Throw the rope (click the icon, bind "AZEcaught: throw rope" in the key bindings, or `/gg catch` in a
     macro) and kill it within 3 seconds for a chance to catch it. Your very first catch always succeeds. One throw per
     enemy. Catching does not work in dungeons and raids: a throw there says so on screen and in chat. The enemy must be your
-    own kill (not tagged by someone else) and within 28 yards. The icon's ring turns from red to green as the chance grows and pulses at the best moment; until your first
+    own kill (not tagged by someone else) and fighting you: until it does, the icon is greyed out. After a failed throw or the enemy's death the icon goes away. The icon's ring turns from red to green as the chance grows and pulses at the best moment; until your first
     throw a red arrow points at it. Kill too slowly and the rope snaps. Move, resize or hide the icon in Options >
     AddOns > GuildGames AZEcaught (or `/gg caught icon on|off|x|y|size|reset`). There, **At the target frame** puts the
     rope icon and the catch items next to the target frame, for your target only, instead of on the nameplates

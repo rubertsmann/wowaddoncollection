@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.1 (2026-11-26, protocol 1.6, schema 3, LibGuildSync MINOR 6)
+- Fix: the game no longer blocks GuildGames in combat ("reserved for the Blizzard UI"). The rope's 28 yard range check used a function the client forbids in combat; the rope and the traps now need the enemy to be fighting you instead (feature 039).
+- The rope icon is greyed out while the enemy is not fighting you, and hides on a dead enemy and after a failed throw (it came back after a minute before).
+
 ## 0.11.0 (2026-11-25, protocol 1.6, schema 3, LibGuildSync MINOR 6)
 - Companion roster (feature 037): every catch is its own companion with its own needs, hearts, arena XP and training; one is active, resting ones are frozen; switching is free (a running training is cancelled); Release lets one go. No more running away on a switch.
 - Team arena fights (feature 038): every fight is 3 against 3 in the picked order; the round winner carries its health and effects into the next round; the defender sees the challenger's team in full and picks three in a dialog (also for counter offers); XP per companion that entered plus per knockout; arena buffs work on the whole team, one charge per fight; the dummy fields a team. Their team shows as a carousel (portrait with model, stats, arrows).

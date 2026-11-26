@@ -500,7 +500,7 @@ end
 ---@field health number fraction 0..1
 
 -- Arms a throw at a unit. Returns true, or nil and why: "unknown" (no NPC), "rolled" (this GUID already had its roll),
--- "thrown" (one throw per enemy), "dead", "health" (above THROW_HEALTH), "cooldown".
+-- "thrown" (one throw per enemy), "tapped", "dead", "health" (above THROW_HEALTH), "nofight" (not fighting me), "cooldown".
 ---@param target ThrowTarget
 ---@param playerLevel integer
 ---@param clockSeconds number GetTime()
@@ -519,7 +519,7 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
     if addon.Utility.Count(AzeCaught.State().roster) >= AzeCaught.ROSTER_LIMIT then return refuse("rosterfull", { npc = npcID }) end
     if AzeCaught.rolled[target.guid] then return refuse("rolled", { npc = npcID }) end
     if AzeCaught.thrown[target.guid] then return refuse("thrown", { npc = npcID }) end
-    -- tapDenied / inRange are nil when the client does not say: then the throw is allowed
+    -- tapDenied / fighting are nil when the client does not say: then the throw is allowed
     if target.tapDenied == true then return refuse("tapped", { npc = npcID }) end
     -- the client may hide the health (a secret in combat/instances): then the throw is allowed and rolls as if the NPC
     -- were at THROW_HEALTH, the worst case
@@ -527,7 +527,7 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
     local health = healthKnown and target.health or AzeCaught.THROW_HEALTH
     if healthKnown and health <= 0 then return refuse("dead", { npc = npcID }) end
     if healthKnown and health > AzeCaught.THROW_HEALTH then return refuse("health", { npc = npcID, hp = round1(health * 100) }) end
-    if target.inRange == false then return refuse("range", { npc = npcID }) end
+    if target.fighting == false then return refuse("nofight", { npc = npcID }) end
     if AzeCaught.lastThrowAt and clockSeconds - AzeCaught.lastThrowAt < AzeCaught.THROW_COOLDOWN then
         return refuse("cooldown", { npc = npcID, left = round1(AzeCaught.THROW_COOLDOWN - (clockSeconds - AzeCaught.lastThrowAt)) })
     end
@@ -581,6 +581,16 @@ end
 function AzeCaught.NeedsThrowHint()
     local caught = AzeCaught.State()
     return not caught.throwHintDone and not caught.firstCatchDone
+end
+
+-- True when the rope can no longer be thrown at `guid`: it had its roll, or a throw at it ended (escaped, too slow)
+-- without a Second Chance. An armed throw is no failed try.
+---@param guid string|nil
+---@return boolean
+function AzeCaught.Tried(guid)
+    if not guid then return false end
+    if AzeCaught.rolled[guid] then return true end
+    return AzeCaught.thrown[guid] ~= nil and AzeCaught.throws[guid] == nil
 end
 
 -- Forgets armed throws and rolled GUIDs after a minute, thrown GUIDs after ten minutes (bounded memory).
@@ -686,7 +696,7 @@ function AzeCaught.OnDeath(guid, myName, clockSeconds, now, randomFunction)
 end
 
 -- A Magic Trap on `target`: catches it at once, at any health, without a kill. Same limits as a throw (an NPC, not
--- rolled, not tagged by others, alive, in range) plus the trap's tier ("tier"; world bosses never). The NPC counts as
+-- rolled, not tagged by others, alive, fighting me) plus the trap's tier ("tier"; world bosses never). The NPC counts as
 -- rolled afterwards. Pays the reward of a catch at the best moment. Returns the result, or nil and why.
 ---@param target ThrowTarget
 ---@param item ItemDefinition
@@ -706,7 +716,7 @@ function AzeCaught.TrapCatch(target, item, myName, clockSeconds, now)
     if AzeCaught.rolled[target.guid] then return refuse("rolled") end
     if target.tapDenied == true then return refuse("tapped") end
     if type(target.health) == "number" and target.health <= 0 then return refuse("dead") end
-    if target.inRange == false then return refuse("range") end
+    if target.fighting == false then return refuse("nofight") end
     if not addon.Items.TrapAllows(item, target.classification) then return refuse("tier") end
     AzeCaught.NoteFound({ npc = npcID, name = target.name, level = target.level, classification = target.classification,
         display = target.display, guid = target.guid }, now)

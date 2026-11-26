@@ -206,7 +206,7 @@ addon.Locale.Register("deDE", {
         ["No guild member has a companion yet."] = "Noch kein Gildenmitglied hat einen Begleiter.",
         ["No target to throw the rope at."] = "Kein Ziel für das Seil.",
         ["Someone else tagged this one: only your own kills can be caught."] = "Jemand anderes hat diesen Gegner markiert: nur eigene Kills können gefangen werden.",
-        ["Too far away: get within 28 yards to throw the rope."] = "Zu weit weg: geh auf 28 Meter heran, um das Seil zu werfen.",
+        ["It is not fighting you: attack it first."] = "Es kämpft nicht mit dir: greif es zuerst an.",
         ["Normal"] = "Normal",
         ["Not enough money in the pool ({gold})."] = "Nicht genug Geld im Topf ({gold}).",
         ["Only NPCs can be caught."] = "Nur NPCs können gefangen werden.",

@@ -134,6 +134,8 @@ end
 ---@field health number|nil fraction 0..1, nil when hidden
 ---@field hostile boolean|nil nil when hidden
 ---@field dead boolean|nil nil when hidden
+---@field tapDenied boolean|nil nil when the client does not say
+---@field fighting boolean|nil the unit has me on its threat list; nil when the client does not say
 
 ---@param func function|nil
 ---@param ... any
@@ -152,16 +154,6 @@ function Api.IsTapDenied(unit)
     local denied = read(UnitIsTapDenied, unit)
     if denied == nil then return nil end
     return denied and true or false
-end
-
--- Whether `unit` is within ROPE_RANGE (the client's 28-yard interact distance, index 4), nil when the client does not
--- say (it may refuse the check for hostile units in combat).
----@param unit string
----@return boolean|nil
-function Api.InRopeRange(unit)
-    local inRange = read(CheckInteractDistance, unit, 4)
-    if inRange == nil then return nil end
-    return inRange and true or false
 end
 
 -- What AZEcaught can know about a unit, or nil when there is no unit (or its GUID is hidden). Never raises.
@@ -183,7 +175,7 @@ function Api.UnitSnapshot(unit)
             classification = type(classification) == "string" and classification or "normal",
             health = (type(health) == "number" and type(healthMaximum) == "number" and healthMaximum > 0) and health / healthMaximum or nil,
             hostile = canAttack ~= nil and (canAttack and true or false) or nil, dead = Api.IsDead(unit),
-            tapDenied = Api.IsTapDenied(unit), inRange = Api.InRopeRange(unit) }
+            tapDenied = Api.IsTapDenied(unit), fighting = Api.IsFightingMe(unit) }
     end)
     if not ok then
         addon.AzeCaught.Journal("WARNING", "api.unit", "reading a unit failed", { unit = unit, error = tostring(snapshot) })
@@ -334,7 +326,6 @@ function Api.UnitDump(unit)
         canAttack = { G.UnitCanAttack, "player", unit }, isEnemy = { G.UnitIsEnemy, "player", unit },
         isDead = { G.UnitIsDead, unit }, inCombat = { G.UnitAffectingCombat, unit },
         threat = { G.UnitThreatSituation, "player", unit }, tapDenied = { G.UnitIsTapDenied, unit },
-        interactRange4 = { G.CheckInteractDistance, unit, 4 },
         isPlayer = { G.UnitIsPlayer, unit }, isBoss = { G.UnitIsBossMob, unit }, questBoss = { G.UnitIsQuestBoss, unit },
         armor = { G.UnitArmor, unit }, attackPower = { G.UnitAttackPower, unit }, damage = { G.UnitDamage, unit },
         attackSpeed = { G.UnitAttackSpeed, unit }, resistance = { G.UnitResistance, unit, 1 },

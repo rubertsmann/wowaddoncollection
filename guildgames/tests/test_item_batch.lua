@@ -95,6 +95,7 @@ return {
         assert(AzeCaught.Throw(target({ guid = third, health = 0.3 }), 10, 300, NOW + 30))
         late = AzeCaught.EndLateThrows(304)
         harness.equal(late[1].again, true, "the rope slipped off: a second throw is allowed")
+        harness.equal(AzeCaught.Tried(third), false, "Second Chance: the icon comes back")
         harness.truthy(AzeCaught.Throw(target({ guid = third, health = 0.2 }), 10, 305, NOW + 35), "thrown again")
         late = AzeCaught.EndLateThrows(309)
         harness.equal(late[1].again, nil, "only one second throw")

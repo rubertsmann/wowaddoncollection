@@ -1,3 +1,18 @@
+# GuildGames 0.11.1
+
+**English:** Fixes the "reserved for the Blizzard UI" error that GuildGames could cause in fights: the rope checked its
+28 yard range with a function the game does not allow during combat. The rope and the traps now need the enemy to be
+**fighting you** instead of a distance. Until it is, the rope icon is greyed out, and a click tells you to attack it
+first. The rope icon also goes away on a dead enemy and after a failed throw (it came back after a minute before).
+**Everyone should update:** arena fights only work between players on the same GuildGames version.
+
+**Deutsch:** Behebt den Fehler "nur für die Blizzard-Oberfläche reserviert", den GuildGames in Kämpfen auslösen
+konnte: Das Seil prüfte seine 28 Meter Reichweite mit einer Funktion, die das Spiel im Kampf nicht erlaubt. Seil und
+Fallen brauchen jetzt statt einer Entfernung einen Gegner, der **mit dir kämpft**. Bis dahin ist das Seilsymbol
+ausgegraut, und ein Klick sagt dir, dass du ihn zuerst angreifen musst. Das Seilsymbol verschwindet außerdem bei einem
+toten Gegner und nach einem misslungenen Wurf (vorher kam es nach einer Minute zurück). **Alle sollten
+aktualisieren:** Arenakämpfe gehen nur zwischen Spielern mit derselben GuildGames-Version.
+
 # GuildGames 0.11.0
 
 **English:** Every monster you catch is now its own companion in your **roster** (Collection > Caught, one row per
