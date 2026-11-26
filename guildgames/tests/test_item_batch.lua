@@ -20,7 +20,7 @@ local function withCompanion(harness, name)
     if name then addon.Store.db.me = name end
     local AzeCaught = addon.AzeCaught
     local entry = AzeCaught.NoteFound({ npc = 100, name = "Npc100", level = 20, classification = "normal", stats = { type = 1 } }, NOW)
-    entry.caught = 1
+    entry.caught = 3
     assert(AzeCaught.Select(100, NOW))
     return addon
 end
@@ -174,15 +174,23 @@ return {
         local B = withCompanion(harness, "B-R")
         A.Items.Inventory().barkSkin = 1
         assert(A.Items.Use("barkSkin", { myName = "A-R", now = NOW }))
-        local records = { ["B-R"] = { name = "B-R", caught = B.AzeCaught.BuildSection() } }
-        local id = assert(A.Arena.Challenge(records, "A-R", "B-R", 0, NOW))
-        harness.equal(A.Items.ArenaBuffs().barkSkin, 2, "one of 3 fights used")
+        local records = { ["B-R"] = { name = "B-R", caught = B.AzeCaught.BuildSection(), arena = B.Arena.BuildSection() } }
+        local function team(addon)
+            local uids = {}
+            for index, companion in ipairs(addon.AzeCaught.Roster()) do uids[index] = companion.uid end
+            return uids
+        end
+        local id = assert(A.Arena.Challenge(records, "A-R", "B-R", 0, NOW, team(A)))
+        harness.equal(A.Items.ArenaBuffs().barkSkin, 2, "one of 3 fights used, for the whole team")
         local challenge = A.Arena.State().ch[id]
-        harness.equal(challenge.f.bf[1], "barkSkin")
+        for slot = 1, 3 do harness.equal(challenge.t[slot].bf[1], "barkSkin", "every fighter of the team is buffed") end
         local old = {}
-        for key, value in pairs(challenge.f) do if key ~= "bf" then old[key] = value end end
-        local other = B.Arena.Fighter(B.AzeCaught.Active())
-        local withBuffs, withoutBuffs = A.Arena.Fight(challenge.f, other, id), A.Arena.Fight(old, other, id)
+        for slot, fighter in ipairs(challenge.t) do
+            old[slot] = {}
+            for key, value in pairs(fighter) do if key ~= "bf" then old[slot][key] = value end end
+        end
+        local other = assert(B.Arena.Team(team(B)))
+        local withBuffs, withoutBuffs = A.Arena.Fight(challenge.t, other, id), A.Arena.Fight(old, other, id)
         harness.equal(withBuffs.winner, withoutBuffs.winner)
         harness.equal(#withBuffs.events, #withoutBuffs.events)
     end,

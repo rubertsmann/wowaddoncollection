@@ -198,6 +198,25 @@ function Model.BuildCollectionRows(collection, activeNpc)
     return rows
 end
 
+
+-- My roster as collection rows: one row per companion (uid), the active one first, then by name and catch order.
+---@param roster CompanionState[] AzeCaught.Roster()
+---@param collection table<integer, CollectionEntry>
+---@param active CompanionState|nil
+---@return CollectionRow[]
+function Model.BuildRosterRows(roster, collection, active)
+    local rows = {}
+    for _, companion in ipairs(roster or {}) do
+        local entry = collection and collection[companion.npc]
+        if entry then
+            local progress = type(companion.ar) == "table" and companion.ar or { xp = 0 }
+            rows[#rows + 1] = { uid = companion.uid, npc = companion.npc, name = escape(entry.n), nameKey = (entry.n or ""):lower(),
+                lvl = entry.lvl, cls = entry.cls, disp = entry.disp, caught = 1, active = companion == active, seen = entry.seen,
+                hearts = companion.hearts or 0, arenaLevel = addon.Arena.Level(progress.xp or 0), history = addon.AzeCaught.History(entry) }
+        end
+    end
+    return rows
+end
 -- The collection's two sections: caught (the active companion first, then by name) and seen (every
 -- found NPC with its highest level, highest first).
 ---@param collection table<integer, CollectionEntry>

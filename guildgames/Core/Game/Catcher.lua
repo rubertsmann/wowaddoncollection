@@ -195,6 +195,7 @@ end
 ---@return string
 local function throwRefusalText(reason)
     if reason == "cooldown" then return Text["The rope is not ready yet."] end
+    if reason == "rosterfull" then return Text["Your roster is full: release a companion first."] end
     if reason == "rolled" then return Text["You already tried to catch this one."] end
     if reason == "dead" then return Text["It is already dead."] end
     if reason == "thrown" then return Text["You already threw the rope at this one."] end
@@ -1324,8 +1325,11 @@ function developmentCommands.dummy(arguments)
         addon.Games.simulated[Arena.DUMMY_NAME] = nil
         printLine("the arena dummy is gone")
     else
-        local companion = AzeCaught.Active()
-        addon.Games.simulated[Arena.DUMMY_NAME] = Arena.DummyRecord(companion and Arena.Fighter(companion), now())
+        local team = {}
+        for _, companion in ipairs(AzeCaught.Roster()) do
+            if #team < Arena.TEAM_SIZE then team[#team + 1] = Arena.Fighter(companion) end
+        end
+        addon.Games.simulated[Arena.DUMMY_NAME] = Arena.DummyRecord(team, now())
         printLine(Arena.DUMMY_NAME .. " joined the guild list (memory only): challenge it in AZEcaught > Guild, it accepts within 5 s")
     end
     AzeCaught.Journal("INFORMATION", "dev.dummy", "the arena dummy was changed", { on = addon.Games.simulated[Arena.DUMMY_NAME] ~= nil })
@@ -1367,6 +1371,7 @@ function developmentCommands.add()
     local entry = AzeCaught.NoteFound(npcInformation, now())
     if entry then
         entry.caught = entry.caught + 1
+        AzeCaught.Reconcile()
         AzeCaught.Journal("INFORMATION", "dev.add", "an NPC was added as caught by hand", { npc = npcInformation.npc, name = entry.n })
         if snapshot and snapshot.npc then
             AzeCaught.Journal("INFORMATION", "catch.dump", "everything the client told about the caught NPC (dev add)", Api.UnitDump("target"))
@@ -1376,20 +1381,30 @@ function developmentCommands.add()
     addon.Events.Fire("CAUGHT_CHANGED")
 end
 
--- /ggd caught setup [items|boost]: one start state for testing. Without a word: a test companion when none is active,
+-- /ggd caught setup [items|boost]: one start state for testing. Without a word: the roster filled up to one arena team,
 -- SETUP_GOLD gold, SETUP_ITEMS of every catalog item, the window on the Shop tab. "items": only the items. "boost":
 -- everything plus every booster running.
 local SETUP_GOLD, SETUP_ITEMS = 3000, 3
+-- test NPCs that fill the roster up to one arena team
+local SETUP_ROSTER = { { 299, "Young Wolf", 2 }, { 1984, "Young Thistle Boar", 3 }, { 1512, "Duskbat", 4 }, { 2956, "Adult Plainstrider", 5 } }
 function developmentCommands.setup(arguments)
     local word = ((arguments or ""):match("^%s*(%S*)") or ""):lower()
     local done = {}
     if word ~= "items" then
-        if not AzeCaught.Active() then
-            local entry = AzeCaught.NoteFound({ npc = 299, name = "Young Wolf", level = 2, classification = "normal" }, now())
+        local added = 0
+        for _, monster in ipairs(SETUP_ROSTER) do
+            if #AzeCaught.Roster() >= addon.Arena.TEAM_SIZE then break end
+            local entry = AzeCaught.NoteFound({ npc = monster[1], name = monster[2], level = monster[3], classification = "normal" }, now())
             if entry then
-                entry.caught = math.max(entry.caught, 1)
-                if AzeCaught.Select(299, now()) then done[#done + 1] = "companion " .. entry.n end
+                entry.caught = entry.caught + 1
+                AzeCaught.Reconcile()
+                added = added + 1
             end
+        end
+        if added > 0 then done[#done + 1] = added .. " companion(s)" end
+        if not AzeCaught.Active() then
+            local first = AzeCaught.Roster()[1]
+            if first and AzeCaught.Select(first.uid, now()) then done[#done + 1] = "companion " .. first.n end
         end
         if addon.Wallet.Earn(me(), SETUP_GOLD * 10000, "dev", now(), "setup") then done[#done + 1] = SETUP_GOLD .. "g" end
     end

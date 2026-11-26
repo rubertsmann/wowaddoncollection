@@ -68,7 +68,9 @@ local BAR_WIDTH = 210   -- the label is an icon, so the bar takes the room
 ---@field previewNpc integer|nil collection preview
 ---@field selectedNpc integer|nil the collection row the switch button acts on
 ---@field guildRow CompanionRow|nil guild preview
----@field confirmNpc integer|nil the switch waiting in the confirm dialog
+---@field selectedUid string|nil the roster companion the switch and release buttons act on
+---@field confirmUid string|nil the roster companion waiting in the confirm dialog
+---@field confirmMode "switch"|"release"|nil
 ---@field careReadyAt number|nil clock until the care buttons unlock (CARE_COOLDOWN)
 ---@field badgeNpc integer|nil whose history badges are shown
 ---@field badgeValues table|nil their values (a rise pulses the badge)
@@ -551,15 +553,15 @@ function Panel.Care(action, target)
     addon.Events.Fire("CAUGHT_CHANGED")
 end
 
--- Makes `npcID` the companion (after the confirm dialog, see Panel.RequestSwitch).
----@param npcID integer
-function Panel.SelectCompanion(npcID)
-    local companion, refusal, ranAway = AzeCaught.Select(npcID, addon.Utility.Now())
+-- Makes roster companion `uid` active (after the confirm dialog, see Panel.RequestSwitch).
+---@param uid string
+function Panel.SelectCompanion(uid)
+    local companion, refusal, trainingCancelled = AzeCaught.Select(uid, addon.Utility.Now())
     if not companion then
         widgets.collectionStatus:SetText(refusal == "notcaught" and Text["Only caught NPCs can be your companion."] or "")
         return
     end
-    if ranAway then addon.Print(Format(Text["{name} ran away."], { name = addon.Utility.ChatSafe(ranAway.name) })) end
+    if trainingCancelled then addon.Print(Text["The running training was cancelled."]) end
     addon.Catcher.lastZones = {}
     addon.Catcher.PublishSoon(true)
     addon.Events.Fire("CAUGHT_CHANGED")
@@ -740,7 +742,7 @@ local function createCollectionRow(list)
     row.selected = row:CreateTexture(nil, "BACKGROUND", nil, 2); row.selected:SetAllPoints(); row.selected:SetColorTexture(0.3, 0.6, 1, 0.22); row.selected:Hide()
     row:SetScript("OnLeave", function(self) self.hover:Hide() end)
     -- a click selects the row (preview + the switch button); switching needs the button and its confirm dialog
-    row:SetScript("OnClick", function(self) if self.entry then Panel.SelectRow(self.entry.npc) end end)
+    row:SetScript("OnClick", function(self) if self.entry then Panel.SelectRow(self.entry.npc, self.entry.uid) end end)
     return row
 end
 
@@ -748,19 +750,19 @@ end
 ---@param entry CollectionRow
 local function fillCollectionRow(row, entry)
     row.active:SetShown(entry.active)
-    row.selected:SetShown(entry.npc == Panel.state.selectedNpc)
+    row.selected:SetShown(entry.uid and entry.uid == Panel.state.selectedUid or (not entry.uid and entry.npc == Panel.state.selectedNpc))
     local color = entry.caught > 0 and (RARITY_COLOR[entry.cls] or "ffffff") or "777777"
     addon.UI.Widgets.FitText(row.name, "|cff" .. color .. entry.name .. "|r", 0.85)
     if Panel.state.section == "seen" then   -- how often seen, then the level
         row.info:SetText(inlineIcon("seen", 11) .. "|cff88bbff" .. entry.history.seen .. "|r |cffaaaaaa" .. entry.lvl .. "|r")
-    else
-        row.info:SetText((entry.caught > 1 and ("x" .. entry.caught .. " ") or "") .. "|cffaaaaaa" .. entry.lvl .. "|r")
+    else   -- arena level, then the NPC level
+        row.info:SetText("|cffffd100A" .. (entry.arenaLevel or 1) .. "|r |cffaaaaaa" .. entry.lvl .. "|r")
     end
 end
 
 ------------------------------------------------------------------ collection: sections, selection, switching
 
--- "caught" (no limit) or "seen" (every enemy fought, with its highest level)
+-- "caught" (the roster: one row per companion) or "seen" (every enemy fought, with its highest level)
 ---@param section "caught"|"seen"
 function Panel.SelectSection(section)
     Panel.state.section = section == "seen" and "seen" or "caught"
@@ -772,54 +774,70 @@ function Panel.SelectSection(section)
     Panel.Refresh()
 end
 
--- The switch button is usable for a caught NPC that is not the companion already.
+-- Switch: a resting roster companion is selected. Release: any roster companion is selected.
 local function refreshSwitchButton()
     if not widgets.switchButton then return end
-    local npcID = Panel.state.selectedNpc
-    local entry = npcID and AzeCaught.State().collection[npcID]
-    local active = AzeCaught.Active()
-    widgets.switchButton:SetEnabled(entry ~= nil and (entry.caught or 0) > 0 and not (active and active.npc == npcID))
+    local companion = Panel.state.section ~= "seen" and AzeCaught.Companion(Panel.state.selectedUid) or nil
+    widgets.switchButton:SetEnabled(companion ~= nil and companion ~= AzeCaught.Active())
+    widgets.releaseButton:SetEnabled(companion ~= nil)
 end
 
 ---@param npcID integer
-function Panel.SelectRow(npcID)
-    Panel.state.selectedNpc, Panel.state.previewNpc = npcID, npcID
+---@param uid? string the roster companion (caught section)
+function Panel.SelectRow(npcID, uid)
+    Panel.state.selectedNpc, Panel.state.selectedUid, Panel.state.previewNpc = npcID, uid, npcID
     local entry = AzeCaught.State().collection[npcID]
-    widgets.collectionStatus:SetText(entry and (entry.caught or 0) < 1 and Text["Only caught NPCs can be your companion."] or "")
+    widgets.collectionStatus:SetText(not uid and entry and (entry.caught or 0) < 1 and Text["Only caught NPCs can be your companion."] or "")
     if widgets.collectionList then widgets.collectionList:Refresh() end
     Panel.RefreshPreview()
     refreshSwitchButton()
 end
 
--- The switch button: asks first ("Stats will be reset"; a companion with negative hearts runs away).
+-- The switch button: asks first (the current companion rests; a running training is cancelled).
 function Panel.RequestSwitch()
-    local npcID = Panel.state.selectedNpc
-    local entry = npcID and AzeCaught.State().collection[npcID]
-    if not entry or (entry.caught or 0) < 1 then return end
-    local text = Format(Text["Make {name} your companion? Stats will be reset."], { name = addon.Utility.Escape(entry.n) })
-    local current = AzeCaught.Active()
-    if current and current.hearts < 0 then
-        text = text .. "\n|cffff8040" .. Format(Text["{name} has negative hearts and will run away."],
-            { name = addon.Utility.Escape(current.n) }) .. "|r"
+    local companion = AzeCaught.Companion(Panel.state.selectedUid)
+    if not companion or companion == AzeCaught.Active() then return end
+    local text = Format(Text["Make {name} your companion? The current one rests: its needs wait until you switch back."],
+        { name = addon.Utility.Escape(companion.n) })
+    if addon.Arena.State().training then
+        text = text .. "\n|cffff8040" .. Text["The running training is cancelled (no refund)."] .. "|r"
     end
     widgets.confirmText:SetText(text)
-    Panel.state.confirmNpc = npcID
+    Panel.state.confirmUid, Panel.state.confirmMode = companion.uid, "switch"
     widgets.confirmDialog:Show()
-    AzeCaught.Journal("DEBUG", "ui.switch", "the switch dialog was opened", { npc = npcID })
+    AzeCaught.Journal("DEBUG", "ui.switch", "the switch dialog was opened", { uid = companion.uid })
+end
+
+-- The release button: asks first, then the companion is gone for good.
+function Panel.RequestRelease()
+    local companion = AzeCaught.Companion(Panel.state.selectedUid)
+    if not companion then return end
+    widgets.confirmText:SetText(Format(Text["Release {name} for good? Its arena progress is lost."], { name = addon.Utility.Escape(companion.n) }))
+    Panel.state.confirmUid, Panel.state.confirmMode = companion.uid, "release"
+    widgets.confirmDialog:Show()
 end
 
 function Panel.ConfirmSwitch()
-    local npcID = Panel.state.confirmNpc
+    local uid, mode = Panel.state.confirmUid, Panel.state.confirmMode
     widgets.confirmDialog:Hide()
-    Panel.state.confirmNpc = nil
-    AzeCaught.Journal("DEBUG", "ui.switch", "the switch was confirmed", { npc = npcID })
-    if npcID then Panel.SelectCompanion(npcID) end
+    Panel.state.confirmUid, Panel.state.confirmMode = nil, nil
+    AzeCaught.Journal("DEBUG", "ui.switch", "the dialog was confirmed", { uid = uid, mode = mode })
+    if not uid then return end
+    if mode == "release" then
+        if AzeCaught.Release(uid) then
+            Panel.state.selectedUid = nil
+            addon.Catcher.PublishSoon(true)
+            addon.Events.Fire("CAUGHT_CHANGED")
+        end
+    else
+        Panel.SelectCompanion(uid)
+    end
 end
 
 function Panel.CancelSwitch()
     widgets.confirmDialog:Hide()
-    AzeCaught.Journal("DEBUG", "ui.switch", "the switch was cancelled", { npc = Panel.state.confirmNpc })
-    Panel.state.confirmNpc = nil
+    AzeCaught.Journal("DEBUG", "ui.switch", "the dialog was cancelled", { uid = Panel.state.confirmUid })
+    Panel.state.confirmUid, Panel.state.confirmMode = nil, nil
 end
 
 ---@param panel table
@@ -865,11 +883,14 @@ local function buildCollectionView(panel)
     widgets.switchButton = Widgets.CreateButton(panel, Text["Make companion"], 104, 22, function() Panel.RequestSwitch() end)
     widgets.switchButton:SetPoint("TOPRIGHT", -2, -258)
     widgets.switchButton:SetEnabled(false)
+    widgets.releaseButton = Widgets.CreateButton(panel, Text["Release"], 104, 18, function() Panel.RequestRelease() end)
+    widgets.releaseButton:SetPoint("TOP", widgets.switchButton, "BOTTOM", 0, -3)
+    widgets.releaseButton:SetEnabled(false)
     widgets.collectionStatus = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
-    widgets.collectionStatus:SetPoint("TOP", 0, -292); widgets.collectionStatus:SetWidth(290)
+    widgets.collectionStatus:SetPoint("TOP", 0, -304); widgets.collectionStatus:SetWidth(290)
     local hint = Widgets.CreateFontString(panel, "GameFontDisableSmall", "CENTER")
-    hint:SetPoint("TOP", 0, -314); hint:SetWidth(290)
-    hint:SetText(Text["Select a caught NPC, then Make companion. Seen: every enemy you fought, with its highest level."])
+    hint:SetPoint("TOP", 0, -320); hint:SetWidth(290)
+    hint:SetText(Text["Every catch is its own companion: select one, then Make companion. Resting ones wait with frozen needs."])
     buildConfirmDialog(panel)
 end
 
@@ -1408,7 +1429,8 @@ function Panel.RefreshView()
         local caught = AzeCaught.State()
         local active = caught.active
         local sections = addon.Model.BuildCollectionSections(caught.collection, active and active.npc)
-        widgets.sectionButtons.caught:SetLabel(Format(Text["Caught ({n})"], { n = sections.caughtCount }))
+        sections.caught = addon.Model.BuildRosterRows(AzeCaught.Roster(), caught.collection, active)
+        widgets.sectionButtons.caught:SetLabel(Format(Text["Caught ({n})"], { n = #sections.caught }))
         widgets.sectionButtons.seen:SetLabel(Format(Text["Seen {n}"], { n = #sections.seen }))
         local rows = sections[Panel.state.section] or sections.caught
         widgets.collectionList:SetData(rows)

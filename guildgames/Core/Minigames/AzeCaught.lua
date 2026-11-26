@@ -146,6 +146,7 @@ function AzeCaught.State()
     if type(caught.collection) ~= "table" then caught.collection = {} end
     if type(caught.journal) ~= "table" then caught.journal = {} end
     if type(caught.peaks) ~= "table" then caught.peaks = {} end
+    if type(caught.roster) ~= "table" then caught.roster = {} end
     if type(caught.activeSeconds) ~= "number" then caught.activeSeconds = 0 end
     if caught.notify == nil then caught.notify = true end
     return caught
@@ -515,6 +516,7 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
         return nil, reason
     end
     if not npcID then return refuse("unknown") end
+    if addon.Utility.Count(AzeCaught.State().roster) >= AzeCaught.ROSTER_LIMIT then return refuse("rosterfull", { npc = npcID }) end
     if AzeCaught.rolled[target.guid] then return refuse("rolled", { npc = npcID }) end
     if AzeCaught.thrown[target.guid] then return refuse("thrown", { npc = npcID }) end
     -- tapDenied / inRange are nil when the client does not say: then the throw is allowed
@@ -627,6 +629,7 @@ local function recordCatch(npcID, chance, myName, now, result)
     end
     entry.got = bump(entry.got or entry.caught)
     entry.caught = math.min(AzeCaught.MAXIMUM_ID, entry.caught + 1)
+    AzeCaught.Reconcile()
     result.reward = math.min(AzeCaught.MAXIMUM_REWARD, math.floor(AzeCaught.Reward(chance) * AzeCaught.CharmRewardFactor(entry.cls) + 0.5))
     AzeCaught.Journal("INFORMATION", "catch", "an NPC was caught",
         { npc = npcID, name = entry.n, timesCaught = entry.caught, reward = result.reward, trap = result.trap })
@@ -958,38 +961,156 @@ local function releaseOne(npcID)
     if entry then entry.caught = math.max(0, entry.caught - 1) end
 end
 
+------------------------------------------------------------------ the roster (every catch is its own companion)
+
+AzeCaught.ROSTER_LIMIT = 1000   -- a technical bound for the saved data, not a game limit
+
+---@param npcID integer
+---@param entry CollectionEntry
+---@param uid string
+---@return CompanionState
+local function freshCompanion(npcID, entry, uid, activeSeconds)
+    return { uid = uid, npc = npcID, n = entry.n, lvl = entry.lvl, cls = entry.cls, disp = entry.disp,
+        since = activeSeconds or 0, hunger = 100, thirst = 100, affection = 100, energy = 100, asleep = nil,
+        hearts = 0, fedStreak = 0, careStreak = 0, starve = 0, neglect = 0, snap = 0,
+        zones = { hunger = "ok", thirst = "ok", affection = "ok", energy = "ok" } }
+end
+
+---@param caught table
+---@return string
+local function newUid(caught)
+    local next = (tonumber(caught.nextID) or 0) + 1
+    while caught.roster["u" .. next] do next = next + 1 end
+    caught.nextID = next
+    return "u" .. next
+end
+
+---@param uid any
+---@return number
+local function uidNumber(uid) return tonumber(type(uid) == "string" and uid:match("^u(%d+)$")) or math.huge end
+AzeCaught.UidNumber = uidNumber
+
+-- Keeps the roster in step with the collection: each NPC's `caught` count is that many companions. Missing ones are
+-- added fresh (also when moving from the one-companion data), surplus resting ones go (newest first), and the active
+-- companion is always in the roster. Returns true when something changed.
+---@param caught? table db.caught (default: the live one)
+---@return boolean
+function AzeCaught.Reconcile(caught)
+    caught = caught or AzeCaught.State()
+    local roster, collection, changed = caught.roster, caught.collection, false
+    local active = caught.active
+    if type(active) == "table" and collection[active.npc] then
+        if type(active.uid) ~= "string" or not roster[active.uid] then
+            if type(active.uid) ~= "string" then active.uid = newUid(caught) end
+            roster[active.uid] = active
+            changed = true
+        elseif roster[active.uid] ~= active then
+            caught.active = roster[active.uid]
+        end
+        caught.activeID = caught.active.uid
+    else
+        caught.active, caught.activeID = nil, nil
+    end
+    local byNpc = {}
+    for uid, companion in pairs(roster) do
+        if not collection[companion.npc] then
+            roster[uid], changed = nil, true
+        else
+            byNpc[companion.npc] = byNpc[companion.npc] or {}
+            table.insert(byNpc[companion.npc], uid)
+        end
+    end
+    local count = addon.Utility.Count(roster)
+    for _, npcID in ipairs(addon.Utility.SortedKeys(collection)) do
+        local entry = collection[npcID]
+        local uids = byNpc[npcID] or {}
+        table.sort(uids, function(left, right) return uidNumber(left) < uidNumber(right) end)
+        local want = math.max(entry.caught or 0, caught.activeID and roster[caught.activeID].npc == npcID and 1 or 0)
+        for index = #uids, 1, -1 do
+            if #uids <= want then break end
+            if uids[index] ~= caught.activeID then
+                roster[uids[index]] = nil
+                table.remove(uids, index)
+                count, changed = count - 1, true
+            end
+        end
+        while #uids < want and count < AzeCaught.ROSTER_LIMIT do
+            local uid = newUid(caught)
+            roster[uid] = freshCompanion(npcID, entry, uid, caught.activeSeconds)
+            uids[#uids + 1] = uid
+            count, changed = count + 1, true
+        end
+        entry.caught = #uids
+    end
+    return changed
+end
+
+-- My companions, the active one first, then by name and catch order.
+---@return CompanionState[]
+function AzeCaught.Roster()
+    AzeCaught.Reconcile()
+    local caught = AzeCaught.State()
+    local list = {}
+    for _, companion in pairs(caught.roster) do list[#list + 1] = companion end
+    table.sort(list, function(left, right)
+        if (left == caught.active) ~= (right == caught.active) then return left == caught.active end
+        if left.n ~= right.n then return (left.n or "") < (right.n or "") end
+        return uidNumber(left.uid) < uidNumber(right.uid)
+    end)
+    return list
+end
+
+---@param uid any
+---@return CompanionState|nil
+function AzeCaught.Companion(uid)
+    if type(uid) ~= "string" then return nil end
+    return AzeCaught.State().roster[uid]
+end
+
 ---@alias SelectRefusal "unknown"|"notcaught"|"same"|"readonly"
 
--- Makes a caught NPC the active companion, fresh. A previous companion with negative hearts runs away.
----@param npcID any
+-- Makes a roster companion active (`id` a uid, or an NPC id: then the oldest resting companion of that NPC). Nothing
+-- is reset: the old companion rests with its needs frozen, the new one continues where it stopped. A running training
+-- is cancelled (not refunded).
+---@param id string|integer
 ---@param now integer server time
 ---@return CompanionState|nil
 ---@return SelectRefusal|nil
----@return table|nil ranAway the description of the companion that ran away
-function AzeCaught.Select(npcID, now)
+---@return boolean|nil trainingCancelled
+function AzeCaught.Select(id, now)
     local caught = AzeCaught.State()
     if addon.Store.db.readonly then return nil, "readonly" end
-    local entry = caught.collection[npcID]
-    if not entry then return nil, "unknown" end
-    if (entry.caught or 0) < 1 then return nil, "notcaught" end
+    AzeCaught.Reconcile()
     local previous = caught.active
-    if previous and previous.npc == npcID then return nil, "same" end
-    local ranAway
-    if previous then
-        if previous.hearts < 0 then
-            ranAway = AzeCaught.Describe(previous)
-            releaseOne(previous.npc)
-            AzeCaught.Journal("INFORMATION", "companion.ranAway", "the old companion ran away (negative hearts)", ranAway)
-        else
-            AzeCaught.Journal("INFORMATION", "companion.switch", "the old companion went back to the collection",
-                AzeCaught.Describe(previous))
+    local companion
+    if type(id) == "string" then
+        companion = caught.roster[id]
+        if not companion then return nil, "unknown" end
+        if companion == previous then return nil, "same" end
+    else
+        local entry = caught.collection[id]
+        if not entry then return nil, "unknown" end
+        if (entry.caught or 0) < 1 then return nil, "notcaught" end
+        for uid, candidate in pairs(caught.roster) do
+            if candidate.npc == id and candidate ~= previous and (not companion or uidNumber(uid) < uidNumber(companion.uid)) then
+                companion = candidate
+            end
         end
+        if not companion then return nil, "same" end
     end
-    local companion = { npc = npcID, n = entry.n, lvl = entry.lvl, cls = entry.cls, disp = entry.disp,
-        since = caught.activeSeconds, hunger = 100, thirst = 100, affection = 100, energy = 100, asleep = nil, hearts = 0,
-        fedStreak = 0, careStreak = 0, starve = 0, neglect = 0, snap = 0,
-        zones = { hunger = "ok", thirst = "ok", affection = "ok", energy = "ok" } }
-    caught.active = companion
+    local trainingCancelled = addon.Arena.CancelTraining() and true or nil
+    if previous then
+        previous.restAt = caught.activeSeconds
+        AzeCaught.Journal("INFORMATION", "companion.switch", "the old companion rests", AzeCaught.Describe(previous))
+    end
+    -- frozen while resting: the time-based fields move on by the resting time
+    if companion.restAt then
+        local rested = math.max(0, caught.activeSeconds - companion.restAt)
+        companion.since = (companion.since or 0) + rested
+        if companion.streakAt then companion.streakAt = companion.streakAt + rested end
+        companion.restAt = nil
+    end
+    caught.active, caught.activeID = companion, companion.uid
     AzeCaught.NotePeak(companion, now)
     local description = AzeCaught.Describe(companion)
     local profile = AzeCaught.ProfileOf(companion)
@@ -997,18 +1118,38 @@ function AzeCaught.Select(npcID, now)
         tostring(profile.intervals.hunger), tostring(profile.intervals.thirst), tostring(profile.intervals.affection),
         tostring(profile.intervals.energy), table.concat(profile.traits, ","))
     AzeCaught.Journal("INFORMATION", "companion.select", "a companion was selected", description)
-    return companion, nil, ranAway
+    return companion, nil, trainingCancelled
 end
 
--- The companion dies: it loses its catch and the active slot is emptied.
+-- Lets one roster companion go for good. Reasons: "readonly", "unknown".
+---@param uid string
+---@return boolean|nil
+---@return string|nil reason
+function AzeCaught.Release(uid)
+    local caught = AzeCaught.State()
+    if addon.Store.db.readonly then return nil, "readonly" end
+    local companion = AzeCaught.Companion(uid)
+    if not companion then return nil, "unknown" end
+    local training = addon.Arena.State().training
+    if training and training.uid == uid then addon.Arena.CancelTraining() end
+    caught.roster[uid] = nil
+    if caught.active == companion then caught.active, caught.activeID = nil, nil end
+    releaseOne(companion.npc)
+    AzeCaught.Journal("INFORMATION", "companion.release", "a companion was released", AzeCaught.Describe(companion))
+    return true
+end
+
+-- The companion dies: it leaves the roster and the active slot is emptied.
 ---@param companion CompanionState
 ---@param cause string
 local function die(companion, cause)
     local description = AzeCaught.Describe(companion)
     description.cause = cause
     AzeCaught.Journal("WARNING", "companion.death", "the companion died", description)
+    local caught = AzeCaught.State()
+    if companion.uid then caught.roster[companion.uid] = nil end
     releaseOne(companion.npc)
-    AzeCaught.State().active = nil
+    caught.active, caught.activeID = nil, nil
     AzeCaught.lastDeath = description
 end
 
@@ -1430,6 +1571,8 @@ local function sanitizeCompanion(companion, collection)
         clean[field] = addon.Utility.IsFinite(value) and value >= 0 and value or 0
     end
     if addon.Utility.IsFinite(companion.streakAt) and companion.streakAt >= 0 then clean.streakAt = companion.streakAt end
+    if addon.Utility.IsFinite(companion.restAt) and companion.restAt >= 0 then clean.restAt = companion.restAt end
+    if companion.ar ~= nil then clean.ar = addon.Arena.CleanProgress(companion.ar) end
     if companion.asleep ~= nil then
         clean.asleep = addon.Utility.IsFinite(companion.asleep) and clamp(companion.asleep, 0, AzeCaught.SLEEP_DURATION) or nil
     end
@@ -1464,13 +1607,52 @@ function AzeCaught.SanitizePersisted(savedVariables)
         end
     end
     caught.collection = collection
-    if caught.active ~= nil then
-        local companion = sanitizeCompanion(caught.active, collection)
-        if not companion or (collection[companion.npc].caught or 0) < 1 then
+    if not (Utility.IsFinite(caught.activeSeconds) and caught.activeSeconds >= 0) then caught.activeSeconds = 0 end
+    -- the roster; saved data from before it (no roster) is moved: the active companion keeps its state, every other
+    -- catch becomes a fresh companion, and the arena progress per NPC goes to one companion of that NPC
+    local moving = caught.roster == nil
+    local roster = {}
+    for uid, raw in pairs(type(caught.roster) == "table" and caught.roster or {}) do
+        local companion = uidNumber(uid) ~= math.huge and sanitizeCompanion(raw, collection)
+        if companion and Utility.Count(roster) < AzeCaught.ROSTER_LIMIT then
+            companion.uid = uid
+            roster[uid] = companion
+        else
+            dropped = dropped + 1
+        end
+    end
+    caught.roster = roster
+    caught.nextID = SafeInteger(caught.nextID, 0) or 0
+    if moving then
+        local companion = caught.active ~= nil and sanitizeCompanion(caught.active, collection) or nil
+        if caught.active ~= nil and (not companion or (collection[companion.npc].caught or 0) < 1) then
             dropped = dropped + 1
             companion = nil
         end
         caught.active = companion
+    else
+        caught.active = type(caught.activeID) == "string" and roster[caught.activeID] or nil
+        for _, entry in pairs(collection) do entry.caught = 0 end
+        for _, companion in pairs(roster) do
+            local entry = collection[companion.npc]
+            entry.caught = entry.caught + 1
+        end
+    end
+    AzeCaught.Reconcile(caught)
+    local arena = caught.arena
+    if moving and type(arena) == "table" and type(arena.npcs) == "table" then
+        for key, raw in pairs(arena.npcs) do
+            local npcID = tonumber(key)
+            local target = caught.active and caught.active.npc == npcID and caught.active or nil
+            if not target then
+                for uid, companion in pairs(roster) do
+                    if companion.npc == npcID and (not target or uidNumber(uid) < uidNumber(target.uid)) then target = companion end
+                end
+            end
+            if target then target.ar = addon.Arena.CleanProgress(raw) end
+        end
+        local training = arena.training
+        if type(training) == "table" and caught.active and training.npc == caught.active.npc then training.uid = caught.active.uid end
     end
     local peaks = {}
     for periodKey, peak in pairs(type(caught.peaks) == "table" and caught.peaks or {}) do
@@ -1562,6 +1744,7 @@ function AzeCaught.Reset(withWallet)
     local summary = { found = addon.Utility.Count(caught.collection), caught = AzeCaught.CaughtCount(),
         companion = caught.active ~= nil, wallet = withWallet == true }
     caught.collection, caught.active, caught.activeSeconds, caught.peaks = {}, nil, 0, {}
+    caught.roster, caught.activeID, caught.nextID = {}, nil, nil
     caught.arena = nil   -- the arena progress, fights and bets
     caught.paidWeek, caught.firstCatchDone, caught.throwHintDone = nil, nil, nil
     if withWallet then caught.ledger, caught.items, caught.boosts, caught.equipped, caught.arenaBuffs = nil, nil, nil, nil, nil end

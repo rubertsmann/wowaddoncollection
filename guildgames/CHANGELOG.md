@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.0 (2026-11-25, protocol 1.6, schema 3, LibGuildSync MINOR 6)
+- Companion roster (feature 037): every catch is its own companion with its own needs, hearts, arena XP and training; one is active, resting ones are frozen; switching is free (a running training is cancelled); Release lets one go. No more running away on a switch.
+- Team arena fights (feature 038): every fight is 3 against 3 in the picked order; the round winner carries its health and effects into the next round; the defender sees the challenger's team in full and picks three in a dialog (also for counter offers); XP per companion that entered plus per knockout; arena buffs work on the whole team, one charge per fight; the dummy fields a team. Their team shows as a carousel (portrait with model, stats, arrows).
+- Same-version gate: the arena section carries the addon version; challenges, accepts and counter offers need the same version on both sides; a fight between different versions is void and refunded.
+- Protocol 1.6 (arena entries carry a team `t` instead of a fighter `f`, the section carries `ver`); schema 3 (`caught.roster`, `activeID`, `nextID`; progress per companion `ar`); open one-against-one challenges are void and their stakes refunded once.
+- Dev: `/ggd caught setup` fills the roster up to three test companions.
+
 ## 0.10.0 (2026-11-25, protocol 1.5, schema 2, LibGuildSync MINOR 6)
 - Item batch (feature 036), 13 new shop items in four new groups:
   - Charms: Lucky Charm, Steady Hand, Second Chance and Rare Lure, worn in one charm slot.

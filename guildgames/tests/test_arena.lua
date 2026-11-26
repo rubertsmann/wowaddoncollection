@@ -2,15 +2,25 @@
 -- the challenge / answer / bet / settle flow between two (three) simulated players exchanging records.
 local NOW = 1794873600   -- 2026-11-17 00:00 UTC
 
--- a player with a caught, active companion of `npc` (beast unless `typeID`)
+-- a player with three caught companions of `npc` (beast unless `typeID`), the first active; `addon.team` holds their
+-- uids, and Challenge / Answer / Counter use that team unless a test passes its own
 local function player(harness, name, npc, typeID, level)
     local addon = harness.addon({ now = NOW })
     addon.Store.db.me = name
     local AzeCaught = addon.AzeCaught
     local entry = AzeCaught.NoteFound({ npc = npc, name = "Npc" .. npc, level = level or 20, classification = "normal",
         stats = { type = typeID or 1 } }, NOW)
-    entry.caught = 1
+    entry.caught = 3
     assert(AzeCaught.Select(npc, NOW))
+    addon.team = {}
+    for index, companion in ipairs(AzeCaught.Roster()) do addon.team[index] = companion.uid end
+    local Arena = addon.Arena
+    for _, action in ipairs({ "Challenge", "Answer", "Counter" }) do
+        local original = Arena[action]
+        Arena[action] = function(records, myName, first, second, now, uids)
+            return original(records, myName, first, second, now, uids or addon.team)
+        end
+    end
     return addon
 end
 
@@ -65,7 +75,7 @@ return {
         local _, tired = Arena.Train("A-R", "def", NOW); harness.equal(tired, "energy")
         -- a level makes every stat stronger; hunger weakens the attack
         AzeCaught.Active().energy = 100
-        Arena.Npc(100).xp = 50 * 10
+        Arena.Progress(AzeCaught.Active()).xp = 50 * 10
         local leveled = Arena.Fighter(AzeCaught.Active())
         harness.truthy(leveled.def > after.def and leveled.al > 1)
         AzeCaught.Active().zones.hunger = "needy"
@@ -186,7 +196,7 @@ return {
             harness.equal(B.Arena.State().w, 1); harness.equal(A.Arena.State().l, 1)
         end
         harness.equal(#A.Arena.State().history, 1); harness.equal(#B.Arena.State().history, 1)
-        harness.truthy(A.Arena.Npc(100).xp > 0 and B.Arena.Npc(200).xp > 0, "both gained XP")
+        harness.truthy(A.Arena.Progress(A.AzeCaught.Companion(A.team[1])).xp > 0 and B.Arena.Progress(B.AzeCaught.Companion(B.team[1])).xp > 0, "both gained XP")
     end,
 
     ["arena: a decline or an expired challenge refunds once; a lapsed one waits for a late answer"] = function(harness)
@@ -225,17 +235,20 @@ return {
             for key, value in pairs(changes) do f[key] = value end
             return f
         end
-        local okSection = { w = 1, l = 2, ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = 0, f = good } } }
+        local okSection = { w = 1, l = 2, ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = 0, t = { good, good, good } } } }
         harness.truthy(Arena.SanitizeSection(okSection, "Me-R", 1e10))
         harness.equal(Arena.SanitizeSection(okSection, "Other-R", 1e10), nil, "a challenge in someone else's name")
         for _, bad in ipairs({
-            { ch = { ["Me-R#10"] = { to = "You-R", at = 11, wg = 0, f = good } } },            -- id time mismatch
-            { ch = { ["Me-R#10"] = { to = "Me-R", at = 10, wg = 0, f = good } } },             -- self
-            { ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = -1, f = good } } },
-            { ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = 0, f = with({ atk = 1e12 }) } } },
-            { ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = 0, f = with({ ab = "nuke" }) } } },
-            { ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = 0, f = with({ n = "x\124cffff0000y" .. string.rep("z", 60) }) } } },
-            { an = { ["You-R#5"] = { ok = true, at = 6 } } },                                    -- accepted without fighter
+            { ch = { ["Me-R#10"] = { to = "You-R", at = 11, wg = 0, t = { good, good, good } } } },            -- id time mismatch
+            { ch = { ["Me-R#10"] = { to = "Me-R", at = 10, wg = 0, t = { good, good, good } } } },             -- self
+            { ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = -1, t = { good, good, good } } } },
+            { ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = 0, t = { good, with{ atk = 1e12 }, good } } } },
+            { ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = 0, t = { good, with{ ab = "nuke" }, good } } } },
+            { ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = 0, t = { good, with{ n = "x\124cffff0000y" .. string.rep("z", 60) }, good } } } },
+            { an = { ["You-R#5"] = { ok = true, at = 6 } } },                                    -- accepted without a team
+            { ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = 0, t = { good, good } } } },    -- two fighters
+            { ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = 0, t = { good, good, good, good } } } },
+            { ch = { ["Me-R#10"] = { to = "You-R", at = 10, wg = 0, f = good } } },            -- a one-against-one challenge
             { bt = { ["You-R#5"] = { s = "c", c = 5000, o = 200, at = 6 } } },
             { bt = { ["You-R#5"] = { s = "a", c = 5000, o = 5000, at = 6 } } },
             { w = -1 }, { ch = "x" }, "x",
@@ -246,7 +259,7 @@ return {
         local players = { ["A-R"] = player(harness, "A-R", 100), ["B-R"] = player(harness, "B-R", 200), ["C-R"] = player(harness, "C-R", 300) }
         local A = players["A-R"]
         local id = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", 0, NOW))
-        players["C-R"].Arena.State().an[id] = { ok = true, at = NOW + 5, f = good }
+        players["C-R"].Arena.State().an[id] = { ok = true, at = NOW + 5, t = { good, good, good } }
         harness.equal(A.Arena.Fights(recordsFor(players, "A-R"), "A-R", NOW + 10)[id].state, "pending")
         -- a record with an invalid arena section keeps the rest (dropped alone)
         local record = { name = "B-R", rev = 5, total = { won = 0, lost = 0, wins = 0, losses = 0 }, weeks = {}, recent = {}, arena = { w = "x" } }
@@ -256,18 +269,23 @@ return {
 
     ["arena: the local state survives a reload and is repaired when edited"] = function(harness)
         local A = player(harness, "A-R", 100)
-        A.Arena.Npc(100).tr.atk = 3
-        A.Arena.Npc(100).xp = 120
+        local active = A.AzeCaught.Active()
+        A.Arena.Progress(active).tr.atk = 3
+        A.Arena.Progress(active).xp = 120
         A.Arena.State().history = { { id = "A-R#1", opp = "B-R", me = "Npc100", them = "Wolf", won = true, wg = 5, t = NOW } }
-        A.Arena.State().training = { stat = "def", npc = 100, done = 50 }
-        local loaded = harness.addon({ now = NOW }).Store.Init({ schema = 2, games = {}, me = "A-R", caught = A.AzeCaught.State() })
+        A.Arena.State().training = { stat = "def", uid = active.uid, done = 50 }
+        local loaded = harness.addon({ now = NOW }).Store.Init({ schema = 3, games = {}, me = "A-R", caught = A.AzeCaught.State() })
         local arena = loaded.caught.arena
-        harness.equal(arena.npcs[100].tr.atk, 3); harness.equal(arena.npcs[100].xp, 120)
-        harness.equal(#arena.history, 1); harness.equal(arena.training.stat, "def")
-        local broken = harness.addon({ now = NOW }).Store.Init({ schema = 2, games = {}, me = "A-R",
-            caught = { collection = {}, arena = { npcs = { [5] = { xp = "lots", tr = { atk = 99 } } }, ch = { bad = 1 }, history = "x" } } })
+        local reloaded = loaded.caught.roster[active.uid]
+        harness.equal(reloaded.ar.tr.atk, 3); harness.equal(reloaded.ar.xp, 120)
+        harness.equal(#arena.history, 1); harness.equal(arena.training.stat, "def"); harness.equal(arena.training.uid, active.uid)
+        harness.truthy(loaded.caught.active == reloaded, "the active companion is the roster entry")
+        local broken = harness.addon({ now = NOW }).Store.Init({ schema = 3, games = {}, me = "A-R",
+            caught = { collection = {}, roster = { u1 = { npc = 5 } }, arena = { training = { stat = "atk", uid = "u9", done = 1 },
+                ch = { bad = 1 }, history = "x" } } })
         local repaired = broken.caught.arena
-        harness.equal(repaired.npcs[5].xp, 0); harness.equal(repaired.npcs[5].tr.atk, 0)
+        harness.equal(next(broken.caught.roster), nil, "a companion without a collection entry is dropped")
+        harness.equal(repaired.training, nil, "a training of a companion that is not there")
         harness.equal(next(repaired.ch), nil)
     end,
 
@@ -277,7 +295,7 @@ return {
         local dummy = Arena.DummyRecord(Arena.Fighter(AzeCaught.Active()), NOW)
         harness.equal(dummy.name, Arena.DUMMY_NAME)
         harness.truthy(addon.Utility.IsSafeName(dummy.name))
-        harness.truthy(Arena.SanitizeFighter(dummy.dummyFighter), "the dummy's fighter is valid")
+        harness.truthy(Arena.SanitizeTeam(dummy.dummyTeam), "the dummy's team is valid")
         harness.truthy(AzeCaught.SanitizeSection(dummy.caught, math.huge), "the dummy's companion is valid")
         local records = { [dummy.name] = dummy }
         local start = balance(addon, "A-R")
@@ -486,8 +504,8 @@ return {
             return Arena.SanitizeSection(copy, "B-R", math.huge)
         end
         local good = section.co[id]
-        harness.equal(withCounter({ wg = Arena.MAXIMUM_WAGER + 1, at = good.at, f = good.f }), nil, "wager too high")
-        harness.equal(withCounter({ wg = 100, at = good.at, f = { npc = 1 } }), nil, "bad fighter")
+        harness.equal(withCounter({ wg = Arena.MAXIMUM_WAGER + 1, at = good.at, t = good.t }), nil, "wager too high")
+        harness.equal(withCounter({ wg = 100, at = good.at, t = { { npc = 1 } } }), nil, "bad fighter")
         harness.equal(Arena.SanitizeSection({ w = 0, l = 0, co = { [id] = good } }, "A-R", math.huge), nil, "a counter to my own challenge in my record")
         -- the challenger's answer fields: at most one, inside the horizon
         assert(A.Arena.AnswerCounter(recordsFor(players, "A-R"), "A-R", id, true, NOW + 20))

@@ -1,3 +1,28 @@
+# GuildGames 0.11.0
+
+**English:** Every monster you catch is now its own companion in your **roster** (Collection > Caught, one row per
+catch). One is active at a time: **Make companion** switches for free, and each one keeps its needs, hearts, arena
+level and training. Resting companions are frozen, so they don't get hungry and can't die; a training that is running
+stops when you switch. **Release** lets a companion go for good. Arena fights are now **3 against 3**: you challenge
+with a team of three in fighting order, and the other player sees your team in full (flip through it with the
+arrows) and picks three of their own to counter it, with their win chance shown. The winner of a round stays in with
+the health it has left for the next opponent. Every companion that fought gets XP, more for every opponent it beat.
+Arena buffs now work on the whole team. **Everyone must update:** fights only work between players on the same
+GuildGames version, and the arena tells you when your versions differ. Open one-against-one challenges from the old
+version are cancelled and your own wagers are refunded.
+
+**Deutsch:** Jedes gefangene Monster ist jetzt ein eigener Begleiter in deinem **Kader** (Sammlung > Gefangen, eine
+Zeile pro Fang). Einer ist aktiv: **Als Begleiter** wechselt kostenlos, und jeder behält seine Bedürfnisse,
+Herzen, Arenastufe und sein Training. Ruhende Begleiter sind eingefroren, sie bekommen keinen Hunger und können nicht
+sterben; ein laufendes Training endet beim Wechsel. **Freilassen** lässt einen Begleiter endgültig gehen.
+Arenakämpfe sind jetzt **3 gegen 3**: Du forderst mit einem Team aus drei Begleitern in Kampfreihenfolge heraus, und
+der andere Spieler sieht dein Team vollständig (mit den Pfeilen durchblättern) und wählt drei eigene als Konter, mit
+Anzeige seiner Siegchance. Der Sieger einer Runde bleibt mit seinem restlichen Leben gegen den nächsten Gegner im
+Kampf. Jeder Begleiter, der gekämpft hat, bekommt EP, mehr für jeden besiegten Gegner. Arena-Buffs wirken jetzt auf
+das ganze Team. **Alle müssen aktualisieren:** Kämpfe gehen nur zwischen Spielern mit derselben GuildGames-Version,
+und die Arena sagt dir, wenn eure Versionen verschieden sind. Offene Eins-gegen-eins-Herausforderungen der alten
+Version werden abgebrochen, und deine eigenen Einsätze bekommst du zurück.
+
 # GuildGames 0.10.0
 
 **English:** Thirteen new items in the AZEcaught shop. **Charms** (bought once, worn in one charm slot, swapped for

@@ -13,7 +13,8 @@ addon.Store = Store
 
 -- Schema history:
 --   1  0.1.0   games (moved from TalentShare 0.6.0; nothing imported)
-Store.SCHEMA = 2   -- 2  0.2.0   db.caught (AZEcaught)
+--   2  0.2.0   db.caught (AZEcaught)
+Store.SCHEMA = 3   -- 3  0.11.0  db.caught.roster: every catch its own companion (moved by AzeCaught.SanitizePersisted)
 
 local SECONDS_PER_DAY = 86400
 Store.TIME_SLACK = SECONDS_PER_DAY        -- timestamps further than this into the future are rejected (clock skew is seconds)
@@ -46,6 +47,8 @@ end
 local MIGRATIONS = {
     -- 1 -> 2: AZEcaught's local state starts empty; game records are unchanged
     [1] = function(savedVariables) savedVariables.caught = {} end,
+    -- 2 -> 3: nothing here; the roster is built from the collection when db.caught.roster is missing
+    [2] = function() end,
 }
 
 ---@param savedVariables any

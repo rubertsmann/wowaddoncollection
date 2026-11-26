@@ -79,7 +79,10 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     the history: seen, killed, caught x/y, first and last seen. Select a caught one and press **Make companion** (it asks first: stats are reset).
   - Hover the model to see everything known about the NPC. Its needs come from its stats: e.g. beasts are hungrier,
     undead and mechanical companions never get thirsty, rage users and rare NPCs get needy sooner.
-  - Pick a caught NPC as your **companion** (3D model). In play time only, it needs water every hour, food every 2 hours,
+  - Every catch is its own companion in your **roster** (Collection > Caught: one row per companion, its arena level
+    and NPC level). One is active at a time: **Make companion** switches for free, both keep their needs, hearts,
+    XP and training (a running training session is cancelled). Resting companions are frozen: no needs, no death.
+    **Release** lets one go for good. In play time only, the active one needs water every hour, food every 2 hours,
     petting every 2 hours and 1 hour of sleep every 4 hours; the bars show the thresholds.
   - **Companion** view: a click on a need bar cares for it (Food bar feeds, Water waters, Petting pets, Energy puts it
     to sleep or wakes it; hover for the price). Under the name: the arena level, wins/losses and an XP bar (hover for
@@ -87,10 +90,14 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     trains that stat.
   - Food costs 50s and water 25s from the pool; petting and sleep are free. Care in time earns hearts (red heart counter) and a care streak (at most +1 per hour);
     a critical need costs a heart every 10 minutes, into the negatives. Two hours without food or water and it dies.
-    Switching away from a companion with negative hearts makes it run away.
   - **Guild** view: everyone's companion, ranked by NPC level + rarity + hearts. Last week's place pays 500g, 300g, 150g,
     or 25g into your pool. The minimap button shows a badge when a need is due; `/gg notify off` turns reminders off.
-  - **Arena:** challenge a guild member's companion from the Guild view (optional wager in gold). They accept,
+  - **Arena:** every fight is **3 against 3**. Challenge a guild member from the Guild view with a team of three of
+    your companions (in fighting order; "Change team") and an optional wager in gold. Accepting or a counter offer
+    opens the team dialog: their team in full (stats, ability, buffs), your whole roster to pick three from, and
+    your win chance. The first of each side fight; the winner stays in with its health and running effects and meets
+    the next one; the side without fighters left loses. Every companion that entered gains XP (more per opponent it
+    beat). Both players need the **same GuildGames version**, otherwise challenges and accepts are refused. They accept,
     decline or make a **counter offer** (another wager, paid at once) whenever they are online; a counter offer is
     accepted or declined by the challenger (declined: both wagers come back). 5 minutes after the accept the fight is decided on its own (no input: stats, arena level,
     training, hearts, needs and the creature type's ability decide). The winner takes both wagers; the rest of the guild

@@ -92,3 +92,16 @@ protocol, so ProfessionShare and GuildGames never read each other's messages.
 - **Display:** names are escaped in `Core/View/Model.lua`. Dev-build simulated players (`/ggd game sim`) live outside the
   database and are never sent.
 
+
+## Arena teams and the version gate (protocol 1.6, features 037/038)
+- Every arena entry carries a team instead of a fighter: challenge `ch[id] = {to, at, wg, t, wd?, ca?, cd?}`, answer
+  `an[id] = {ok, at, t?}`, counter `co[id] = {wg, at, t}`. `t` is exactly 3 fighter snapshots in fighting order (each
+  validated like `f` before); a section with any entry of another size, or a one-against-one entry (`f`), is dropped.
+- The arena section carries `ver`, the sender's addon version (plain string, at most 32 bytes). Challenge, Answer,
+  Counter and AnswerCounter are refused (`"version"`) unless both players' `ver` match exactly; a fight whose two
+  sections show different versions has the state `version`: never computed or settled, both stakes come back.
+- The fight (`Arena.Fight(teamA, teamB, id)`): the first fighters duel as before; the round winner keeps its health,
+  shield, damage over time, stun, focus, ability cadence and action gauge; the loser's next fighter enters fresh with a
+  random head start from the same generator. Events gain `ia/ib` (current slots), `ma/mb` (their maximum health) and
+  `k = "enter"`. A team of one fights exactly the old duel.
+- Local only (never sent): the roster uids of my team per fight (`arena.uids[id]`), used to credit XP per companion.

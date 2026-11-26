@@ -22,7 +22,7 @@ local function withCaught(harness, options)
     AzeCaught.forceNextCatch = true
     assert(AzeCaught.OnDeath(GUID, "Me-R", 101, NOW, constant(0.99)).caught)
     -- the catch became the companion (none was active); these tests select it themselves
-    AzeCaught.State().active, AzeCaught.State().peaks = nil, {}
+    AzeCaught.State().active, AzeCaught.State().activeID, AzeCaught.State().peaks = nil, nil, {}
     return addon
 end
 
@@ -276,7 +276,7 @@ return {
         harness.equal(companion.starve, 0)
     end,
 
-    ["azecaught: switching away with negative hearts makes it run away; with hearts >= 0 it stays"] = function(harness)
+    ["azecaught: switching keeps both companions as they are; the resting one is frozen, nobody runs away"] = function(harness)
         local addon = withCaught(harness)
         local AzeCaught = addon.AzeCaught
         AzeCaught.lastThrowAt = nil
@@ -285,15 +285,17 @@ return {
         AzeCaught.forceNextCatch = true
         assert(AzeCaught.OnDeath(otherGuid, "Me-R", 501, NOW, constant(0.99)).caught)
         local wolf = assert(AzeCaught.Select(4711, NOW))
-        assert(AzeCaught.Select(555, NOW))
-        harness.equal(AzeCaught.State().collection[4711].caught, 1, "hearts 0: back to the collection")
+        wolf.hearts, wolf.hunger = -1, 70
+        local bear = assert(AzeCaught.Select(555, NOW))
+        harness.equal(AzeCaught.State().collection[4711].caught, 1, "negative hearts: it rests, it does not run away")
+        run(AzeCaught, 3 * 3600)
+        harness.truthy(bear.hunger < 70, "the active one decays")
         local wolfAgain = assert(AzeCaught.Select(4711, NOW))
-        harness.truthy(wolfAgain ~= wolf, "fresh state on every select")
-        wolfAgain.hearts = -1
-        local _, _, ranAway = AzeCaught.Select(555, NOW)
-        harness.truthy(ranAway and ranAway.npc == 4711)
-        harness.equal(AzeCaught.State().collection[4711].caught, 0)
-        harness.truthy(journalHas(addon, "ran away"))
+        harness.truthy(wolfAgain == wolf, "the same companion comes back")
+        harness.equal(wolf.hunger, 70, "frozen while resting")
+        harness.equal(wolf.hearts, -1)
+        harness.equal(select(2, AzeCaught.Select(wolf.uid, NOW)), "same")
+        harness.equal(#AzeCaught.Roster(), 2)
     end,
 
     ["azecaught: a paid action is refused when the pool is short (RF3) and the companion still decays"] = function(harness)
@@ -393,10 +395,10 @@ return {
         harness.equal(good.caught.active.zones.hunger, "needy")
     end,
 
-    ["azecaught: schema 1 data migrates to 2 with an empty AZEcaught state"] = function(harness)
+    ["azecaught: schema 1 data migrates to today's schema with an empty AZEcaught state"] = function(harness)
         local addon = harness.addon({ now = NOW })
         local loaded, status = addon.Store.Init({ schema = 1, games = {} })
-        harness.equal(status, "migrated"); harness.equal(loaded.schema, 2); harness.equal(type(loaded.caught), "table")
+        harness.equal(status, "migrated"); harness.equal(loaded.schema, addon.Store.SCHEMA); harness.equal(type(loaded.caught), "table")
     end,
 
     ["azecaught: journal: own ring, filter, verbose echo, export line"] = function(harness)
@@ -547,6 +549,7 @@ return {
         local AzeCaught = addon.AzeCaught
         local entry = AzeCaught.State().collection[4711]
         entry.st = { type = 6 }
+        AzeCaught.ForgetProfile(4711)
         local companion = assert(AzeCaught.Select(4711, NOW))
         run(AzeCaught, 3 * 3600)
         harness.equal(companion.thirst, 100); harness.equal(companion.zones.thirst, "ok")

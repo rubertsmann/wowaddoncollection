@@ -83,7 +83,7 @@ return {
                 harness.equal(addon.IS_DEVELOPMENT_BUILD, development)
                 harness.equal(addon.PREFIX, development and "GGamesDev" or "GGames")
                 harness.equal(addon.SAVED_VARIABLES_NAME, development and "GuildGamesDevDB" or "GuildGamesDB")
-                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 5); harness.equal(addon.Store.SCHEMA, 2)
+                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 6); harness.equal(addon.Store.SCHEMA, 3)
                 -- the key binding's globals carry this build's names (live + dev installed together)
                 local binding = addon.Catcher.BindingNames(development)
                 harness.equal(binding.name, development and "AZECAUGHT_THROW_DEV" or "AZECAUGHT_THROW")
@@ -202,7 +202,7 @@ return {
                 end
                 harness.equal(Panel.ViewLocked("collection"), false); harness.equal(Panel.ViewLocked("companion"), false)
                 Panel.SelectView("collection"); Panel.SelectSection("caught")
-                Panel.SelectRow(4711)
+                Panel.SelectRow(4711, addon.AzeCaught.Roster()[1].uid)
                 harness.equal(Panel.state.previewNpc, 4711, "a click selects the row")
                 harness.equal(addon.AzeCaught.Active(), nil, "a click alone does not switch")
                 Panel.RequestSwitch()
@@ -541,17 +541,34 @@ return {
                         end
                         local foe = { npc = 5, n = "Bear", cls = "elite", disp = 0, ty = 1, al = 3, atk = 30, def = 30, spd = 30, vit = 30, ab = "rend" }
                         local records = { ["Foe-R"] = { name = "Foe-R", caught = { c = { npc = 5 }, weeks = {} },
-                            arena = { w = 0, l = 0, ch = {}, an = {}, bt = {} } } }
+                            arena = { w = 0, l = 0, ver = addon.VERSION, ch = {}, an = {}, bt = {} } } }
+                        -- a team needs three companions
+                        AzeCaught.State().collection[AzeCaught.Active().npc].caught = 3
+                        AzeCaught.Reconcile()
                         local savedRecords, savedNow = addon.Games.AllRecords, addon.Utility.Now
                         addon.Games.AllRecords = function() return records end
                         local start = savedNow()
                         -- the foe challenges me: an incoming fight with Accept
-                        records["Foe-R"].arena.ch["Foe-R#" .. start] = { to = me, at = start, wg = 0, f = foe }
+                        records["Foe-R"].arena.ch["Foe-R#" .. start] = { to = me, at = start, wg = 0, t = { foe, foe, foe } }
                         harness.truthy(pcall(addon.ArenaView.SelectPage, "fights"))
                         harness.truthy(addon.ArenaView.widgets.acceptButton, "accept is in the dialog below the list (next to the counter offer)")
                         harness.equal(addon.ArenaView.state.selected, "Foe-R#" .. start, "the incoming challenge is selected")
                         local okAnswer, answerError = pcall(addon.ArenaView.Decide, true)
                         harness.truthy(okAnswer, tostring(answerError))
+                        harness.truthy(addon.TeamDialog.IsOpen(), "accepting opens the team dialog")
+                        harness.equal(#addon.TeamDialog.state.picks, 3, "three companions picked to start with")
+                        -- their team as a carousel: one fighter at a time, the arrows wrap around
+                        harness.equal(addon.TeamDialog.state.shown, 1)
+                        harness.equal(addon.TeamDialog.ShowTheirs(1), 2)
+                        harness.equal(addon.TeamDialog.ShowTheirs(1), 3)
+                        harness.equal(addon.TeamDialog.ShowTheirs(1), 1, "wraps to the first")
+                        harness.equal(addon.TeamDialog.ShowTheirs(-1), 3, "wraps to the last")
+                        harness.truthy(addon.TeamDialog.widgets.card:IsShown(), "the card is shown")
+                        addon.TeamDialog.ClearSlot(3)
+                        harness.equal(addon.TeamDialog.Confirm(), false, "two are not a team")
+                        addon.TeamDialog.Toggle(addon.TeamDialog.Rows()[3].uid)
+                        local okConfirm, confirmed = pcall(addon.TeamDialog.Confirm)
+                        harness.truthy(okConfirm and confirmed, "accepted with the team: " .. tostring(confirmed))
                         harness.truthy(Arena.State().an["Foe-R#" .. start], "accepted")
                         local savedServerTime = rawget(_G, "GetServerTime")
                         rawset(_G, "GetServerTime", function() return start + 400 end)
@@ -742,6 +759,7 @@ return {
                     end
                     -- /ggd caught setup: gold, every item, a companion, the boosters with "boost"
                     harness.truthy(addon.AzeCaught.Active(), "setup leaves a companion")
+                    harness.truthy(#addon.AzeCaught.Roster() >= addon.Arena.TEAM_SIZE, "setup fills the roster up to one arena team")
                     for _, item in ipairs(addon.Items.CATALOG) do
                         harness.truthy(addon.Items.Count(item.id) >= 3, "setup gives " .. item.id)
                     end
