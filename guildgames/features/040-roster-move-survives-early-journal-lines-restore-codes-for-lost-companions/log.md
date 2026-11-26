@@ -26,3 +26,15 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: suite green
 - Evidence: `196 passed, 0 failed`
 - Next: T4 needs the release (user) and the affected player running the code in game
+
+## 2026-11-26 21:34 | VERIFY | T4 restore worked in game
+- Did: 0.11.2 released (`2c3631b`, CurseForge file 9833344); the affected player ran the code
+- Result: the user reported "the command worked"
+- Evidence: user statement in chat, 2026-11-26
+- Next: T5
+
+## 2026-11-26 21:35 | BUILD | T5 restore command moved to the dev build
+- Did: `Core/Game/Catcher.lua` `commands.restore` -> `developmentCommands.restore`; README, CHANGELOG 0.11.3, RELEASE_NOTES 0.11.3, spec, doc, verify
+- Result: suite green (see the release entry)
+- Evidence: `luajit tests/run.lua` in the 0.11.3 release
+- Next: none; feature done with 0.11.3

@@ -1,3 +1,15 @@
+# GuildGames 0.11.3
+
+**English:** The restore command from 0.11.2 (`/gg caught restore`) is no longer available: the companion it was made
+for is back. If you still miss a companion after the update to 0.11, keep a copy of
+`WTF/Account/<account>/SavedVariables/GuildGames.lua.bak` and contact us. Nothing else changes; arena fights still need
+the same version on both sides, so please update.
+
+**Deutsch:** Der Wiederherstellungsbefehl aus 0.11.2 (`/gg caught restore`) ist nicht mehr verfügbar: Der Begleiter,
+für den er gedacht war, ist zurück. Wenn dir nach dem Update auf 0.11 noch ein Begleiter fehlt, sichere eine Kopie von
+`WTF/Account/<Account>/SavedVariables/GuildGames.lua.bak` und melde dich. Sonst ändert sich nichts; Arenakämpfe
+brauchen weiterhin auf beiden Seiten dieselbe Version, also bitte aktualisieren.
+
 # GuildGames 0.11.2
 
 **English:** Fixes lost companions after the update to 0.11: when an older GuildGames version was still in use in the

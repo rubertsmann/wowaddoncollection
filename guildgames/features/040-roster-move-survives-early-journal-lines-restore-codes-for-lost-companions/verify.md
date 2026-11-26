@@ -13,10 +13,10 @@ Result after work:    `luajit tests/run.lua` -> 196 passed, 0 failed
 | R3 | once per character, bad code refused, survives a reload | first restore test | OFFLINE | `196 passed, 0 failed` | pass | 2026-11-26 |
 | R4 | code built from a backup | `RestoreCode` pinned in the first restore test; built from the real backup offline | OFFLINE | `GGR1;6500;55;elite;19;5;0;89;83;89;100;40;1;0;10;1;0;0;<name>` | pass | 2026-11-26 |
 | RF1-RF4 | see spec | the three new roster tests | OFFLINE | `196 passed, 0 failed` | pass | 2026-11-26 |
-| T4 | the affected player restores in game | `/gg caught restore <code>` after the release | NOT-VERIFIED | needs the user and the affected player | | |
+| T4 | the affected player restores in game | `/gg caught restore <code>` on 0.11.2 | IN-GAME | the user reported "the command worked" (2026-11-26) | pass | 2026-11-26 |
 
 ## In-game checklist (things only the user can do)
-- [ ] After 0.11.2: the affected player types `/gg caught restore <code>`; chat says the companion is back and active; the Companion view shows it with its hearts and training.
+- [x] After 0.11.2: the affected player types `/gg caught restore <code>`; chat says the companion is back and active (confirmed by the user).
 
 ## Accepted gaps
 - none

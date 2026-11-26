@@ -113,8 +113,7 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
   reset the size. Position and size are saved.
 - `/gg version | comm | hello | debug [n] | trace [n] [problems] | clean [confirm] | locale [code|auto]`
 - AZEcaught diagnostics: `/gg caught state | log [n] [filter] | wallet | chance | collection | dump [unit] | verbose on|off |
-  notify on|off | export | probe | model | restore <code>` (`model`: the companion model's animations and camera, shown
-  for 15 s; `restore`: brings back a companion lost to the 0.11.0/0.11.1 update bug from a support code, once per character). Every catch logs everything the client tells about the NPC (`/gg caught log 1 catch.dump`). The journal keeps the last 400 AZEcaught steps (throws, rolls with every factor, care, hearts, money).
+  notify on|off | export | probe | model` (`model`: the companion model's animations and camera, shown for 15 s). Every catch logs everything the client tells about the NPC (`/gg caught log 1 catch.dump`). The journal keeps the last 400 AZEcaught steps (throws, rolls with every factor, care, hearts, money).
 
 ## How it syncs
 Every guild member running GuildGames shares one record of results (copper amounts, the last 4 weeks and the 20 latest
@@ -136,6 +135,8 @@ send budget for every addon that embeds it, the guild-only gate, record pulls wi
 - Dev only, AZEcaught: `/ggd caught setup [items|boost]` (one start state: a test companion if none, 3000g, 3 of
   every shop item, the window on the Shop tab; `items` only the items, `boost` also starts Delicious Meat),
   `/ggd caught add` (target or a test NPC as caught), `time <minutes>` (fast-forward play time),
-  `give <gold>`, `force` (next roll catches), `need <name> <0-100>`, `week` (run the weekly payout again).
+  `give <gold>`, `force` (next roll catches), `need <name> <0-100>`, `week` (run the weekly payout again),
+  `restore <code>` (a companion from a restore code built out of a backup with `AzeCaught.RestoreCode`, once per
+  character; it was a player command in 0.11.2 only).
 - Dev only: `/ggd anim` (animation probe), `/ggd anim speed 0.25`, `/ggd game sim <n>` (fake leaderboard players that are
   never stored or sent). Offline: `luajit tools/coinflip.lua [H|T] [flips]`.
