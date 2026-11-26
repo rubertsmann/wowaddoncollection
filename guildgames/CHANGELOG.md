@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (protocol 1.6, schema 3, LibGuildSync MINOR 6)
+## 0.11.2 (2026-11-26, protocol 1.6, schema 3, LibGuildSync MINOR 6)
 - Fix: updating from 0.10.x or older no longer loses every catch and the active companion. 0.11.0 and 0.11.1 lost them when a guild member's outdated arena or companion section was dropped during the same load (feature 040).
 - `/gg caught restore <code>`: brings back a companion lost to that bug from a restore code built out of a pre-update backup (once per character).
 

@@ -1,3 +1,17 @@
+# GuildGames 0.11.2
+
+**English:** Fixes lost companions after the update to 0.11: when an older GuildGames version was still in use in the
+guild, updating could empty your AZEcaught companions and remove your active companion. This version keeps them.
+**If you have not updated to 0.11 yet, update straight to this version.** If you already lost your companion, keep a
+copy of `WTF/Account/<account>/SavedVariables/GuildGames.lua.bak` and contact us: we can build a restore code from it,
+which you enter once with `/gg caught restore <code>`.
+
+**Deutsch:** Behebt verlorene Begleiter nach dem Update auf 0.11: Wenn in der Gilde noch eine ältere GuildGames-Version
+lief, konnte das Update deine AZEcaught-Begleiter leeren und deinen aktiven Begleiter entfernen. Diese Version behält
+sie. **Wer noch nicht auf 0.11 aktualisiert hat, sollte direkt auf diese Version gehen.** Wenn dein Begleiter schon weg
+ist, sichere eine Kopie von `WTF/Account/<Account>/SavedVariables/GuildGames.lua.bak` und melde dich: Daraus können
+wir einen Wiederherstellungscode erstellen, den du einmal mit `/gg caught restore <Code>` eingibst.
+
 # GuildGames 0.11.1
 
 **English:** Fixes the "reserved for the Blizzard UI" error that GuildGames could cause in fights: the rope checked its
