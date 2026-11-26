@@ -113,7 +113,8 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
   reset the size. Position and size are saved.
 - `/gg version | comm | hello | debug [n] | trace [n] [problems] | clean [confirm] | locale [code|auto]`
 - AZEcaught diagnostics: `/gg caught state | log [n] [filter] | wallet | chance | collection | dump [unit] | verbose on|off |
-  notify on|off | export | probe | model` (`model`: the companion model's animations and camera, shown for 15 s). Every catch logs everything the client tells about the NPC (`/gg caught log 1 catch.dump`). The journal keeps the last 400 AZEcaught steps (throws, rolls with every factor, care, hearts, money).
+  notify on|off | export | probe | model | restore <code>` (`model`: the companion model's animations and camera, shown
+  for 15 s; `restore`: brings back a companion lost to the 0.11.0/0.11.1 update bug from a support code, once per character). Every catch logs everything the client tells about the NPC (`/gg caught log 1 catch.dump`). The journal keeps the last 400 AZEcaught steps (throws, rolls with every factor, care, hearts, money).
 
 ## How it syncs
 Every guild member running GuildGames shares one record of results (copper amounts, the last 4 weeks and the 20 latest

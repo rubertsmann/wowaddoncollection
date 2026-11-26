@@ -1620,7 +1620,8 @@ function AzeCaught.SanitizePersisted(savedVariables)
     if not (Utility.IsFinite(caught.activeSeconds) and caught.activeSeconds >= 0) then caught.activeSeconds = 0 end
     -- the roster; saved data from before it (no roster) is moved: the active companion keeps its state, every other
     -- catch becomes a fresh companion, and the arena progress per NPC goes to one companion of that NPC
-    local moving = caught.roster == nil
+    local moving = caught.moveRoster == true or caught.roster == nil
+    caught.moveRoster = nil
     local roster = {}
     for uid, raw in pairs(type(caught.roster) == "table" and caught.roster or {}) do
         local companion = uidNumber(uid) ~= math.huge and sanitizeCompanion(raw, collection)
@@ -1675,6 +1676,7 @@ function AzeCaught.SanitizePersisted(savedVariables)
     caught.peaks = peaks
     if not (Utility.IsFinite(caught.activeSeconds) and caught.activeSeconds >= 0) then caught.activeSeconds = 0 end
     if caught.paidWeek ~= nil and not addon.Games.IsPeriodKey(caught.paidWeek) then caught.paidWeek = nil end
+    if caught.restoredAt ~= nil then caught.restoredAt = SafeInteger(caught.restoredAt, 1) or 1 end
     if type(caught.journal) ~= "table" then caught.journal = {} end
     for index = #caught.journal, 1, -1 do
         if type(caught.journal[index]) ~= "string" then table.remove(caught.journal, index) end
@@ -1689,6 +1691,83 @@ function AzeCaught.SanitizePersisted(savedVariables)
     if addon.Arena.SanitizePersisted(caught, savedVariables.me) then dropped = dropped + 1 end
     if addon.Items.SanitizePersisted(caught) then dropped = dropped + 1 end
     return dropped
+end
+
+------------------------------------------------------------------ restore (support)
+
+-- A companion lost to a bug comes back from a restore code (`/gg caught restore <code>`) that support builds from a
+-- saved-data backup with AzeCaught.RestoreCode. Fields, ";"-separated, the name last:
+-- GGR1;npc;lvl;cls;hearts;fedStreak;careStreak;hunger;thirst;affection;energy;xp;w;l;atk;def;spd;vit;name
+AzeCaught.RESTORE_PREFIX = "GGR1"
+local RESTORE_NUMBERS = { "npc", "lvl", "cls", "hearts", "fedStreak", "careStreak", "hunger", "thirst", "affection", "energy",
+    "xp", "w", "l", "atk", "def", "spd", "vit" }
+
+---@param companion table a companion (needs, hearts, streaks, `npc`) with its arena progress in `ar`
+---@param entry table its collection entry (n, lvl, cls)
+---@return string
+function AzeCaught.RestoreCode(companion, entry)
+    local progress = addon.Arena.CleanProgress(companion.ar)
+    local values = { npc = companion.npc, lvl = entry.lvl, cls = entry.cls, xp = progress.xp, w = progress.w, l = progress.l }
+    for _, field in ipairs({ "hearts", "fedStreak", "careStreak", "hunger", "thirst", "affection", "energy" }) do
+        values[field] = math.floor((tonumber(companion[field]) or 0) + 0.5)
+    end
+    for _, stat in ipairs(addon.Arena.STATS) do values[stat] = progress.tr[stat] end
+    local parts = { AzeCaught.RESTORE_PREFIX }
+    for _, field in ipairs(RESTORE_NUMBERS) do parts[#parts + 1] = tostring(values[field]) end
+    parts[#parts + 1] = entry.n
+    return table.concat(parts, ";")
+end
+
+---@alias RestoreRefusal "readonly"|"used"|"code"|"rosterfull"
+
+-- Adds the companion of a restore code to the roster (also its collection entry when that is gone) and makes it active.
+-- Works once per character (`caught.restoredAt`).
+---@param code string
+---@param now integer server time
+---@return CompanionState|nil
+---@return RestoreRefusal|nil
+function AzeCaught.Restore(code, now)
+    local caught = AzeCaught.State()
+    if addon.Store.db.readonly then return nil, "readonly" end
+    if caught.restoredAt then return nil, "used" end
+    local Utility = addon.Utility
+    local parts = {}
+    for part in ((code or "") .. ";"):gmatch("([^;]*);") do parts[#parts + 1] = part end
+    if parts[1] ~= AzeCaught.RESTORE_PREFIX or #parts < #RESTORE_NUMBERS + 2 then return nil, "code" end
+    local values = {}
+    for index, field in ipairs(RESTORE_NUMBERS) do
+        values[field] = field == "cls" and parts[index + 1] or tonumber(parts[index + 1])
+    end
+    local name = Utility.CleanString(table.concat(parts, ";", #RESTORE_NUMBERS + 2), AzeCaught.MAXIMUM_NAME_BYTES)
+    local npcID = Utility.SafeInteger(values.npc, 1, AzeCaught.MAXIMUM_ID)
+    if not (npcID and name and AzeCaught.RARITY_MALUS[values.cls] and Utility.SafeInteger(values.lvl, 1, AzeCaught.MAXIMUM_LEVEL)) then
+        return nil, "code"
+    end
+    if Utility.Count(caught.roster) >= AzeCaught.ROSTER_LIMIT then return nil, "rosterfull" end
+    AzeCaught.Reconcile()
+    local entry = caught.collection[npcID]
+    if not entry then
+        entry = { n = name, lvl = values.lvl, cls = values.cls, disp = 0, seen = now, caught = 0, cnt = 1, last = now }
+        caught.collection[npcID] = entry
+    end
+    local raw = { npc = npcID, hearts = values.hearts, fedStreak = values.fedStreak, careStreak = values.careStreak,
+        hunger = values.hunger, thirst = values.thirst, affection = values.affection, energy = values.energy,
+        since = caught.activeSeconds, starve = 0, neglect = 0, snap = 0,
+        ar = { xp = values.xp, w = values.w, l = values.l, tr = { atk = values.atk, def = values.def, spd = values.spd, vit = values.vit } } }
+    local companion = sanitizeCompanion(raw, caught.collection)
+    if not companion then return nil, "code" end
+    companion.uid = newUid(caught)
+    companion.restAt = caught.activeSeconds
+    caught.roster[companion.uid] = companion
+    entry.caught = (entry.caught or 0) + 1
+    entry.got = math.max(entry.got or 0, entry.caught)
+    caught.restoredAt = now
+    AzeCaught.Reconcile()
+    if caught.active ~= companion then AzeCaught.Select(companion.uid, now) end
+    local description = AzeCaught.Describe(companion)
+    description.code = code
+    AzeCaught.Journal("INFORMATION", "companion.restore", "a companion was restored from a restore code", description)
+    return companion
 end
 
 ------------------------------------------------------------------ rope icon settings

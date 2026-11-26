@@ -158,6 +158,71 @@ return {
         harness.equal(again.caught.active.uid, active.uid)
     end,
 
+    ["roster: the move still happens when a guild record writes a journal line before the companions are sanitized"] = function(harness)
+        local addon = harness.addon({ now = NOW })
+        local outdated = { name = "B-R", rev = 1, total = { won = 0, lost = 0, wins = 0, losses = 0 }, weeks = {}, recent = {},
+            arena = { ch = { ["B-R#1"] = { to = ME, at = 1, wg = 0, f = { npc = 6500 } } } } }
+        local loaded = addon.Store.Init({ schema = 2, games = { ["B-R"] = outdated }, me = ME, caught = {
+            collection = {
+                [6500] = { n = "Saur", lvl = 55, cls = "elite", disp = 0, seen = NOW, caught = 1 },
+                [99] = { n = "Rat", lvl = 1, cls = "normal", disp = 0, seen = NOW, caught = 2 },
+            },
+            active = { npc = 6500, hearts = 19, fedStreak = 5, careStreak = 0, hunger = 88, thirst = 82, affection = 88, energy = 100,
+                since = 10, starve = 0, neglect = 0, snap = 0 },
+            activeSeconds = 500,
+            arena = { npcs = { [6500] = { xp = 40, w = 1, l = 0, tr = { atk = 10, def = 1 } } } },
+        } })
+        harness.equal(loaded.games["B-R"].arena, nil, "the outdated arena section was dropped (and journaled)")
+        local caught = loaded.caught
+        harness.equal(addon.Utility.Count(caught.roster), 3, "the saur and two rats")
+        harness.equal(caught.collection[6500].caught, 1); harness.equal(caught.collection[99].caught, 2)
+        local active = caught.active
+        harness.truthy(active and active.npc == 6500, "the active companion survived")
+        harness.equal(active.hearts, 19)
+        harness.equal(active.ar.xp, 40); harness.equal(active.ar.w, 1); harness.equal(active.ar.tr.atk, 10); harness.equal(active.ar.tr.def, 1)
+        harness.equal(caught.moveRoster, nil, "the move marker is cleared")
+    end,
+
+    ["roster: a restore code brings a wiped companion back once, with hearts and arena training, and survives a reload"] = function(harness)
+        local addon = fresh(harness)
+        local AzeCaught = addon.AzeCaught
+        local code = AzeCaught.RestoreCode({ npc = 6500, hearts = 19, fedStreak = 5, careStreak = 0, hunger = 88.6, thirst = 82.9,
+            affection = 88.6, energy = 100, ar = { xp = 40, w = 1, l = 0, tr = { atk = 10, def = 1 } } },
+            { n = "Tyrant Saur", lvl = 55, cls = "elite" })
+        harness.equal(code, "GGR1;6500;55;elite;19;5;0;89;83;89;100;40;1;0;10;1;0;0;Tyrant Saur")
+        -- the wiped state: the collection entry stays with 0 caught, a newer catch is active
+        AzeCaught.State().collection[6500] = { n = "Tyrant Saur", lvl = 55, cls = "elite", disp = 0, seen = NOW, caught = 0, cnt = 3 }
+        catch(addon, 555, 1)
+        local other = AzeCaught.Active()
+        harness.equal(select(2, AzeCaught.Restore("GGR1;6500;55", NOW)), "code")
+        harness.equal(select(2, AzeCaught.Restore("XXX1;6500;55;elite;19;5;0;89;83;89;100;40;1;0;10;1;0;0;Saur", NOW)), "code")
+        harness.equal(select(2, AzeCaught.Restore("GGR1;6500;55;boss;19;5;0;89;83;89;100;40;1;0;10;1;0;0;Saur", NOW)), "code")
+        local saur = assert(AzeCaught.Restore(code, NOW))
+        harness.truthy(AzeCaught.Active() == saur, "the restored companion is active")
+        harness.truthy(other.restAt ~= nil, "the other one rests")
+        harness.equal(saur.hearts, 19); harness.equal(saur.fedStreak, 5); harness.equal(saur.hunger, 89)
+        harness.equal(saur.n, "Tyrant Saur"); harness.equal(saur.lvl, 55)
+        harness.equal(saur.ar.xp, 40); harness.equal(saur.ar.w, 1); harness.equal(saur.ar.tr.atk, 10); harness.equal(saur.ar.tr.def, 1)
+        harness.equal(AzeCaught.State().collection[6500].caught, 1)
+        harness.equal(AzeCaught.State().collection[6500].cnt, 3, "the history stays")
+        harness.equal(addon.Utility.Count(AzeCaught.State().roster), 2)
+        harness.equal(select(2, AzeCaught.Restore(code, NOW)), "used", "once per character")
+        local again = harness.addon({ now = NOW }).Store.Init({ schema = 3, games = {}, me = ME,
+            caught = addon.Utility.DeepCopy(AzeCaught.State()) })
+        harness.equal(again.caught.active.uid, saur.uid); harness.equal(again.caught.active.ar.tr.atk, 10)
+        harness.equal(again.caught.collection[6500].caught, 1)
+        harness.equal(again.caught.restoredAt, NOW)
+    end,
+
+    ["roster: a restore code also works when the collection entry is gone"] = function(harness)
+        local addon = fresh(harness)
+        local AzeCaught = addon.AzeCaught
+        local saur = assert(AzeCaught.Restore("GGR1;6500;55;elite;19;5;0;89;83;89;100;40;1;0;10;1;0;0;Tyrant; Saur", NOW))
+        harness.equal(saur.n, "Tyrant; Saur", "the name may hold the separator")
+        harness.equal(AzeCaught.State().collection[6500].caught, 1)
+        harness.truthy(AzeCaught.Active() == saur)
+    end,
+
     ["roster: garbage entries, a dangling active id and the cap are handled on load"] = function(harness)
         local addon = harness.addon({ now = NOW })
         local roster = {

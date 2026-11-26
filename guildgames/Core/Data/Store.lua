@@ -47,8 +47,11 @@ end
 local MIGRATIONS = {
     -- 1 -> 2: AZEcaught's local state starts empty; game records are unchanged
     [1] = function(savedVariables) savedVariables.caught = {} end,
-    -- 2 -> 3: nothing here; the roster is built from the collection when db.caught.roster is missing
-    [2] = function() end,
+    -- 2 -> 3: only a marker; AzeCaught.SanitizePersisted builds the roster from the collection. The marker and not a
+    -- missing db.caught.roster decides: a journal line written earlier in the load (AzeCaught.State) creates an empty one.
+    [2] = function(savedVariables)
+        if type(savedVariables.caught) == "table" then savedVariables.caught.moveRoster = true end
+    end,
 }
 
 ---@param savedVariables any

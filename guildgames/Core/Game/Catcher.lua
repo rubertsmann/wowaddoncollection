@@ -1162,6 +1162,23 @@ function commands.export()
     printLine("(also saved as lastExport in the SavedVariables file after /reload or logout)")
 end
 
+-- /gg caught restore <code>: brings back a companion lost to a bug, from the code support built out of a backup
+function commands.restore(arguments)
+    local companion, refusal = AzeCaught.Restore(arguments, now())
+    if not companion then
+        printLine(({ used = "restore: this character already used a restore code",
+            readonly = "restore: this session runs without saving", rosterfull = "restore: the roster is full" })[refusal]
+            or "restore: the code is not valid (copy it exactly)")
+        return
+    end
+    local progress = addon.Arena.Progress(companion)
+    printLine(("restore: %s is back and active (hearts %d, arena XP %d, training atk %d def %d spd %d vit %d)"):format(
+        companion.n, companion.hearts, progress.xp, progress.tr.atk, progress.tr.def, progress.tr.spd, progress.tr.vit))
+    addon.Catcher.lastZones = {}
+    addon.Catcher.PublishSoon(true)
+    addon.Events.Fire("CAUGHT_CHANGED")
+end
+
 -- /gg caught dump [unit]: everything the client tells about a unit (default target), into the journal and chat
 function commands.dump(arguments)
     local unit = ((arguments or ""):match("^%s*(%S+)") or "target"):lower()
