@@ -20,14 +20,17 @@ else (unrelated working-tree changes) goes into it unless the user says so.
 ## Steps (in order)
 1. **Version, all places** (they must agree):
    - `<addon>/<Name>.toc` `## Version: X.Y.Z`
-   - `<addon>/<Name>-Dev.toc` `## Version: X.Y.Z-dev` (generated and gitignored: edit it anyway, so the dev build shows it)
    - `<addon>/Core/Base/Init.lua` `fallbackVersion = "X.Y.Z"`
+   - `<addon>/<Name>-Dev.toc`: generated and gitignored, never edit it by hand. Run `powershell -File
+     <addon>/tools/deploy.ps1` after the TOC bump: it regenerates the repo copy (`## Version: X.Y.Z-dev`) AND the copy in
+     the game's `AddOns\<Name>-Dev` folder, which the dev client reads (a skipped deploy leaves the dev build reporting an
+     old version, e.g. 0.11.1-dev on a 0.13.0 repo). Check both files say `X.Y.Z-dev`; the game needs a restart.
 2. **Developer changelog:** `## Unreleased` -> `## X.Y.Z (YYYY-MM-DD, protocol P, schema S[, LibGuildSync MINOR M])`
    (date from the system, never guessed).
-3. **Player notes:** a new section at the TOP of `<addon>/RELEASE_NOTES.md`: `# <Name> X.Y.Z`, then
-   `**English:**` and `**Deutsch:**` paragraphs in plain player language (what changes for them, whether everyone
-   must update). No internals, no MINOR/protocol numbers, no real character or realm names. This section is the
-   CurseForge changelog.
+3. **Player notes:** a new section at the TOP of `<addon>/RELEASE_NOTES.md`: `# <Name> X.Y.Z`, then plain English
+   paragraphs in player language (what changes for them, whether everyone must update). English only: no `**English:**`
+   label, no German or other translation (older sections keep theirs; leave them as they are). No internals, no
+   MINOR/protocol numbers, no real character or realm names. This section is the CurseForge changelog.
 4. **Tests:** `export PATH="$PATH:$(cygpath "$LOCALAPPDATA")/Programs/LuaJIT/bin"`, then `luajit tests/run.lua` in the
    addon folder AND in `libguildsync` when it changed. Quote the "N passed, 0 failed" line. A failure stops the release.
 5. **Commit** only the release files plus the reviewed changes: `release(<addon>): X.Y.Z (<short summary>)`, trailer
