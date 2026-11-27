@@ -24,7 +24,7 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
   3x to 75x the stake, and lines add up (about 94% return). Press **Spin** or click the lever's knob. Hover the
   machine to see the paytable.
 - **Survivor:** a tower in the middle of the arena fights monsters that walk in from the edges. Bet a stake on how
-  long it survives: 1:00 pays 2x, 1:30 3x, 2:00 5x, 3:00 10x. The tower starts with a fire bolt. Every level-up pauses
+  long it survives: your stake comes back with a small bonus, 1:00 x1.05, 1:30 x1.1, 2:00 x1.2, 3:00 x1.4. The tower starts with a fire bolt. Every level-up pauses
   the run and offers three items to pick from: 13 weapons and 12 passives. Offence: might, haste, volley (+1 projectile),
   penetration (+1 pierce), reach (+15% area). Defence: armor, vitality, regeneration, thorns (damage to monsters touching
   the tower), deflect (turns damage away and hits the attacker with 3x of it), barrier (a shield that refills after 3 s)
@@ -35,8 +35,9 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
   6 weapons. Reach the time and you win; if the tower falls first, you lose the stake. **Give up**
   ends the run as a loss. The stake is booked when the run starts, so a /reload or logout mid-run counts as a loss.
   Closing the window pauses the run.
-  **Endless** mode has no end time: every full minute doubles the payout (1:00 x2, 2:00 x4, 3:00 x8, up to x64), and
+  **Endless** mode has no end time: 1:00 pays x1.05 and every further minute 5% more, up to x1.3 at 6:00, and
   **Cash out** takes it at any time. If the tower falls, the last minute reached is still paid; before 1:00 the stake is lost.
+  From 4:00 the monsters grow much stronger every minute, so every run ends.
   With a companion, your companion stands in the tower's place and attacks whenever a weapon fires.
 - **Companion Dash:** your companion runs through a scrolling landscape; the monsters you have found or caught come at
   it. Click the top half of the play area to jump (hold for a higher jump), hold the bottom half to duck under flying
@@ -114,6 +115,11 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     the replay in the Arena view (`/gg arena`), or on their own an hour after the fight.
 - **Money pool:** one balance for all games: 20g to start, plus your casino results, catch rewards and weekly payouts,
   minus food, water and the shop. You cannot stake more than the balance. It is shown next to the game switch.
+- **Daily win limit:** the coin flip, slots and Survivor together can raise your pool by at most 500g a day (net:
+  a loss that day makes room again; the day starts at 00:00 UTC). What is left is shown next to the pool. You can keep
+  playing at the limit, but a win pays nothing more that day; the leaderboards still show the real results. A stake of
+  0 is free play in all three games: nothing is won, lost or stored. The coin flip and slots wait while a Survivor run
+  with a stake is open.
 - **Window:** the icons at the top left switch the game (hover for the name). Drag the handle in the bottom-left
   corner (or the header) to move the window; drag the grip in the bottom-right corner to scale it, double-click it to
   reset the size. Position and size are saved.

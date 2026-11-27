@@ -28,7 +28,9 @@ local addonName, addon = ...
 ---@field multiplier integer sum of the winning lines' multipliers (0 = no win)
 ---@field stake integer copper
 ---@field payout integer stake * multiplier
----@field net integer payout - stake when it won, else -stake
+---@field net integer payout - stake when it won, else -stake (0 in free play)
+---@field paid integer what the money pool got: net, a win cut to the daily win limit left (0 in free play)
+---@field free? boolean free play (stake 0): shown only, nothing stored
 
 ---@class SlotsModule
 local Slots = {}
@@ -127,7 +129,8 @@ function Slots.ReturnToPlayer()
 end
 
 -- One spin. The stops are drawn and the result STORED here (Games.RecordPlay), before any animation. Returns the result,
--- or nil and the refusal ("stake", "readonly", "name", "funds": more than the money pool holds).
+-- or nil and the refusal ("stake", "readonly", "name", "funds": more than the money pool holds, "run": a survivor stake is
+-- pending). Stake 0 is free play: the spin is drawn and shown, nothing is stored or paid.
 ---@param myName string|nil
 ---@param stake any copper, 1..Games.MAXIMUM_STAKE
 ---@param now integer
@@ -135,18 +138,25 @@ end
 ---@return SlotResult|nil
 ---@return FlipRefusal|nil
 function Slots.Spin(myName, stake, now, randomFunction)
-    if not addon.Utility.SafeInteger(stake, 1, addon.Games.MAXIMUM_STAKE) then return nil, "stake" end
-    local refused = addon.Games.Refusal(myName, stake, true)
-    if refused then return nil, refused end
+    if stake ~= 0 and not addon.Utility.SafeInteger(stake, 1, addon.Games.MAXIMUM_STAKE) then return nil, "stake" end
+    local free = stake == 0
+    if not free then
+        local refused = addon.Games.Refusal(myName, stake, true) or addon.Games.RunRefusal(myName)
+        if refused then return nil, refused end
+    end
     local stops = {}
     for reel = 1, Slots.REELS do stops[reel] = math.min(#Slots.STRIP, 1 + math.floor(randomFunction() * #Slots.STRIP)) end
     local grid = Slots.Grid(stops)
     local lines, multiplier = Slots.Evaluate(grid)
-    local payout = stake * multiplier
-    local net = multiplier > 0 and payout - stake or -stake
-    local stored, refusal = addon.Games.RecordPlay(myName, "slots", stake, net, now)
+    local result = { stops = stops, grid = grid, lines = lines, multiplier = multiplier, stake = stake, payout = 0, net = 0,
+        paid = 0, free = free or nil }
+    if free then return result end
+    result.payout = stake * multiplier
+    result.net = multiplier > 0 and result.payout - stake or -stake
+    local stored, refusal, paid = addon.Games.RecordPlay(myName, "slots", stake, result.net, now)
     if not stored then return nil, refusal end
-    return { stops = stops, grid = grid, lines = lines, multiplier = multiplier, stake = stake, payout = payout, net = net }
+    result.paid = paid
+    return result
 end
 
 ------------------------------------------------------------------ reel motion (what the UI plays)

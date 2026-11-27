@@ -25,6 +25,44 @@ function Model.MoneyText(copper)
     return table.concat(parts, " ")
 end
 
+-- A payout percent as a multiplier: 105 -> "x1.05", 110 -> "x1.1", 200 -> "x2" (decimal mark from the locale).
+---@param pct integer
+---@return string
+function Model.PercentText(pct)
+    local Text, Format = addon.Text, addon.Locale.Format
+    pct = math.max(0, math.floor(pct or 0))
+    local whole, fraction = math.floor(pct / 100), pct % 100
+    local number = tostring(whole)
+    if fraction > 0 then
+        local digits = fraction % 10 == 0 and tostring(fraction / 10) or string.format("%02d", fraction)
+        number = Format(Text["{whole}.{fraction}"], { whole = whole, fraction = digits })
+    end
+    return Format(Text["x{n}"], { n = number })
+end
+
+-- The result line of a won play: the win, and when the daily win limit cut it, what was paid.
+---@param net integer the play's win (record value)
+---@param paid integer what the money pool got
+---@return string
+function Model.WinText(net, paid)
+    local Text, Format = addon.Text, addon.Locale.Format
+    if paid >= net then return Format(Text["You won {gold}"], { gold = Model.MoneyText(net) }) end
+    if paid <= 0 then
+        return Format(Text["You won {gold}, but the daily win limit is reached: nothing paid."], { gold = Model.MoneyText(net) })
+    end
+    return Format(Text["You won {gold}, paid {paid} (daily win limit)."], { gold = Model.MoneyText(net), paid = Model.MoneyText(paid) })
+end
+
+-- The daily win limit for the header: what a win may still add today, or that the limit is reached.
+---@param now integer
+---@return string
+function Model.WinLimitText(now)
+    local Text, Format = addon.Text, addon.Locale.Format
+    local remaining = addon.Wallet.WinRemaining(now)
+    if remaining <= 0 then return "|cffff9933" .. Text["Daily win limit reached"] .. "|r" end
+    return Format(Text["Win limit today: {gold} left"], { gold = Model.MoneyText(remaining) })
+end
+
 ---@class LeaderboardRow
 ---@field rank integer
 ---@field name string escaped display name
@@ -334,6 +372,7 @@ end
 function Model.CommonRefusalText(refusal, myName)
     local Text, Format = addon.Text, addon.Locale.Format
     if refusal == "readonly" then return Text["Saved data is read-only in this session."] end
+    if refusal == "run" then return Text["Finish your Survivor run first."] end
     if refusal == "funds" then
         return Format(Text["Not enough money in the pool ({gold})."], { gold = Model.MoneyText(addon.Wallet.Balance(myName)) })
     end

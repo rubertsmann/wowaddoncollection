@@ -83,7 +83,7 @@ return {
                 harness.equal(addon.IS_DEVELOPMENT_BUILD, development)
                 harness.equal(addon.PREFIX, development and "GGamesDev" or "GGames")
                 harness.equal(addon.SAVED_VARIABLES_NAME, development and "GuildGamesDevDB" or "GuildGamesDB")
-                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 8); harness.equal(addon.Store.SCHEMA, 3)
+                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 9); harness.equal(addon.Store.SCHEMA, 3)
                 -- the key binding's globals carry this build's names (live + dev installed together)
                 local binding = addon.Catcher.BindingNames(development)
                 harness.equal(binding.name, development and "AZECAUGHT_THROW_DEV" or "AZECAUGHT_THROW")
@@ -124,7 +124,7 @@ return {
                     if addon.SurvivorArena.state.run then addon.SurvivorArena.Start() end   -- give up
                 end)
                 harness.truthy(okRun, "the survivor run failed: " .. tostring(runError))
-                harness.truthy(addon.Games.Get("A-R").survivor, "the run was stored")
+                harness.truthy(addon.Games.Get("A-R").tower, "the run was stored")
                 harness.truthy(addon.SurvivorArena.widgets.pet, "the survivor companion model was built")
                 -- the runner: locked without a companion; a run without input crashes and is booked
                 addon.GamesTab.SelectGame("runner")

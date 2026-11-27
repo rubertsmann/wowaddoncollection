@@ -97,7 +97,7 @@ return {
 
     ["slots: refused stakes and a readonly db record nothing"] = function(harness)
         local addon = fresh(harness)
-        for _, stake in ipairs({ 0, -1, 1.5, addon.Games.MAXIMUM_STAKE + 1, "5" }) do
+        for _, stake in ipairs({ -1, 1.5, addon.Games.MAXIMUM_STAKE + 1, "5" }) do
             harness.equal(select(2, addon.Slots.Spin("Me-R", stake, NOW, math.random)), "stake")
         end
         addon.Store.db.readonly = true

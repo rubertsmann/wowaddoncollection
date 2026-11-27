@@ -34,7 +34,8 @@ local addonName, addon = ...
 ---@field weeks table<string, GameTotals> "YYYY-Www" -> totals; at most MAXIMUM_WEEKS newest keys
 ---@field recent GameFlip[] newest first, at most MAXIMUM_RECENT
 ---@field slots? GameSection slot machine results
----@field survivor? GameSection survivor results
+---@field tower? GameSection survivor results (protocol 1.9, percent payouts)
+---@field survivor? GameSection survivor results from before protocol 1.9 (2x..64x payouts), read-only history
 ---@field caught? table AZEcaught: { c = current companion | nil, weeks = { [periodKey] = peak level } } (protocol 1.1;
 ---  1.0 peers drop it). Not a GameSection: not in Games.ORDER, sanitized by AzeCaught.SanitizeSection.
 ---@field arena? table companion arena (protocol 1.2), sanitized by Arena.SanitizeSection.
@@ -44,9 +45,11 @@ local addonName, addon = ...
 ---@field outcome "H"|"T"
 ---@field won boolean
 ---@field stake integer copper
----@field net integer +stake or -stake (copper)
+---@field net integer +stake or -stake (copper), 0 in free play
+---@field paid integer what the money pool got: net, a win cut to the daily limit left (Wallet.BookCasino), 0 in free play
+---@field free? boolean free play: no stake, nothing stored
 
----@alias FlipRefusal "stake"|"pick"|"readonly"|"name"|"funds"
+---@alias FlipRefusal "stake"|"pick"|"readonly"|"name"|"funds"|"run"
 
 ---@class GamesModule
 ---@field simulated table<string, GameRecord> fake records (dev command), never stored, never sent
@@ -118,27 +121,38 @@ end
 
 ------------------------------------------------------------------ games and their sections of the record
 -- One record holds every game: the coin flip's section is the record itself (total, weeks, recent), every later game has its own optional sub-table with the same shape (record.slots). Each section feeds its own
--- leaderboard. A play is binary for the leaderboard: a loss costs exactly the stake, a win nets 1..maximumWinFactor x stake.
+-- leaderboard. A play is binary for the leaderboard: a loss costs exactly the stake, a win nets
+-- minimumWinNet..maximumWinFactor x stake (minimumWinNet defaults to the stake).
+--
+-- Survivor plays are stored in the record field "tower" since protocol 1.9 (small percent payouts: a win may net less
+-- than the stake). The field "survivor" holds the runs from before, which paid 2x..64x; it is kept and validated as the
+-- game "legacySurvivor" (it still counts in the money pool) but gets no new plays and no leaderboard. Peers before 1.9
+-- drop the unknown "tower" field instead of rejecting the record.
 
----@alias GameKey "coin"|"slots"|"survivor"
+---@alias GameKey "coin"|"slots"|"survivor"|"legacySurvivor"
 
 ---@class GameKind
+---@field field? string the record field of the section (nil: the coin flip, whose section is the record itself)
 ---@field maximumWinFactor integer the most a win can net, in stakes
+---@field minimumWinNet? integer the least a win can net in copper (nil: the stake)
 
 -- Highest total multiplier of one slot spin (every payline paying the top symbol): Slots.MAXIMUM_MULTIPLIER must equal it
 -- (tests/test_slots.lua pins both).
 Games.SLOTS_MAXIMUM_MULTIPLIER = 375
--- Highest payout factor of a survivor run (endless mode's cap): Survivor.ENDLESS_MAXIMUM_FACTOR must equal it.
+-- Highest payout factor of the survivor runs stored before the "tower" field (validation of that history only).
 Games.SURVIVOR_MAXIMUM_FACTOR = 64
 
 ---@type table<GameKey, GameKind>
 Games.KINDS = {
     coin = { maximumWinFactor = 1 },
-    slots = { maximumWinFactor = Games.SLOTS_MAXIMUM_MULTIPLIER - 1 },
-    survivor = { maximumWinFactor = Games.SURVIVOR_MAXIMUM_FACTOR - 1 },
+    slots = { field = "slots", maximumWinFactor = Games.SLOTS_MAXIMUM_MULTIPLIER - 1 },
+    survivor = { field = "tower", maximumWinFactor = 1, minimumWinNet = 1 },
+    legacySurvivor = { field = "survivor", maximumWinFactor = Games.SURVIVOR_MAXIMUM_FACTOR - 1 },
 }
----@type GameKey[] display order of the games
+---@type GameKey[] display order of the games (each with its leaderboard)
 Games.ORDER = { "coin", "slots", "survivor" }
+---@type GameKey[] every game stored in its own record field
+Games.STORED = { "slots", "survivor", "legacySurvivor" }
 
 -- The section of `gameRecord` that holds `gameKey`'s results (nil when that game was never played).
 ---@param gameRecord GameRecord|nil
@@ -147,7 +161,8 @@ Games.ORDER = { "coin", "slots", "survivor" }
 function Games.Section(gameRecord, gameKey)
     if type(gameRecord) ~= "table" then return nil end
     if gameKey == nil or gameKey == "coin" then return gameRecord end
-    return gameRecord[gameKey]
+    local kind = Games.KINDS[gameKey]
+    return kind and kind.field and gameRecord[kind.field] or nil
 end
 
 -- net copper of one recent entry: coin entries carry r = "W"|"L", other games the signed net n
@@ -199,8 +214,9 @@ local function sanitizeEntry(entry, gameKey, horizon)
         if entry.r ~= "W" and entry.r ~= "L" then return nil end
         return { c = entry.c, r = entry.r, t = entry.t }
     end
-    local net = SafeInteger(entry.n, -entry.c, entry.c * Games.KINDS[gameKey].maximumWinFactor)
-    if not net or (net < 0 and net ~= -entry.c) or (net >= 0 and net < entry.c) then return nil end
+    local kind = Games.KINDS[gameKey]
+    local net = SafeInteger(entry.n, -entry.c, entry.c * kind.maximumWinFactor)
+    if not net or (net < 0 and net ~= -entry.c) or (net >= 0 and net < (kind.minimumWinNet or entry.c)) then return nil end
     return { c = entry.c, n = net, t = entry.t, it = entry.it == 1 and 1 or nil }
 end
 
@@ -249,11 +265,12 @@ function Games.Sanitize(gameRecord)
     local coin = sanitizeSection(gameRecord, "coin", horizon)
     if not coin then return nil end
     local clean = { name = gameRecord.name, rev = revision, total = coin.total, weeks = coin.weeks, recent = coin.recent }
-    for _, gameKey in ipairs(Games.ORDER) do
-        if gameKey ~= "coin" and gameRecord[gameKey] ~= nil then
-            local section = sanitizeSection(gameRecord[gameKey], gameKey, horizon)
+    for _, gameKey in ipairs(Games.STORED) do
+        local field = Games.KINDS[gameKey].field
+        if gameRecord[field] ~= nil then
+            local section = sanitizeSection(gameRecord[field], gameKey, horizon)
             if not section then return nil end
-            clean[gameKey] = section
+            clean[field] = section
         end
     end
     -- AZEcaught: a bad companion section is dropped alone; the casino results stay
@@ -406,47 +423,71 @@ Games.Refusal = refusal
 local function record(myName, gameKey, entry, now)
     local previousRecord = database().games[myName]
     local gameRecord = previousRecord and addon.Utility.DeepCopy(previousRecord) or emptyRecord(myName)
-    if gameKey ~= "coin" then gameRecord[gameKey] = gameRecord[gameKey] or emptySection() end
+    local field = Games.KINDS[gameKey].field
+    if field then gameRecord[field] = gameRecord[field] or emptySection() end
     applyPlay(Games.Section(gameRecord, gameKey), entry)
     gameRecord.rev = math.max(now, (previousRecord and previousRecord.rev or 0) + 1)
     database().games[myName] = gameRecord
 end
 
--- One coin flip against the house. The outcome is decided AND stored here, before any animation (a /reload cannot lose
--- or re-roll it). Returns the result, or nil and the refusal reason.
+-- "run" while a survivor stake of mine is pending (a run in progress, or one a /reload left open): the coin flip and
+-- the slots wait, so the daily win limit left at the start of a run cannot shrink during it. Free play never waits.
 ---@param myName string|nil
----@param stake any copper, 1..MAXIMUM_STAKE
+---@return "run"|nil
+function Games.RunRefusal(myName)
+    if addon.Wallet.PendingStake(myName) > 0 then return "run" end
+    return nil
+end
+
+-- One coin flip against the house. The outcome is decided AND stored here, before any animation (a /reload cannot lose
+-- or re-roll it). The record keeps the real result; the money pool gets it cut to the daily win limit left
+-- (result.paid). Stake 0 is free play: the outcome is drawn and nothing is stored. Returns the result, or nil and the
+-- refusal reason.
+---@param myName string|nil
+---@param stake any copper, 0 (free play) or 1..MAXIMUM_STAKE
 ---@param pick any "H" or "T"
 ---@param now integer server time
 ---@param randomFunction fun(): number in [0, 1)
 ---@return FlipResult|nil
 ---@return FlipRefusal|nil
 function Games.Flip(myName, stake, pick, now, randomFunction)
-    if not addon.Utility.SafeInteger(stake, 1, Games.MAXIMUM_STAKE) then return nil, "stake" end
+    if stake ~= 0 and not addon.Utility.SafeInteger(stake, 1, Games.MAXIMUM_STAKE) then return nil, "stake" end
     if pick ~= "H" and pick ~= "T" then return nil, "pick" end
-    local refused = refusal(myName, stake, true)
-    if refused then return nil, refused end
+    local free = stake == 0
+    if not free then
+        local refused = refusal(myName, stake, true) or Games.RunRefusal(myName)
+        if refused then return nil, refused end
+    end
     local outcome = randomFunction() < 0.5 and "H" or "T"
     local won = outcome == pick
+    if free then return { outcome = outcome, won = won, stake = 0, net = 0, paid = 0, free = true } end
     record(myName, "coin", { c = stake, r = won and "W" or "L", t = now }, now)
-    return { outcome = outcome, won = won, stake = stake, net = won and stake or -stake }
+    local net = won and stake or -stake
+    local paid = addon.Wallet.BookCasino(myName, net, now, "coin")
+    return { outcome = outcome, won = won, stake = stake, net = net, paid = paid }
 end
 
--- Stores a play of another game whose outcome the caller decided (Slots.Spin, Survivor). net: -stake, or stake..factor*stake.
+-- Stores a play of another game whose outcome the caller decided (Slots.Spin, Survivor) and books it against the daily
+-- win limit. net: -stake, or minimumWinNet..factor*stake. Returns true and what the money pool got (the net, a win cut
+-- to the daily limit left), or false and the refusal.
 ---@param myName string|nil
 ---@param gameKey GameKey
 ---@param stake any copper
 ---@param net integer
 ---@param now integer
+---@param usedItem? boolean
 ---@return boolean stored
 ---@return FlipRefusal|nil
+---@return integer|nil paid
 function Games.RecordPlay(myName, gameKey, stake, net, now, usedItem)
     local refused = refusal(myName, stake)
     if refused then return false, refused end
     local entry = sanitizeEntry({ c = stake, n = net, t = now, it = usedItem and 1 or nil }, gameKey, math.huge)
-    if gameKey == "coin" or not entry then error("invalid play for " .. tostring(gameKey) .. ": net " .. tostring(net)) end
+    if gameKey == "coin" or gameKey == "legacySurvivor" or not entry then
+        error("invalid play for " .. tostring(gameKey) .. ": net " .. tostring(net))
+    end
     record(myName, gameKey, entry, now)
-    return true
+    return true, nil, addon.Wallet.BookCasino(myName, net, now, gameKey)
 end
 
 local NON_PLAY_SECTIONS = { caught = true, arena = true, runner = true }
@@ -483,7 +524,8 @@ function Games.Simulate(count, now, randomFunction)
         local playerName = "Sim" .. index .. "-Test"
         local gameRecord = emptyRecord(playerName)
         for _, gameKey in ipairs(Games.ORDER) do
-            if gameKey ~= "coin" then gameRecord[gameKey] = emptySection() end
+            local field = Games.KINDS[gameKey].field
+            if field then gameRecord[field] = emptySection() end
         end
         for _, gameKey in ipairs(Games.ORDER) do
             local section = Games.Section(gameRecord, gameKey)

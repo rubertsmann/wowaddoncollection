@@ -8,19 +8,23 @@ local addonName, addon = ...
 -- (cleave, frost nova, chain lightning, ...) and passives come from level-ups. Kills give experience; every level offers
 -- up to 3 items (a new weapon, a weapon level, or a passive) and the run pauses until one is picked.
 --
--- Betting: the stake goes on a survival time (Survivor.TARGETS). Survive until then and the payout is factor x stake;
+-- Betting: the stake goes on a survival time (Survivor.TARGETS). Survive until then and the payout is pct % of the stake
+-- (stake included: 105 pays the stake back plus 5%, at least 1c more);
 -- fall earlier (or give up, or leave the game mid-run) and the stake is lost. A run is a game of skill (the item picks),
 -- so it cannot be decided before it is played like the coin flip: instead the stake is marked PENDING in the saved data
 -- when the run starts. A /reload or logout mid-run then still books the loss (Survivor.ResolvePending, at login).
 --
--- Endless mode (Survivor.ENDLESS): no fixed end. Every full minute survived doubles the payout (1:00 x2, 2:00 x4, ...,
--- capped at Games.SURVIVOR_MAXIMUM_FACTOR). The run ends when the tower falls or the player cashes out (the Give up
--- button); either way the last minute reached is paid, and before 1:00 the stake is lost. The reached factor is kept
--- in the pending mark, so a /reload mid-run pays what was already reached, no more.
+-- Endless mode (Survivor.ENDLESS): no fixed end. The first full minute pays 105%, every further minute 5% more, capped
+-- at ENDLESS_MAXIMUM_PERCENT. The run ends when the tower falls or the player cashes out (the Give up
+-- button); either way the last minute reached is paid, and before 1:00 the stake is lost. The reached percent is kept
+-- in the pending mark (pct), so a /reload mid-run pays what was already reached, no more.
+--
+-- Stake 0 is free play: the run is played, nothing is marked pending, stored or paid. Every win goes through the daily
+-- win limit of the money pool (Wallet.BookCasino, via Games.RecordPlay).
 
 ---@class SurvivorTarget
 ---@field seconds number the time to survive (math.huge in endless mode)
----@field factor integer payout multiplier (payout = factor x stake, net = (factor - 1) x stake); 0 in endless mode
+---@field pct integer payout in percent of the stake (stake included); 0 in endless mode (Survivor.EndlessPercent)
 ---@field endless? boolean
 
 ---@class SurvivorEnemy
@@ -57,7 +61,7 @@ local addonName, addon = ...
 ---@field kind "shot"|"hit"|"kill"|"cleave"|"nova"|"blast"|"zap"|"hurt"|"shieldbreak"|"levelup"|"milestone"|"won"|"lost"
 ---@field weapon? string shot, blast, zap: the weapon key
 ---@field points? number[][] zap: the chain's points { x, y }, from the tower
----@field factor? integer milestone: the endless payout factor reached
+---@field pct? integer milestone: the endless payout percent reached
 ---@field x? number
 ---@field y? number
 ---@field radius? number
@@ -90,7 +94,8 @@ local addonName, addon = ...
 ---@field finished "won"|"lost"|nil
 ---@field events SurvivorEvent[] what happened since the UI last took them
 ---@field accumulator number unsimulated seconds (fixed step)
----@field reachedFactor? integer endless: the payout factor reached so far
+---@field reachedPercent? integer endless: the payout percent reached so far
+---@field paid? integer after Settle: what the money pool got (a win cut to the daily limit left)
 ---@field spirals table<string, number> spiral weapons: the angle of the next volley
 ---@field shield number barrier points left
 ---@field shieldPause number seconds until the barrier refills
@@ -106,27 +111,48 @@ Survivor.HALF_WIDTH, Survivor.HALF_HEIGHT = 145, 100   -- arena, tower at (0, 0)
 Survivor.TOWER_RADIUS = 14
 Survivor.BASE_HP = 100
 
----@type SurvivorTarget[] shortest first; no factor above Games.SURVIVOR_MAXIMUM_FACTOR (endless mode reaches it)
+---@type SurvivorTarget[] shortest first; a win nets at most the stake (Games.KINDS.survivor.maximumWinFactor = 1)
 Survivor.TARGETS = {
-    { seconds = 60, factor = 2 },
-    { seconds = 90, factor = 3 },
-    { seconds = 120, factor = 5 },
-    { seconds = 180, factor = 10 },
+    { seconds = 60, pct = 105 },
+    { seconds = 90, pct = 110 },
+    { seconds = 120, pct = 120 },
+    { seconds = 180, pct = 140 },
 }
 
 ---@type SurvivorTarget endless mode: index #TARGETS + 1 (Survivor.Target)
-Survivor.ENDLESS = { seconds = math.huge, factor = 0, endless = true }
+Survivor.ENDLESS = { seconds = math.huge, pct = 0, endless = true }
 Survivor.ENDLESS_INDEX = #Survivor.TARGETS + 1
 Survivor.MILESTONE_SECONDS = 60
-Survivor.ENDLESS_MAXIMUM_FACTOR = 64   -- 6 minutes; Games.SURVIVOR_MAXIMUM_FACTOR must equal it
+Survivor.ENDLESS_STEP_PERCENT = 5
+Survivor.ENDLESS_MAXIMUM_PERCENT = 130   -- 6 minutes
 
--- The payout factor of an endless run after `time` seconds: 0 before the first minute, then 2, 4, 8, ... (capped).
+-- The payout of an endless run after `time` seconds, in percent of the stake: 0 before the first minute, then 105, 110,
+-- ... (capped).
 ---@param time number
 ---@return integer
-function Survivor.EndlessFactor(time)
+function Survivor.EndlessPercent(time)
     local minutes = math.floor((time or 0) / Survivor.MILESTONE_SECONDS)
     if minutes < 1 then return 0 end
-    return math.min(Survivor.ENDLESS_MAXIMUM_FACTOR, 2 ^ minutes)
+    return math.min(Survivor.ENDLESS_MAXIMUM_PERCENT, 100 + Survivor.ENDLESS_STEP_PERCENT * minutes)
+end
+
+-- The net of a won run: what `pct` percent pays above the stake, at least 1c (a win must net something, or peers would
+-- reject the record entry).
+---@param stake integer
+---@param pct integer > 100
+---@return integer
+function Survivor.WinNet(stake, pct)
+    return math.max(1, math.floor(stake * (pct - 100) / 100))
+end
+
+-- A pending mark written before the percent payouts carries `factor` (2, 4, ... 64 = the endless minute reached as a
+-- power of two): the percent of the same minute today.
+---@param factor integer
+---@return integer pct
+local function percentOfOldFactor(factor)
+    local minutes = 0
+    while 2 ^ (minutes + 1) <= factor do minutes = minutes + 1 end
+    return Survivor.EndlessPercent(minutes * Survivor.MILESTONE_SECONDS)
 end
 
 ---@class SurvivorEnemyKind
@@ -352,12 +378,23 @@ end
 ---@param event SurvivorEvent
 local function emit(run, event) run.events[#run.events + 1] = event end
 
+Survivor.FRENZY_FROM = 240     -- seconds: from here monsters grow stronger every minute, so every run ends
+Survivor.FRENZY_GROWTH = 2.5   -- health and damage multiplier per minute of frenzy
+
+-- The frenzy multiplier at `time`: 1 until FRENZY_FROM, then FRENZY_GROWTH per minute (continuous).
+---@param time number
+---@return number
+function Survivor.Frenzy(time)
+    if time <= Survivor.FRENZY_FROM then return 1 end
+    return Survivor.FRENZY_GROWTH ^ ((time - Survivor.FRENZY_FROM) / 60)
+end
+
 -- seconds between spawns and enemy health factor at `time`
 ---@param time number
 ---@return number interval
 ---@return number healthFactor
 function Survivor.Difficulty(time)
-    return math.max(0.16, 1.05 - time * 0.0065), 1 + time / 50 + (time / 70) ^ 2.1
+    return math.max(0.16, 1.05 - time * 0.0065), (1 + time / 50 + (time / 70) ^ 2.1) * Survivor.Frenzy(time)
 end
 
 ---@param run SurvivorRun
@@ -384,7 +421,7 @@ local function spawn(run)
     run.nextID = run.nextID + 1
     local hp = chosen.hp * healthFactor
     run.enemies[#run.enemies + 1] = { id = run.nextID, kind = chosen.key, x = x, y = y, hp = hp, maxHp = hp,
-        radius = chosen.radius, speed = chosen.speed * (0.9 + 0.2 * random()), damage = chosen.damage * (1 + run.time / 90),
+        radius = chosen.radius, speed = chosen.speed * (0.9 + 0.2 * random()), damage = chosen.damage * (1 + run.time / 90) * Survivor.Frenzy(run.time),
         slow = 0, flash = 0 }
 end
 
@@ -741,13 +778,13 @@ local function step(run, stepSeconds)
     end
     -- endless: a new minute raises the payout (and the pending mark, so a reload pays what was reached)
     if run.target.endless then
-        local factor = Survivor.EndlessFactor(run.time)
-        if factor > (run.reachedFactor or 0) then
-            run.reachedFactor = factor
+        local pct = Survivor.EndlessPercent(run.time)
+        if pct > (run.reachedPercent or 0) then
+            run.reachedPercent = pct
             local database = addon.Store.db
             local pending = database and database.ui and database.ui.survivorPending
-            if type(pending) == "table" and pending.name == run.name then pending.factor = factor end
-            emit(run, { kind = "milestone", factor = factor })
+            if run.stake > 0 and type(pending) == "table" and pending.name == run.name then pending.pct = pct end
+            emit(run, { kind = "milestone", pct = pct })
         end
     end
     -- the end
@@ -794,20 +831,28 @@ function Survivor.Target(index)
     return type(index) == "number" and Survivor.TARGETS[index] or nil
 end
 
--- The net of a run if it ended now: fixed target won -> (factor - 1) x stake; endless -> the minute reached; else -stake.
+-- The payout in percent if the run ended now: a won fixed target -> its pct; endless -> the minute reached; else 0.
+---@param run SurvivorRun
+---@return integer
+function Survivor.Percent(run)
+    if run.target.endless then return Survivor.EndlessPercent(run.time) end
+    return run.finished == "won" and run.target.pct or 0
+end
+
+-- The net of a run if it ended now: a payout above 100% nets Survivor.WinNet, anything else loses the stake. 0 in free
+-- play.
 ---@param run SurvivorRun
 ---@return integer
 function Survivor.Net(run)
-    local factor = 0
-    if run.target.endless then factor = Survivor.EndlessFactor(run.time)
-    elseif run.finished == "won" then factor = run.target.factor end
-    return factor >= 2 and run.stake * (factor - 1) or -run.stake
+    if run.stake == 0 then return 0 end
+    local pct = Survivor.Percent(run)
+    return pct > 100 and Survivor.WinNet(run.stake, pct) or -run.stake
 end
 
--- Starts a run: checks the stake like every play, then books it as PENDING (so leaving mid-run still loses it).
--- Returns the run, or nil and the refusal.
+-- Starts a run: checks the stake like every play, then books it as PENDING (so leaving mid-run still loses it). Stake 0
+-- starts a free run: no checks, nothing pending. Returns the run, or nil and the refusal.
 ---@param myName string|nil
----@param stake any copper
+---@param stake any copper, 0 (free play) or 1..Games.MAXIMUM_STAKE
 ---@param targetIndex integer
 ---@param now integer
 ---@param randomFunction fun(): number
@@ -817,6 +862,7 @@ function Survivor.Begin(myName, stake, targetIndex, now, randomFunction)
     local target = Survivor.Target(targetIndex)
     if not target then return nil, "target" end
     Survivor.ResolvePending(now)   -- a run left open by a crash is lost before the next one starts (and before the funds check)
+    if stake == 0 then return Survivor.NewRun(myName, 0, target, randomFunction) end
     local refused = addon.Games.Refusal(myName, stake, true)
     if refused then return nil, refused end
     settings().survivorPending = { name = myName, c = stake, t = now }
@@ -824,21 +870,25 @@ function Survivor.Begin(myName, stake, targetIndex, now, randomFunction)
 end
 
 -- Books the end of a run (Survivor.Net; a run not won counts as lost) and clears the pending mark. Returns the signed net
--- in copper.
+-- in copper (the record's value) and what the money pool got (a win cut to the daily limit left); 0, 0 in free play.
 ---@param run SurvivorRun
 ---@param now integer
 ---@return integer net
+---@return integer paid
 function Survivor.Settle(run, now)
-    settings().survivorPending = nil
     run.finished = run.finished or "lost"
     local net = Survivor.Net(run)
-    run.net = net
-    addon.Games.RecordPlay(run.name, "survivor", run.stake, net, now, run.bombed)
-    return net
+    run.net, run.paid = net, 0
+    if run.stake == 0 then return 0, 0 end
+    settings().survivorPending = nil
+    local stored, _, paid = addon.Games.RecordPlay(run.name, "survivor", run.stake, net, now, run.bombed)
+    run.paid = stored and paid or 0
+    return net, run.paid
 end
 
 -- A run that was still pending (the game was closed or reloaded mid-run) is booked as lost, or for an endless run as
--- the factor it had reached. Returns true when one was booked.
+-- the percent it had reached (a mark written before the percent payouts carries `factor` and is converted). Returns
+-- true when one was booked.
 ---@param now integer
 ---@return boolean
 function Survivor.ResolvePending(now)
@@ -849,7 +899,11 @@ function Survivor.ResolvePending(now)
     if type(pending) ~= "table" or database.readonly then return false end
     local stake = addon.Utility.SafeInteger(pending.c, 1, addon.Games.MAXIMUM_STAKE)
     if not stake or not addon.Utility.IsSafeName(pending.name) then return false end
-    local factor = addon.Utility.SafeInteger(pending.factor, 2, Survivor.ENDLESS_MAXIMUM_FACTOR)
-    local stored = addon.Games.RecordPlay(pending.name, "survivor", stake, factor and stake * (factor - 1) or -stake, now)
+    local pct = addon.Utility.SafeInteger(pending.pct, 101, Survivor.ENDLESS_MAXIMUM_PERCENT)
+    if not pct then
+        local factor = addon.Utility.SafeInteger(pending.factor, 2, addon.Games.SURVIVOR_MAXIMUM_FACTOR)
+        pct = factor and percentOfOldFactor(factor) or nil
+    end
+    local stored = addon.Games.RecordPlay(pending.name, "survivor", stake, pct and Survivor.WinNet(stake, pct) or -stake, now)
     return stored and true or false
 end

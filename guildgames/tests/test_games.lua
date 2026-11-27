@@ -55,7 +55,7 @@ return {
 
     ["games: invalid stakes and picks are refused and record nothing (R2)"] = function(harness)
         local addon = fresh(harness)
-        for _, stake in ipairs({ 0, -5, 1.5, 1000000001, 0 / 0, 1 / 0, "10" }) do
+        for _, stake in ipairs({ -5, 1.5, 1000000001, 0 / 0, 1 / 0, "10" }) do
             local result, refusal = addon.Games.Flip("Me-R", stake, "H", NOW, constant(0.1))
             harness.equal(result, nil); harness.equal(refusal, "stake", "stake " .. tostring(stake))
         end

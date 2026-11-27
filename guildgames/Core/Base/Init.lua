@@ -11,7 +11,7 @@ LibStub("LibGuildSync-1.0").Addon.Setup(addon, addonName,
 ---@type integer
 addon.PROTOCOL_MAJOR = 1
 ---@type integer
-addon.PROTOCOL_MINOR = 8   -- 1.1: the optional "caught" record section; 1.2: "arena"; 1.3: arena counter offers; 1.4: "runner"; 1.5: item marks; 1.6: arena teams of 3 and the version in the arena section; 1.7: own wagers (an.wg), the pot (bets without odds), the companion count (caught.rc), companion nicknames (caught.c.nk, fighter nk); 1.8: the fighter TLevel (fighter tl)
+addon.PROTOCOL_MINOR = 9   -- 1.1: the optional "caught" record section; 1.2: "arena"; 1.3: arena counter offers; 1.4: "runner"; 1.5: item marks; 1.6: arena teams of 3 and the version in the arena section; 1.7: own wagers (an.wg), the pot (bets without odds), the companion count (caught.rc), companion nicknames (caught.c.nk, fighter nk); 1.8: the fighter TLevel (fighter tl); 1.9: the survivor section "tower" (percent payouts)
 ---@type integer alias: the major is what the payload "v" field carries
 addon.PROTOCOL = addon.PROTOCOL_MAJOR
 

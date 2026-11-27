@@ -32,11 +32,16 @@ protocol, so ProfessionShare and GuildGames never read each other's messages.
   recent entries are `{c = stake, n = net, t}` with `n = -c` (a loss) or `c <= n <= c * 374` (a win; 5 paylines x 75 is the
   highest multiplier). Win totals may reach `wins * 1e9 * 374`. Every game has its own section and its own leaderboard;
   a client that does not know a section drops it (allow-list copy).
-- **Survivor section (optional, 0.1.0) `survivor = { total, weeks, recent }`:** same shape as the slot section, with
-  `n = -c` or `c <= n <= c * 63` (endless mode doubles the payout every minute up to 64x the stake). A run's outcome depends on the player's item
-  picks, so it cannot be decided up front: the stake is kept as `ui.survivorPending = { name, c, t }` while a run is open
-  and booked at the next login if the run never ended: a loss, or for an endless run the factor it had reached
-  (`factor`, 2..64; local only, never sent).
+- **Survivor section (optional, protocol 1.9) `tower = { total, weeks, recent }`:** same shape as the slot section, with
+  `n = -c` or `1 <= n <= c` (a won run pays 105% to 140% of the stake, endless up to 130%; a win nets at least 1c). A
+  run's outcome depends on the player's item picks, so it cannot be decided up front: the stake is kept as
+  `ui.survivorPending = { name, c, t, pct? }` while a run is open and booked at the next login if the run never ended: a
+  loss, or for an endless run the percent it had reached (`pct`, 101..130; a mark from 0.13 carries `factor` 2..64 and
+  is converted to the percent of the same minute; local only, never sent). A stake of 0 is free play: nothing pending,
+  nothing stored. Peers on 1.8 or older drop the unknown `tower` field and keep the record.
+- **Old survivor section (0.1.0 to 0.13) `survivor = { total, weeks, recent }`:** the runs from before 1.9, with `n = -c`
+  or `c <= n <= c * 63` (endless used to double the payout every minute up to 64x). Kept and validated as history
+  (game `legacySurvivor`): it still counts in the money pool, gets no new plays and has no leaderboard.
 - **AZEcaught section (optional, protocol 1.1, feature 018) `caught = { c?, weeks }`:** my current companion and my
   weekly peaks. `c = { npc, n, lvl, cls, disp, h, hu, th, af, en, sl?, fs }`: NPC id (1..2^31-1), NPC name (client text,
   at most 48 bytes, UTF-8, no control characters), level 1..200, classification `normal|elite|rare|rareelite|worldboss`,
@@ -74,9 +79,14 @@ protocol, so ProfessionShare and GuildGames never read each other's messages.
   - Runner section `bi = 1`: the best run used an item.
   - Runner recent entries and survivor play entries `it = 1`: the run used an item (Dash Shield, Head Start, Survivor Bomb).
   - Any other value of `bi` or `it` counts as unmarked. Peers on 1.4 or older drop these fields (allow-list copy).
-- **Money pool (local only, never sent):** `balance = 20g + casino net (coin + slots + survivor) - pending survivor stake
-  + ledger.earned - ledger.spent` (runner payouts are ledger earnings, kind `runner`). Every casino play START (flip, spin, survivor run) is refused with `funds` when the stake
-  is above the balance; settling a run never is.
+- **Money pool (local only, never sent):** `balance = 20g + casino net (coin + slots + survivor + old survivor) - pending
+  survivor stake + ledger.earned - ledger.spent` (runner payouts are ledger earnings, kind `runner`). Every casino play
+  START (flip, spin, survivor run) is refused with `funds` when the stake is above the balance; settling a run never is.
+  The coin flip and the slots are refused with `run` while a survivor stake is pending.
+- **Daily win limit (protocol 1.9, local only, never sent):** the house games (coin, slots, survivor) raise the balance by
+  at most 500g net per server day (UTC); `caught.casinoDay = { d = day, n = paid net copper }`. The record keeps every
+  play's real result; the part of a win above the limit left is a ledger entry of kind `cap` (spent), so the balance
+  rises by what was paid only. Playing never stops at the limit, and stake 0 is free play in every house game.
 - **Validation (whole record rejected on one bad entry):** safe name equal to the sender (canonical form); `rev` in
   `[0, now + 1 day]`; totals integers with `won, lost <= 2e13` copper, `wins, losses <= 1 000 000` and consistent
   (`wins <= won <= wins * 1e9`, same for losses); week keys `YYYY-Www` with year 2020..2100, week 1..53, not after the week

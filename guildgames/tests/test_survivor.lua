@@ -26,23 +26,29 @@ local function playOut(addon, run, pick)
 end
 
 return {
-    ["survivor: targets pay more the longer they are; the last factor is the validation bound"] = function(harness)
+    ["survivor: targets pay 105 to 140 percent, longer pays more; a win nets at most the stake"] = function(harness)
         local addon = fresh(harness)
         local Survivor = addon.Survivor
-        harness.equal(Survivor.ENDLESS_MAXIMUM_FACTOR, addon.Games.SURVIVOR_MAXIMUM_FACTOR)
-        harness.truthy(Survivor.TARGETS[#Survivor.TARGETS].factor <= addon.Games.SURVIVOR_MAXIMUM_FACTOR)
+        local expected = { 105, 110, 120, 140 }
+        for index, pct in ipairs(expected) do harness.equal(Survivor.TARGETS[index].pct, pct) end
+        harness.equal(#Survivor.TARGETS, #expected)
         harness.truthy(Survivor.Target(Survivor.ENDLESS_INDEX) == Survivor.ENDLESS)
         for index = 2, #Survivor.TARGETS do
             harness.truthy(Survivor.TARGETS[index].seconds > Survivor.TARGETS[index - 1].seconds)
-            harness.truthy(Survivor.TARGETS[index].factor > Survivor.TARGETS[index - 1].factor)
         end
-        harness.truthy(Survivor.TARGETS[1].factor >= 2, "a win must net at least the stake (record validation)")
-        harness.equal(addon.Games.KINDS.survivor.maximumWinFactor, addon.Games.SURVIVOR_MAXIMUM_FACTOR - 1)
+        harness.truthy(Survivor.TARGETS[#Survivor.TARGETS].pct <= 200, "the net stays inside maximumWinFactor")
+        harness.truthy(Survivor.ENDLESS_MAXIMUM_PERCENT <= 200)
+        harness.equal(addon.Games.KINDS.survivor.maximumWinFactor, 1)
+        harness.equal(addon.Games.KINDS.survivor.field, "tower")
         harness.equal(addon.Games.ORDER[3], "survivor")
+        harness.equal(Survivor.WinNet(1, 105), 1, "a 1c stake still nets 1c")
+        harness.equal(Survivor.WinNet(19, 105), 1)
+        harness.equal(Survivor.WinNet(1000, 105), 50)
+        harness.equal(Survivor.WinNet(1000000000, 140), 400000000)
         for _, item in ipairs(Survivor.ITEMS) do harness.truthy(Survivor.ITEM_BY_KEY[item.key] == item) end
     end,
 
-    ["survivor: a run is booked as pending at the start and settled at the end (won pays factor x stake)"] = function(harness)
+    ["survivor: a run is booked as pending at the start and settled at the end (won pays its percent)"] = function(harness)
         local addon = fresh(harness)
         local run = assert(addon.Survivor.Begin("Me-R", 300, 2, NOW, seeded(3)))
         local pending = addon.db.ui.survivorPending
@@ -50,18 +56,18 @@ return {
         harness.equal(addon.Games.Get("Me-R"), nil, "nothing recorded yet")
         run.finished = "won"
         local net = addon.Survivor.Settle(run, NOW + 100)
-        harness.equal(net, 300 * (addon.Survivor.TARGETS[2].factor - 1))
+        harness.equal(net, 30, "110% of 300c")
         harness.equal(addon.db.ui.survivorPending, nil)
         local mine = addon.Games.Get("Me-R")
-        harness.equal(mine.survivor.total.won, net); harness.equal(mine.survivor.total.wins, 1)
-        harness.equal(mine.survivor.recent[1].n, net)
+        harness.equal(mine.tower.total.won, net); harness.equal(mine.tower.total.wins, 1)
+        harness.equal(mine.tower.recent[1].n, net)
         harness.equal(mine.total.wins + mine.total.losses, 0, "the coin section has no play")
         harness.truthy(addon.Games.Sanitize(mine), "my own record passes peer validation")
         -- a lost (or given up) run costs the stake
         local second = assert(addon.Survivor.Begin("Me-R", 50, 4, NOW + 200, seeded(4)))
         second.finished = nil   -- give up: the UI settles an unfinished run as lost
         harness.equal(addon.Survivor.Settle(second, NOW + 210), -50)
-        harness.equal(addon.Games.Get("Me-R").survivor.total.lost, 50)
+        harness.equal(addon.Games.Get("Me-R").tower.total.lost, 50)
     end,
 
     ["survivor: a run left open by a reload is lost at the next login; garbage pending data is dropped"] = function(harness)
@@ -69,7 +75,7 @@ return {
         assert(addon.Survivor.Begin("Me-R", 700, 1, NOW, seeded(5)))
         -- /reload: the run is gone, the pending mark stays in the saved data
         harness.equal(addon.Survivor.ResolvePending(NOW + 60), true)
-        harness.equal(addon.Games.Get("Me-R").survivor.total.lost, 700)
+        harness.equal(addon.Games.Get("Me-R").tower.total.lost, 700)
         harness.equal(addon.db.ui.survivorPending, nil)
         harness.equal(addon.Survivor.ResolvePending(NOW + 61), false, "only once")
         for _, garbage in ipairs({ "x", { c = -5, name = "Me-R" }, { c = 10, name = "bad name|cff" }, { c = 1.5, name = "Me-R" } }) do
@@ -77,17 +83,17 @@ return {
             harness.equal(addon.Survivor.ResolvePending(NOW + 70), false)
             harness.equal(addon.db.ui.survivorPending, nil)
         end
-        harness.equal(addon.Games.Get("Me-R").survivor.total.losses, 1)
+        harness.equal(addon.Games.Get("Me-R").tower.total.losses, 1)
         -- starting a new run settles a stale pending one first
         addon.db.ui.survivorPending = { name = "Me-R", c = 20, t = NOW }
         assert(addon.Survivor.Begin("Me-R", 30, 1, NOW + 80, seeded(6)))
-        harness.equal(addon.Games.Get("Me-R").survivor.total.losses, 2)
+        harness.equal(addon.Games.Get("Me-R").tower.total.losses, 2)
         harness.equal(addon.db.ui.survivorPending.c, 30)
     end,
 
     ["survivor: refused stakes, targets and a readonly db start nothing"] = function(harness)
         local addon = fresh(harness)
-        for _, stake in ipairs({ 0, -1, 1.5, addon.Games.MAXIMUM_STAKE + 1, "5" }) do
+        for _, stake in ipairs({ -1, 1.5, addon.Games.MAXIMUM_STAKE + 1, "5" }) do
             harness.equal(select(2, addon.Survivor.Begin("Me-R", stake, 1, NOW, seeded(1))), "stake")
         end
         harness.equal(select(2, addon.Survivor.Begin("Me-R", 10, 0, NOW, seeded(1))), "target")
@@ -162,7 +168,7 @@ return {
         harness.equal(run.items.vitality, Survivor.ITEM_BY_KEY.vitality.maximum, "never past the maximum")
     end,
 
-    ["survivor: Sanitize bounds the survivor section by the top factor; the board is its own"] = function(harness)
+    ["survivor: Sanitize bounds the tower section (a win nets 1c..stake); the board is its own"] = function(harness)
         local addon = fresh(harness)
         local run = assert(addon.Survivor.Begin("Me-R", 100, 4, NOW, seeded(2)))
         run.finished = "won"
@@ -171,11 +177,14 @@ return {
         local good = addon.Utility.DeepCopy(addon.Games.Get("Me-R"))
         harness.truthy(addon.Games.Sanitize(good))
         local tooMuch = addon.Utility.DeepCopy(good)
-        tooMuch.survivor.recent[1].n = 100 * addon.Games.SURVIVOR_MAXIMUM_FACTOR   -- the top net is (factor - 1) x stake
-        harness.equal(addon.Games.Sanitize(tooMuch), nil, "net over (factor - 1) x stake")
+        tooMuch.tower.recent[1].n = 101
+        harness.equal(addon.Games.Sanitize(tooMuch), nil, "a win netting more than the stake")
+        local nothing = addon.Utility.DeepCopy(good)
+        nothing.tower.recent[1].n = 0
+        harness.equal(addon.Games.Sanitize(nothing), nil, "a win netting nothing")
         local records = addon.Games.AllRecords()
         local board = addon.Model.BuildLeaderboardRows(records, "all", "2026-W47", "Me-R", "survivor")
-        harness.equal(#board, 1); harness.equal(board[1].nameRaw, "Me-R"); harness.equal(board[1].net, 900)
+        harness.equal(#board, 1); harness.equal(board[1].nameRaw, "Me-R"); harness.equal(board[1].net, 40)
         harness.equal(#addon.Model.BuildFlipFeedRows(records, nil, 15, "survivor"), 1)
         harness.equal(addon.Model.BuildLeaderboardRows(records, "all", "2026-W47", nil, "coin")[1].nameRaw, "Coin-R")
         addon.Games.Simulate(5, NOW, seeded(8))
@@ -184,17 +193,17 @@ return {
         end
     end,
 
-    ["survivor endless: every minute doubles the payout, capped; before 1:00 the stake is lost"] = function(harness)
+    ["survivor endless: 105% at 1:00, 5% more per minute, capped at 130%; before 1:00 the stake is lost"] = function(harness)
         local Survivor = fresh(harness).Survivor
-        local expected = { [0] = 0, [59.9] = 0, [60] = 2, [119] = 2, [120] = 4, [180] = 8, [300] = 32, [360] = 64, [3600] = 64 }
-        for time, factor in pairs(expected) do harness.equal(Survivor.EndlessFactor(time), factor, "at " .. time) end
+        local expected = { [0] = 0, [59.9] = 0, [60] = 105, [119] = 105, [120] = 110, [180] = 115, [300] = 125, [360] = 130, [3600] = 130 }
+        for time, pct in pairs(expected) do harness.equal(Survivor.EndlessPercent(time), pct, "at " .. time) end
         local run = Survivor.NewRun("Me-R", 100, Survivor.ENDLESS, seeded(1))
         run.time = 30; harness.equal(Survivor.Net(run), -100)
-        run.time = 125; harness.equal(Survivor.Net(run), 300, "x4 at 2:05")
-        run.finished = "lost"; harness.equal(Survivor.Net(run), 300, "the tower fell, the minute reached still pays")
+        run.time = 125; harness.equal(Survivor.Net(run), 10, "110% at 2:05")
+        run.finished = "lost"; harness.equal(Survivor.Net(run), 10, "the tower fell, the minute reached still pays")
     end,
 
-    ["survivor endless: never ends by time, raises the pending factor at each minute, a reload pays what was reached"] = function(harness)
+    ["survivor endless: never ends by time, raises the pending percent at each minute, a reload pays what was reached"] = function(harness)
         local addon = fresh(harness)
         local Survivor = addon.Survivor
         local run = assert(Survivor.Begin("Me-R", 100, Survivor.ENDLESS_INDEX, NOW, seeded(11)))
@@ -205,23 +214,33 @@ return {
             Survivor.Advance(run, 0.2)
             while run.choices do Survivor.Choose(run, 1) end
             for _, event in ipairs(Survivor.TakeEvents(run)) do
-                if event.kind == "milestone" then milestones[#milestones + 1] = event.factor end
+                if event.kind == "milestone" then milestones[#milestones + 1] = event.pct end
             end
         end
         harness.equal(run.finished, nil, "endless does not stop at a time")
-        harness.equal(#milestones, 2); harness.equal(milestones[1], 2); harness.equal(milestones[2], 4)
-        harness.equal(addon.db.ui.survivorPending.factor, 4)
-        -- /reload now: x4 is paid
+        harness.equal(#milestones, 2); harness.equal(milestones[1], 105); harness.equal(milestones[2], 110)
+        harness.equal(addon.db.ui.survivorPending.pct, 110)
+        -- /reload now: 110% is paid
         harness.equal(Survivor.ResolvePending(NOW + 200), true)
-        harness.equal(addon.Games.Get("Me-R").survivor.recent[1].n, 300)
+        harness.equal(addon.Games.Get("Me-R").tower.recent[1].n, 10)
         harness.truthy(addon.Games.Sanitize(addon.Games.Get("Me-R")))
-        addon.db.ui.survivorPending = { name = "Me-R", c = 100, t = NOW, factor = 65 }
+        addon.db.ui.survivorPending = { name = "Me-R", c = 100, t = NOW, pct = 131 }
         Survivor.ResolvePending(NOW + 201)
-        harness.equal(addon.Games.Get("Me-R").survivor.recent[1].n, -100, "a factor over the cap is not trusted")
+        harness.equal(addon.Games.Get("Me-R").tower.recent[1].n, -100, "a percent over the cap is not trusted")
+        -- a mark written by the 2x..64x version: the same minute at today's percent, never 64x
+        addon.db.ui.survivorPending = { name = "Me-R", c = 100, t = NOW, factor = 64 }
+        Survivor.ResolvePending(NOW + 202)
+        harness.equal(addon.Games.Get("Me-R").tower.recent[1].n, 30, "factor 64 (6:00) pays 130%")
+        addon.db.ui.survivorPending = { name = "Me-R", c = 100, t = NOW, factor = 4 }
+        Survivor.ResolvePending(NOW + 203)
+        harness.equal(addon.Games.Get("Me-R").tower.recent[1].n, 10, "factor 4 (2:00) pays 110%")
+        addon.db.ui.survivorPending = { name = "Me-R", c = 100, t = NOW, factor = 65 }
+        Survivor.ResolvePending(NOW + 204)
+        harness.equal(addon.Games.Get("Me-R").tower.recent[1].n, -100, "a factor over the old cap is not trusted")
         -- cash out: settle while the run is open
         local second = assert(Survivor.Begin("Me-R", 10, Survivor.ENDLESS_INDEX, NOW + 300, seeded(12)))
         second.time = 61
-        harness.equal(Survivor.Settle(second, NOW + 400), 10)
+        harness.equal(Survivor.Settle(second, NOW + 400), 1, "105% of 10c nets the minimum 1c")
     end,
 
     ["survivor weapons: every ranged weapon fires and hurts; chains zap, explosions and strikes blast, the axe comes back"] = function(harness)
@@ -327,6 +346,28 @@ return {
         leeching.items, leeching.hp = { leech = 5 }, 50
         leeching.choices = { { key = "leech", level = 5 } }
         harness.equal(Survivor.DefenseStats(leeching).leech, 3)
+    end,
+
+    ["survivor frenzy: every run ends; 200 seeded runs with three card strategies, none past 8:00"] = function(harness)
+        local Survivor = fresh(harness).Survivor
+        harness.equal(Survivor.Frenzy(240), 1); harness.truthy(Survivor.Frenzy(300) > 2.49 and Survivor.Frenzy(300) < 2.51)
+        local strategies = {
+            first = function() return 1 end,
+            last = function(run) return #run.choices end,
+            second = function(run) return math.min(2, #run.choices) end,
+        }
+        local longest = 0
+        for _, pick in pairs(strategies) do
+            for seed = 1, 200 do
+                local run = Survivor.NewRun("Me-R", 100, Survivor.ENDLESS, seeded(seed * 7919 + 13))
+                while not run.finished and run.time <= 480 do
+                    Survivor.Advance(run, 0.25)
+                    while run.choices do assert(Survivor.Choose(run, pick(run))) end
+                end
+                longest = math.max(longest, run.time)
+            end
+        end
+        harness.truthy(longest <= 480, "the longest run lasted " .. longest .. " s")
     end,
 }
 

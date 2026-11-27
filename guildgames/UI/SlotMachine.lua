@@ -298,14 +298,20 @@ local function showWin(result)
     Animate.Pulse(widgets.multiplierText, 1.6, 0.4)
     local countDuration = 0.8 + math.min(1.6, result.multiplier / 40)
     widgets.resultText:SetTextColor(0.2, 1, 0.6)
-    Animate.Tween("slotCount", countDuration, function(elapsed)
-        local eased = 1 - (1 - math.min(1, elapsed / countDuration)) ^ 3
-        widgets.resultText:SetText(Format(Text["You won {gold}"], { gold = money(math.floor(result.net * eased)) }))
-    end, function() widgets.resultText:SetText(Format(Text["You won {gold}"], { gold = money(result.net) })) end)
+    if result.free then
+        widgets.resultText:SetText(Format(Text["Free play: {n}"], { n = Format(Text["x{n}"], { n = result.multiplier }) }))
+    else
+        Animate.Tween("slotCount", countDuration, function(elapsed)
+            local eased = 1 - (1 - math.min(1, elapsed / countDuration)) ^ 3
+            widgets.resultText:SetText(Format(Text["You won {gold}"], { gold = money(math.floor(result.net * eased)) }))
+        end, function() widgets.resultText:SetText(addon.Model.WinText(result.net, result.paid)) end)
+    end
     -- every win: sparkles from the reels and the payout floats up over the cabinet
     Animate.Burst("slots", widgets.effects, widgets.reelsArea, 0, 0,
         { count = math.min(36, 14 + 2 * #result.lines + math.floor(result.multiplier / 3)), speed = 200, gravity = 240, size = 15 })
-    Animate.FloatText("slots", widgets.floatText, widgets.cabinet, 0, CABINET_HEIGHT / 2 - 14, "+" .. money(result.net), { 0.35, 1, 0.55 })
+    if not result.free then
+        Animate.FloatText("slots", widgets.floatText, widgets.cabinet, 0, CABINET_HEIGHT / 2 - 14, "+" .. money(result.paid), { 0.35, 1, 0.55 })
+    end
     -- big wins: banner, shockwave, a gold flash over the cabinet and the coin shower
     local jackpot = false
     for _, lineWin in ipairs(result.lines) do if lineWin.symbol == addon.Slots.SYMBOLS[1].key then jackpot = true end end
@@ -330,12 +336,15 @@ local function reveal(result)
         addon.Log.Protected("games.effects", "the win effects failed", showWin, result)   -- never blocks the unlock below
     else
         setLights("lose")
-        widgets.resultText:SetText(Format(Text["You lost {gold}"], { gold = addon.Model.MoneyText(result.stake) }))
+        widgets.resultText:SetText(result.free and Text["Free play: no win"]
+            or Format(Text["You lost {gold}"], { gold = addon.Model.MoneyText(result.stake) }))
         widgets.resultText:SetTextColor(1, 0.33, 0.33)
         addon.Animate.FadeIn(widgets.resultText, 0.3)
         addon.Animate.Shake(widgets.cabinet, 3, 4)
-        addon.Animate.FloatText("slots", widgets.floatText, widgets.cabinet, 0, CABINET_HEIGHT / 2 - 14,
-            "-" .. addon.Model.MoneyText(result.stake), { 1, 0.35, 0.3 }, -24, 1.3)
+        if not result.free then
+            addon.Animate.FloatText("slots", widgets.floatText, widgets.cabinet, 0, CABINET_HEIGHT / 2 - 14,
+                "-" .. addon.Model.MoneyText(result.stake), { 1, 0.35, 0.3 }, -24, 1.3)
+        end
     end
     state.spinning = false
     widgets.spinButton:Enable()

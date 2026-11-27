@@ -1110,9 +1110,12 @@ end
 
 function commands.wallet()
     local breakdown = addon.Wallet.Breakdown(me())
-    printLine(("balance %d = grant %d + casino %d (coin %d, slots %d, survivor %d) - pending %d + earned %d - spent %d (copper)"):format(
+    printLine(("balance %d = grant %d + casino %d (coin %d, slots %d, survivor %d, survivor before 1.9 %d) - pending %d + earned %d - spent %d (copper)"):format(
         breakdown.balance, breakdown.grant, breakdown.casino, breakdown.byGame.coin, breakdown.byGame.slots, breakdown.byGame.survivor,
-        breakdown.pending, breakdown.earned, breakdown.spent))
+        breakdown.byGame.legacySurvivor, breakdown.pending, breakdown.earned, breakdown.spent))
+    local now = addon.Utility.Now()
+    printLine(("daily win limit: paid net today %d, left %d of %d (copper)"):format(addon.Wallet.CasinoDay(now).n,
+        addon.Wallet.WinRemaining(now), addon.Wallet.DAILY_WIN_CAP))
     local entries = addon.Wallet.Ledger().entries
     for index = math.max(1, #entries - 9), #entries do
         local entry = entries[index]

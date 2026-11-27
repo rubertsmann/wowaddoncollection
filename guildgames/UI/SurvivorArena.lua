@@ -208,8 +208,8 @@ local function drawHud(run)
     widgets.hpFill:SetColorTexture(1 - share, 0.35 + 0.6 * share, 0.25, 1)
     if run.target.endless then
         -- endless: the time, the payout reached so far, and the line fills towards the next minute
-        local factor = addon.Survivor.EndlessFactor(run.time)
-        widgets.timerText:SetText(clock(run.time) .. (factor > 0 and ("  |cffffd200" .. Format(Text["x{n}"], { n = factor }) .. "|r") or ""))
+        local pct = addon.Survivor.EndlessPercent(run.time)
+        widgets.timerText:SetText(clock(run.time) .. (pct > 0 and ("  |cffffd200" .. addon.Model.PercentText(pct) .. "|r") or ""))
         local minute = addon.Survivor.MILESTONE_SECONDS
         widgets.progressFill:SetWidth(math.max(1, ARENA_WIDTH * ((run.time % minute) / minute)))
     else
@@ -448,7 +448,7 @@ local function handleEvent(event)
         Animate.Flash("survivorHurt", widgets.hurtFlash, 0.22, 0.3)
         Animate.Pulse(widgets.tower, 0.9, 0.15)
     elseif event.kind == "milestone" then
-        local label = Format(Text["x{n}"], { n = event.factor })
+        local label = addon.Model.PercentText(event.pct)
         Animate.Ring("survivorMilestone", widgets.effects, widgets.towerAnchor, 30, 300, { 1, 0.85, 0.3 }, 0.8)
         Animate.Burst("survivor", widgets.effects, widgets.towerAnchor, 0, 0, { count = 18, speed = 170, gravity = 200, size = 13 })
         Animate.FloatText("survivor", widgets.floatText, widgets.towerAnchor, 0, 24, label, { 1, 0.85, 0.3 })
@@ -504,7 +504,8 @@ end
 local function targetLabel(index)
     local target = addon.Survivor.Target(index)
     if not target then return "" end
-    return target.endless and Text["Endless"] or Format(Text["{time} x{n}"], { time = clock(target.seconds), n = target.factor })
+    return target.endless and Text["Endless"] or Format(Text["{time} {multiplier}"],
+        { time = clock(target.seconds), multiplier = addon.Model.PercentText(target.pct) })
 end
 
 ---@param running boolean
@@ -531,10 +532,13 @@ end
 ---@param target SurvivorTarget
 local function showHint(target)
     if target.endless then
-        widgets.hintText:SetText(Text["Endless: every minute doubles the payout (x2 at 1:00). Cash out any time."])
+        widgets.hintText:SetText(Format(Text["Endless: {first} at 1:00, then {step}% more every minute (up to {top}). Cash out any time."],
+            { first = addon.Model.PercentText(100 + addon.Survivor.ENDLESS_STEP_PERCENT), step = addon.Survivor.ENDLESS_STEP_PERCENT,
+              top = addon.Model.PercentText(addon.Survivor.ENDLESS_MAXIMUM_PERCENT) }))
         widgets.timerText:SetText(clock(0))
     else
-        widgets.hintText:SetText(Format(Text["Survive {time} to win {n}x your stake"], { time = clock(target.seconds), n = target.factor }))
+        widgets.hintText:SetText(Format(Text["Survive {time}: your stake comes back {multiplier}"],
+            { time = clock(target.seconds), multiplier = addon.Model.PercentText(target.pct) }))
         widgets.timerText:SetText(clock(0) .. " / " .. clock(target.seconds))
     end
 end
@@ -585,22 +589,29 @@ local function finish(run)
     local state = SurvivorArena.state
     local Animate = addon.Animate
     local money = addon.Model.MoneyText
-    local net = addon.Survivor.Settle(run, addon.Utility.Now())
+    local net, paid = addon.Survivor.Settle(run, addon.Utility.Now())
+    local free = run.stake == 0
+    local survived = run.target.endless and addon.Survivor.EndlessPercent(run.time) > 100 or run.finished == "won"
     state.run, state.lastRun = nil, run
     addon.Events.Fire("GAMES_CHANGED")   -- announce (coalesced HELLO)
     hideCards()
     addon.Log.Debug("games.survivor", "a survivor run ended", { result = run.finished, time = run.time, net = net })
     addon.Log.Protected("games.effects", "the survivor end effects failed", function()
-        if net > 0 then
-            widgets.resultText:SetText(Format(Text["You won {gold}"], { gold = money(net) }))
+        if free then
+            widgets.resultText:SetText(Format(survived and Text["Free play: survived {time}"] or Text["Free play: the tower fell after {time}"],
+                { time = clock(run.time) }))
+            widgets.resultText:SetTextColor(survived and 0.2 or 1, survived and 1 or 0.33, survived and 0.6 or 0.33)
+            widgets.bannerText:SetText("")
+        elseif net > 0 then
+            widgets.resultText:SetText(addon.Model.WinText(net, paid))
             widgets.resultText:SetTextColor(0.2, 1, 0.6)
-            widgets.bannerText:SetText(run.target.endless and Format(Text["x{n}"], { n = addon.Survivor.EndlessFactor(run.time) })
+            widgets.bannerText:SetText(run.target.endless and addon.Model.PercentText(addon.Survivor.EndlessPercent(run.time))
                 .. "  " .. clock(run.time) or Text["Survived!"])
             Animate.FadeIn(widgets.bannerText, 0.2); Animate.Pulse(widgets.bannerText, 1.4, 0.5)
             Animate.Glow(widgets.towerGlow, 4)
             Animate.Ring("survivorEnd", widgets.effects, widgets.towerAnchor, 40, 340, nil, 0.8)
             Animate.Burst("survivor", widgets.effects, widgets.towerAnchor, 0, 0, { count = 32, speed = 210, gravity = 230, size = 15 })
-            Animate.FloatText("survivor", widgets.floatText, widgets.towerAnchor, 0, 24, "+" .. money(net), { 0.35, 1, 0.55 })
+            Animate.FloatText("survivor", widgets.floatText, widgets.towerAnchor, 0, 24, "+" .. money(paid), { 0.35, 1, 0.55 })
             addon.Api.PlaySoundNamed({ "UI_EPICLOOT_TOAST", "LOOT_WINDOW_COIN_SOUND" })
         else
             widgets.resultText:SetText(Format(Text["The tower fell after {time}. You lost {gold}"],

@@ -190,7 +190,7 @@ return {
             widgets.targetRows[2].scripts.OnClick()
             harness.equal(Arena.state.targetIndex, 2); harness.equal(addon.db.ui.survivorTarget, 2)
             harness.equal(widgets.targetMenu.shown, false, "a pick closes the list")
-            harness.equal(widgets.targetDropdown.text, "1:30 x3", "the dropdown shows the pick")
+            harness.equal(widgets.targetDropdown.text, "1:30 x1.1", "the dropdown shows the pick")
             harness.equal(widgets.startButton.kind, "start")
             widgets.targetDropdown.scripts.OnClick()
             widgets.stake.Write(400)
@@ -216,7 +216,7 @@ return {
             harness.truthy(sawCards, "a level-up showed cards")
             harness.equal(#failures, 0, table.concat(failures, "; "))
             harness.equal(addon.db.ui.survivorPending, nil)
-            local section = addon.Games.Get("Me-R").survivor
+            local section = addon.Games.Get("Me-R").tower
             harness.equal(section.total.wins + section.total.losses, 1)
             harness.equal(widgets.startButton.kind, "start"); harness.equal(GamesTab.widgets.gameButtons.coin.enabled, true)
             harness.equal(widgets.targetDropdown.enabled, true)
@@ -226,7 +226,7 @@ return {
             for _ = 1, 10 do Arena.Update(0.05) end
             harness.equal(Arena.Start(), nil)
             harness.equal(Arena.state.run, nil)
-            harness.equal(addon.Games.Get("Me-R").survivor.total.losses, section.total.losses + 1)
+            harness.equal(addon.Games.Get("Me-R").tower.total.losses, section.total.losses + 1)
             harness.equal(#failures, 0, table.concat(failures, "; "))
             -- every weapon draws (projectile styles, blasts, zaps) without errors
             local armed = assert(Arena.Start())
@@ -249,10 +249,10 @@ return {
                 if endless.choices then widgets.cards[1].scripts.OnClick() end
             end
             harness.truthy(endless.time >= 60, "a minute passed"); harness.equal(widgets.startButton.kind, "cashout")
-            local before = addon.Games.Get("Me-R").survivor.total.won
+            local before = addon.Games.Get("Me-R").tower.total.won
             Arena.Start()
             harness.equal(Arena.state.run, nil)
-            harness.equal(addon.Games.Get("Me-R").survivor.total.won, before + 400, "x2 cashed out")
+            harness.equal(addon.Games.Get("Me-R").tower.total.won, before + 20, "105% of 400c cashed out")
             harness.equal(#failures, 0, table.concat(failures, "; "))
             addon.Log.Protected = protected
         end)
@@ -359,7 +359,7 @@ return {
             local GamesTab = addon.GamesTab
             GamesTab.Build(newWidget(world, "Frame"))
             local widgets = GamesTab.widgets
-            for _, boxes in ipairs({ { "0", "0", "0" }, { "", "", "" }, { "", "100", "" }, { "", "", "100" } }) do
+            for _, boxes in ipairs({ { "", "100", "" }, { "", "", "100" }, { "-1", "", "" } }) do
                 widgets.goldBox.text, widgets.silverBox.text, widgets.copperBox.text = boxes[1], boxes[2], boxes[3]
                 harness.equal(GamesTab.Flip(), nil)
                 harness.truthy(widgets.resultText.text:find("100000", 1, true), "error names the limit: " .. widgets.resultText.text)
@@ -475,7 +475,7 @@ return {
         withSetup(harness, nil, function(addon, world)
             addon.GamesTab.Build(newWidget(world, "Frame"))
             local widgets = addon.SlotMachine.widgets
-            widgets.stake.goldBox.text, widgets.stake.silverBox.text, widgets.stake.copperBox.text = "", "", ""
+            widgets.stake.goldBox.text, widgets.stake.silverBox.text, widgets.stake.copperBox.text = "", "", "100"
             harness.equal(addon.SlotMachine.Spin(), nil)
             harness.truthy(widgets.resultText.text:find("100000", 1, true), widgets.resultText.text)
             harness.equal(addon.Animate.IsTweening("slotReels"), false); harness.equal(widgets.spinButton.enabled, true)

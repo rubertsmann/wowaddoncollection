@@ -47,7 +47,7 @@ return {
         addon.Wallet.Ledger().spent = addon.Wallet.Ledger().spent + 5 * 10000
         run.finished = "lost"
         addon.Survivor.Settle(run, NOW)
-        harness.equal(addon.Games.Get("Me-R").survivor.total.lost, 15 * 10000, "the loss was booked")
+        harness.equal(addon.Games.Get("Me-R").tower.total.lost, 15 * 10000, "the loss was booked")
         harness.equal(addon.Wallet.Balance("Me-R"), 0)
     end,
 

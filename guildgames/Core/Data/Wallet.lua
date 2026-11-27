@@ -4,12 +4,17 @@ local addonName, addon = ...
 --
 --   balance = STARTING_GRANT + net of every casino game in my record (coin, slots, survivor)
 --           - a survivor stake still pending (booked at the start of a run)
---           + ledger.earned (catch rewards, weekly payouts, dev gifts) - ledger.spent (food, water, shop)
+--           + ledger.earned (catch rewards, weekly payouts, dev gifts) - ledger.spent (food, water, shop, daily limit)
 --
 -- The casino net is read from my game record (it is already stored there), so nothing is counted twice. The ledger lives
 -- in db.caught.ledger (local only, never sent). Every movement is a ledger entry with the balance after it, and a journal
 -- line (AzeCaught journal), so any balance can be explained line by line (/gg caught wallet).
 -- Still bookkeeping only: no real gold is read or moved.
+--
+-- Daily win limit: the house games (coin, slots, survivor) may raise the balance by at most DAILY_WIN_CAP per server day
+-- (UTC), net: a loss that day makes room again. The record keeps every play's real result; the part of a win above the
+-- limit left is booked here as a "cap" ledger entry (spent), so the balance only rises by what was paid. Playing never
+-- stops at the limit: a win just pays nothing more. The day's paid net lives in db.caught.casinoDay (local only).
 ---@class WalletModule
 local Wallet = {}
 addon.Wallet = Wallet
@@ -17,11 +22,13 @@ addon.Wallet = Wallet
 Wallet.STARTING_GRANT = 20 * 10000            -- 20g, in copper
 Wallet.MAXIMUM_AMOUNT = 2000000000 * 10000    -- same bound as Games.MAXIMUM_TOTAL
 Wallet.MAXIMUM_LEDGER = 60                     -- newest ledger entries kept
-Wallet.CASINO_GAMES = { "coin", "slots", "survivor" }
+Wallet.CASINO_GAMES = { "coin", "slots", "survivor", "legacySurvivor" }
+Wallet.DAILY_WIN_CAP = 500 * 10000             -- 500g net per server day from the house games
+Wallet.SECONDS_PER_DAY = 86400
 
 ---@class LedgerEntry
 ---@field t integer server time
----@field k string kind: "catch"|"payout"|"food"|"water"|"shop"|"dev"
+---@field k string kind: "catch"|"payout"|"food"|"water"|"shop"|"dev"|"cap"|...
 ---@field a integer signed copper (+ earned, - spent)
 ---@field b integer balance after the movement
 ---@field note? string short detail (npc name, week key, ...)
@@ -166,13 +173,82 @@ function Wallet.Spend(myName, amount, kind, now, note)
     return balance
 end
 
+------------------------------------------------------------------ daily win limit
+
+---@param now integer
+---@return integer
+function Wallet.DayOf(now) return math.floor((tonumber(now) or 0) / Wallet.SECONDS_PER_DAY) end
+
+---@class CasinoDay
+---@field d integer server day (days since 1970, UTC)
+---@field n integer net copper the house games paid into the pool that day (after the limit)
+
+-- Today's state, reset when the day changed (a fresh table when none is stored yet).
+---@param now integer
+---@return CasinoDay
+function Wallet.CasinoDay(now)
+    local database = addon.Store.db
+    database.caught = type(database.caught) == "table" and database.caught or {}
+    local day, state = Wallet.DayOf(now), database.caught.casinoDay
+    if type(state) ~= "table" or state.d ~= day then
+        state = { d = day, n = 0 }
+        database.caught.casinoDay = state
+    end
+    return state
+end
+
+-- What a win may still add to the pool today (0..DAILY_WIN_CAP plus what was lost today).
+---@param now integer
+---@return integer copper
+function Wallet.WinRemaining(now)
+    return math.max(0, Wallet.DAILY_WIN_CAP - Wallet.CasinoDay(now).n)
+end
+
+-- Books one house-game play that was just stored in my record: a loss in full, a win up to the limit left; the part of
+-- a win above it becomes a "cap" ledger entry so the balance rises by the paid part only. Returns the paid net.
+---@param myName string|nil
+---@param net integer signed copper of the play (the record's value)
+---@param now integer
+---@param gameKey string
+---@return integer paid
+function Wallet.BookCasino(myName, net, now, gameKey)
+    local day = Wallet.CasinoDay(now)
+    if net <= 0 then
+        day.n = math.max(-Wallet.MAXIMUM_AMOUNT, day.n + net)
+        return net
+    end
+    local paid = math.min(net, Wallet.WinRemaining(now))
+    day.n = day.n + paid
+    local cut = net - paid
+    if cut > 0 then
+        local ledger = Wallet.Ledger()
+        ledger.spent = math.min(Wallet.MAXIMUM_AMOUNT, ledger.spent + cut)
+        local balance = Wallet.Balance(myName)
+        appendEntry(ledger, { t = now, k = "cap", a = -cut, b = balance, note = gameKey })
+        addon.AzeCaught.Journal("INFORMATION", "wallet.cap", "a win above the daily limit was not paid",
+            { game = gameKey, won = net, paid = paid, cut = cut, balance = balance })
+    end
+    return paid
+end
+
 -- Re-validates the persisted ledger (SavedVariables are untrusted on load). Returns true when it had to be repaired.
 ---@param caught table db.caught
 ---@return boolean repaired
 function Wallet.SanitizePersisted(caught)
-    local ledger = caught.ledger
-    if ledger == nil then return false end
     local SafeInteger = addon.Utility.SafeInteger
+    local dayRepaired = false
+    if caught.casinoDay ~= nil then
+        local state = caught.casinoDay
+        local day = type(state) == "table" and SafeInteger(state.d, 0, 10000000)
+        local net = type(state) == "table" and SafeInteger(state.n, -Wallet.MAXIMUM_AMOUNT, Wallet.DAILY_WIN_CAP)
+        if day and net then
+            caught.casinoDay = { d = day, n = net }
+        else
+            caught.casinoDay, dayRepaired = nil, true
+        end
+    end
+    local ledger = caught.ledger
+    if ledger == nil then return dayRepaired end
     local clean = { earned = SafeInteger(type(ledger) == "table" and ledger.earned, 0, Wallet.MAXIMUM_AMOUNT) or 0,
         spent = SafeInteger(type(ledger) == "table" and ledger.spent, 0, Wallet.MAXIMUM_AMOUNT) or 0, entries = {} }
     local repaired = type(ledger) ~= "table" or clean.earned ~= ledger.earned or clean.spent ~= ledger.spent
@@ -190,5 +266,5 @@ function Wallet.SanitizePersisted(caught)
     end
     while #clean.entries > Wallet.MAXIMUM_LEDGER do table.remove(clean.entries, 1) end
     caught.ledger = clean
-    return repaired
+    return repaired or dayRepaired
 end

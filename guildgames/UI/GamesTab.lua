@@ -249,11 +249,13 @@ end
 ---@param result FlipResult
 local function landingEffects(result)
     local Animate, holder, effects = addon.Animate, widgets.coinHolder, widgets.effects
-    if result.won then
+    if result.free then
+        Animate.Pulse(widgets.coin, result.won and 1.2 or 0.9, 0.25)
+    elseif result.won then
         Animate.Glow(widgets.glow, 2)
         Animate.Ring("coin", effects, widgets.coinCentre, COIN_SIZE * 0.8, COIN_SIZE * 2.6)
         Animate.Burst("coin", effects, holder, 0, COIN_REST_Y, { count = 28, speed = 190, gravity = 260, size = 16 })
-        Animate.FloatText("coin", widgets.floatText, holder, 0, COIN_REST_Y + COIN_SIZE / 2 + 8, "+" .. money(result.stake), WIN_COLOR)
+        Animate.FloatText("coin", widgets.floatText, holder, 0, COIN_REST_Y + COIN_SIZE / 2 + 8, "+" .. money(result.paid), WIN_COLOR)
     else
         Animate.Shake(holder, 4, 4)
         Animate.Burst("coin", effects, holder, 0, COIN_REST_Y - COIN_SIZE / 3,
@@ -268,11 +270,17 @@ local function land(result)
     updateTrail(nil)
     local Animate = addon.Animate
     Animate.Pulse(widgets.coin, 1.15, 0.25)
-    widgets.resultText:SetText(Format(result.won and Text["You won {gold}"] or Text["You lost {gold}"], { gold = money(result.stake) }))
+    if result.free then
+        widgets.resultText:SetText(result.won and Text["Free play: you won"] or Text["Free play: you lost"])
+    elseif result.won then
+        widgets.resultText:SetText(addon.Model.WinText(result.net, result.paid))
+    else
+        widgets.resultText:SetText(Format(Text["You lost {gold}"], { gold = money(result.stake) }))
+    end
     widgets.resultText:SetTextColor(result.won and 0.2 or 1, result.won and 1 or 0.33, result.won and 0.6 or 0.33)
     Animate.FadeIn(widgets.resultText, 0.3)
     addon.Log.Protected("games.effects", "a landing effect failed", landingEffects, result)   -- never blocks the unlock below
-    if result.won then addon.Api.PlaySound(addon.Api.CoinSoundKit()) end
+    if result.won and not result.free then addon.Api.PlaySound(addon.Api.CoinSoundKit()) end
     GamesTab.state.flipping = false
     widgets.flipButton:Enable()
     GamesTab.SetBusy(false)   -- unlocks the game selector and runs the refresh that waited
@@ -284,7 +292,7 @@ local function refusalText(refusal)
     local commonText = addon.Model.CommonRefusalText(refusal, addon.Utility.Me())
     if commonText then return commonText end
     if refusal == "name" then return Text["Your character is not known yet."] end
-    return Format(Text["Enter a stake from 1c to {max}"], { max = money(addon.Games.MAXIMUM_STAKE) })
+    return Format(Text["Enter a stake from 1c to {max}, or 0 for free play"], { max = money(addon.Games.MAXIMUM_STAKE) })
 end
 GamesTab.RefusalText = refusalText
 
@@ -474,6 +482,7 @@ function GamesTab.RefreshBalance()
     if not widgets.balanceText then return end
     local balance = addon.Wallet.Balance(addon.Utility.Me())
     widgets.balanceText:SetText((balance < 0 and "|cffff5555-|r" or "") .. money(balance))
+    if widgets.limitText then widgets.limitText:SetText(addon.Model.WinLimitText(addon.Utility.Now())) end
 end
 
 -- Redraws the selected game's leaderboard, feed and last week's winner (deferred while a game animates).
@@ -746,6 +755,10 @@ function GamesTab.Build(stage, sidebar, header)
     widgets.balanceText = Widgets.CreateFontString(header, "GameFontHighlightSmall", "LEFT")
     widgets.balanceText:SetPoint("LEFT", previousButton, "RIGHT", 8, 0)
     widgets.balanceText:SetWidth(110)
+    -- the daily win limit of the house games, right of the pool
+    widgets.limitText = Widgets.CreateFontString(header, "GameFontHighlightSmall", "LEFT")
+    widgets.limitText:SetPoint("LEFT", widgets.balanceText, "RIGHT", 4, 0)
+    widgets.limitText:SetWidth(200)
 
     -- sidebar: last week's winner, scope, the selected game's leaderboard and feed
     widgets.winnerText = Widgets.CreateFontString(sidebar, "GameFontNormalSmall")

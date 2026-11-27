@@ -266,7 +266,7 @@ return {
         run.finished = "lost"
         Survivor.Settle(run, NOW + 30)
         local mine = addon.Games.Get(ME)
-        harness.equal(mine.survivor.recent[1].it, 1); harness.equal(mine.survivor.recent[2].it, nil)
+        harness.equal(mine.tower.recent[1].it, 1); harness.equal(mine.tower.recent[2].it, nil)
         harness.truthy(addon.Games.Sanitize(mine), "a marked play passes peer validation")
     end,
 
