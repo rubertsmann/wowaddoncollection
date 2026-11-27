@@ -184,6 +184,25 @@ function Api.UnitSnapshot(unit)
     return snapshot
 end
 
+-- The uiMapID the player stands in, or nil when the client does not say (no C_Map, a loading screen, a secret).
+---@return integer|nil
+function Api.PlayerMapID()
+    local mapApi = C_Map
+    local mapID = read(mapApi and mapApi.GetBestMapForUnit, "player")
+    return type(mapID) == "number" and mapID > 0 and math.floor(mapID) or nil
+end
+
+-- The client's (localized) name of a uiMapID, or nil.
+---@param mapID integer|nil
+---@return string|nil
+function Api.MapName(mapID)
+    local mapApi = C_Map
+    if type(mapID) ~= "number" then return nil end
+    local information = read(mapApi and mapApi.GetMapInfo, mapID)
+    local name = type(information) == "table" and NotSecret(information.name) or nil
+    return type(name) == "string" and name ~= "" and name or nil
+end
+
 -- The instance type ("party", "raid", "none", ...) for the journal, or nil when the client does not say.
 ---@return string|nil
 function Api.InInstance()

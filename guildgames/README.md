@@ -63,8 +63,8 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     - **Care**: **Feast** (1g: hunger and thirst to full), **Squeaky Toy** (50s: affection to full), **Care Elixir** (5g:
       hunger, thirst and affection don't drop for 4 hours).
     - **Arena**: **War Paint** (250g: attack +10% for 3 fights), **Bark Skin** (250g: health +10% for 3 fights), **Swift
-      Tonic** (100g: speed +25% for one fight). A fight is used when your fighter is sent (a challenge, an accept or a
-      counter offer); the buff icons show next to the fighter for everyone.
+      Tonic** (100g: speed +25% for one fight). A fight is used when your fighter is sent (a request or an accept); the
+      buff icons show next to the fighter for everyone.
     - **Games**: **Dash Shield** (10g: the next Companion Dash run survives one hit) and **Head Start** (5g: the next run
       starts at 200 m, no gold for those 200 m), armed with the two buttons beside the Start button; **Survivor Bomb**
       (100g: a button during a Survivor run with a stake of at most 250g, clears every monster on the screen, once per
@@ -82,7 +82,11 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
   - Every catch is its own companion in your **roster** (Collection > Caught: one row per companion, its arena level
     and NPC level). One is active at a time: **Make companion** switches for free, both keep their needs, hearts,
     XP and training (a running training session is cancelled). Resting companions are frozen: no needs, no death.
-    **Release** lets one go for good. In play time only, the active one needs water every hour, food every 2 hours,
+    **Release** lets one go for good. Every companion can be given a nickname **once** (up to 24 characters): select it
+    in Collection > Caught and press **Rename** (above Make companion), type the name and press the tick (the cross cancels). The same works
+    by clicking the active companion's name or with `/gg caught name <text>`. Once named, the Rename button is gone. Guild members see the nickname in the guild list and in fights, with
+    the species on hover. Hover over the name (or a roster row) to see where and when it was caught (companions caught
+    before 0.12.0 have no record of it). In play time only, the active one needs water every hour, food every 2 hours,
     petting every 2 hours and 1 hour of sleep every 4 hours; the bars show the thresholds.
   - **Companion** view: a click on a need bar cares for it (Food bar feeds, Water waters, Petting pets, Energy puts it
     to sleep or wakes it; hover for the price). Under the name: the arena level, wins/losses and an XP bar (hover for
@@ -92,20 +96,22 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     a critical need costs a heart every 10 minutes, into the negatives. Two hours without food or water and it dies.
   - **Guild** view: everyone's companion, ranked by NPC level + rarity + hearts. Last week's place pays 500g, 300g, 150g,
     or 25g into your pool. The minimap button shows a badge when a need is due; `/gg notify off` turns reminders off.
-  - **Arena:** every fight is **3 against 3**. Challenge a guild member from the Guild view with a team of three of
-    your companions (in fighting order; "Change team") and an optional wager in gold. Accepting or a counter offer
-    opens the team dialog: their team in full (stats, ability, buffs), your whole roster to pick three from, and
-    your win chance. The first of each side fight; the winner stays in with its health and running effects and meets
+  - **Arena:** every fight is **3 against 3**. Request a fight on the **Fights** page: pick a guild member in the
+    dropdown (members on another version, with fewer than 3 companions, in a fight or offline are greyed out; hover
+    says why), then **Fight!** opens the team picker: your three companions in fighting order and your wager (at least
+    1g). Send takes the wager and crossed swords clash. The other player accepts in the same picker: your team in a
+    carousel (stats, ability, buffs), their three and **their own wager** (any amount from 1g); or
+    they decline. The first of each side fight; the winner stays in with its health and running effects and meets
     the next one; the side without fighters left loses. Every companion that entered gains XP (more per opponent it
-    beat). Both players need the **same GuildGames version**, otherwise challenges and accepts are refused. They accept,
-    decline or make a **counter offer** (another wager, paid at once) whenever they are online; a counter offer is
-    accepted or declined by the challenger (declined: both wagers come back). 5 minutes after the accept the fight is decided on its own (no input: stats, arena level,
-    training, hearts, needs and the creature type's ability decide). The winner takes both wagers; the rest of the guild
-    can bet on either side in those 5 minutes at odds from the win chance. Train Attack, Defense, Speed or Vitality
-    in the Companion view or the minimal view's training button (gold, energy and 10 minutes of play time per point)
-    and gain XP and arena levels. The Arena view has the Guild and Fights pages. A decided fight shows
-    "watch!": its result, the wager and side bets are paid only after you watched the replay in the Arena view
-    (`/gg arena`), or on their own 24 hours later. Both players need this version (protocol 1.3 for counter offers).
+    beat). Both players need the **same GuildGames version**, otherwise requests and accepts are refused. 5 minutes
+    after the accept the fight is decided on its own (no input: stats, arena level, training, hearts, needs and the
+    creature type's ability decide). In those 5 minutes the rest of the guild can bet on either side (one bet each).
+    **The pot:** each fighter's wager is the first stake on their own side, every bet joins its side; the winning side
+    gets its stakes back plus the losing side's whole total, split by each stake's share. The losing side loses
+    everything. Train Attack, Defense, Speed or Vitality in the Companion view or the minimal view's training button
+    (gold, energy and 10 minutes of play time per point) and gain XP and arena levels. The Arena view has the Guild
+    and Fights pages. A decided fight shows "watch!": its result, the pot and the bets are paid only after you watched
+    the replay in the Arena view (`/gg arena`), or on their own an hour after the fight.
 - **Money pool:** one balance for all games: 20g to start, plus your casino results, catch rewards and weekly payouts,
   minus food, water and the shop. You cannot stake more than the balance. It is shown next to the game switch.
 - **Window:** the icons at the top left switch the game (hover for the name). Drag the handle in the bottom-left
@@ -138,5 +144,11 @@ send budget for every addon that embeds it, the guild-only gate, record pulls wi
   `give <gold>`, `force` (next roll catches), `need <name> <0-100>`, `week` (run the weekly payout again),
   `restore <code>` (a companion from a restore code built out of a backup with `AzeCaught.RestoreCode`, once per
   character; it was a player command in 0.11.2 only).
+- Dev only, arena (also the icons in a row just below the Fights page; all memory only, never stored or sent):
+  `/ggd arena dummy [off]` (a fake member that accepts after 20 s), `request [gold]` (it challenges you), `accept` /
+  `decline` (it answers your waiting challenge now), `skip` (its accepted fights are decided now), `crowd` (fake bettors
+  on both sides of the selected open fight), `latebet` (a fake bet after the selected fight's fight time),
+  `members` (a fake member that can be challenged and answers like the dummy, plus one for every greyed reason), `expire` / `reveal` (fake fights past their time
+  to live / past the one hour reveal), `clear` (all of it gone).
 - Dev only: `/ggd anim` (animation probe), `/ggd anim speed 0.25`, `/ggd game sim <n>` (fake leaderboard players that are
   never stored or sent). Offline: `luajit tools/coinflip.lua [H|T] [flips]`.

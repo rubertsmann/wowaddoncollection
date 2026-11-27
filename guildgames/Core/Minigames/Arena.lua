@@ -26,11 +26,12 @@ Arena.ABILITY_EVERY = 3              -- every 3rd action of a fighter is its abi
 Arena.CHALLENGE_TTL = 24 * 3600      -- an unanswered challenge expires (refund)
 Arena.ANSWER_GRACE = 24 * 3600       -- the refund waits this long more: a late-synced answer still counts
 Arena.BET_WINDOW = 300               -- the fight is decided this long after the accept; bets until then
-Arena.REVEAL_AFTER = 24 * 3600       -- a decided fight nobody watched is settled anyway this long after the fight time
+Arena.REVEAL_AFTER = 3600            -- a decided fight nobody watched is settled anyway this long after the fight time
 Arena.KEEP_SECONDS = 3 * 86400       -- settled entries leave my record after this
 Arena.MAXIMUM_WAGER = 1000 * 10000   -- 1000g
+Arena.MINIMUM_WAGER = 10000          -- 1g: each fighter is the first stake on its side of the pot, so no side is empty
 Arena.MINIMUM_BET, Arena.MAXIMUM_BET = 1000, 500 * 10000
-Arena.ODDS_LIMITS = { 110, 1000 }    -- hundredths: 1.1x .. 10x
+Arena.ODDS_LIMITS = { 110, 1000 }    -- hundredths: 1.1x .. 10x (only bets from before the pot carry odds)
 Arena.MAXIMUM_ENTRIES = 20           -- per record table (ch, an, bt)
 Arena.MAXIMUM_HISTORY = 30
 Arena.MAXIMUM_STAT = 1000000
@@ -181,6 +182,7 @@ end
 ---@class Fighter
 ---@field npc integer
 ---@field n string NPC name
+---@field nk? string the owner's nickname for it (display only: never part of the fight)
 ---@field cls string
 ---@field disp integer
 ---@field ty integer creature type id (0 unknown)
@@ -208,7 +210,8 @@ function Arena.Fighter(companion)
     local level = Arena.Level(npc.xp)
     local morale = 1 + addon.Utility.Clamp(companion.hearts or 0, -10, 10) / 100
     local fighter = { npc = companion.npc, n = entry.n, cls = entry.cls, disp = entry.disp or 0,
-        ty = type(entry.st) == "table" and entry.st.type or 0, al = level }
+        ty = type(entry.st) == "table" and entry.st.type or 0, al = level,
+        nk = type(companion.info) == "table" and companion.info.nick or nil }
     for _, stat in ipairs(Arena.STATS) do
         local factor = (1 + Arena.TRAIN_BONUS * npc.tr[stat]) * (1 + Arena.LEVEL_BONUS * (level - 1)) * morale
         fighter[stat] = math.max(1, math.min(Arena.MAXIMUM_STAT, math.floor(values[stat] * factor + 0.5)))
@@ -263,6 +266,7 @@ function Arena.SanitizeFighter(raw)
         if clean[key] == nil then return nil end
     end
     clean.bf = Arena.SanitizeBuffs(raw.bf)
+    clean.nk = AzeCaught.CleanNickname(raw.nk)   -- optional: a bad one is dropped alone
     return clean
 end
 
@@ -523,14 +527,6 @@ function Arena.WinChance(a, b, id)
     return wins / Arena.CHANCE_SAMPLES
 end
 
--- Fixed odds in hundredths for a side with win chance `chance` (0.95 / chance, ODDS_LIMITS).
----@param chance number
----@return integer
-function Arena.Odds(chance)
-    chance = math.max(0.001, tonumber(chance) or 0)
-    return addon.Utility.Clamp(math.floor(95 / chance), Arena.ODDS_LIMITS[1], Arena.ODDS_LIMITS[2])
-end
-
 ------------------------------------------------------------------ record section
 
 -- My section for the game record: totals and the open entries (copies; the record is replaced as a whole).
@@ -597,12 +593,17 @@ function Arena.SanitizeSection(section, owner, horizon)
         if not at or type(entry.ok) ~= "boolean" then return nil end
         local fighter = entry.ok and Arena.SanitizeTeam(entry.t) or nil
         if entry.ok and not fighter then return nil end
-        return { ok = entry.ok, at = at, t = fighter }
+        -- the accepting player's own wager (missing in accepts from before the pot: the challenger's wager)
+        local wager = entry.wg ~= nil and SafeInteger(entry.wg, 0, Arena.MAXIMUM_WAGER) or nil
+        if entry.wg ~= nil and not wager then return nil end
+        return { ok = entry.ok, at = at, t = fighter, wg = entry.ok and wager or nil }
     end) and each("bt", function(entry, challenger)
         if challenger == owner then return nil end
         local side, stake = entry.s, SafeInteger(entry.c, Arena.MINIMUM_BET, Arena.MAXIMUM_BET)
-        local odds, at = SafeInteger(entry.o, Arena.ODDS_LIMITS[1], Arena.ODDS_LIMITS[2]), SafeInteger(entry.at, 0, horizon)
-        if (side ~= "a" and side ~= "b") or not stake or not odds or not at then return nil end
+        local at = SafeInteger(entry.at, 0, horizon)
+        -- fixed odds: only bets placed before the pot have them (they are paid by their odds, outside the pot)
+        local odds = entry.o ~= nil and SafeInteger(entry.o, Arena.ODDS_LIMITS[1], Arena.ODDS_LIMITS[2]) or nil
+        if (side ~= "a" and side ~= "b") or not stake or (entry.o ~= nil and not odds) or not at then return nil end
         return { s = side, c = stake, o = odds, at = at }
     end) and each("co", function(entry, challenger)
         if challenger == owner then return nil end
@@ -622,7 +623,8 @@ end
 ---@field a string challenger
 ---@field b string challenged
 ---@field at integer
----@field wager integer
+---@field wager integer the challenger's stake
+---@field wagerB integer|nil the challenged player's own stake (once accepted)
 ---@field ta Fighter[] the challenger's team
 ---@field tb Fighter[]|nil the challenged player's team (once accepted)
 ---@field fa Fighter the first of ta
@@ -653,6 +655,7 @@ function Arena.Fights(records, myName, now)
     for name in pairs(names) do
         local section = sectionOf(records, name, myName)
         for id, challenge in pairs(section and section.ch or {}) do
+            local now = now + (Arena.devShift[id] or 0)   -- dev: a fake fight moved forward in time (memory only)
             local fight = { id = id, a = name, b = challenge.to, at = challenge.at, wager = challenge.wg or 0, ta = challenge.t,
                 fa = challenge.t[1], bets = {} }
             local answers = sectionOf(records, challenge.to, myName)
@@ -665,6 +668,7 @@ function Arena.Fights(records, myName, now)
                 fight.answerAt = answer.at
                 if answer.ok then
                     fight.tb, fight.fb, fight.fightAt = answer.t, answer.t[1], answer.at + Arena.BET_WINDOW
+                    fight.wagerB = answer.wg or fight.wager
                     -- dev: the waiting time of a dummy fight was cut short (memory only, Arena.SkipDummyWait)
                     if Arena.skipped[id] then fight.fightAt = math.max(answer.at, math.min(fight.fightAt, Arena.skipped[id])) end
                     fight.state = now >= fight.fightAt and "done" or "open"
@@ -674,7 +678,7 @@ function Arena.Fights(records, myName, now)
             elseif counter and inTime(counter.at, challenge.at) then
                 fight.counter = counter
                 if challenge.ca and inTime(challenge.ca, counter.at) then
-                    fight.answerAt, fight.wager = challenge.ca, counter.wg
+                    fight.answerAt, fight.wager, fight.wagerB = challenge.ca, counter.wg, counter.wg
                     fight.tb, fight.fb, fight.fightAt = counter.t, counter.t[1], challenge.ca + Arena.BET_WINDOW
                     if Arena.skipped[id] then fight.fightAt = math.max(challenge.ca, math.min(fight.fightAt, Arena.skipped[id])) end
                     fight.state = now >= fight.fightAt and "done" or "open"
@@ -700,16 +704,61 @@ function Arena.Fights(records, myName, now)
             fights[id] = fight
         end
     end
+    -- bets: not from the two fighters, placed while the fight was open, and from a bettor on the fighters' version
     for name in pairs(names) do
         local section = sectionOf(records, name, myName)
+        local bettorVersion = Arena.VersionOf(records, name, myName)
         for id, bet in pairs(section and section.bt or {}) do
             local fight = fights[id]
-            if fight and name ~= fight.a and name ~= fight.b and fight.fightAt and bet.at < fight.fightAt and bet.at >= (fight.answerAt or 0) then
+            local fightVersion = fight and Arena.VersionOf(records, fight.a, myName)
+            if fight and name ~= fight.a and name ~= fight.b and fight.fightAt and bet.at < fight.fightAt and bet.at >= (fight.answerAt or 0)
+                and (not bettorVersion or not fightVersion or bettorVersion == fightVersion) then
                 fight.bets[name] = bet
             end
         end
     end
     return fights
+end
+
+------------------------------------------------------------------ the pot
+
+---@class ArenaPot
+---@field a integer the challenger's side: their wager plus the bets on them
+---@field b integer the challenged player's side
+---@field stakes table<string, {s: "a"|"b", c: integer}> every stake in the pot by player
+
+-- The pot of an accepted fight: each fighter's wager is the first stake on their own side, every counted bet joins
+-- its side (bets with fixed odds from before the pot are paid by their odds and stay out). Each client builds it from
+-- the bets it has seen; Arena.Fights already left out late bets, the fighters' own and other versions'.
+---@param fight ArenaFight|nil
+---@return ArenaPot
+function Arena.Pot(fight)
+    local pot = { a = 0, b = 0, stakes = {} }
+    if not fight or not fight.tb then return pot end
+    local function add(name, side, amount)
+        if type(name) ~= "string" or pot.stakes[name] or type(amount) ~= "number" or amount <= 0 then return end
+        pot.stakes[name] = { s = side, c = amount }
+        pot[side] = pot[side] + amount
+    end
+    add(fight.a, "a", fight.wager)
+    add(fight.b, "b", fight.wagerB or fight.wager)
+    for name, bet in pairs(fight.bets or {}) do
+        if not bet.o then add(name, bet.s, bet.c) end
+    end
+    return pot
+end
+
+-- What `name` gets from the pot when `winner` won: their own stake back plus the losing side's total, split by
+-- their share of the winning side (rounded down to copper). A stake on the losing side (or none) gets 0.
+---@param pot ArenaPot
+---@param winner "a"|"b"
+---@param name string
+---@return integer
+function Arena.Payout(pot, winner, name)
+    local stake = pot and pot.stakes[name]
+    if not stake or stake.s ~= winner or (pot[winner] or 0) <= 0 then return 0 end
+    local loser = winner == "a" and "b" or "a"
+    return stake.c + math.floor(pot[loser] * stake.c / pot[winner])
 end
 
 local resultCache, resultCount = {}, 0
@@ -727,16 +776,6 @@ function Arena.Result(fight)
     return cached
 end
 
-local chanceCache = {}
--- a's win chance for a fight (cached).
----@param fight ArenaFight
----@return number|nil
-function Arena.Chance(fight)
-    if not fight or not fight.fb then return nil end
-    if chanceCache[fight.id] == nil then chanceCache[fight.id] = Arena.WinChance(fight.ta, fight.tb, fight.id) end
-    return chanceCache[fight.id]
-end
-
 ------------------------------------------------------------------ actions (each returns true or nil, reason)
 
 -- One fight at a time: `name` is busy with an open (accepted, not yet fought) fight, or, when
@@ -752,6 +791,41 @@ function Arena.Busy(fights, name, outgoing)
         if outgoing and fight.b == name and fight.state == "countered" then return id end
     end
     return nil
+end
+
+---@class ArenaCandidate
+---@field name string
+---@field reason string|nil why they can't be challenged: "version", "fewcompanions", "theybusy", "offline"; nil: they can
+---@field version string|nil the version they run (when known)
+---@field companions integer|nil how many companions they have (when their record says)
+
+-- Everybody I could challenge: every other member with a companion record, the ones that can be challenged first
+-- (then by name). `isOnline(name)` returns false for a member known to be offline (nil: unknown, not greyed).
+---@param records table<string, table>
+---@param myName string
+---@param now integer
+---@param isOnline? fun(name: string): boolean|nil
+---@return ArenaCandidate[]
+function Arena.Candidates(records, myName, now, isOnline)
+    local fights = Arena.Fights(records, myName, now)
+    local list = {}
+    for name, gameRecord in pairs(records or {}) do
+        if name ~= myName and addon.Utility.IsSafeName(name) and type(gameRecord) == "table" and type(gameRecord.caught) == "table" then
+            local same, theirs = Arena.SameVersion(records, name)
+            local companions = tonumber(gameRecord.caught.rc)
+            local reason
+            if not same then reason = "version"
+            elseif companions and companions < Arena.TEAM_SIZE then reason = "fewcompanions"
+            elseif Arena.Busy(fights, name, false) then reason = "theybusy"
+            elseif Arena.devOffline[name] or (isOnline and isOnline(name) == false) then reason = "offline" end
+            list[#list + 1] = { name = name, reason = reason, version = theirs, companions = companions }
+        end
+    end
+    table.sort(list, function(left, right)
+        if (left.reason == nil) ~= (right.reason == nil) then return left.reason == nil end
+        return left.name < right.name
+    end)
+    return list
 end
 
 -- Challenges `opponent` (who must have a companion in their record and run my version) with `wager` copper and my team
@@ -773,7 +847,7 @@ function Arena.Challenge(records, myName, opponent, wager, now, uids)
     local team, teamRefusal = Arena.Team(uids)
     if not team then return nil, teamRefusal end
     wager = math.floor(tonumber(wager) or 0)
-    if wager < 0 or wager > Arena.MAXIMUM_WAGER then return nil, "wager" end
+    if wager < Arena.MINIMUM_WAGER or wager > Arena.MAXIMUM_WAGER then return nil, "wager" end
     local state = Arena.State()
     local fights = Arena.Fights(records, myName, now)
     if Arena.Busy(fights, myName, true) then return nil, "busy" end
@@ -782,10 +856,8 @@ function Arena.Challenge(records, myName, opponent, wager, now, uids)
     local at = now
     while state.ch[myName .. "#" .. at] do at = at + 1 end
     local id = myName .. "#" .. at
-    if wager > 0 then
-        local _, refusal = addon.Wallet.Spend(myName, wager, "wager", now, opponent)
-        if refusal then return nil, refusal end
-    end
+    local _, refusal = addon.Wallet.Spend(myName, wager, "wager", now, opponent)
+    if refusal then return nil, refusal end
     state.ch[id] = { to = opponent, at = at, wg = wager, t = team }
     state.uids[id] = { uids[1], uids[2], uids[3] }
     addon.Items.SpendArenaBuffs(team[1].bf)
@@ -793,13 +865,14 @@ function Arena.Challenge(records, myName, opponent, wager, now, uids)
     return id
 end
 
--- Accepts (with my team: TEAM_SIZE roster uids in fighting order) or declines a challenge to me. Reasons: "readonly",
--- "unknown", "answered", "late", "version", "busy" (accepting while my one fight runs or my own challenge waits),
--- "team", "nocompanion", "funds".
+-- Accepts (with my team: TEAM_SIZE roster uids in fighting order, and my own wager MINIMUM_WAGER..MAXIMUM_WAGER) or
+-- declines a challenge to me. Reasons: "readonly", "unknown", "answered", "late", "version", "busy" (accepting while
+-- my one fight runs or my own challenge waits), "team", "nocompanion", "wager", "funds".
 ---@param uids string[]|nil
+---@param wager integer|nil copper (accepting only)
 ---@return boolean|nil
 ---@return string|nil reason
-function Arena.Answer(records, myName, id, accept, now, uids)
+function Arena.Answer(records, myName, id, accept, now, uids, wager)
     if addon.Store.db.readonly then return nil, "readonly" end
     local fight = Arena.Fights(records, myName, now)[id]
     if not fight or fight.b ~= myName then return nil, "unknown" end
@@ -816,76 +889,14 @@ function Arena.Answer(records, myName, id, accept, now, uids)
     if Arena.Busy(Arena.Fights(records, myName, now), myName, true) then return nil, "busy" end
     local team, teamRefusal = Arena.Team(uids)
     if not team then return nil, teamRefusal end
-    if fight.wager > 0 then
-        local _, refusal = addon.Wallet.Spend(myName, fight.wager, "wager", now, fight.a)
-        if refusal then return nil, refusal end
-    end
-    state.an[id] = { ok = true, at = now, t = team }
+    wager = math.floor(tonumber(wager) or 0)
+    if wager < Arena.MINIMUM_WAGER or wager > Arena.MAXIMUM_WAGER then return nil, "wager" end
+    local _, refusal = addon.Wallet.Spend(myName, wager, "wager", now, fight.a)
+    if refusal then return nil, refusal end
+    state.an[id] = { ok = true, at = now, t = team, wg = wager }
     state.uids[id] = { uids[1], uids[2], uids[3] }
     addon.Items.SpendArenaBuffs(team[1].bf)
-    addon.AzeCaught.Journal("INFORMATION", "arena.accept", "a challenge was accepted", { id = id, wager = fight.wager })
-    return true
-end
-
--- Answers a challenge to me with a counter offer: another wager, paid at once, and my team. One counter per challenge;
--- the challenger then accepts or declines it (Arena.AnswerCounter). Reasons: "readonly", "unknown", "answered", "late",
--- "version", "wager", "same" (the offered wager), "busy", "team", "nocompanion", "funds".
----@param uids string[]
----@return boolean|nil
----@return string|nil reason
-function Arena.Counter(records, myName, id, wager, now, uids)
-    if addon.Store.db.readonly then return nil, "readonly" end
-    local fights = Arena.Fights(records, myName, now)
-    local fight = fights[id]
-    if not fight or fight.b ~= myName then return nil, "unknown" end
-    local state = Arena.State()
-    if state.an[id] or state.co[id] then return nil, "answered" end
-    if fight.state == "version" or not Arena.SameVersion(records, fight.a) then return nil, "version" end
-    if fight.state ~= "pending" then return nil, "late" end
-    wager = math.floor(tonumber(wager) or -1)
-    if wager < 0 or wager > Arena.MAXIMUM_WAGER then return nil, "wager" end
-    if wager == fight.wager then return nil, "same" end
-    if Arena.Busy(fights, myName, true) then return nil, "busy" end
-    local team, teamRefusal = Arena.Team(uids)
-    if not team then return nil, teamRefusal end
-    if wager > 0 then
-        local _, refusal = addon.Wallet.Spend(myName, wager, "wager", now, fight.a)
-        if refusal then return nil, refusal end
-    end
-    state.co[id] = { wg = wager, at = now, t = team }
-    state.uids[id] = { uids[1], uids[2], uids[3] }
-    addon.Items.SpendArenaBuffs(team[1].bf)
-    addon.AzeCaught.Journal("INFORMATION", "arena.counter", "a counter offer was made", { id = id, wager = wager, offered = fight.wager })
-    return true
-end
-
--- Accepts or declines the counter offer to my challenge. Accepting pays the difference to the countered wager (or
--- gets it back) at once and starts the fight. Reasons: "readonly", "unknown", "version", "late", "funds".
----@return boolean|nil
----@return string|nil reason
-function Arena.AnswerCounter(records, myName, id, accept, now)
-    if addon.Store.db.readonly then return nil, "readonly" end
-    local state = Arena.State()
-    local challenge = state.ch[id]
-    local fight = Arena.Fights(records, myName, now)[id]
-    if not challenge or not fight or fight.a ~= myName or not fight.counter then return nil, "unknown" end
-    if fight.state == "version" or (accept and not Arena.SameVersion(records, fight.b)) then return nil, "version" end
-    if fight.state ~= "countered" or now > fight.counter.at + Arena.CHALLENGE_TTL then return nil, "late" end
-    local at = math.max(now, fight.counter.at)
-    if accept then
-        local difference = fight.counter.wg - challenge.wg
-        if difference > 0 then
-            local _, refusal = addon.Wallet.Spend(myName, difference, "wager", now, fight.b)
-            if refusal then return nil, refusal end
-        elseif difference < 0 then
-            addon.Wallet.Earn(myName, -difference, "refund", now, fight.b)
-        end
-        challenge.ca = at
-    else
-        challenge.cd = at
-    end
-    addon.AzeCaught.Journal("INFORMATION", "arena.counterAnswer", accept and "a counter offer was accepted" or "a counter offer was declined",
-        { id = id, wager = fight.counter.wg, offered = challenge.wg })
+    addon.AzeCaught.Journal("INFORMATION", "arena.accept", "a challenge was accepted", { id = id, wager = wager, theirs = fight.wager })
     return true
 end
 
@@ -903,7 +914,7 @@ end
 ---@return boolean
 function Arena.Revealed(fight, now)
     if not fight or fight.state ~= "done" then return false end
-    return Arena.State().watched[fight.id] ~= nil or now >= fight.fightAt + Arena.REVEAL_AFTER
+    return Arena.State().watched[fight.id] ~= nil or now + (Arena.devShift[fight.id] or 0) >= fight.fightAt + Arena.REVEAL_AFTER
 end
 
 -- Stops my own challenge that was not answered yet. The stake comes back on the next settlement.
@@ -922,9 +933,9 @@ function Arena.Withdraw(records, myName, id, now)
     return true
 end
 
--- Bets `stake` copper on `side` ("a" challenger, "b" challenged) of an open fight. Reasons: "readonly", "unknown",
--- "closed", "own", "twice", "side", "stake", "funds".
----@return integer|nil odds hundredths
+-- Bets `stake` copper on `side` ("a" challenger, "b" challenged) of an open fight: the stake joins that side of the
+-- pot. Reasons: "readonly", "unknown", "closed", "own", "version", "twice", "side", "stake", "funds".
+---@return boolean|nil
 ---@return string|nil reason
 function Arena.Bet(records, myName, id, side, stake, now)
     if addon.Store.db.readonly then return nil, "readonly" end
@@ -932,18 +943,17 @@ function Arena.Bet(records, myName, id, side, stake, now)
     if not fight then return nil, "unknown" end
     if fight.state ~= "open" then return nil, "closed" end
     if fight.a == myName or fight.b == myName then return nil, "own" end
+    if not Arena.SameVersion(records, fight.a) then return nil, "version" end
     local state = Arena.State()
     if state.bt[id] then return nil, "twice" end
     if side ~= "a" and side ~= "b" then return nil, "side" end
     stake = math.floor(tonumber(stake) or 0)
     if stake < Arena.MINIMUM_BET or stake > Arena.MAXIMUM_BET then return nil, "stake" end
-    local chance = Arena.Chance(fight)
-    local odds = Arena.Odds(side == "a" and chance or 1 - chance)
     local _, refusal = addon.Wallet.Spend(myName, stake, "bet", now, id)
     if refusal then return nil, refusal end
-    state.bt[id] = { s = side, c = stake, o = odds, at = now }
-    addon.AzeCaught.Journal("INFORMATION", "arena.bet", "a bet was placed", { id = id, side = side, stake = stake, odds = odds })
-    return odds
+    state.bt[id] = { s = side, c = stake, at = now }
+    addon.AzeCaught.Journal("INFORMATION", "arena.bet", "a bet was placed", { id = id, side = side, stake = stake })
+    return true
 end
 
 ------------------------------------------------------------------ settlement
@@ -1005,8 +1015,9 @@ function Arena.Settle(records, myName, now)
         local myAnswer = state.an[id]
         if mine == "b" and (fight.state == "withdrawn" or fight.state == "version") and myAnswer and myAnswer.ok
             and not state.settled["f:" .. id] and once("r:" .. id) then
-            pay(myName, fight.wager, "refund", now, fight.a)
-            notices[#notices + 1] = { kind = "refund", id = id, opponent = fight.a, wager = fight.wager, why = fight.state }
+            local myStake = myAnswer.wg or fight.wager
+            pay(myName, myStake, "refund", now, fight.a)
+            notices[#notices + 1] = { kind = "refund", id = id, opponent = fight.a, wager = myStake, why = fight.state }
         end
         -- my counter offer was declined, stopped or not answered in time: my counter stake comes back
         local myCounter = state.co[id]
@@ -1040,19 +1051,23 @@ function Arena.Settle(records, myName, now)
             if won then state.w = state.w + 1 else state.l = state.l + 1 end
             -- a stop refunded my stake, then an accept from before the stop turned up: the fight counts, the refund is undone
             local refunded = mine == "a" and state.settled["r:" .. id] and fight.wager or 0
+            local myStake = mine == "a" and fight.wager or (fight.wagerB or fight.wager)
+            local payout = won and Arena.Payout(Arena.Pot(fight), mine, myName) or 0
             if won then
-                pay(myName, fight.wager * 2 - refunded, "arena", now, mine == "a" and fight.b or fight.a)
+                pay(myName, payout - refunded, "arena", now, mine == "a" and fight.b or fight.a)
             elseif refunded > 0 then
                 addon.Wallet.Spend(myName, refunded, "wager", now, fight.b)
             end
             local opponent = mine == "a" and fight.b or fight.a
-            table.insert(state.history, 1, { id = id, opp = opponent, me = fighter.n, them = (mine == "a" and fight.fb or fight.fa).n,
-                won = won, wg = fight.wager, t = fight.fightAt })
+            local theirs = mine == "a" and fight.fb or fight.fa
+            table.insert(state.history, 1, { id = id, opp = opponent, me = fighter.n, them = theirs.n,
+                mi = fighter.npc, mk = fighter.nk, ti = theirs.npc, tk = theirs.nk,
+                won = won, wg = myStake, t = fight.fightAt })
             while #state.history > Arena.MAXIMUM_HISTORY do table.remove(state.history) end
             changed = true
             addon.AzeCaught.Journal("INFORMATION", "arena.fight", won and "an arena fight was won" or "an arena fight was lost",
-                { id = id, side = mine, wager = fight.wager, reason = result.reason, actions = #result.events })
-            notices[#notices + 1] = { kind = won and "won" or "lost", id = id, opponent = opponent, wager = fight.wager }
+                { id = id, side = mine, wager = myStake, payout = payout, reason = result.reason, actions = #result.events })
+            notices[#notices + 1] = { kind = won and "won" or "lost", id = id, opponent = opponent, wager = myStake, payout = payout }
         end
         local bet = state.bt[id]
         if bet and fight.state == "done" and not revealed and not state.settled["b:" .. id] then
@@ -1060,16 +1075,25 @@ function Arena.Settle(records, myName, now)
         end
         if bet and revealed and once("b:" .. id) then
             local result = Arena.Result(fight)
-            local payout = result.winner == bet.s and math.floor(bet.c * bet.o / 100) or 0
-            pay(myName, payout, "betwin", now, id)
-            notices[#notices + 1] = { kind = payout > 0 and "betwon" or "betlost", id = id, stake = bet.c, payout = payout,
-                fighter = bet.s == "a" and fight.a or fight.b }
+            local pot = Arena.Pot(fight)
+            if not bet.o and not pot.stakes[myName] then
+                -- my bet did not make it into the pot (placed too late): it comes back
+                pay(myName, bet.c, "refund", now, id)
+                notices[#notices + 1] = { kind = "refund", id = id, wager = bet.c, why = "late" }
+            else
+                local payout = bet.o and (result.winner == bet.s and math.floor(bet.c * bet.o / 100) or 0)
+                    or Arena.Payout(pot, result.winner, myName)
+                pay(myName, payout, "betwin", now, id)
+                notices[#notices + 1] = { kind = payout > 0 and "betwon" or "betlost", id = id, stake = bet.c, payout = payout,
+                    fighter = bet.s == "a" and fight.a or fight.b }
+            end
         end
     end
     -- a bet whose fight is gone (records pruned) or never happened: refund after the grace time
     for id, bet in pairs(state.bt) do
         local fight = fights[id]
-        if (not fight or fight.state == "declined" or fight.state == "expired" or fight.state == "rejected")
+        if (not fight or fight.state == "declined" or fight.state == "expired" or fight.state == "rejected"
+            or fight.state == "withdrawn" or fight.state == "version")
             and now > bet.at + Arena.CHALLENGE_TTL + Arena.ANSWER_GRACE and once("b:" .. id) then
             pay(myName, bet.c, "refund", now, id)
             notices[#notices + 1] = { kind = "refund", id = id, wager = bet.c, why = "bet" }
@@ -1145,7 +1169,9 @@ function Arena.SanitizePersisted(caught, me)
         if type(entry) == "table" and type(entry.id) == "string" and addon.Utility.IsSafeName(entry.opp) and #clean.history < Arena.MAXIMUM_HISTORY then
             clean.history[#clean.history + 1] = { id = entry.id, opp = entry.opp, me = addon.Utility.CleanString(entry.me, 48) or "?",
                 them = addon.Utility.CleanString(entry.them, 48) or "?", won = entry.won == true, wg = SafeInteger(entry.wg, 0, Arena.MAXIMUM_WAGER) or 0,
-                t = SafeInteger(entry.t, 0) or 0 }
+                t = SafeInteger(entry.t, 0) or 0,
+                mi = SafeInteger(entry.mi, 1, addon.AzeCaught.MAXIMUM_ID), mk = addon.AzeCaught.CleanNickname(entry.mk),
+                ti = SafeInteger(entry.ti, 1, addon.AzeCaught.MAXIMUM_ID), tk = addon.AzeCaught.CleanNickname(entry.tk) }
         end
     end
     -- my team per fight (roster uids, local only); a uid that left the roster stays and is skipped when settling
@@ -1198,7 +1224,7 @@ function Arena.DummyRecord(myTeam, now, seed)
         for _, stat in ipairs(Arena.STATS) do
             fighter[stat] = math.max(1, math.floor(base[stat] * (0.85 + 0.3 * random()) + 0.5))
         end
-        fighter.n = base.n .. " (Dummy)"
+        fighter.nk = "Dummy " .. index   -- a nickname like a player's: the species stays on hover
         team[index] = fighter
     end
     local first = team[1]
@@ -1226,29 +1252,41 @@ function Arena.SkipDummyWait(records, myName, now)
     return count
 end
 
--- The dummy accepts every pending challenge of mine to it. Returns the number accepted.
+Arena.DUMMY_DELAY = 20   -- seconds the dummy waits before it accepts on its own (time for the dev decline button)
+
+-- The dummy's own wager for a challenge: 0.5x..2x the challenger's, from the fight id (the same on every call).
+---@param id string
+---@param theirs integer
+---@return integer
+function Arena.DummyWager(id, theirs)
+    local factor = 50 + Arena.Seed(id) % 151
+    return addon.Utility.Clamp(math.floor((theirs or 0) * factor / 100), Arena.MINIMUM_WAGER, Arena.MAXIMUM_WAGER)
+end
+
+-- The dummy answers my pending challenges to it: with `onlyID` that one at once (`accept` false declines), without it
+-- every challenge older than DUMMY_DELAY is accepted with the dummy's own wager. Returns the number answered.
 ---@param dummy table the dummy's record
 ---@param myName string
 ---@param now integer
+---@param onlyID? string
+---@param accept? boolean
 ---@return integer
-function Arena.DummyRespond(dummy, myName, now)
-    local accepted = 0
+function Arena.DummyRespond(dummy, myName, now, onlyID, accept)
+    local answered = 0
     for id, challenge in pairs(Arena.State().ch) do
-        if challenge.to == dummy.name and not dummy.arena.an[id] and not challenge.wd and now <= challenge.at + Arena.CHALLENGE_TTL then
-            dummy.arena.an[id] = { ok = true, at = math.max(now, challenge.at), t = addon.Utility.DeepCopy(dummy.dummyTeam) }
-            accepted = accepted + 1
+        if challenge.to == dummy.name and not dummy.arena.an[id] and not challenge.wd and now <= challenge.at + Arena.CHALLENGE_TTL
+            and (onlyID == id or (not onlyID and now >= challenge.at + Arena.DUMMY_DELAY)) then
+            if onlyID and accept == false then
+                dummy.arena.an[id] = { ok = false, at = math.max(now, challenge.at) }
+            else
+                dummy.arena.an[id] = { ok = true, at = math.max(now, challenge.at), t = addon.Utility.DeepCopy(dummy.dummyTeam),
+                    wg = Arena.DummyWager(id, challenge.wg) }
+            end
+            answered = answered + 1
         end
     end
-    -- my counter offers to the dummy's challenges: it accepts them too
-    for id, counter in pairs(Arena.State().co) do
-        local challenge = dummy.arena.ch[id]
-        if challenge and not challenge.ca and not challenge.cd and not challenge.wd and now <= counter.at + Arena.CHALLENGE_TTL then
-            challenge.ca = math.max(now, counter.at)
-            accepted = accepted + 1
-        end
-    end
-    if accepted > 0 then dummy.rev = now end
-    return accepted
+    if answered > 0 then dummy.rev = now end
+    return answered
 end
 
 -- The dummy challenges me with `wager` copper. Returns the fight id.
@@ -1261,8 +1299,132 @@ function Arena.DummyChallenge(dummy, myName, wager, now)
     local at = now
     while dummy.arena.ch[dummy.name .. "#" .. at] do at = at + 1 end
     local id = dummy.name .. "#" .. at
-    dummy.arena.ch[id] = { to = myName, at = at, wg = addon.Utility.Clamp(math.floor(tonumber(wager) or 0), 0, Arena.MAXIMUM_WAGER),
+    dummy.arena.ch[id] = { to = myName, at = at, wg = addon.Utility.Clamp(math.floor(tonumber(wager) or 0), Arena.MINIMUM_WAGER, Arena.MAXIMUM_WAGER),
         t = addon.Utility.DeepCopy(dummy.dummyTeam) }
     dummy.rev = now
     return id
+end
+
+------------------------------------------------------------------ dev events (dev build only, memory only)
+
+-- Fake fights, members and bettors for trying the request, the pot and the dropdown alone. They live in
+-- Games.simulated (never stored, never sent) and in the tables below; Arena.DevClear removes them all.
+Arena.devShift = {}     -- fight id -> seconds a fake fight is moved forward in time (expire, reveal)
+Arena.devOffline = {}   -- fake member -> true: shown as offline in the dropdown
+Arena.devNames = {}     -- fake records made here
+Arena.DEV_BETTORS = 4
+
+-- A fake member's record, a copy of the dummy's (its companion and team), on my version with a team's worth of companions.
+local function fakeRecord(simulated, name, now)
+    local dummy = simulated[Arena.DUMMY_NAME] or Arena.DummyRecord(nil, now)
+    local record = addon.Utility.DeepCopy(dummy)
+    record.name, record.rev = name, now
+    record.caught.rc = Arena.TEAM_SIZE
+    record.arena = { w = 0, l = 0, ver = addon.VERSION, ch = {}, an = {}, bt = {}, co = {} }
+    simulated[name] = record
+    Arena.devNames[name] = true
+    return record
+end
+
+-- Fake bettors place one bet each on both sides of the open fight `id`. Returns the number of bets, or nil and
+-- "closed" when the fight is not open.
+---@param simulated table<string, table> Games.simulated
+---@return integer|nil
+---@return string|nil reason
+function Arena.DevCrowd(records, simulated, myName, id, now, seed)
+    local fight = id and Arena.Fights(records, myName, now)[id]
+    if not fight or fight.state ~= "open" then return nil, "closed" end
+    local random = generator((math.floor(seed or now) % (MODULUS - 1)) + 1)
+    for index = 1, Arena.DEV_BETTORS do
+        local record = fakeRecord(simulated, "Bettor" .. string.char(64 + index) .. "-Test", now)
+        record.arena.bt[id] = { s = index % 2 == 1 and "a" or "b", c = (1 + math.floor(random() * 20)) * 10000,
+            at = math.max(now, fight.answerAt or now) }
+    end
+    return Arena.DEV_BETTORS
+end
+
+-- A fake bet on the accepted fight `id` stamped at its fight time: too late, it must stay out of the pot.
+---@return boolean|nil
+---@return string|nil reason
+function Arena.DevLateBet(records, simulated, myName, id, now)
+    local fight = id and Arena.Fights(records, myName, now)[id]
+    if not fight or not fight.fightAt then return nil, "closed" end
+    local record = fakeRecord(simulated, "Latebettor-Test", now)
+    record.arena.bt[id] = { s = "a", c = 50000, at = fight.fightAt }
+    return true
+end
+
+Arena.DEV_SPARRING = "Sparring-Test"   -- the fake member that can be challenged (it answers like the dummy)
+
+-- Fake members for the dropdown: one that can be challenged (it accepts like the dummy) and one per greyed reason:
+-- another version, fewer than 3 companions, in a fight (with a partner), offline. Returns the names shown.
+---@return string[]
+function Arena.DevMembers(simulated, now)
+    fakeRecord(simulated, Arena.DEV_SPARRING, now)
+    local old = fakeRecord(simulated, "Oldversion-Test", now); old.arena.ver = "0.0.0-old"
+    local few = fakeRecord(simulated, "Fewpets-Test", now); few.caught.rc = Arena.TEAM_SIZE - 1
+    local busy = fakeRecord(simulated, "Busy-Test", now)
+    local pal = fakeRecord(simulated, "Busypal-Test", now)
+    local id = "Busy-Test#" .. now
+    busy.arena.ch[id] = { to = "Busypal-Test", at = now, wg = Arena.MINIMUM_WAGER, t = addon.Utility.DeepCopy(busy.dummyTeam) }
+    pal.arena.an[id] = { ok = true, at = now, t = addon.Utility.DeepCopy(pal.dummyTeam), wg = Arena.MINIMUM_WAGER }
+    fakeRecord(simulated, "Offline-Test", now)
+    Arena.devOffline["Offline-Test"] = true
+    return { Arena.DEV_SPARRING, "Oldversion-Test", "Fewpets-Test", "Busy-Test", "Offline-Test" }
+end
+
+-- The fake members that answer my challenges: the dummy and the sparring member (when they are there).
+---@return table[] records
+function Arena.DevResponders(simulated)
+    local list = {}
+    for _, name in ipairs({ Arena.DUMMY_NAME, Arena.DEV_SPARRING }) do
+        if simulated[name] then list[#list + 1] = simulated[name] end
+    end
+    return list
+end
+
+-- A fake member answers my waiting challenge to it now (accept with its own wager, or decline). Returns the number
+-- answered.
+---@return integer
+function Arena.DevAnswer(simulated, myName, now, accept)
+    for _, responder in ipairs(Arena.DevResponders(simulated)) do
+        for id, challenge in pairs(Arena.State().ch) do
+            if challenge.to == responder.name and not responder.arena.an[id] then
+                return Arena.DummyRespond(responder, myName, now, id, accept)
+            end
+        end
+    end
+    return 0
+end
+
+-- Moves fake fights forward: "expire" (waiting challenges with a fake member: past the time to live and the grace, so
+-- the stake comes back) or "reveal" (decided fights nobody watched: past REVEAL_AFTER, so they settle). Only fights
+-- with a fake member: a real player's fight never changes. Returns the number moved.
+---@param kind "expire"|"reveal"
+---@return integer
+function Arena.DevShift(records, simulated, myName, now, kind)
+    local count = 0
+    for id, fight in pairs(Arena.Fights(records, myName, now)) do
+        local fake = simulated[fight.a] ~= nil or simulated[fight.b] ~= nil
+        if fake and kind == "expire" and (fight.state == "pending" or fight.state == "lapsed" or fight.state == "countered") then
+            Arena.devShift[id] = (Arena.devShift[id] or 0) + Arena.CHALLENGE_TTL + Arena.ANSWER_GRACE + 1
+            count = count + 1
+        elseif fake and kind == "reveal" and fight.state == "done" and not Arena.Revealed(fight, now) then
+            Arena.devShift[id] = (Arena.devShift[id] or 0) + Arena.REVEAL_AFTER
+            count = count + 1
+        end
+    end
+    return count
+end
+
+-- Removes every fake member, bettor and time shift, and the dummy. Returns the number of records removed.
+---@return integer
+function Arena.DevClear(simulated)
+    local count = 0
+    for name in pairs(Arena.devNames) do
+        if simulated[name] then simulated[name] = nil; count = count + 1 end
+    end
+    if simulated[Arena.DUMMY_NAME] then simulated[Arena.DUMMY_NAME] = nil; count = count + 1 end
+    Arena.devNames, Arena.devOffline, Arena.devShift, Arena.skipped = {}, {}, {}, {}
+    return count
 end

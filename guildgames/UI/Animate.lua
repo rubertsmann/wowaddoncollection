@@ -406,3 +406,53 @@ function Animate.Flash(key, texture, peakAlpha, duration)
         texture:Show()
     end, function() texture:SetAlpha(0); texture:Hide() end)
 end
+
+local SWORD_TEXTURE = "Interface\\Icons\\INV_Sword_04"
+local CLASH_SECONDS, CLASH_HIT = 0.8, 0.3
+
+-- Two swords fly in from the sides of `anchor`, cross in the middle (a flash, sparks and a ring), the anchor shakes, and
+-- the swords fade out; onDone() runs once at the end (or at once when the client can't play it).
+---@param key string
+---@param anchor table the frame the clash plays over
+---@param onDone? function
+function Animate.Clash(key, anchor, onDone)
+    local done = false
+    local function finish()
+        if done then return end
+        done = true
+        if onDone then onDone() end
+    end
+    local ok = pcall(function()
+        local swords = pool(anchor, "clash:" .. key, 2, SWORD_TEXTURE)
+        local flash = pool(anchor, "clashFlash:" .. key, 1, SPARKLE_TEXTURE)[1]
+        texturedOrColor(flash, SPARKLE_TEXTURE, 1, 0.9, 0.5)
+        local hit = false
+        Animate.Tween("clash:" .. key, CLASH_SECONDS, function(elapsed)
+            for index, sword in ipairs(swords) do
+                local side = index == 1 and -1 or 1
+                local progress = math.min(1, elapsed / CLASH_HIT)
+                local eased = progress * progress
+                sword:SetTexture(SWORD_TEXTURE)
+                pcall(sword.SetBlendMode, sword, "BLEND")
+                sword:SetSize(40, 40)
+                sword:ClearAllPoints()
+                sword:SetPoint("CENTER", anchor, "CENTER", side * 120 * (1 - eased), 0)
+                pcall(sword.SetRotation, sword, side * (math.pi / 4) * eased)
+                sword:SetAlpha(elapsed < CLASH_HIT and 1 or math.max(0, 1 - (elapsed - CLASH_HIT) / (CLASH_SECONDS - CLASH_HIT)))
+                sword:Show()
+            end
+            if not hit and elapsed >= CLASH_HIT then
+                hit = true
+                flash:ClearAllPoints(); flash:SetPoint("CENTER", anchor, "CENTER", 0, 0); flash:SetSize(90, 90)
+                Animate.Flash("clash:" .. key, flash, 1, 0.35)
+                Animate.Ring("clash:" .. key, anchor, anchor, 20, 140, { 1, 0.75, 0.3 }, 0.45)
+                Animate.Burst("clash:" .. key, anchor, anchor, 0, 0, { count = 16, color = { 1, 0.8, 0.3 }, speed = 140, duration = 0.6 })
+                Animate.Shake(anchor, 5, 6)
+            end
+        end, function()
+            for _, sword in ipairs(swords) do sword:Hide() end
+            finish()
+        end)
+    end)
+    if not ok then finish() end
+end

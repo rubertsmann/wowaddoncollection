@@ -1,9 +1,9 @@
--- Companion arena: fighters, training, levels, the deterministic battle, odds, the record section and
+-- Companion arena: fighters, training, levels, the deterministic battle, the record section and
 -- the challenge / answer / bet / settle flow between two (three) simulated players exchanging records.
 local NOW = 1794873600   -- 2026-11-17 00:00 UTC
 
 -- a player with three caught companions of `npc` (beast unless `typeID`), the first active; `addon.team` holds their
--- uids, and Challenge / Answer / Counter use that team unless a test passes its own
+-- uids, and Challenge / Answer use that team unless a test passes its own
 local function player(harness, name, npc, typeID, level)
     local addon = harness.addon({ now = NOW })
     addon.Store.db.me = name
@@ -15,10 +15,15 @@ local function player(harness, name, npc, typeID, level)
     addon.team = {}
     for index, companion in ipairs(AzeCaught.Roster()) do addon.team[index] = companion.uid end
     local Arena = addon.Arena
-    for _, action in ipairs({ "Challenge", "Answer", "Counter" }) do
+    for _, action in ipairs({ "Challenge", "Answer" }) do
         local original = Arena[action]
-        Arena[action] = function(records, myName, first, second, now, uids)
-            return original(records, myName, first, second, now, uids or addon.team)
+        Arena[action] = function(records, myName, first, second, now, uids, wager)
+            -- an accept stakes the challenger's wager unless a test passes its own
+            if action == "Answer" and second and wager == nil then
+                local fight = Arena.Fights(records, myName, now)[first]
+                wager = fight and fight.wager
+            end
+            return original(records, myName, first, second, now, uids or addon.team, wager)
         end
     end
     return addon
@@ -104,9 +109,6 @@ return {
             local result = Arena.Fight(fighter({ ab = ability }), fighter({ npc = 2, ab = ability }), "X-R#" .. ability)
             harness.truthy(result.winner == "a" or result.winner == "b", ability)
         end
-        -- odds: 0.95 / chance in hundredths, bounded
-        harness.equal(Arena.Odds(0.5), 190); harness.equal(Arena.Odds(0.99), 110); harness.equal(Arena.Odds(0.01), 1000)
-        harness.equal(Arena.Odds(0), 1000)
     end,
 
     -- balance: with equal stats no ability wins much more than half its fights, and a mirror match is even
@@ -152,8 +154,7 @@ return {
         assert(B.Arena.Answer(recordsFor(players, "B-R"), "B-R", id, true, NOW + 30))
         harness.equal(balance(B, "B-R"), startB - wager)
         -- C bets now; A cannot bet on its own fight
-        local odds = assert(C.Arena.Bet(recordsFor(players, "C-R"), "C-R", id, "b", 5000, NOW + 40))
-        harness.truthy(odds >= 110 and odds <= 1000)
+        assert(C.Arena.Bet(recordsFor(players, "C-R"), "C-R", id, "b", 5000, NOW + 40))
         local _, own = A.Arena.Bet(recordsFor(players, "A-R"), "A-R", id, "a", 5000, NOW + 40)
         harness.equal(own, "own")
         local fights = A.Arena.Fights(recordsFor(players, "A-R"), "A-R", NOW + 50)
@@ -186,16 +187,22 @@ return {
         A.Arena.Settle(recordsFor(players, "A-R"), "A-R", fightTime + 5)
         B.Arena.Settle(recordsFor(players, "B-R"), "B-R", fightTime + 5)
         C.Arena.Settle(recordsFor(players, "C-R"), "C-R", fightTime + 5)
+        -- the pot: a = A's 1g, b = B's 1g + C's 50s; the winning side splits it by share
         if winner == "a" then
-            harness.equal(balance(A, "A-R"), startA + wager); harness.equal(balance(B, "B-R"), startB - wager)
+            harness.equal(balance(A, "A-R"), startA + wager + 5000, "A takes B's wager and C's bet")
+            harness.equal(balance(B, "B-R"), startB - wager)
             harness.equal(balance(C, "C-R"), startC - 5000, "C bet on b and lost")
             harness.equal(A.Arena.State().w, 1); harness.equal(B.Arena.State().l, 1)
         else
-            harness.equal(balance(A, "A-R"), startA - wager); harness.equal(balance(B, "B-R"), startB + wager)
-            harness.equal(balance(C, "C-R"), startC - 5000 + math.floor(5000 * odds / 100))
+            harness.equal(balance(A, "A-R"), startA - wager)
+            harness.equal(balance(B, "B-R"), startB + math.floor(wager * wager / (wager + 5000)))
+            harness.equal(balance(C, "C-R"), startC + math.floor(wager * 5000 / (wager + 5000)))
             harness.equal(B.Arena.State().w, 1); harness.equal(A.Arena.State().l, 1)
         end
         harness.equal(#A.Arena.State().history, 1); harness.equal(#B.Arena.State().history, 1)
+        local row = A.Arena.State().history[1]
+        harness.equal(row.mi, A.AzeCaught.Companion(A.team[1]).npc, "my side by NPC id")
+        harness.equal(row.ti, B.AzeCaught.Companion(B.team[1]).npc, "their side by NPC id")
         harness.truthy(A.Arena.Progress(A.AzeCaught.Companion(A.team[1])).xp > 0 and B.Arena.Progress(B.AzeCaught.Companion(B.team[1])).xp > 0, "both gained XP")
     end,
 
@@ -258,7 +265,7 @@ return {
         -- an answer by a third player for someone else's fight is ignored
         local players = { ["A-R"] = player(harness, "A-R", 100), ["B-R"] = player(harness, "B-R", 200), ["C-R"] = player(harness, "C-R", 300) }
         local A = players["A-R"]
-        local id = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", 0, NOW))
+        local id = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", 10000, NOW))
         players["C-R"].Arena.State().an[id] = { ok = true, at = NOW + 5, t = { good, good, good } }
         harness.equal(A.Arena.Fights(recordsFor(players, "A-R"), "A-R", NOW + 10)[id].state, "pending")
         -- a record with an invalid arena section keeps the rest (dropped alone)
@@ -300,29 +307,35 @@ return {
         local records = { [dummy.name] = dummy }
         local start = balance(addon, "A-R")
         local id = assert(Arena.Challenge(records, "A-R", dummy.name, 10000, NOW))
-        harness.equal(Arena.DummyRespond(dummy, "A-R", NOW + 5), 1)
-        harness.equal(Arena.DummyRespond(dummy, "A-R", NOW + 6), 0, "answers once")
-        harness.equal(Arena.Fights(records, "A-R", NOW + 10)[id].state, "open")
+        harness.equal(Arena.DummyRespond(dummy, "A-R", NOW + 5), 0, "the dummy waits a moment before it accepts")
+        local answerAt = NOW + Arena.DUMMY_DELAY
+        harness.equal(Arena.DummyRespond(dummy, "A-R", answerAt), 1)
+        harness.equal(Arena.DummyRespond(dummy, "A-R", answerAt + 1), 0, "answers once")
+        local theirs = Arena.DummyWager(id, 10000)
+        harness.truthy(theirs >= Arena.MINIMUM_WAGER and theirs <= 20000, "its own wager, 0.5x..2x: " .. theirs)
+        harness.equal(Arena.Fights(records, "A-R", answerAt + 5)[id].wagerB, theirs)
+        harness.equal(Arena.Fights(records, "A-R", answerAt + 5)[id].state, "open")
         -- dev skip: only dummy fights, decided at once (then the normal flow; reset for the rest of the test)
-        harness.equal(Arena.SkipDummyWait(records, "A-R", NOW + 20), 1)
-        harness.equal(Arena.Fights(records, "A-R", NOW + 20)[id].state, "done")
+        harness.equal(Arena.SkipDummyWait(records, "A-R", answerAt + 15), 1)
+        harness.equal(Arena.Fights(records, "A-R", answerAt + 15)[id].state, "done")
         Arena.skipped[id] = nil
-        local fightTime = NOW + 5 + Arena.BET_WINDOW
+        local fightTime = answerAt + Arena.BET_WINDOW
         Arena.MarkWatched(id, fightTime)
         Arena.Settle(records, "A-R", fightTime)
         local won = Arena.State().w == 1
         harness.equal(Arena.State().w + Arena.State().l, 1)
-        harness.equal(balance(addon, "A-R"), won and start + 10000 or start - 10000)
+        local expected = won and start + theirs or start - 10000
+        harness.equal(balance(addon, "A-R"), expected)
         -- the dummy is gone (a reload): the challenge looks unanswered and expires, but the fight was settled: no refund
         local late = NOW + Arena.CHALLENGE_TTL + Arena.ANSWER_GRACE + 10
         local notices = Arena.Settle({}, "A-R", late)
         for _, notice in ipairs(notices) do harness.truthy(notice.kind ~= "refund", "no refund after a settled fight") end
-        harness.equal(balance(addon, "A-R"), won and start + 10000 or start - 10000)
-        -- the dummy challenges me: an incoming fight I can accept
+        harness.equal(balance(addon, "A-R"), expected)
+        -- the dummy challenges me: an incoming fight I can accept (its wager is at least 1g)
         local later = fightTime + 100
         local incoming = Arena.DummyChallenge(dummy, "A-R", 5000, later)
         local fight = Arena.Fights(records, "A-R", later + 1)[incoming]
-        harness.equal(fight.state, "pending"); harness.equal(fight.b, "A-R"); harness.equal(fight.wager, 5000)
+        harness.equal(fight.state, "pending"); harness.equal(fight.b, "A-R"); harness.equal(fight.wager, Arena.MINIMUM_WAGER)
         harness.truthy(Arena.SanitizeSection(dummy.arena, dummy.name, math.huge), "the dummy's section is valid")
         assert(Arena.Answer(records, "A-R", incoming, true, later + 2))
         harness.equal(Arena.Fights(records, "A-R", later + 3)[incoming].state, "open")
@@ -335,10 +348,10 @@ return {
         local startA, startB = balance(A, "A-R"), balance(B, "B-R")
         local first = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", wager, NOW))
         -- the requesting side: no second challenge while mine waits
-        local _, busy = A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "C-R", 0, NOW + 1)
+        local _, busy = A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "C-R", 10000, NOW + 1)
         harness.equal(busy, "busy")
         -- the accepting side: C challenges A, A cannot accept while A's own challenge waits
-        local fromC = assert(C.Arena.Challenge(recordsFor(players, "C-R"), "C-R", "A-R", 0, NOW + 2))
+        local fromC = assert(C.Arena.Challenge(recordsFor(players, "C-R"), "C-R", "A-R", 10000, NOW + 2))
         local _, acceptBusy = A.Arena.Answer(recordsFor(players, "A-R"), "A-R", fromC, true, NOW + 3)
         harness.equal(acceptBusy, "busy")
         harness.truthy(A.Arena.Answer(recordsFor(players, "A-R"), "A-R", fromC, false, NOW + 3), "a decline is always possible")
@@ -355,7 +368,7 @@ return {
         -- a free player can challenge again; B, in an open fight, is busy for others
         local second = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", wager, NOW + 30))
         assert(B.Arena.Answer(recordsFor(players, "B-R"), "B-R", second, true, NOW + 40))
-        local _, theyBusy = C.Arena.Challenge(recordsFor(players, "C-R"), "C-R", "B-R", 0, NOW + 50)
+        local _, theyBusy = C.Arena.Challenge(recordsFor(players, "C-R"), "C-R", "B-R", 10000, NOW + 50)
         harness.equal(theyBusy, "theybusy")
         local _, stopOpen = A.Arena.Withdraw(recordsFor(players, "A-R"), "A-R", second, NOW + 50)
         harness.equal(stopOpen, "late", "an accepted fight cannot be stopped")
@@ -365,7 +378,7 @@ return {
         A.Arena.Settle(recordsFor(players, "A-R"), "A-R", fightTime)
         B.Arena.Settle(recordsFor(players, "B-R"), "B-R", fightTime)
         harness.equal(balance(A, "A-R") + balance(B, "B-R"), startA + startB, "nothing created or lost")
-        harness.truthy(C.Arena.Challenge(recordsFor(players, "C-R"), "C-R", "B-R", 0, fightTime + 1), "B is free after the fight")
+        harness.truthy(C.Arena.Challenge(recordsFor(players, "C-R"), "C-R", "B-R", 10000, fightTime + 1), "B is free after the fight")
     end,
 
     ["arena: an accept made before the stop but synced after the refund still counts, and the refund is undone"] = function(harness)
@@ -410,126 +423,5 @@ return {
         caught.arena.watched["bad"] = "x"
         harness.truthy(A.Arena.SanitizePersisted(caught, "A-R"), "repaired")
         harness.equal(caught.arena.watched["X-R#1"], NOW); harness.equal(caught.arena.watched["bad"], nil)
-    end,
-
-    ["arena: a counter offer (higher or lower) accepted by the challenger fights with the new wager; money adds up"] = function(harness)
-        for _, counterWager in ipairs({ 30000, 4000 }) do
-            local players = { ["A-R"] = player(harness, "A-R", 100), ["B-R"] = player(harness, "B-R", 200), ["C-R"] = player(harness, "C-R", 300) }
-            local A, B, C = players["A-R"], players["B-R"], players["C-R"]
-            local startA, startB = balance(A, "A-R"), balance(B, "B-R")
-            local id = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", 10000, NOW))
-            local _, same = B.Arena.Counter(recordsFor(players, "B-R"), "B-R", id, 10000, NOW + 5)
-            harness.equal(same, "same")
-            local _, notMine = C.Arena.Counter(recordsFor(players, "C-R"), "C-R", id, 5000, NOW + 5)
-            harness.equal(notMine, "unknown")
-            assert(B.Arena.Counter(recordsFor(players, "B-R"), "B-R", id, counterWager, NOW + 10))
-            harness.equal(balance(B, "B-R"), startB - counterWager, "the counter stake left at once")
-            local _, twice = B.Arena.Counter(recordsFor(players, "B-R"), "B-R", id, 20000, NOW + 11)
-            harness.equal(twice, "answered")
-            local _, noAccept = B.Arena.Answer(recordsFor(players, "B-R"), "B-R", id, true, NOW + 11)
-            harness.equal(noAccept, "answered", "after a counter the original cannot be accepted")
-            -- A sees the counter (notice once), both are busy, nobody can bet yet
-            local notices = A.Arena.Settle(recordsFor(players, "A-R"), "A-R", NOW + 20)
-            harness.equal(#notices, 1); harness.equal(notices[1].kind, "countered"); harness.equal(notices[1].wager, counterWager)
-            local fights = A.Arena.Fights(recordsFor(players, "A-R"), "A-R", NOW + 20)
-            harness.equal(fights[id].state, "countered")
-            harness.equal(A.Arena.Busy(fights, "A-R", true), id); harness.equal(A.Arena.Busy(fights, "B-R", true), id)
-            local _, closed = C.Arena.Bet(recordsFor(players, "C-R"), "C-R", id, "a", 5000, NOW + 20)
-            harness.equal(closed, "closed")
-            local _, notB = B.Arena.AnswerCounter(recordsFor(players, "B-R"), "B-R", id, true, NOW + 25)
-            harness.equal(notB, "unknown", "only the challenger answers a counter")
-            assert(A.Arena.AnswerCounter(recordsFor(players, "A-R"), "A-R", id, true, NOW + 30))
-            harness.equal(balance(A, "A-R"), startA - counterWager, "the difference was paid or given back")
-            local open = A.Arena.Fights(recordsFor(players, "A-R"), "A-R", NOW + 40)[id]
-            harness.equal(open.state, "open"); harness.equal(open.wager, counterWager); harness.equal(open.fightAt, NOW + 30 + A.Arena.BET_WINDOW)
-            local notifyB = B.Arena.Settle(recordsFor(players, "B-R"), "B-R", NOW + 40)
-            harness.equal(#notifyB, 1); harness.equal(notifyB[1].kind, "counteranswered"); harness.equal(notifyB[1].accepted, true)
-            assert(C.Arena.Bet(recordsFor(players, "C-R"), "C-R", id, "a", 5000, NOW + 50), "bets open after the counter was accepted")
-            -- every client computes the same fight from the counter's fighter
-            local fightTime = NOW + 30 + A.Arena.BET_WINDOW
-            local resultA = A.Arena.Result(A.Arena.Fights(recordsFor(players, "A-R"), "A-R", fightTime)[id])
-            local resultC = C.Arena.Result(C.Arena.Fights(recordsFor(players, "C-R"), "C-R", fightTime)[id])
-            harness.equal(resultA.winner, resultC.winner); harness.equal(#resultA.events, #resultC.events)
-            for _, name in ipairs({ "A-R", "B-R" }) do
-                players[name].Arena.MarkWatched(id, fightTime)
-                players[name].Arena.Settle(recordsFor(players, name), name, fightTime)
-                players[name].Arena.Settle(recordsFor(players, name), name, fightTime + 5)
-            end
-            harness.equal(balance(A, "A-R") + balance(B, "B-R"), startA + startB, "nothing created or lost (" .. counterWager .. ")")
-            local winnerA = resultA.winner == "a"
-            harness.equal(balance(A, "A-R"), winnerA and startA + counterWager or startA - counterWager, "the countered wager was at stake")
-        end
-    end,
-
-    ["arena: a declined, stopped or expired counter offer refunds both stakes once"] = function(harness)
-        for _, ending in ipairs({ "declined", "stopped", "expired" }) do
-            local players = { ["A-R"] = player(harness, "A-R", 100), ["B-R"] = player(harness, "B-R", 200) }
-            local A, B = players["A-R"], players["B-R"]
-            local startA, startB = balance(A, "A-R"), balance(B, "B-R")
-            local id = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", 10000, NOW))
-            assert(B.Arena.Counter(recordsFor(players, "B-R"), "B-R", id, 25000, NOW + 10))
-            local finish = NOW + 30
-            if ending == "declined" then
-                assert(A.Arena.AnswerCounter(recordsFor(players, "A-R"), "A-R", id, false, NOW + 20))
-                harness.equal(A.Arena.Fights(recordsFor(players, "A-R"), "A-R", finish)[id].state, "rejected")
-            elseif ending == "stopped" then
-                assert(A.Arena.Withdraw(recordsFor(players, "A-R"), "A-R", id, NOW + 20))
-                harness.equal(A.Arena.Fights(recordsFor(players, "A-R"), "A-R", finish)[id].state, "withdrawn")
-            else
-                local lateAnswer = NOW + 10 + A.Arena.CHALLENGE_TTL + 5
-                local _, late = A.Arena.AnswerCounter(recordsFor(players, "A-R"), "A-R", id, true, lateAnswer)
-                harness.equal(late, "late")
-                finish = NOW + 10 + A.Arena.CHALLENGE_TTL + A.Arena.ANSWER_GRACE + 5
-                harness.equal(A.Arena.Fights(recordsFor(players, "A-R"), "A-R", finish)[id].state, "expired")
-            end
-            for _ = 1, 2 do
-                A.Arena.Settle(recordsFor(players, "A-R"), "A-R", finish)
-                B.Arena.Settle(recordsFor(players, "B-R"), "B-R", finish)
-            end
-            harness.equal(balance(A, "A-R"), startA, ending .. ": the challenger got its stake back once")
-            harness.equal(balance(B, "B-R"), startB, ending .. ": the counter stake came back once")
-        end
-    end,
-
-    ["arena: counter sections from peers are validated; a 1.2 peer's view of a countered record keeps the section"] = function(harness)
-        local players = { ["A-R"] = player(harness, "A-R", 100), ["B-R"] = player(harness, "B-R", 200) }
-        local A, B = players["A-R"], players["B-R"]
-        local Arena = A.Arena
-        local id = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", 10000, NOW))
-        assert(B.Arena.Counter(recordsFor(players, "B-R"), "B-R", id, 20000, NOW + 10))
-        local section = B.Arena.BuildSection()
-        harness.truthy(Arena.SanitizeSection(section, "B-R", math.huge), "a real counter section is valid")
-        local function withCounter(entry)
-            local copy = { w = 0, l = 0, ch = {}, an = {}, bt = {}, co = { [id] = entry } }
-            return Arena.SanitizeSection(copy, "B-R", math.huge)
-        end
-        local good = section.co[id]
-        harness.equal(withCounter({ wg = Arena.MAXIMUM_WAGER + 1, at = good.at, t = good.t }), nil, "wager too high")
-        harness.equal(withCounter({ wg = 100, at = good.at, t = { { npc = 1 } } }), nil, "bad fighter")
-        harness.equal(Arena.SanitizeSection({ w = 0, l = 0, co = { [id] = good } }, "A-R", math.huge), nil, "a counter to my own challenge in my record")
-        -- the challenger's answer fields: at most one, inside the horizon
-        assert(A.Arena.AnswerCounter(recordsFor(players, "A-R"), "A-R", id, true, NOW + 20))
-        local mine = A.Arena.BuildSection()
-        harness.truthy(Arena.SanitizeSection(mine, "A-R", math.huge), "ca is valid")
-        mine.ch[id].cd = NOW + 21
-        harness.equal(Arena.SanitizeSection(mine, "A-R", math.huge), nil, "ca and cd together")
-        -- what a 1.2 peer keeps: its sanitizer copies ch/an/bt only, so B's counter (in co) is ignored, not fatal
-        local oldView = { w = section.w, l = section.l, ch = section.ch, an = section.an, bt = section.bt }
-        harness.truthy(Arena.SanitizeSection(oldView, "B-R", math.huge), "without co the section stays valid")
-        harness.equal(next(section.an), nil, "a counter is not an answer entry")
-    end,
-
-    ["arena: the dev dummy accepts my counter offer to its challenge"] = function(harness)
-        local addon = player(harness, "A-R", 100)
-        local Arena, AzeCaught = addon.Arena, addon.AzeCaught
-        local dummy = Arena.DummyRecord(Arena.Fighter(AzeCaught.Active()), NOW)
-        local records = { [dummy.name] = dummy }
-        local id = Arena.DummyChallenge(dummy, "A-R", 5000, NOW)
-        assert(Arena.Counter(records, "A-R", id, 8000, NOW + 1))
-        harness.equal(Arena.Fights(records, "A-R", NOW + 2)[id].state, "countered")
-        harness.equal(Arena.DummyRespond(dummy, "A-R", NOW + 3), 1)
-        harness.truthy(Arena.SanitizeSection(dummy.arena, dummy.name, math.huge), "the dummy's section stays valid")
-        local fight = Arena.Fights(records, "A-R", NOW + 4)[id]
-        harness.equal(fight.state, "open"); harness.equal(fight.wager, 8000)
     end,
 }

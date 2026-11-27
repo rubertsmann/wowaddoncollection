@@ -99,7 +99,7 @@ return {
         local _, noTeam = B.Arena.Answer(recordsFor(players, "B-R"), "B-R", id, true, NOW + 10, { B.team[2], B.team[3] })
         harness.equal(noTeam, "team")
         local pick = { B.team[4], B.team[3], B.team[2] }
-        assert(B.Arena.Answer(recordsFor(players, "B-R"), "B-R", id, true, NOW + 10, pick))
+        assert(B.Arena.Answer(recordsFor(players, "B-R"), "B-R", id, true, NOW + 10, pick, 25000))
         local fightTime = NOW + 10 + A.Arena.BET_WINDOW
         local resultA = A.Arena.Result(A.Arena.Fights(recordsFor(players, "A-R"), "A-R", fightTime)[id])
         local resultB = B.Arena.Result(B.Arena.Fights(recordsFor(players, "B-R"), "B-R", fightTime)[id])
@@ -129,35 +129,23 @@ return {
         harness.equal(A.Arena.State().w + A.Arena.State().l, 1, "one team fight on the player record")
     end,
 
-    ["team arena: a counter offer brings the defender's team; the challenger accepts it"] = function(harness)
-        local players = { ["A-R"] = player(harness, "A-R", 100), ["B-R"] = player(harness, "B-R", 200) }
-        local A, B = players["A-R"], players["B-R"]
-        local id = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", 10000, NOW, A.team))
-        assert(B.Arena.Counter(recordsFor(players, "B-R"), "B-R", id, 20000, NOW + 5, B.team))
-        local fight = A.Arena.Fights(recordsFor(players, "A-R"), "A-R", NOW + 6)[id]
-        harness.equal(#fight.counter.t, 3, "the challenger sees the counter team")
-        assert(A.Arena.AnswerCounter(recordsFor(players, "A-R"), "A-R", id, true, NOW + 10))
-        local open = A.Arena.Fights(recordsFor(players, "A-R"), "A-R", NOW + 11)[id]
-        harness.equal(open.state, "open"); harness.equal(#open.tb, 3)
-    end,
-
     ["team arena: different versions can neither challenge nor accept; a fight that turns mixed is void and refunded"] = function(harness)
         local players = { ["A-R"] = player(harness, "A-R", 100), ["B-R"] = player(harness, "B-R", 200) }
         local A, B = players["A-R"], players["B-R"]
         local startA, startB = A.Wallet.Balance("A-R"), B.Wallet.Balance("B-R")
         local records = recordsFor(players, "A-R")
         records["B-R"].arena.ver = "0.0.1"
-        harness.equal(select(2, A.Arena.Challenge(records, "A-R", "B-R", 0, NOW, A.team)), "version")
+        harness.equal(select(2, A.Arena.Challenge(records, "A-R", "B-R", 10000, NOW, A.team)), "version")
         local same, theirs = A.Arena.SameVersion(records, "B-R")
         harness.equal(same, false); harness.equal(theirs, "0.0.1")
         records["B-R"].arena.ver = nil
-        harness.equal(select(2, A.Arena.Challenge(records, "A-R", "B-R", 0, NOW, A.team)), "version", "an unknown version")
+        harness.equal(select(2, A.Arena.Challenge(records, "A-R", "B-R", 10000, NOW, A.team)), "version", "an unknown version")
         -- same version: the challenge goes out and is accepted, then B updates before the fight
         local id = assert(A.Arena.Challenge(recordsFor(players, "A-R"), "A-R", "B-R", 10000, NOW, A.team))
         local forB = recordsFor(players, "B-R")
         forB["A-R"].arena.ver = "9.9.9"
-        harness.equal(select(2, B.Arena.Answer(forB, "B-R", id, true, NOW + 5, B.team)), "version")
-        assert(B.Arena.Answer(recordsFor(players, "B-R"), "B-R", id, true, NOW + 5, B.team))
+        harness.equal(select(2, B.Arena.Answer(forB, "B-R", id, true, NOW + 5, B.team, 10000)), "version")
+        assert(B.Arena.Answer(recordsFor(players, "B-R"), "B-R", id, true, NOW + 5, B.team, 10000))
         local mixedA = recordsFor(players, "A-R")
         mixedA["B-R"].arena.ver = "9.9.9"
         local fight = A.Arena.Fights(mixedA, "A-R", NOW + 10)[id]
@@ -204,9 +192,9 @@ return {
         harness.truthy(Arena.SanitizeTeam(dummy.dummyTeam), "a valid team")
         harness.equal(dummy.arena.ver, addon.VERSION)
         local records = { [dummy.name] = dummy }
-        local id = assert(Arena.Challenge(records, "A-R", dummy.name, 0, NOW, addon.team))
-        harness.equal(Arena.DummyRespond(dummy, "A-R", NOW + 1), 1)
-        local fight = Arena.Fights(records, "A-R", NOW + 2)[id]
+        local id = assert(Arena.Challenge(records, "A-R", dummy.name, 10000, NOW, addon.team))
+        harness.equal(Arena.DummyRespond(dummy, "A-R", NOW + Arena.DUMMY_DELAY), 1)
+        local fight = Arena.Fights(records, "A-R", NOW + Arena.DUMMY_DELAY + 1)[id]
         harness.equal(fight.state, "open"); harness.equal(#fight.tb, 3)
         harness.truthy(Arena.SanitizeSection(dummy.arena, dummy.name, math.huge), "the dummy's section is valid")
     end,

@@ -54,6 +54,8 @@ AzeCaught.PAYOUT_OTHER = 25 * 10000
 AzeCaught.MAXIMUM_COLLECTION = 2000     -- bound against corrupt saved data only; caught NPCs have no limit
 AzeCaught.MAXIMUM_SEEN = 100            -- seen-only NPCs; the oldest makes room for a new one
 AzeCaught.MAXIMUM_NAME_BYTES = 48
+AzeCaught.MAXIMUM_NICK_CHARACTERS = 24
+AzeCaught.MAXIMUM_NICK_BYTES = 96       -- 24 characters of up to 4 bytes each
 AzeCaught.MAXIMUM_LEVEL = 200
 AzeCaught.MAXIMUM_HEARTS = 1000000
 AzeCaught.MAXIMUM_ID = 2147483647
@@ -136,6 +138,12 @@ AzeCaught.killed, AzeCaught.killedCount = {}, 0
 ---@field neglect number seconds with a critical need, not yet turned into a lost heart
 ---@field snap number seconds since the last snapshot line
 ---@field zones table<string, string> last zone of each need
+---@field info? CompanionInfo who this one companion is: its nickname and where and when it was caught
+
+---@class CompanionInfo
+---@field nick? string the player's nickname for it (display only; the companion is always referred to by its uid)
+---@field at? integer server time it was caught (missing on companions from before it was recorded)
+---@field map? integer uiMapID where it was caught; the zone name is looked up when shown
 
 -- db.caught, every table present.
 ---@return table
@@ -538,7 +546,8 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
     AzeCaught.thrown[target.guid] = clockSeconds
     AzeCaught.throws[target.guid] = { at = clockSeconds, npc = npcID, health = health, playerLevel = playerLevel,
         level = target.level, classification = AzeCaught.Classification(target.classification), name = target.name,
-        boosted = addon.Items.CatchBoosted(now) or nil, second = AzeCaught.again[target.guid] and true or nil }
+        boosted = addon.Items.CatchBoosted(now) or nil, second = AzeCaught.again[target.guid] and true or nil,
+        map = addon.Utility.SafeInteger(target.map, 1, AzeCaught.MAXIMUM_ID) }
     AzeCaught.again[target.guid] = nil
     if not addon.Store.db.readonly then AzeCaught.State().throwHintDone = true end
     AzeCaught.Journal("INFORMATION", "throw.armed", "a rope was thrown",
@@ -622,14 +631,16 @@ end
 ---@field second? boolean the roll of a second throw (Second Chance charm)
 ---@field trap? string the item id of the trap that caught it
 ---@field companion? boolean the catch became the companion
+---@field uid? string the roster id of the caught companion
 
 -- The bookkeeping of a successful catch: counts, the reward for `chance`, and the companion when none is active.
 ---@param npcID integer
 ---@param chance number the chance the reward is paid for
 ---@param myName string|nil
 ---@param now integer
----@param result RollResult filled in: reward, companion
-local function recordCatch(npcID, chance, myName, now, result)
+---@param result RollResult filled in: reward, companion, uid
+---@param map? integer uiMapID where it was caught
+local function recordCatch(npcID, chance, myName, now, result, map)
     local caughtState = AzeCaught.State()
     caughtState.firstCatchDone = true
     local entry = caughtState.collection[npcID]
@@ -639,7 +650,15 @@ local function recordCatch(npcID, chance, myName, now, result)
     end
     entry.got = bump(entry.got or entry.caught)
     entry.caught = math.min(AzeCaught.MAXIMUM_ID, entry.caught + 1)
+    local before = {}
+    for uid in pairs(caughtState.roster) do before[uid] = true end
     AzeCaught.Reconcile()
+    for uid, companion in pairs(caughtState.roster) do
+        if not before[uid] and companion.npc == npcID then
+            companion.info = AzeCaught.CleanInfo({ at = now, map = map })
+            result.uid = uid
+        end
+    end
     result.reward = math.min(AzeCaught.MAXIMUM_REWARD, math.floor(AzeCaught.Reward(chance) * AzeCaught.CharmRewardFactor(entry.cls) + 0.5))
     AzeCaught.Journal("INFORMATION", "catch", "an NPC was caught",
         { npc = npcID, name = entry.n, timesCaught = entry.caught, reward = result.reward, trap = result.trap })
@@ -691,7 +710,7 @@ function AzeCaught.OnDeath(guid, myName, clockSeconds, now, randomFunction)
           healthChance = ("%.4f"):format(breakdown.healthChance), class = breakdown.classification, malus = breakdown.malus,
           forced = forced or nil, first = first or nil, boosted = boosted, second = throw.second })
     if not caught then return result end
-    recordCatch(throw.npc, breakdown.chance, myName, now, result)
+    recordCatch(throw.npc, breakdown.chance, myName, now, result, throw.map)
     return result
 end
 
@@ -727,7 +746,7 @@ function AzeCaught.TrapCatch(target, item, myName, clockSeconds, now)
     local chance = AzeCaught.Chance(AzeCaught.BEST_HEALTH, classification).chance
     local result = { caught = true, npc = npcID, chance = chance, roll = 0, reward = 0, forced = false, first = false,
         trap = item.id }
-    recordCatch(npcID, chance, myName, now, result)
+    recordCatch(npcID, chance, myName, now, result, addon.Utility.SafeInteger(target.map, 1, AzeCaught.MAXIMUM_ID))
     return result
 end
 
@@ -928,7 +947,7 @@ function AzeCaught.Active() return AzeCaught.State().active end
 ---@param companion CompanionState
 ---@return table
 function AzeCaught.Describe(companion)
-    return { npc = companion.npc, name = companion.n, level = companion.lvl, class = companion.cls, display = companion.disp,
+    return { uid = companion.uid, npc = companion.npc, name = companion.n, nick = companion.info and companion.info.nick, level = companion.lvl, class = companion.cls, display = companion.disp,
         hunger = round1(companion.hunger), thirst = round1(companion.thirst), affection = round1(companion.affection),
         energy = round1(companion.energy), asleep = companion.asleep and round1(companion.asleep) or nil,
         hearts = companion.hearts, fedStreak = companion.fedStreak, careStreak = companion.careStreak,
@@ -1055,6 +1074,136 @@ function AzeCaught.Reconcile(caught)
     return changed
 end
 
+------------------------------------------------------------------ nickname and catch origin
+
+---@param text string
+---@return integer
+local function characterCount(text) return select(2, text:gsub("[^\128-\191]", "")) end
+
+-- The player's input as a nickname: control characters and "|" (escape codes) removed, runs of spaces made one,
+-- trimmed. "" clears the nickname. Nil and why for "invalid" (not UTF-8) and "toolong" (more than
+-- MAXIMUM_NICK_CHARACTERS characters).
+---@param text any
+---@return string|nil
+---@return string|nil reason
+function AzeCaught.NormalizeNickname(text)
+    if type(text) ~= "string" then return nil, "invalid" end
+    text = addon.Utility.StripControlCharacters(text):gsub("|", ""):gsub("%s+", " "):match("^ *(.-) *$")
+    if not addon.Utility.IsValidUtf8(text) then return nil, "invalid" end
+    if characterCount(text) > AzeCaught.MAXIMUM_NICK_CHARACTERS then return nil, "toolong" end
+    return text
+end
+
+-- `value` when it is a nickname as NormalizeNickname leaves it (saved data, a peer's field); otherwise nil.
+---@param value any
+---@return string|nil
+function AzeCaught.CleanNickname(value)
+    local clean = addon.Utility.CleanString(value, AzeCaught.MAXIMUM_NICK_BYTES)
+    if not clean or clean == "" or clean:find("|", 1, true) then return nil end
+    if AzeCaught.NormalizeNickname(clean) ~= clean then return nil end
+    return clean
+end
+
+-- A clean copy of a companion's info, or nil when nothing valid is left. A bad value is dropped alone.
+---@param raw any
+---@return CompanionInfo|nil
+function AzeCaught.CleanInfo(raw)
+    if type(raw) ~= "table" then return nil end
+    local SafeInteger = addon.Utility.SafeInteger
+    local clean = { nick = AzeCaught.CleanNickname(raw.nick), at = SafeInteger(raw.at, 1, AzeCaught.MAXIMUM_ID),
+        map = SafeInteger(raw.map, 1, AzeCaught.MAXIMUM_ID) }
+    if clean.nick == nil and clean.at == nil and clean.map == nil then return nil end
+    return clean
+end
+
+-- The nickname a companion (`info.nick`) or a peer's companion or fighter (`nk`) carries, or nil.
+---@param companion table
+---@return string|nil
+local function nicknameOf(companion)
+    local nick = type(companion.info) == "table" and companion.info.nick or companion.nk
+    return type(nick) == "string" and nick ~= "" and nick or nil
+end
+
+-- The name a companion is shown with: its nickname, else the species name. Raw text: escape it before display.
+---@param companion table|nil a CompanionState, or a peer's companion or fighter (`nk`)
+---@return string
+function AzeCaught.ShownName(companion)
+    if type(companion) ~= "table" then return "?" end
+    return nicknameOf(companion) or (type(companion.n) == "string" and companion.n) or "?"
+end
+
+-- The species name of a companion or fighter: from its NPC id in my collection first, else the name it carries.
+---@param companion table|nil
+---@return string
+function AzeCaught.SpeciesName(companion)
+    if type(companion) ~= "table" then return "?" end
+    local entry = AzeCaught.State().collection[companion.npc or 0]
+    if entry and type(entry.n) == "string" then return entry.n end
+    return type(companion.n) == "string" and companion.n or "?"
+end
+
+-- True when the companion or fighter carries a nickname (then the species is worth a hover).
+---@param companion table|nil
+---@return boolean
+function AzeCaught.HasNickname(companion)
+    return type(companion) == "table" and nicknameOf(companion) ~= nil
+end
+
+---@alias NicknameRefusal "readonly"|"unknown"|"invalid"|"toolong"|"empty"|"named"
+
+-- True when my companion can still get its nickname (a companion is named once).
+---@param companion table|nil
+---@return boolean
+function AzeCaught.CanRename(companion)
+    return type(companion) == "table" and companion.uid ~= nil and not AzeCaught.HasNickname(companion)
+        and not addon.Store.db.readonly
+end
+
+-- Gives my companion `uid` its nickname. A companion is named once: refused with "named" when it has one, "empty"
+-- when nothing is left after cleaning. Returns the stored nickname.
+---@param uid any
+---@param text any
+---@return string|nil
+---@return NicknameRefusal|nil
+function AzeCaught.SetNickname(uid, text)
+    if addon.Store.db.readonly then return nil, "readonly" end
+    local companion = AzeCaught.Companion(uid)
+    if not companion then return nil, "unknown" end
+    if AzeCaught.HasNickname(companion) then return nil, "named" end
+    local nick, reason = AzeCaught.NormalizeNickname(text)
+    if not nick then return nil, reason end
+    if nick == "" then return nil, "empty" end
+    local info = companion.info or {}
+    info.nick = nick
+    companion.info = AzeCaught.CleanInfo(info)
+    AzeCaught.Journal("INFORMATION", "companion.nick", "a companion got its nickname",
+        { uid = companion.uid, npc = companion.npc, nick = nick })
+    return nick
+end
+
+-- Dev: takes the nickname away again (the catch origin stays), so the naming can be tried once more.
+---@param uid any
+---@return boolean|nil
+function AzeCaught.ClearNickname(uid)
+    local companion = AzeCaught.Companion(uid)
+    if addon.Store.db.readonly or not companion or not companion.info then return nil end
+    local before = companion.info.nick
+    companion.info.nick = nil
+    companion.info = AzeCaught.CleanInfo(companion.info)
+    AzeCaught.Journal("INFORMATION", "companion.nick", "a nickname was cleared (dev)", { uid = companion.uid, before = before })
+    return true
+end
+
+-- My companion's catch origin: server time and uiMapID, each nil when not recorded.
+---@param companion table|nil
+---@return integer|nil at
+---@return integer|nil map
+function AzeCaught.CatchOrigin(companion)
+    local info = type(companion) == "table" and companion.info
+    if type(info) ~= "table" then return nil, nil end
+    return info.at, info.map
+end
+
 -- My companions, the active one first, then by name and catch order.
 ---@return CompanionState[]
 function AzeCaught.Roster()
@@ -1064,7 +1213,8 @@ function AzeCaught.Roster()
     for _, companion in pairs(caught.roster) do list[#list + 1] = companion end
     table.sort(list, function(left, right)
         if (left == caught.active) ~= (right == caught.active) then return left == caught.active end
-        if left.n ~= right.n then return (left.n or "") < (right.n or "") end
+        local leftName, rightName = AzeCaught.ShownName(left):lower(), AzeCaught.ShownName(right):lower()
+        if leftName ~= rightName then return leftName < rightName end
         return uidNumber(left.uid) < uidNumber(right.uid)
     end)
     return list
@@ -1435,14 +1585,15 @@ end
 ---@return table section
 function AzeCaught.BuildSection()
     local caught = AzeCaught.State()
-    local section = { weeks = {} }
+    -- rc: how many companions I have (others see whether I can field an arena team)
+    local section = { weeks = {}, rc = addon.Utility.Count(caught.roster or {}) }
     for periodKey, peak in pairs(caught.peaks) do section.weeks[periodKey] = math.floor(peak) end
     local companion = caught.active
     if companion then
         section.c = { npc = companion.npc, n = companion.n, lvl = companion.lvl, cls = companion.cls, disp = companion.disp,
             h = companion.hearts, hu = math.floor(companion.hunger + 0.5), th = math.floor(companion.thirst + 0.5),
             af = math.floor(companion.affection + 0.5), en = math.floor(companion.energy + 0.5), sl = companion.asleep and true or nil,
-            fs = companion.fedStreak }
+            fs = companion.fedStreak, nk = companion.info and companion.info.nick or nil }
     end
     return section
 end
@@ -1479,7 +1630,12 @@ function AzeCaught.SanitizeSection(section, horizon)
         if not name or not AzeCaught.RARITY_MALUS[companion.cls] then return nil end
         if companion.sl ~= nil and companion.sl ~= true then return nil end
         values.n, values.cls, values.sl = name, companion.cls, companion.sl
+        values.nk = AzeCaught.CleanNickname(companion.nk)   -- optional: a bad one is dropped alone
         clean.c = values
+    end
+    if section.rc ~= nil then
+        clean.rc = SafeInteger(section.rc, 0, AzeCaught.ROSTER_LIMIT)
+        if not clean.rc then return nil end
     end
     return clean
 end
@@ -1583,6 +1739,7 @@ local function sanitizeCompanion(companion, collection)
     if addon.Utility.IsFinite(companion.streakAt) and companion.streakAt >= 0 then clean.streakAt = companion.streakAt end
     if addon.Utility.IsFinite(companion.restAt) and companion.restAt >= 0 then clean.restAt = companion.restAt end
     if companion.ar ~= nil then clean.ar = addon.Arena.CleanProgress(companion.ar) end
+    clean.info = AzeCaught.CleanInfo(companion.info)
     if companion.asleep ~= nil then
         clean.asleep = addon.Utility.IsFinite(companion.asleep) and clamp(companion.asleep, 0, AzeCaught.SLEEP_DURATION) or nil
     end

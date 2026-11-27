@@ -181,7 +181,7 @@ return {
             for index, companion in ipairs(addon.AzeCaught.Roster()) do uids[index] = companion.uid end
             return uids
         end
-        local id = assert(A.Arena.Challenge(records, "A-R", "B-R", 0, NOW, team(A)))
+        local id = assert(A.Arena.Challenge(records, "A-R", "B-R", 10000, NOW, team(A)))
         harness.equal(A.Items.ArenaBuffs().barkSkin, 2, "one of 3 fights used, for the whole team")
         local challenge = A.Arena.State().ch[id]
         for slot = 1, 3 do harness.equal(challenge.t[slot].bf[1], "barkSkin", "every fighter of the team is buffed") end

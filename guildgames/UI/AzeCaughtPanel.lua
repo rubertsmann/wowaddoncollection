@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- The AZEcaught game panel: three views in the 300 x 336 game stage.
+-- The AZEcaught game panel: three views in the 300 x 376 game stage.
 --   Companion   the 3D model, hearts, need bars with threshold marks (a click on a bar cares for that need), the
 --               care effects, and my fighter (level line, four stat icons that train; built by UI/ArenaView.lua)
 --   Collection  every found NPC (caught ones first), a model preview, click a caught one to make it the companion
@@ -29,7 +29,6 @@ local CARE_ICONS = { feed = "Interface\\Icons\\INV_Misc_Food_15", water = "Inter
     pet = "Interface\\Icons\\Ability_Hunter_BeastSoothe", sleep = "Interface\\Icons\\Spell_Nature_Sleep",
     wake = "Interface\\Icons\\Ability_Warrior_BattleShout" }
 -- the history badges under the preview model and their icons (rows and hover panel use the same ones)
-local FIGHT_ICON = "Interface\\Icons\\Ability_Warrior_Challange"   -- the guild view's fight icon
 local HISTORY_ICONS = { seen = "Interface\\Icons\\INV_Misc_Spyglass_03", kills = "Interface\\Icons\\Ability_DualWield",
     caught = "Interface\\Icons\\Ability_Ensnare", last = "Interface\\Icons\\INV_Misc_PocketWatch_01",
     first = "Interface\\Icons\\INV_Misc_Map_01" }
@@ -657,6 +656,21 @@ function Panel.ShowNpcInfo(tooltip, owner, npcID, entry)
     return count
 end
 
+-- The tooltip of one of my companions: the shown name, the species when it has a nickname, where and when it was
+-- caught, and an optional hint line.
+---@param tooltip table
+---@param companion CompanionState
+---@param hint? string
+function Panel.ShowCompanionTooltip(tooltip, companion, hint)
+    local Escape = addon.Utility.Escape
+    tooltip:SetText(Escape(AzeCaught.ShownName(companion)), 1, 0.82, 0)
+    if AzeCaught.HasNickname(companion) then tooltip:AddLine(Escape(AzeCaught.SpeciesName(companion)), 0.85, 0.85, 0.85) end
+    local at, map = AzeCaught.CatchOrigin(companion)
+    tooltip:AddLine(addon.Model.CatchOriginText(at, addon.Api.MapName(map), rawget(_G, "date")), 0.55, 0.8, 1)
+    if hint then tooltip:AddLine(hint, 0.6, 0.6, 0.6) end
+    tooltip:Show()
+end
+
 -- Shows the info panel while the mouse is over `model`. `getNpc()` returns npcID, collection entry (or nil: nothing).
 ---@param model table
 ---@param getNpc fun(): integer|nil, CollectionEntry|nil
@@ -696,6 +710,7 @@ local function buildCompanionView(panel)
     attachInfoPanel(model, companionNpc)
     widgets.nameText = Widgets.CreateFontString(panel, "GameFontNormal", "CENTER")
     widgets.nameText:SetPoint("TOP", 0, -26); widgets.nameText:SetWidth(290)
+    Panel.BuildRename(panel)
     widgets.floatText = Widgets.CreateFontString(panel, "GameFontNormalLarge", "CENTER"); widgets.floatText:Hide()
     widgets.sleepText = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
     widgets.sleepText:SetPoint("BOTTOM", model, "BOTTOM", 0, 4)
@@ -738,9 +753,14 @@ local function createCollectionRow(list)
     row:SetScript("OnEnter", function(self)
         self.hover:Show()
         if self.entry then Panel.state.previewNpc = self.entry.npc; Panel.RefreshPreview() end
+        local companion = self.entry and AzeCaught.Companion(self.entry.uid)
+        if companion and GameTooltip then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            Panel.ShowCompanionTooltip(GameTooltip, companion)
+        end
     end)
     row.selected = row:CreateTexture(nil, "BACKGROUND", nil, 2); row.selected:SetAllPoints(); row.selected:SetColorTexture(0.3, 0.6, 1, 0.22); row.selected:Hide()
-    row:SetScript("OnLeave", function(self) self.hover:Hide() end)
+    row:SetScript("OnLeave", function(self) self.hover:Hide(); if GameTooltip then GameTooltip:Hide() end end)
     -- a click selects the row (preview + the switch button); switching needs the button and its confirm dialog
     row:SetScript("OnClick", function(self) if self.entry then Panel.SelectRow(self.entry.npc, self.entry.uid) end end)
     return row
@@ -780,6 +800,59 @@ local function refreshSwitchButton()
     local companion = Panel.state.section ~= "seen" and AzeCaught.Companion(Panel.state.selectedUid) or nil
     widgets.switchButton:SetEnabled(companion ~= nil and companion ~= AzeCaught.Active())
     widgets.releaseButton:SetEnabled(companion ~= nil)
+    Panel.RefreshRosterRename(companion)
+end
+
+------------------------------------------------------------------ collection: naming the selected companion (once)
+
+-- The Rename button shows for a selected roster companion without a nickname. While editing, the box with the tick
+-- and the cross stands in its place; it closes when the selection moves to another companion.
+---@param companion CompanionState|nil the selected roster companion
+function Panel.RefreshRosterRename(companion)
+    local editor, button = widgets.renameEditor, widgets.renameRowButton
+    if not editor then return end
+    if editor:IsShown() and (not companion or companion.uid ~= editor.uid or not AzeCaught.CanRename(companion)) then
+        editor.uid = nil
+        editor:Hide()
+    end
+    button:SetShown(not editor:IsShown() and AzeCaught.CanRename(companion))
+end
+
+function Panel.StartRosterRename()
+    local companion = AzeCaught.Companion(Panel.state.selectedUid)
+    if not AzeCaught.CanRename(companion) then return end
+    local editor, box = widgets.renameEditor, widgets.renameRowBox
+    editor.uid = companion.uid
+    box:SetText("")
+    widgets.renameRowButton:Hide()
+    widgets.collectionStatus:SetText("")
+    editor:Show(); box:SetFocus()
+end
+
+-- The tick (or Enter): names the companion; a refusal stays in the box with its reason under the list.
+function Panel.ConfirmRosterRename()
+    local editor, box = widgets.renameEditor, widgets.renameRowBox
+    local uid = editor.uid
+    if not uid then return end
+    local ok, refusal = addon.Catcher.Rename(uid, box:GetText() or "")
+    if not ok then
+        widgets.collectionStatus:SetText("|cffff6060" .. (refusal or "") .. "|r")
+        box:SetFocus()
+        return
+    end
+    editor.uid = nil
+    box:ClearFocus(); editor:Hide()
+    widgets.collectionStatus:SetText("")
+    Panel.Refresh()
+end
+
+-- The cross (or Escape): back to the button, nothing changes.
+function Panel.CancelRosterRename()
+    local editor = widgets.renameEditor
+    editor.uid = nil
+    widgets.renameRowBox:ClearFocus(); editor:Hide()
+    widgets.collectionStatus:SetText("")
+    Panel.RefreshRosterRename(AzeCaught.Companion(Panel.state.selectedUid))
 end
 
 ---@param npcID integer
@@ -798,7 +871,7 @@ function Panel.RequestSwitch()
     local companion = AzeCaught.Companion(Panel.state.selectedUid)
     if not companion or companion == AzeCaught.Active() then return end
     local text = Format(Text["Make {name} your companion? The current one rests: its needs wait until you switch back."],
-        { name = addon.Utility.Escape(companion.n) })
+        { name = addon.Utility.Escape(AzeCaught.ShownName(companion)) })
     if addon.Arena.State().training then
         text = text .. "\n|cffff8040" .. Text["The running training is cancelled (no refund)."] .. "|r"
     end
@@ -812,7 +885,7 @@ end
 function Panel.RequestRelease()
     local companion = AzeCaught.Companion(Panel.state.selectedUid)
     if not companion then return end
-    widgets.confirmText:SetText(Format(Text["Release {name} for good? Its arena progress is lost."], { name = addon.Utility.Escape(companion.n) }))
+    widgets.confirmText:SetText(Format(Text["Release {name} for good? Its arena progress is lost."], { name = addon.Utility.Escape(AzeCaught.ShownName(companion)) }))
     Panel.state.confirmUid, Panel.state.confirmMode = companion.uid, "release"
     widgets.confirmDialog:Show()
 end
@@ -880,16 +953,36 @@ local function buildCollectionView(panel)
     widgets.previewText = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
     widgets.previewText:SetPoint("TOP", preview, "BOTTOM", 0, -4); widgets.previewText:SetWidth(104)
     widgets.historyBadges = Panel.BuildHistoryBadges(panel, preview)
+    -- the button column: Rename (only for a selected companion without a nickname), Make companion, Release. Each has
+    -- its own slot, so nothing moves when Rename is hidden. While naming, a box with tick and cross takes the Rename
+    -- slot and reaches left under the list.
+    widgets.renameRowButton = Widgets.CreateButton(panel, Text["Rename"], 104, 18, function() Panel.StartRosterRename() end)
+    widgets.renameRowButton:SetPoint("TOPRIGHT", -2, -258)
+    widgets.renameRowButton:Hide()
     widgets.switchButton = Widgets.CreateButton(panel, Text["Make companion"], 104, 22, function() Panel.RequestSwitch() end)
-    widgets.switchButton:SetPoint("TOPRIGHT", -2, -258)
+    widgets.switchButton:SetPoint("TOP", widgets.renameRowButton, "BOTTOM", 0, -3)
     widgets.switchButton:SetEnabled(false)
     widgets.releaseButton = Widgets.CreateButton(panel, Text["Release"], 104, 18, function() Panel.RequestRelease() end)
     widgets.releaseButton:SetPoint("TOP", widgets.switchButton, "BOTTOM", 0, -3)
     widgets.releaseButton:SetEnabled(false)
+    local editor = CreateFrame("Frame", nil, panel)
+    editor:SetSize(190, 18); editor:SetPoint("TOPRIGHT", widgets.renameRowButton, "TOPRIGHT", 0, 0)
+    local no = Widgets.CreateIconButton(editor, "decline", 18, Text["Cancel"], function() Panel.CancelRosterRename() end)
+    no:SetPoint("RIGHT", 0, 0)
+    local yes = Widgets.CreateIconButton(editor, "accept", 18, Text["Save the nickname (once)"], function() Panel.ConfirmRosterRename() end)
+    yes:SetPoint("RIGHT", no, "LEFT", -3, 0)
+    local box = Widgets.CreateEditBox(editor, 148)
+    box:SetPoint("RIGHT", yes, "LEFT", -3, 0); box:SetJustifyH("LEFT"); box:SetAutoFocus(false)
+    if box.SetMaxLetters then box:SetMaxLetters(AzeCaught.MAXIMUM_NICK_CHARACTERS) end
+    box:SetScript("OnEnterPressed", function() Panel.ConfirmRosterRename() end)
+    box:SetScript("OnEscapePressed", function() Panel.CancelRosterRename() end)
+    box:SetScript("OnHide", function(self) self:ClearFocus() end)
+    editor:Hide()
+    widgets.renameEditor, widgets.renameRowBox = editor, box
     widgets.collectionStatus = Widgets.CreateFontString(panel, "GameFontHighlightSmall", "CENTER")
-    widgets.collectionStatus:SetPoint("TOP", 0, -304); widgets.collectionStatus:SetWidth(290)
+    widgets.collectionStatus:SetPoint("TOP", 0, -328); widgets.collectionStatus:SetWidth(290)
     local hint = Widgets.CreateFontString(panel, "GameFontDisableSmall", "CENTER")
-    hint:SetPoint("TOP", 0, -320); hint:SetWidth(290)
+    hint:SetPoint("TOP", 0, -342); hint:SetWidth(290)
     hint:SetText(Text["Every catch is its own companion: select one, then Make companion. Resting ones wait with frozen needs."])
     buildConfirmDialog(panel)
 end
@@ -906,7 +999,7 @@ local function createGuildRow(list)
     row.level = Widgets.CreateFontString(row, "GameFontNormalSmall", "RIGHT"); row.level:SetPoint("RIGHT", -2, 0); row.level:SetWidth(76)
     row.selected = row:CreateTexture(nil, "BACKGROUND", nil, 2); row.selected:SetAllPoints(); row.selected:SetColorTexture(0.3, 0.6, 1, 0.22)
     row.selected:Hide()
-    -- a click selects the pet (hovering does not, so the mouse can reach the fight icon)
+    -- a click selects the pet (hovering does not)
     row:SetScript("OnEnter", function(self) self.hover:Show() end)
     row:SetScript("OnLeave", function(self) self.hover:Hide() end)
     row:SetScript("OnClick", function(self) if self.entry then Panel.SelectGuildRow(self.entry) end end)
@@ -942,34 +1035,6 @@ local function buildGuildView(panel)
     widgets.guildPreviewName = Widgets.CreateFontString(panel, "GameFontNormal", "CENTER")
     widgets.guildPreviewName:SetPoint("BOTTOM", preview, "TOP", 0, 3); widgets.guildPreviewName:SetWidth(108)
     widgets.guildBadges = Panel.BuildStatBadges(panel, preview)
-    -- the arena challenge: one fight icon on another member's pet opens the
-    -- challenge modal (ArenaView.OpenChallenge: matchup, wager, confirm)
-    local fight = CreateFrame("Button", nil, panel)
-    fight:SetSize(30, 30); fight:SetPoint("TOP", preview, "BOTTOM", 0, -4 - 2 * (BADGE_SIZE + 4) - 4)   -- centred below the stat badges
-    fight:SetFrameLevel(preview:GetFrameLevel() + 5)
-    fight.border = fight:CreateTexture(nil, "BACKGROUND"); fight.border:SetPoint("TOPLEFT", -2, 2); fight.border:SetPoint("BOTTOMRIGHT", 2, -2)
-    fight.border:SetColorTexture(0.8, 0.2, 0.15, 0.95)
-    fight.icon = fight:CreateTexture(nil, "ARTWORK"); fight.icon:SetAllPoints()
-    addon.UIHelpers.SetTextureOr(fight.icon, FIGHT_ICON, { 0.8, 0.2, 0.15 })
-    if fight.icon.SetTexCoord then fight.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
-    fight.glow = fight:CreateTexture(nil, "OVERLAY"); fight.glow:SetPoint("CENTER"); fight.glow:SetSize(58, 58)
-    addon.UIHelpers.SetTextureOr(fight.glow, "Interface\\Buttons\\UI-ActionButton-Border", { 1, 0.3, 0.2 })
-    if fight.glow.SetBlendMode then fight.glow:SetBlendMode("ADD") end
-    fight.glow:SetVertexColor(1, 0.35, 0.2); fight.glow:SetAlpha(0)
-    fight:SetScript("OnClick", function() Panel.Challenge() end)
-    fight:SetScript("OnEnter", function(self)
-        self.glow:SetAlpha(0.8)
-        local row = Panel.state.guildRow
-        if not GameTooltip or not row then return end
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(Format(Text["Challenge {name}"], { name = addon.Utility.Escape(row.nameRaw:match("^([^%-]+)") or row.nameRaw) }), 1, 0.82, 0)
-        GameTooltip:AddLine(Text["An arena fight between your companions."], 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    fight:SetScript("OnLeave", function(self) self.glow:SetAlpha(0); if GameTooltip then GameTooltip:Hide() end end)
-    fight:Hide()
-    widgets.fightButton = fight
-    addon.ArenaView.BuildChallenge(panel)
 end
 
 ------------------------------------------------------------------ guild pet stats as badges
@@ -1053,23 +1118,24 @@ end
 
 ------------------------------------------------------------------ the arena guide arrow
 
--- Like the first-throw arrow: a bobbing red arrow shows the way to the first fight, once: the Arena tab, then the first
--- pet that is not mine (Arena > Guild), then the fight icon. Each step ends when it is done; after the fight icon was
--- clicked it never shows again (settings().arenaGuide = "done"). Only with a companion (no fight without one).
+-- Like the first-throw arrow: a bobbing red arrow shows the way to the first fight, once: the Arena tab, then the
+-- fight request on the Fights page. Each step ends when it is done; after the first request was sent it never shows
+-- again (settings().arenaGuide = "done"). Only with a companion (no fight without one).
 local GUIDE_ARROW = "Interface\\Buttons\\UI-MicroStream-Red"   -- points down
 local GUIDE_FALLBACK = { 1, 0.15, 0.1, 1 }
-local GUIDE_NEXT = { arena = "pet", pet = "fight", fight = "done" }
+local GUIDE_NEXT = { arena = "request", request = "done" }
 
--- The current guide step, or nil (done or no companion).
----@return "arena"|"pet"|"fight"|nil
+-- The current guide step, or nil (done or no companion). The older steps "pet" and "fight" (the Guild view's fight
+-- icon) continue at "request".
+---@return "arena"|"request"|nil
 function Panel.GuideStep()
     local step = settings().arenaGuide
     if step == "done" or not AzeCaught.Active() then return nil end
-    return (step == "pet" or step == "fight") and step or "arena"
+    return (step == "request" or step == "pet" or step == "fight") and "request" or "arena"
 end
 
 -- Moves the guide on when `step` is the current one.
----@param step "arena"|"pet"|"fight"
+---@param step "arena"|"request"
 function Panel.AdvanceGuide(step)
     if Panel.GuideStep() ~= step then return end
     settings().arenaGuide = GUIDE_NEXT[step]
@@ -1116,12 +1182,10 @@ function Panel.GuideTarget()
     if not step or not widgets.panel or not widgets.panel:IsVisible() then return nil end
     if Panel.state.view ~= "arena" then return widgets.viewButtons.arena, "above" end
     local ArenaView = addon.ArenaView
-    if ArenaView.state.page ~= "guild" then return ArenaView.widgets.pageButtons.guild, "above" end
-    if step == "fight" and widgets.fightButton and widgets.fightButton:IsShown() then return widgets.fightButton, "left" end
-    -- "pet" (and "fight" while my own pet is selected): the first visible row that is not mine
-    for _, row in ipairs(widgets.guildList and widgets.guildList.rows or {}) do
-        if type(row.entry) == "table" and not row.entry.mine and row:IsShown() then return row, "right" end
-    end
+    if ArenaView.state.page ~= "fights" then return ArenaView.widgets.pageButtons.fights, "above" end
+    -- the member dropdown of the fight request
+    local dropdown = ArenaView.widgets.memberDropdown
+    if dropdown and dropdown:IsShown() then return dropdown, "right" end
     return nil
 end
 
@@ -1141,7 +1205,7 @@ end
 
 ------------------------------------------------------------------ build and refresh
 
--- Builds the panel into `panel` (the game stage's AZEcaught panel, 300 x 336).
+-- Builds the panel into `panel` (the game stage's AZEcaught panel, 300 x 376).
 ---@param panel table
 function Panel.Build(panel)
     local Widgets = addon.UI.Widgets
@@ -1209,6 +1273,58 @@ function Panel.Build(panel)
     Panel.SelectSection(Panel.state.section)
 end
 
+------------------------------------------------------------------ rename (a click on the companion's name)
+
+-- A button over the name line (hover: species and catch origin; click: an edit box in its place). Enter saves,
+-- Escape or a click elsewhere cancels; the box never keeps the keyboard once hidden.
+---@param panel table
+function Panel.BuildRename(panel)
+    local Widgets = addon.UI.Widgets
+    local button = CreateFrame("Button", nil, panel)
+    button:SetPoint("TOP", 0, -24); button:SetSize(290, 18)
+    button:SetScript("OnEnter", function(self)
+        local companion = AzeCaught.Active()
+        if not companion or not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        Panel.ShowCompanionTooltip(GameTooltip, companion, AzeCaught.CanRename(companion) and Text["Click to give it a nickname (once)."] or nil)
+    end)
+    button:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    button:SetScript("OnClick", function() Panel.StartRename() end)
+    widgets.nameButton = button
+    local box = Widgets.CreateEditBox(panel, 200)
+    box:SetPoint("TOP", 0, -24); box:SetJustifyH("CENTER"); box:SetAutoFocus(false)
+    if box.SetMaxLetters then box:SetMaxLetters(AzeCaught.MAXIMUM_NICK_CHARACTERS) end
+    box:SetScript("OnEnterPressed", function(self)
+        local uid = self.uid
+        Panel.EndRename()
+        if uid then addon.Catcher.Rename(uid, self:GetText() or "") end
+    end)
+    box:SetScript("OnEscapePressed", function() Panel.EndRename() end)
+    box:HookScript("OnEditFocusLost", function() Panel.EndRename() end)
+    box:SetScript("OnHide", function(self) self:ClearFocus() end)
+    box:Hide()
+    widgets.renameBox = box
+end
+
+function Panel.StartRename()
+    local companion, box = AzeCaught.Active(), widgets.renameBox
+    if not AzeCaught.CanRename(companion) or not box then return end
+    if GameTooltip then GameTooltip:Hide() end
+    box.uid = companion.uid
+    box:SetText("")
+    widgets.nameText:Hide(); widgets.nameButton:Hide()
+    box:Show(); box:SetFocus(); box:HighlightText()
+end
+
+function Panel.EndRename()
+    local box = widgets.renameBox
+    if not box or not box:IsShown() then return end
+    box.uid = nil
+    box:ClearFocus(); box:Hide()
+    widgets.nameButton:Show()
+    widgets.nameText:SetShown(AzeCaught.Active() ~= nil)
+end
+
 function Panel.RefreshCompanion()
     if not widgets.model then return end
     local companion = AzeCaught.Active()
@@ -1217,6 +1333,10 @@ function Panel.RefreshCompanion()
     for _, region in ipairs({ widgets.model, widgets.heartIcon, widgets.heartText, widgets.streakText, widgets.nameText, widgets.sleepText }) do
         region:SetShown(hasCompanion)
     end
+    if widgets.renameBox and widgets.renameBox:IsShown() then
+        if not hasCompanion or widgets.renameBox.uid ~= companion.uid then Panel.EndRename() else widgets.nameText:Hide() end
+    end
+    widgets.nameButton:SetShown(hasCompanion and not widgets.renameBox:IsShown())
     for _, bar in pairs(widgets.bars) do bar:SetShown(hasCompanion) end
     Panel.RefreshCareButtons()
     addon.ArenaView.RefreshFighter()
@@ -1226,7 +1346,7 @@ function Panel.RefreshCompanion()
         Panel.IdleOfCompanion(widgets.model, companion.asleep and "fellAsleep" or "wokeUp")
     end
     addon.UI.Widgets.FitText(widgets.nameText, ("|cff%s%s|r  |cffaaaaaa%s %d · %s|r"):format(RARITY_COLOR[companion.cls] or "ffffff",
-        addon.Utility.Escape(addon.Utility.ShortText(companion.n, 28)), Text["Level"], companion.lvl, rarityText(companion.cls)))
+        addon.Utility.Escape(addon.Utility.ShortText(AzeCaught.ShownName(companion), 28)), Text["Level"], companion.lvl, rarityText(companion.cls)))
     widgets.heartText:SetText((companion.hearts < 0 and "|cff993333" or "|cffff4060") .. companion.hearts .. "|r")
     widgets.streakText:SetText(Format(Text["Fed streak {fed} · care streak {care} · rank {rank}"],
         { fed = companion.fedStreak, care = companion.careStreak, rank = AzeCaught.CompanionLevel(companion) }))
@@ -1367,7 +1487,6 @@ function Panel.RefreshGuildPreview()
         showModel(widgets.guildModel, nil, "guild") widgets.guildPreviewName:SetText("")
         for _, badge in ipairs(widgets.guildBadges) do badge:Hide() end
         Panel.state.guildBadgeOwner = nil
-        if widgets.fightButton then widgets.fightButton:Hide() end
         return
     end
     showModel(widgets.guildModel, { npc = row.npc, disp = row.disp }, "guild")
@@ -1386,28 +1505,13 @@ function Panel.RefreshGuildPreview()
         badge.icon:SetAlpha(faded and 0.55 or 1)
         if isNew then badge:SetAlpha(0); addon.Animate.FadeIn(badge, 0.1 + 0.04 * index) else badge:Show() end
     end
-    -- the fight icon: only on another member's pet; it pops in when such a pet is selected
-    if row.mine then
-        widgets.fightButton:Hide()
-    elseif not widgets.fightButton:IsShown() then
-        widgets.fightButton:Show(); addon.Animate.Pulse(widgets.fightButton, 1.3, 0.3)
-    end
 end
 
 -- Selects a guild row (a click).
 ---@param row CompanionRow
 function Panel.SelectGuildRow(row)
     Panel.state.guildRow = row
-    if row and not row.mine then Panel.AdvanceGuide("pet") end
     Panel.Refresh()
-end
-
--- The fight icon: opens the challenge modal for the selected pet. Returns true when it opened.
----@return boolean
-function Panel.Challenge()
-    local opened = addon.ArenaView.OpenChallenge(Panel.state.guildRow)
-    if opened then Panel.AdvanceGuide("fight") end
-    return opened
 end
 
 -- Redraws the visible view (CAUGHT_CHANGED, GAMES_CHANGED, DATA_CHANGED and on show).

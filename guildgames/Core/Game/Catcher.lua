@@ -235,7 +235,7 @@ function Catcher.Throw(unit)
     end
     local thrown, reason = AzeCaught.Throw({ guid = snapshot.guid, health = snapshot.health, name = snapshot.name,
         level = snapshot.level, classification = snapshot.classification, display = display,
-        tapDenied = snapshot.tapDenied, fighting = snapshot.fighting }, Api.PlayerLevel(), Api.Clock(), now())
+        tapDenied = snapshot.tapDenied, fighting = snapshot.fighting, map = Api.PlayerMapID() }, Api.PlayerLevel(), Api.Clock(), now())
     local name = addon.Utility.ChatSafe(snapshot.name or AzeCaught.State().collection[snapshot.npc or 0] and AzeCaught.State().collection[snapshot.npc].n or "?")
     if thrown then
         Catcher.PlayRopeEffect(unit)
@@ -293,7 +293,8 @@ function Catcher.UseTrap(unit, itemID)
     end
     local ok, result = addon.Items.Use(itemID, { myName = me(), now = now(), clock = Api.Clock(),
         target = { guid = snapshot.guid, health = snapshot.health, name = snapshot.name, level = snapshot.level,
-            classification = snapshot.classification, display = display, tapDenied = snapshot.tapDenied, fighting = snapshot.fighting } })
+            classification = snapshot.classification, display = display, tapDenied = snapshot.tapDenied, fighting = snapshot.fighting,
+            map = Api.PlayerMapID() } })
     if not ok then return refuse(result, { reason = result, unit = unit, item = itemID }) end
     local item = addon.Items.Get(itemID)
     local npcName = addon.Utility.ChatSafe(snapshot.name or "?")
@@ -850,7 +851,7 @@ local function remind(companion)
         local previous = Catcher.lastZones[need]
         local worse = (zone == "needy" and previous == "ok") or ((zone == "critical" or zone == "empty") and previous ~= "critical" and previous ~= "empty")
         if worse and previous ~= nil and caught.notify then
-            addon.Print(Format(needText(need), { name = addon.Utility.ChatSafe(companion.n) })
+            addon.Print(Format(needText(need), { name = addon.Utility.ChatSafe(AzeCaught.ShownName(companion)) })
                 .. (zone ~= "needy" and (" |cffff4040" .. Text["(critical)"] .. "|r") or ""))
         end
         Catcher.lastZones[need] = zone
@@ -906,7 +907,7 @@ function Catcher.ArenaNoticeText(notice)
         return Format(notice.accepted and Text["{name} accepted your counter offer ({gold}). The fight is decided in 5 minutes."]
             or Text["{name} declined your counter offer."], { name = short(notice.by), gold = money(notice.wager) })
     elseif notice.kind == "won" then
-        return "|cff66ff66" .. Format(Text["Arena: your companion beat {name}! (+{gold})"], { name = short(notice.opponent), gold = money(notice.wager * 2) }) .. "|r"
+        return "|cff66ff66" .. Format(Text["Arena: your companion beat {name}! (+{gold})"], { name = short(notice.opponent), gold = money(notice.payout or notice.wager * 2) }) .. "|r"
     elseif notice.kind == "lost" then
         return "|cffff6060" .. Format(Text["Arena: {name} beat your companion."], { name = short(notice.opponent) }) .. "|r"
     elseif notice.kind == "refund" then
@@ -929,17 +930,17 @@ function Catcher.ArenaTick(force)
     local publish = false
     local finished = Arena.FinishTraining()
     if finished then
-        local entry = AzeCaught.State().collection[finished.npc]
-        addon.Print(Format(Text["Training done: {name}'s {stat} is now {points}."], { name = addon.Utility.ChatSafe(entry and entry.n or "?"),
+        addon.Print(Format(Text["Training done: {name}'s {stat} is now {points}."], { name = addon.Utility.ChatSafe(AzeCaught.ShownName(AzeCaught.Companion(finished.uid))),
             stat = STAT_TEXT[finished.stat], points = finished.points }))
         Api.PlaySound(Api.SoundKitFor({ "LEVELUPSOUND", "IG_QUEST_LIST_COMPLETE" }))
         addon.Events.Fire("CAUGHT_CHANGED")
     end
-    -- the dev dummy (dev build only) accepts my challenges to it
-    local dummy = addon.IS_DEVELOPMENT_BUILD and addon.Games.simulated[Arena.DUMMY_NAME]
-    if dummy and Arena.DummyRespond(dummy, me(), now()) > 0 then
-        addon.Print("[dev] the arena dummy accepted your challenge: the fight is decided in " .. math.floor(Arena.BET_WINDOW / 60) .. " minutes")
-        addon.Events.Fire("CAUGHT_CHANGED")
+    -- the dev dummy and the sparring member (dev build only) accept my challenges to them
+    for _, responder in ipairs(addon.IS_DEVELOPMENT_BUILD and Arena.DevResponders(addon.Games.simulated) or {}) do
+        if Arena.DummyRespond(responder, me(), now()) > 0 then
+            addon.Print("[dev] " .. responder.name .. " accepted your challenge: the fight is decided in " .. math.floor(Arena.BET_WINDOW / 60) .. " minutes")
+            addon.Events.Fire("CAUGHT_CHANGED")
+        end
     end
     local notices, changed = Arena.Settle(addon.Games.AllRecords(), me(), now())
     for _, notice in ipairs(notices) do
@@ -976,7 +977,7 @@ function Catcher.OnTick()
     local companion = AzeCaught.Active()
     if result.died and before then
         addon.Print("|cffff4040" .. Format(Text["{name} died: it was left hungry or thirsty for too long."],
-            { name = addon.Utility.ChatSafe(before.n) }) .. "|r")
+            { name = addon.Utility.ChatSafe(AzeCaught.ShownName(before)) }) .. "|r")
         Catcher.lastZones = {}
         Catcher.PublishSoon(true)
     elseif companion then
@@ -1343,7 +1344,7 @@ end
 
 -- /ggd caught dummy [off] (also /ggd arena dummy): a fake guild member with a companion in the Guild list, to test the
 -- arena alone. Memory only (Games.simulated: never stored, never sent; gone after a reload). It
--- accepts my challenges on the next arena tick (5 s).
+-- accepts my challenges on the first arena tick after Arena.DUMMY_DELAY.
 function developmentCommands.dummy(arguments)
     local Arena = addon.Arena
     if ((arguments or ""):match("^%s*(%S*)") or ""):lower() == "off" then
@@ -1355,7 +1356,7 @@ function developmentCommands.dummy(arguments)
             if #team < Arena.TEAM_SIZE then team[#team + 1] = Arena.Fighter(companion) end
         end
         addon.Games.simulated[Arena.DUMMY_NAME] = Arena.DummyRecord(team, now())
-        printLine(Arena.DUMMY_NAME .. " joined the guild list (memory only): challenge it in AZEcaught > Guild, it accepts within 5 s")
+        printLine(Arena.DUMMY_NAME .. " joined the guild (memory only): pick it in AZEcaught > Arena > Fights, it accepts after " .. Arena.DUMMY_DELAY .. " s")
     end
     AzeCaught.Journal("INFORMATION", "dev.dummy", "the arena dummy was changed", { on = addon.Games.simulated[Arena.DUMMY_NAME] ~= nil })
     addon.Events.Fire("GAMES_CHANGED"); addon.Events.Fire("CAUGHT_CHANGED")
@@ -1371,11 +1372,69 @@ function developmentCommands.request(arguments)
     addon.Events.Fire("GAMES_CHANGED"); addon.Events.Fire("CAUGHT_CHANGED")
 end
 
--- the Fights page's dev button: a fake challenge to me from the arena dummy
+-- the Fights page's dev buttons: each runs the /ggd arena command of the same word
+local DEV_ARENA_WORDS = { dummy = true, request = true, skip = true, crowd = true, latebet = true, members = true, accept = true,
+    decline = true, expire = true, reveal = true, clear = true }
 if addon.IS_DEVELOPMENT_BUILD then
+    function Catcher.DevArena(word, arguments) if DEV_ARENA_WORDS[word] then developmentCommands[word](arguments or "") end end
     function Catcher.DevArenaRequest(gold) developmentCommands.request(tostring(gold or 0)) end
-    -- the Fights page's stopwatch: the dummy's waiting fights are decided now
     function Catcher.DevArenaSkip() developmentCommands.skip() end
+end
+
+local function devArenaDone(event, text, data)
+    AzeCaught.Journal("INFORMATION", "dev." .. event, text, data or {})
+    printLine(text)
+    Catcher.ArenaTick(true)
+    addon.Events.Fire("GAMES_CHANGED"); addon.Events.Fire("CAUGHT_CHANGED")
+end
+
+-- the fight selected on the Fights page (the dev buttons act on it)
+local function selectedFight() return addon.ArenaView.state.selected end
+
+-- /ggd arena crowd: fake bettors bet on both sides of the selected open fight
+function developmentCommands.crowd()
+    local count, reason = addon.Arena.DevCrowd(addon.Games.AllRecords(), addon.Games.simulated, me(), selectedFight(), now())
+    devArenaDone("crowd", count and ("%d fake bettors bet on the selected fight"):format(count)
+        or "select an open fight first (" .. tostring(reason) .. ")", { id = selectedFight(), bets = count })
+end
+
+-- /ggd arena latebet: a fake bet stamped at the selected fight's fight time (it must stay out of the pot)
+function developmentCommands.latebet()
+    local ok, reason = addon.Arena.DevLateBet(addon.Games.AllRecords(), addon.Games.simulated, me(), selectedFight(), now())
+    devArenaDone("latebet", ok and "a late fake bet was placed on the selected fight" or "select an accepted fight first (" .. tostring(reason) .. ")",
+        { id = selectedFight() })
+end
+
+-- /ggd arena members: fake members for every greyed reason in the dropdown
+function developmentCommands.members()
+    local names = addon.Arena.DevMembers(addon.Games.simulated, now())
+    devArenaDone("members", "fake members joined (memory only): " .. table.concat(names, ", "), { count = #names })
+end
+
+-- /ggd arena accept | decline: the dummy answers my waiting challenge to it now
+function developmentCommands.accept()
+    local count = addon.Arena.DevAnswer(addon.Games.simulated, me(), now(), true)
+    devArenaDone("accept", count > 0 and "the arena dummy accepted with its own wager" or "no waiting challenge to the arena dummy", { answered = count })
+end
+function developmentCommands.decline()
+    local count = addon.Arena.DevAnswer(addon.Games.simulated, me(), now(), false)
+    devArenaDone("decline", count > 0 and "the arena dummy declined" or "no waiting challenge to the arena dummy", { answered = count })
+end
+
+-- /ggd arena expire | reveal: fake fights jump past their time to live / past the reveal time
+function developmentCommands.expire()
+    local count = addon.Arena.DevShift(addon.Games.AllRecords(), addon.Games.simulated, me(), now(), "expire")
+    devArenaDone("expire", ("%d waiting fake challenge(s) expired"):format(count), { fights = count })
+end
+function developmentCommands.reveal()
+    local count = addon.Arena.DevShift(addon.Games.AllRecords(), addon.Games.simulated, me(), now(), "reveal")
+    devArenaDone("reveal", ("%d unwatched fake fight(s) settle now"):format(count), { fights = count })
+end
+
+-- /ggd arena clear: every fake member, bettor, time shift and the dummy are gone
+function developmentCommands.clear()
+    local count = addon.Arena.DevClear(addon.Games.simulated)
+    devArenaDone("clear", ("%d fake record(s) removed"):format(count), { records = count })
 end
 
 -- /ggd caught skip (also /ggd arena skip): the dummy's accepted fights are decided now (no 5 minute wait)
@@ -1472,16 +1531,64 @@ addon.SlashCommands.caught = function(arguments)
     printLine(addon.SLASH_COMMANDS[1] .. " caught [" .. table.concat(words, "|") .. "]")
 end
 
--- /gg caught arena: opens the arena view; the dev build also takes "dummy [off]", "request [gold]" and "skip"
+-- /gg caught arena: opens the arena view; the dev build also takes the fake events (dummy [off], request [gold], skip,
+-- crowd, latebet, members, accept, decline, expire, reveal, clear)
 function commands.arena(arguments)
     local word, rest = (arguments or ""):match("^%s*(%S*)%s*(.-)%s*$")
     word = (word or ""):lower()
-    if addon.IS_DEVELOPMENT_BUILD and (word == "dummy" or word == "request" or word == "skip") then developmentCommands[word](rest) return end
+    if addon.IS_DEVELOPMENT_BUILD and DEV_ARENA_WORDS[word] then developmentCommands[word](rest) return end
     addon.UI.ShowFull()
     if addon.GamesTab.SelectGame then addon.GamesTab.SelectGame("caught") end
     addon.AzeCaughtPanel.SelectView("arena")
 end
 addon.SlashCommands.arena = function(arguments) commands.arena(arguments) end
+
+-- /gg caught name <text>: the nickname of the active companion (once per companion)
+function commands.name(arguments)
+    local companion = AzeCaught.Active()
+    if not companion then addon.Print(Text["You have no companion."]) return end
+    Catcher.Rename(companion.uid, arguments or "")
+end
+
+-- Why a nickname was refused, as a player line.
+---@param refusal string|nil
+---@return string
+function Catcher.RenameRefusalText(refusal)
+    if refusal == "toolong" then return Format(Text["A nickname has at most {n} characters."], { n = AzeCaught.MAXIMUM_NICK_CHARACTERS }) end
+    if refusal == "readonly" then return Text["Saved data is read-only in this session."] end
+    if refusal == "named" then return Text["It already has its nickname: a companion is named once."] end
+    if refusal == "empty" then return Text["Type a nickname first."] end
+    return Text["That nickname cannot be used."]
+end
+
+-- Gives a companion its nickname (once), says so in chat, refreshes the views and publishes. Returns true when it was
+-- stored, else false and the refusal line (also printed).
+---@param uid string
+---@param text string
+---@return boolean
+---@return string|nil refusalText
+function Catcher.Rename(uid, text)
+    local species = addon.Utility.ChatSafe(AzeCaught.SpeciesName(AzeCaught.Companion(uid)))
+    local nick, refusal = AzeCaught.SetNickname(uid, text)
+    if not nick then
+        local line = Catcher.RenameRefusalText(refusal)
+        addon.Print(line)
+        return false, line
+    end
+    addon.Print(Format(Text["{species} is now called {name}."], { species = species, name = addon.Utility.ChatSafe(nick) }))
+    addon.Events.Fire("CAUGHT_CHANGED")
+    Catcher.PublishSoon(true)
+    return true
+end
+
+-- /ggd caught unname: takes the selected (else the active) companion's nickname away, to try the naming again
+function developmentCommands.unname()
+    local uid = addon.AzeCaughtPanel.state.selectedUid or (AzeCaught.Active() and AzeCaught.Active().uid)
+    if not uid or not AzeCaught.ClearNickname(uid) then printLine("unname: no companion with a nickname") return end
+    printLine("unname: " .. uid .. " has no nickname now")
+    addon.Events.Fire("CAUGHT_CHANGED")
+    Catcher.PublishSoon(true)
+end
 
 -- /gg caught icon [on|off|x <n>|y <n>|size <n>|reset]
 function commands.icon(arguments) addon.AzeCaughtOptions.Command(arguments) end

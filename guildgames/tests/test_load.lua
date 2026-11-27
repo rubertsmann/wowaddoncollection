@@ -83,7 +83,7 @@ return {
                 harness.equal(addon.IS_DEVELOPMENT_BUILD, development)
                 harness.equal(addon.PREFIX, development and "GGamesDev" or "GGames")
                 harness.equal(addon.SAVED_VARIABLES_NAME, development and "GuildGamesDevDB" or "GuildGamesDB")
-                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 6); harness.equal(addon.Store.SCHEMA, 3)
+                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 7); harness.equal(addon.Store.SCHEMA, 3)
                 -- the key binding's globals carry this build's names (live + dev installed together)
                 local binding = addon.Catcher.BindingNames(development)
                 harness.equal(binding.name, development and "AZECAUGHT_THROW_DEV" or "AZECAUGHT_THROW")
@@ -553,6 +553,12 @@ return {
                         harness.truthy(pcall(addon.ArenaView.SelectPage, "fights"))
                         harness.truthy(addon.ArenaView.widgets.acceptButton, "accept is in the dialog below the list (next to the counter offer)")
                         harness.equal(addon.ArenaView.state.selected, "Foe-R#" .. start, "the incoming challenge is selected")
+                        -- the selected fight in the framed box: the challenger's team as a carousel left, mine unknown yet
+                        local fightCards = addon.ArenaView.widgets.fightCards
+                        harness.truthy(addon.ArenaView.widgets.fightBox, "the framed fight box")
+                        harness.truthy(addon.ArenaView.widgets.answerPanel:IsShown(), "the framed answer panel for an incoming challenge")
+                        harness.equal(fightCards.left.fighter.n, "Bear"); harness.equal(addon.ArenaView.state.cardShown.right, nil, "their team: the note")
+                        harness.equal(addon.ArenaView.state.cardShown.left, 1)
                         local okAnswer, answerError = pcall(addon.ArenaView.Decide, true)
                         harness.truthy(okAnswer, tostring(answerError))
                         harness.truthy(addon.TeamDialog.IsOpen(), "accepting opens the team dialog")
@@ -564,6 +570,12 @@ return {
                         harness.equal(addon.TeamDialog.ShowTheirs(1), 1, "wraps to the first")
                         harness.equal(addon.TeamDialog.ShowTheirs(-1), 3, "wraps to the last")
                         harness.truthy(addon.TeamDialog.widgets.card:IsShown(), "the card is shown")
+                        -- two carousels side by side: the challenger (the foe) left, mine right, each with its player below
+                        local cards = addon.TeamDialog.widgets.cards
+                        harness.equal(cards.left.owner, "theirs"); harness.equal(cards.right.owner, "mine")
+                        harness.equal(cards.left.fighter.n, "Bear")
+                        harness.equal(addon.TeamDialog.ShowMine(1), 2); harness.equal(addon.TeamDialog.ShowMine(-2), 3, "mine wraps too")
+                        harness.truthy(cards.right.fighter, "my pick is shown")
                         addon.TeamDialog.ClearSlot(3)
                         harness.equal(addon.TeamDialog.Confirm(), false, "two are not a team")
                         addon.TeamDialog.Toggle(addon.TeamDialog.Rows()[3].uid)
@@ -593,91 +605,96 @@ return {
                         local okTick, tickError = pcall(addon.Catcher.ArenaTick, true)
                         harness.truthy(okTick, "arena tick: " .. tostring(tickError))
                         harness.equal(Arena.State().w + Arena.State().l, 1, "the fight was settled")
-                        -- the counter offer buttons answer with a refusal for an unknown fight, never an error
-                        harness.truthy(pcall(addon.ArenaView.Counter), "counter offer button")
-                        harness.truthy(pcall(addon.ArenaView.AnswerCounter, true, "Nobody-R#1"), "accept counter button")
-                        harness.truthy(pcall(addon.ArenaView.AnswerCounter, false, "Nobody-R#1"), "decline counter button")
                         addon.Games.AllRecords, addon.Utility.Now = savedRecords, savedNow
                         rawset(_G, "GetServerTime", savedServerTime)
-                        -- the guild view: a click selects a pet, the fight icon opens the challenge modal
+                        -- the fight request on the Fights page: the dummy in the member dropdown, Fight! opens the team
+                        -- picker with my wager, Send sends it (the swords clash) and ends the guide
                         local ArenaView = addon.ArenaView
                         addon.Games.simulated[Arena.DUMMY_NAME] = Arena.DummyRecord(Arena.Fighter(AzeCaught.Active()), savedNow())
-                        harness.truthy(pcall(Panel.SelectView, "guild"))
-                        local dummyRow
-                        for _, row in ipairs(addon.Model.BuildCompanionRows(addon.Games.AllRecords(), me)) do
-                            if row.nameRaw == Arena.DUMMY_NAME then dummyRow = row end
-                        end
-                        harness.truthy(dummyRow, "the dummy is in the guild list")
-                        -- the guide arrow: Arena tab, then the first other pet, then the fight icon, once
                         addon.UIHelpers.Settings().arenaGuide = nil
                         harness.equal(Panel.GuideStep(), "arena")
-                        harness.truthy(pcall(Panel.SelectView, "guild")); harness.equal(Panel.GuideStep(), "pet")
-                        harness.truthy(pcall(Panel.SelectGuildRow, dummyRow))
-                        harness.equal(Panel.GuideStep(), "fight")
-                        harness.equal(Panel.state.guildRow.nameRaw, Arena.DUMMY_NAME)
-                        harness.truthy(Panel.widgets.fightButton:IsShown() ~= false, "the fight icon shows for another member's pet")
-                        -- long names: the font shrinks to fit, never below the minimum
-                        do
-                            local font = { size = 12, text = "" }
-                            local fake = { GetFont = function() return "Fonts\\FRIZQT__.TTF", font.size, "" end,
-                                SetFont = function(_, _, size) font.size = size end, SetText = function(_, text) font.text = text end,
-                                GetWidth = function() return 100 end,
-                                GetStringWidth = function() return #font.text * font.size / 2 end }
-                            addon.UI.Widgets.FitText(fake, ("x"):rep(20), 0.7)   -- 120 wide at 12: shrinks to 10 (100/120 of 12)
-                            harness.equal(font.size, 10)
-                            addon.UI.Widgets.FitText(fake, ("x"):rep(40), 0.7)   -- would need 5: stops at 70 %
-                            harness.equal(font.size, 8)
-                            addon.UI.Widgets.FitText(fake, "short", 0.7)          -- back to its own size
-                            harness.equal(font.size, 12)
-                        end
-                        -- the pet's stats as icon badges with numbers, the name on top
-                        harness.equal(#Panel.widgets.guildBadges, 8)
-                        local stats = Panel.GuildStats(Panel.state.guildRow)
-                        harness.equal(stats.level.count, tostring(dummyRow.lvl))
-                        harness.truthy(stats.wins and stats.losses and stats.hunger and stats.energy, "all stats")
-                        local okOpen, opened = pcall(Panel.Challenge)
-                        harness.truthy(okOpen and opened, "modal: " .. tostring(opened))
-                        harness.equal(ArenaView.challenge.step, 1)
-                        harness.equal(Panel.GuideStep(), nil, "the guide is done after the fight icon")
-                        harness.equal(addon.UIHelpers.Settings().arenaGuide, "done")
-                        harness.truthy(pcall(Panel.UpdateGuide))
-                        harness.truthy(pcall(ArenaView.ChallengeNext)); harness.equal(ArenaView.challenge.step, 2)
-                        ArenaView.widgets.wagerBox:SetText("abc")
-                        harness.truthy(pcall(ArenaView.ChallengeNext)); harness.equal(ArenaView.challenge.step, 2, "a bad wager stays")
-                        harness.truthy(pcall(ArenaView.SetWager, 10000)); harness.equal(ArenaView.ReadWager(), 10000)
-                        harness.truthy(pcall(ArenaView.ChallengeNext)); harness.equal(ArenaView.challenge.step, 3)
-                        harness.truthy(pcall(ArenaView.ChallengeBack)); harness.equal(ArenaView.challenge.step, 2)
-                        harness.truthy(pcall(ArenaView.ChallengeNext)); harness.truthy(pcall(ArenaView.ChallengeNext))
-                        harness.equal(ArenaView.challenge.step, 4, "sent")
-                        local sent = 0
-                        for _, challenge in pairs(Arena.State().ch) do if challenge.to == Arena.DUMMY_NAME then sent = sent + 1 end end
-                        harness.equal(sent, 1)
-                        harness.truthy(pcall(ArenaView.ChallengeNext)); harness.truthy(not ArenaView.challenge.row, "closed")
-                        -- Fights: my waiting challenge has Stop in its row and in the details; it stops
+                        harness.truthy(pcall(Panel.SelectView, "guild")); harness.equal(Panel.GuideStep(), "request")
                         harness.truthy(pcall(ArenaView.SelectPage, "fights"))
-                        harness.truthy(ArenaView.widgets.stopButton:IsShown(), "stop offered")
+                        harness.truthy(pcall(Panel.UpdateGuide))
+                        harness.truthy(ArenaView.widgets.memberDropdown and ArenaView.widgets.requestButton, "the request row is built")
+                        harness.equal(ArenaView.Request(), false, "Fight! needs a member first")
+                        harness.truthy(pcall(ArenaView.ToggleMemberMenu))
+                        harness.truthy(ArenaView.widgets.memberMenu:IsShown(), "the member list opens")
+                        local listed
+                        for _, entry in ipairs(ArenaView.Candidates()) do if entry.name == Arena.DUMMY_NAME then listed = entry end end
+                        harness.truthy(listed and not listed.reason, "the dummy can be picked")
+                        harness.truthy(ArenaView.PickMember(Arena.DUMMY_NAME))
+                        harness.truthy(not ArenaView.widgets.memberMenu:IsShown(), "the list closes on a pick")
+                        harness.truthy(ArenaView.Request(), "the team picker opens")
+                        harness.truthy(addon.TeamDialog.IsOpen(), "the team picker is open")
+                        harness.truthy(addon.TeamDialog.widgets.wager:IsShown(), "with my wager")
+                        addon.TeamDialog.SetWager("abc"); harness.equal(addon.TeamDialog.Confirm(), false, "a bad wager stays")
+                        addon.TeamDialog.SetWager(0); harness.equal(addon.TeamDialog.Confirm(), false, "below 1g stays")
+                        addon.TeamDialog.SetWager(1)
+                        local okSend, sentOk = pcall(addon.TeamDialog.Confirm)
+                        harness.truthy(okSend and sentOk, "sent: " .. tostring(sentOk))
+                        harness.truthy(not addon.TeamDialog.IsOpen(), "the picker closes")
+                        local sent = 0
+                        for _, challenge in pairs(Arena.State().ch) do
+                            if challenge.to == Arena.DUMMY_NAME then sent = sent + 1; harness.equal(challenge.wg, 10000) end
+                        end
+                        harness.equal(sent, 1)
+                        harness.equal(Panel.GuideStep(), nil, "the guide is done after the first request")
+                        harness.equal(addon.UIHelpers.Settings().arenaGuide, "done")
+                        harness.truthy(pcall(addon.Animate.FinishTween, "clash:fightRequest"), "the clash ends")
+                        -- greyed members: every reason in the list, a greyed one can't be picked
+                        Arena.DevMembers(addon.Games.simulated, savedNow())
+                        local reasons = {}
+                        for _, entry in ipairs(ArenaView.Candidates()) do if entry.reason then reasons[entry.reason] = entry.name end end
+                        harness.truthy(reasons.version and reasons.fewcompanions and reasons.theybusy and reasons.offline,
+                            "greyed for every reason")
+                        harness.equal(ArenaView.PickMember(reasons.version), false)
+                        harness.truthy(ArenaView.PickMember(Arena.DEV_SPARRING), "the sparring member can be picked")
+                        ArenaView.state.opponent = nil
+                        harness.truthy(ArenaView.CandidateText({ name = reasons.version, reason = "version" }) ~= "", "the hover text")
+                        -- an open fight between two others: the framed bet panel, and a bet through it joins the pot
+                        local openID
+                        for id, fight in pairs(Arena.Fights(addon.Games.AllRecords(), me, savedNow())) do
+                            if fight.state == "open" and fight.a ~= me and fight.b ~= me then openID = id end
+                        end
+                        harness.truthy(openID, "the fake members' fight is open")
+                        ArenaView.state.selected = openID
+                        harness.truthy(pcall(ArenaView.SelectPage, "fights"))
+                        harness.truthy(ArenaView.widgets.betPanel:IsShown(), "the bet panel shows")
+                        ArenaView.widgets.betBox:SetText("0")
+                        harness.truthy(pcall(ArenaView.Bet, "a"))
+                        harness.truthy(ArenaView.state.refusal and ArenaView.state.refusal.id == openID, "a refused bet: one red line in the box")
+                        harness.truthy(ArenaView.widgets.betPanel:IsShown(), "the panel stays for another try")
+                        ArenaView.widgets.betBox:SetText("2")
+                        harness.truthy(pcall(ArenaView.Bet, "a"))
+                        harness.equal(Arena.State().bt[openID].c, 20000, "the bet is placed")
+                        harness.truthy(not ArenaView.widgets.betPanel:IsShown(), "after the bet the panel goes")
+                        harness.truthy(ArenaView.widgets.fightCards.left.gold:IsShown() and ArenaView.widgets.fightCards.right.gold:IsShown(),
+                            "both sides show their gold on the name plate")
+                        harness.equal(addon.TeamDialog.GoldNumber(10000), "1"); harness.equal(addon.TeamDialog.GoldNumber(25000), "2.5")
+                        harness.equal(addon.TeamDialog.GoldNumber(1500), "0.15", "the badge shows plain gold numbers")
+                        -- Fights: my waiting challenge has Stop in its row and in the details; it stops
                         local stopID
                         for id, challenge in pairs(Arena.State().ch) do if challenge.to == Arena.DUMMY_NAME then stopID = id end end
+                        ArenaView.state.selected = stopID
+                        harness.truthy(pcall(ArenaView.SelectPage, "fights"))
+                        harness.equal(ArenaView.widgets.stopButton, nil, "Stop is only in the fight row, not in the fight box")
                         local okStop, stopError = pcall(ArenaView.Withdraw, stopID)
                         harness.truthy(okStop, tostring(stopError))
                         harness.truthy(Arena.State().ch[stopID].wd, "stopped")
-                        if addon.IS_DEVELOPMENT_BUILD then   -- the dev icon tools on the Fights page
+                        if addon.IS_DEVELOPMENT_BUILD then   -- the dev icon tools on the Fights page, each runs without an error
                             harness.truthy(ArenaView.widgets.dummyButton and ArenaView.widgets.skipButton, "dev icons built")
-                            harness.truthy(pcall(addon.Catcher.DevArenaRequest, 0), "dummy request")
-                            harness.truthy(pcall(addon.Catcher.DevArenaSkip), "skip")
+                            for _, word in ipairs({ "request", "accept", "decline", "skip", "crowd", "latebet", "members", "expire", "reveal", "clear" }) do
+                                harness.truthy(ArenaView.widgets.devTools[word], "dev icon " .. word)
+                                local okTool, toolError = pcall(addon.Catcher.DevArena, word)
+                                harness.truthy(okTool, word .. ": " .. tostring(toolError))
+                            end
+                            harness.equal(addon.Games.simulated[Arena.DUMMY_NAME], nil, "clear removed the dummy")
                         end
                         harness.truthy(pcall(Panel.SelectView, "guild"))
-                        -- my own pet: no fight icon, no modal
-                        local myRow
-                        for _, row in ipairs(addon.Model.BuildCompanionRows(addon.Games.AllRecords(), me)) do if row.mine then myRow = row end end
-                        if myRow then
-                            Panel.SelectGuildRow(myRow)
-                            harness.truthy(not Panel.widgets.fightButton:IsShown(), "no fight icon on my own pet")
-                            harness.equal(Panel.Challenge(), false)
-                        end
-                        addon.Games.simulated[Arena.DUMMY_NAME] = nil
+                        Arena.DevClear(addon.Games.simulated)
                         Panel.state.guildRow = nil
-                        harness.truthy(pcall(Panel.Refresh)); harness.truthy(pcall(Panel.Challenge), "challenge without a row")
+                        harness.truthy(pcall(Panel.Refresh))
                     end
                 end
                 -- the identity probe: runs on any client, secret or missing functions are named, never raises

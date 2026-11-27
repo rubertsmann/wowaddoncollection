@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0 (2026-11-27, protocol 1.7, schema 3, LibGuildSync MINOR 6)
+- Arena fight requests move to the Fights page: a dropdown of the guild members (another version, fewer than 3 companions, in a fight or offline: greyed out with the reason on hover), "Fight!" opens the team picker with your wager, Send plays a swords clash. The fight icon in the Guild view is gone (feature 041).
+- Each fighter sets their own wager (at least 1g); the accepting player picks their team and wager in the same picker. Counter offers are gone.
+- Side bets go into one pot per fight: the winning side (fighter plus bettors) gets its stakes back plus the losing side's total, split by share; the losing side loses everything. No more fixed odds.
+- A decided fight nobody watched settles by itself 1 hour after the fight time (was 24 hours).
+- Companion nicknames (feature 042): every companion can be named once, with up to 24 characters. In Collection > Caught, select it and press Rename, then type the name and press the tick (the cross cancels). Clicking the active companion's name or `/gg caught name <text>` does the same. The nickname shows everywhere, and guild members see it in the guild list and in fights, with the species on hover. Each companion also remembers when and where it was caught (zone from the map id, shown in the client's language; only you see it). Companions caught earlier have no record. The fight history keeps NPC ids and nicknames instead of name text.
+- Dev build: icons and `/ggd arena` commands for fake events (dummy accept/decline, fake bettors, a late bet, greyed members, expire, reveal, clear).
+
 ## 0.11.3 (2026-11-26, protocol 1.6, schema 3, LibGuildSync MINOR 6)
 - `/gg caught restore` is gone from the player build (a public code format made it an easy way to forge trained companions); it lives on as the dev command `/ggd caught restore <code>` (feature 040).
 

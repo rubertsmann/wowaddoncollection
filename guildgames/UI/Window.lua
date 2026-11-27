@@ -14,7 +14,7 @@ addon.UI = UI
 local Text = addon.Text
 local Widgets = LibStub("LibGuildSync-1.0").Widgets
 
-local STAGE_WIDTH, STAGE_HEIGHT = 300, 336
+local STAGE_WIDTH, STAGE_HEIGHT = 300, 376
 local HEADER_HEIGHT = 24
 local SIDEBAR_WIDTH, SIDEBAR_HEIGHT = 350, 400
 local BACKDROP_IDLE, BACKDROP_HOVER = 0.10, 0.55
@@ -78,12 +78,20 @@ end
 local ICON_BUTTON = {
     accept = { texture = "Interface\\RaidFrame\\ReadyCheck-Ready", color = { 0.25, 0.85, 0.3 } },
     decline = { texture = "Interface\\RaidFrame\\ReadyCheck-NotReady", color = { 0.95, 0.3, 0.25 } },
-    -- dev build tools: add a debug thing / make a timer run out
+    -- dev build tools: add a debug thing / make a timer run out / the fake arena events
     debug = { texture = "Interface\\Icons\\Trade_Engineering", color = { 1, 0.55, 0.15 }, crop = true, dev = true },
     skip = { texture = "Interface\\Icons\\INV_Misc_PocketWatch_01", color = { 0.35, 0.75, 1 }, crop = true, dev = true },
+    crowd = { texture = "Interface\\Icons\\INV_Misc_Coin_01", color = { 1, 0.82, 0.2 }, crop = true, dev = true },
+    latebet = { texture = "Interface\\Icons\\INV_Misc_PocketWatch_02", color = { 0.8, 0.5, 0.2 }, crop = true, dev = true },
+    members = { texture = "Interface\\Icons\\Spell_Holy_PrayerOfHealing", color = { 0.6, 0.8, 1 }, crop = true, dev = true },
+    devaccept = { texture = "Interface\\RaidFrame\\ReadyCheck-Ready", color = { 0.25, 0.85, 0.3 }, dev = true },
+    devdecline = { texture = "Interface\\RaidFrame\\ReadyCheck-NotReady", color = { 0.95, 0.3, 0.25 }, dev = true },
+    expire = { texture = "Interface\\Icons\\Spell_Shadow_DeathCoil", color = { 0.6, 0.3, 0.8 }, crop = true, dev = true },
+    reveal = { texture = "Interface\\Icons\\INV_Misc_Spyglass_03", color = { 0.4, 0.9, 0.9 }, crop = true, dev = true },
+    clear = { texture = "Interface\\Icons\\Spell_Holy_DispelMagic", color = { 0.9, 0.9, 0.9 }, crop = true, dev = true },
 }
 ---@param parent table
----@param kind "accept"|"decline"|"debug"|"skip"
+---@param kind string a key of ICON_BUTTON
 ---@param size number
 ---@param tooltip string
 ---@param onClick? function
@@ -671,7 +679,7 @@ function UI.AddCompanionTooltip(tooltip)
         tooltip:AddLine(Text["AZEcaught: no companion"], 0.7, 0.7, 0.7)
         return
     end
-    tooltip:AddDoubleLine("AZEcaught: " .. addon.Utility.Escape(companion.n), Format(Text["{hearts} hearts"], { hearts = companion.hearts }),
+    tooltip:AddDoubleLine("AZEcaught: " .. addon.Utility.Escape(addon.AzeCaught.ShownName(companion)), Format(Text["{hearts} hearts"], { hearts = companion.hearts }),
         1, 0.82, 0, 1, 0.3, 0.4)
     local labels = { hunger = Text["Food"], thirst = Text["Water"], affection = Text["Petting"], energy = Text["Energy"] }
     local profile = AzeCaught.ProfileOf(companion)

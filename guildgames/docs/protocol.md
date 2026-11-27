@@ -86,7 +86,10 @@ protocol, so ProfessionShare and GuildGames never read each other's messages.
   (<= 2000), `active` companion state, `activeSeconds`, `peaks`, `paidWeek`, `ledger = {earned, spent, entries}` (<= 60),
   `journal` (<= 400 log lines), `notify`, `verbose`, `items` (id -> count), `boosts` (id -> end time), `equipped` (the charm
   in the one slot, only while owned), `arenaBuffs` (id -> fights left, 1..3), `arena` = local arena state: per NPC `{xp, w, l, tr}`, the running
-  training, my `ch`/`an`/`bt`, `settled`, `noticed`, `history` (<= 30)); migration 1 -> 2 adds it empty; re-validated on every load and kept
+  training, my `ch`/`an`/`bt`, `settled`, `noticed`, `history` (<= 30; since 0.12.0 also `mi`/`ti` NPC ids and `mk`/`tk`
+  nicknames of the first fighters)); schema 3 adds `roster[uid]`, each companion with an optional
+  `info = { nick?, at?, map? }` (nickname, server time and uiMapID of the catch; the zone name is looked up from the map id
+  when shown; companions from before 0.12.0 have no `at`/`map`); migration 1 -> 2 adds it empty; re-validated on every load and kept
   by `/gg clean`. `games[name]`, re-validated on every load,
   emptied by `/gg clean`, pruned with players who left the guild. A newer schema on disk is left untouched (read-only session).
 - **Display:** names are escaped in `Core/View/Model.lua`. Dev-build simulated players (`/ggd game sim`) live outside the
@@ -105,3 +108,28 @@ protocol, so ProfessionShare and GuildGames never read each other's messages.
   random head start from the same generator. Events gain `ia/ib` (current slots), `ma/mb` (their maximum health) and
   `k = "enter"`. A team of one fights exactly the old duel.
 - Local only (never sent): the roster uids of my team per fight (`arena.uids[id]`), used to credit XP per companion.
+
+## Own wagers and the pot (protocol 1.7, feature 041)
+- Answer `an[id] = {ok, at, t?, wg?}`: `wg` is the accepting player's own wager (0..MAXIMUM_WAGER copper). An accept
+  without `wg` (from 1.6) stakes the challenger's wager. New requests and accepts need at least `MINIMUM_WAGER` (1g).
+- Bet `bt[id] = {s, c, at}`: no `o` any more. A bet that still has `o` (from 1.6, fixed odds) is validated as before and
+  paid by its odds, outside the pot.
+- The pot (`Arena.Pot(fight)`, computed on each client): side a = the challenger's wager plus every counted bet on a,
+  side b the same for the challenged player. A bet counts when it is placed after the accept and before the fight time,
+  is not from one of the two fighters, and comes from a bettor whose arena section shows the fighters' version.
+  `Arena.Payout(pot, winner, name)` = own stake + floor(losing side total x own stake / winning side total); the losing
+  side gets 0. Each player settles only themselves; a client that did not see a bet in time leaves it out (its own bet
+  that did not count is refunded to the bettor).
+- Counter offers can no longer be made: `co`, `ca` and `cd` are still read, so a 1.6 counter fight already accepted
+  still fights and one still waiting expires and refunds.
+- The caught section carries `rc`, the number of companions in the sender's roster (0..ROSTER_LIMIT), so the request
+  dropdown can grey out members who can't field a team. Older sections without `rc` are not greyed for it.
+
+## Companion nicknames (protocol 1.7, feature 042, additive)
+- `caught.c.nk` and each arena team fighter's `nk`: the owner's nickname for that companion. 1..24 characters, at most
+  96 bytes, UTF-8, no control characters, no `|`, no leading/trailing or double spaces (`AzeCaught.CleanNickname`). A bad
+  `nk` is dropped alone; the companion or fighter stays. A peer without `nk` shows the species name `n`.
+- Display only: `nk` is never part of the fight math, the fight id or any lookup. Companions are referred to by their
+  roster `uid` (mine) or `npc` id (a peer's). The species shown on hover comes from my collection by `npc` id first,
+  then from the `n` the peer sent.
+- Not sent: where and when a companion was caught (`info.at`, `info.map`, below) stays on the owner's client.

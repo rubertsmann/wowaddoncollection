@@ -1,3 +1,28 @@
+# GuildGames 0.12.0
+
+**English:** Arena fights are now requested on the Fights page: pick a guild member from the list (members who can't
+fight right now are greyed out, hover to see why), press **Fight!**, choose your three companions and your wager.
+Each side sets its own wager (at least 1g), and the challenged player picks their team and wager when accepting.
+Counter offers are gone. Side bets now go into one pot per fight: the winning side shares everything the losing side
+put in. A fight nobody watches settles by itself after one hour.
+New: give each of your companions a nickname, once, with up to 24 characters. In the collection, select it and press
+**Rename** above *Make companion*, type the name and press the tick. Your guild sees the nickname in the guild list
+and in fights; hover over it to see what kind of creature it is. Companions you catch from now on also remember when
+and where you caught them (hover over the name). Only you see that.
+Arena fights need the same version on both sides, so everyone should update.
+
+**Deutsch:** Arenakämpfe werden jetzt auf der Seite *Kämpfe* angefragt: Wähle ein Gildenmitglied aus der Liste
+(wer gerade nicht kämpfen kann, ist ausgegraut, beim Darüberfahren steht der Grund), drücke **Kampf!**, wähle deine
+drei Begleiter und deinen Einsatz. Jede Seite setzt ihren eigenen Einsatz (mindestens 1 g), und der Herausgeforderte
+wählt Team und Einsatz beim Annehmen. Gegenangebote gibt es nicht mehr. Wetten gehen jetzt in einen gemeinsamen Topf
+pro Kampf: Die Gewinnerseite teilt sich alles, was die Verliererseite gesetzt hat. Ein Kampf, den niemand ansieht,
+wird nach einer Stunde von selbst abgerechnet.
+Neu: Gib jedem deiner Begleiter einmal einen Spitznamen mit bis zu 24 Zeichen. Wähle ihn in der Sammlung aus, drücke
+**Umbenennen** über *Als Begleiter*, gib den Namen ein und drücke das Häkchen. Deine Gilde sieht den Spitznamen in
+der Gildenliste und in Kämpfen; beim Darüberfahren steht, was für ein Wesen es ist. Begleiter, die du ab jetzt fängst,
+merken sich auch, wann und wo du sie gefangen hast (über den Namen fahren). Das siehst nur du.
+Arenakämpfe brauchen auf beiden Seiten dieselbe Version, also bitte alle aktualisieren.
+
 # GuildGames 0.11.3
 
 **English:** The restore command from 0.11.2 (`/gg caught restore`) is no longer available: the companion it was made

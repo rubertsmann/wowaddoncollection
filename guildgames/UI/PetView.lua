@@ -320,7 +320,7 @@ local function build()
         local companion = AzeCaught.Active()
         if not companion then return end
         showTooltip(self, { { Format(Text["Hearts: {n}"], { n = companion.hearts }), companion.hearts < 0 and { 0.7, 0.2, 0.2 } or { 1, 0.3, 0.4 } },
-            { addon.Utility.Escape(addon.Utility.ShortText(companion.n or "", 28)), { 1, 0.82, 0.2 } } })
+            { addon.Utility.Escape(addon.Utility.ShortText(AzeCaught.ShownName(companion), 28)), { 1, 0.82, 0.2 } } })
     end)
     heart:SetScript("OnLeave", hideTooltip)
     widgets.heart, widgets.heartIcon = heart, heartIcon

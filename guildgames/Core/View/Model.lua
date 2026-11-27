@@ -123,7 +123,9 @@ end
 ---@field rank integer
 ---@field name string escaped owner
 ---@field nameRaw string
----@field companion string escaped NPC name
+---@field companion string escaped shown name (the nickname, else the NPC name)
+---@field species string escaped NPC name (from the NPC id in my collection first)
+---@field nicknamed boolean
 ---@field npc integer
 ---@field disp integer
 ---@field lvl integer
@@ -147,7 +149,8 @@ function Model.BuildCompanionRows(records, myName)
     local AzeCaught = addon.AzeCaught
     local rows = {}
     local function add(ownerName, companion)
-        rows[#rows + 1] = { name = escape(ownerName), nameRaw = ownerName, companion = escape(companion.n), npc = companion.npc,
+        rows[#rows + 1] = { name = escape(ownerName), nameRaw = ownerName, companion = escape(AzeCaught.ShownName(companion)),
+            species = escape(AzeCaught.SpeciesName(companion)), nicknamed = AzeCaught.HasNickname(companion), npc = companion.npc,
             disp = companion.disp, lvl = companion.lvl, cls = companion.cls, hearts = companion.h,
             level = AzeCaught.CompanionLevel({ lvl = companion.lvl, cls = companion.cls, hearts = companion.h }),
             hunger = companion.hu, thirst = companion.th, affection = companion.af, energy = companion.en,
@@ -177,6 +180,11 @@ end
 ---@field seen integer
 ---@field nameKey string lower-case name (sorting)
 ---@field history table AzeCaught.History
+---@field uid? string roster rows: the companion's id
+---@field species? string roster rows: the species name, escaped (the name may be a nickname)
+---@field nicknamed? boolean roster rows: the name is a nickname
+---@field caughtAt? integer roster rows: server time of the catch
+---@field caughtMap? integer roster rows: uiMapID of the catch
 
 -- My collection: the active companion first, then caught NPCs, then only-found ones; each group by name.
 ---@param collection table<integer, CollectionEntry>
@@ -210,7 +218,10 @@ function Model.BuildRosterRows(roster, collection, active)
         local entry = collection and collection[companion.npc]
         if entry then
             local progress = type(companion.ar) == "table" and companion.ar or { xp = 0 }
-            rows[#rows + 1] = { uid = companion.uid, npc = companion.npc, name = escape(entry.n), nameKey = (entry.n or ""):lower(),
+            local shown = addon.AzeCaught.ShownName(companion)
+            local caughtAt, caughtMap = addon.AzeCaught.CatchOrigin(companion)
+            rows[#rows + 1] = { uid = companion.uid, npc = companion.npc, name = escape(shown), nameKey = shown:lower(),
+                species = escape(entry.n), nicknamed = addon.AzeCaught.HasNickname(companion), caughtAt = caughtAt, caughtMap = caughtMap,
                 lvl = entry.lvl, cls = entry.cls, disp = entry.disp, caught = 1, active = companion == active, seen = entry.seen,
                 hearts = companion.hearts or 0, arenaLevel = addon.Arena.Level(progress.xp or 0), history = addon.AzeCaught.History(entry) }
         end
@@ -249,6 +260,20 @@ function Model.ShortAge(timestamp, now)
     if seconds < 5400 then return Format(Text["{n}m"], { n = math.floor(seconds / 60) }) end
     if seconds < 129600 then return Format(Text["{n}h"], { n = math.floor(seconds / 3600) }) end
     return Format(Text["{n}d"], { n = math.floor(seconds / 86400) })
+end
+
+-- "Caught <date> in <zone>" for one of my companions. `mapName` is the client's name of its uiMapID (nil when not
+-- recorded or unknown); `formatDate` turns server time into a date (the client's date(); nil in the offline tests).
+---@param at integer|nil server time of the catch
+---@param mapName string|nil
+---@param formatDate fun(format: string, time: integer): string|nil
+---@return string
+function Model.CatchOriginText(at, mapName, formatDate)
+    local Text, Format = addon.Text, addon.Locale.Format
+    if type(at) ~= "number" then return Text["Caught: before this was recorded"] end
+    local day = formatDate and formatDate(Text["%Y-%m-%d"], at) or tostring(at)
+    if type(mapName) ~= "string" or mapName == "" then return Format(Text["Caught {date}"], { date = day }) end
+    return Format(Text["Caught {date} in {zone}"], { date = day, zone = escape(mapName) })
 end
 
 -- The history as icon badges: key, the number to count up to (nil: text only), the badge text, whether it is "empty"
