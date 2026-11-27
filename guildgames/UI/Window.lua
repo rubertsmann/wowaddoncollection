@@ -454,6 +454,46 @@ function UI.ToggleSidebar()
     setSidebar(not parts.sidebar:IsShown() or not settings().sidebarOpen, true)
 end
 
+-- Bottom left: a small button for one maintainer character (Model.IsBuildViewer) whose tooltip lists every member's
+-- live build (their HELLO this session) next to the version their synced record carries (arena.ver, what the fight
+-- rules compare); a record that disagrees with the live build is stale and shown in orange, first.
+local MEMBER_BUILDS_TOOLTIP_ROWS = 30
+local function buildMemberBuildsButton()
+    local buildsButton = CreateFrame("Button", nil, mainFrame)
+    buildsButton:SetSize(14, 14)
+    buildsButton:SetPoint("BOTTOMLEFT", mainFrame, "BOTTOMLEFT", 22, 3)   -- right of the move handle (16 px at x 2)
+    buildsButton:SetFrameLevel((tonumber(mainFrame:GetFrameLevel()) or 1) + 20)
+    buildsButton:SetNormalTexture("Interface\\FriendsFrame\\InformationIcon")
+    buildsButton:SetHighlightTexture("Interface\\FriendsFrame\\InformationIcon")
+    buildsButton:SetScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        local Format, Channel, Communication = addon.Locale.Format, LibStub("LibGuildSync-1.0").Channel, addon.Communication
+        local myName = addon.Utility.Me()
+        local stored = addon.Store.db and addon.Store.db.games or {}
+        local rows = addon.Model.MemberBuilds(stored, Communication and Channel.PeerVersions(Communication) or {}, myName)
+        local timeAgo = UI.Widgets.TimeAgo
+        GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
+        GameTooltip:SetText(Text["Member builds"], 1, 1, 1)
+        GameTooltip:AddLine(Format(Text["my build: {build}"], { build = Communication and Channel.VersionTag(Communication) or addon.VERSION }), 0.7, 0.7, 0.7)
+        GameTooltip:AddLine(Text["live = their HELLO this session, record = the version their synced record carries (fights compare this one)"], 0.6, 0.6, 0.6, true)
+        if #rows == 0 then GameTooltip:AddLine(Text["no other members known yet"], 0.6, 0.6, 0.6) end
+        for rowIndex = 1, math.min(#rows, MEMBER_BUILDS_TOOLTIP_ROWS) do
+            local row = rows[rowIndex]
+            local color = row.mismatch and "|cffff9933" or (row.live and "|cff33ff33" or "|cff999999")
+            local right = Format(Text["live {live}, record {record}"], { live = row.live or "-", record = row.record or "-" })
+            local left = row.name .. (row.rev and (" |cff999999(" .. Format(Text["record {ago}"], { ago = timeAgo(row.rev) }) .. ")|r") or "")
+            GameTooltip:AddDoubleLine(left, color .. right .. "|r", 1, 1, 1, 1, 1, 1)
+        end
+        if #rows > MEMBER_BUILDS_TOOLTIP_ROWS then
+            GameTooltip:AddLine(Format(Text["+{n} more"], { n = #rows - MEMBER_BUILDS_TOOLTIP_ROWS }), 0.6, 0.6, 0.6)
+        end
+        GameTooltip:Show()
+    end)
+    buildsButton:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    buildsButton:Hide()
+    parts.memberBuildsButton = buildsButton
+end
+
 local function build()
     local frameName = addon.FRAME_PREFIX .. "Frame"
     mainFrame = CreateFrame("Frame", frameName, UIParent)
@@ -530,11 +570,16 @@ local function build()
     sidebarContent:SetPoint("TOPLEFT", 12, -10); sidebarContent:SetPoint("BOTTOMRIGHT", -8, 8)
     parts.sidebarContent = sidebarContent
 
-    mainFrame:SetScript("OnShow", function() addon.Events.Fire("WINDOW_OPENED"); UI.Refresh() end)
+    mainFrame:SetScript("OnShow", function()
+        -- my name is only known after login: decide on every open
+        if parts.memberBuildsButton then parts.memberBuildsButton:SetShown(addon.Model.IsBuildViewer(addon.Utility.Me())) end
+        addon.Events.Fire("WINDOW_OPENED"); UI.Refresh()
+    end)
     mainFrame:SetScript("OnUpdate", function(_, elapsedSeconds) updateHover(elapsedSeconds) end)
 
     addon.Log.Protected("window.games", "building the games failed", addon.GamesTab.Build, stage, sidebarContent, header)
     addon.Log.Protected("window.grip", "building the window grip failed", buildGrip)
+    addon.Log.Protected("window.builds", "building the member builds button failed", buildMemberBuildsButton)
     -- the saved position and scale (a bad saved value is ignored)
     local saved = settings().window
     if type(saved) == "table" and type(saved.left) == "number" and type(saved.top) == "number" and type(saved.scale) == "number" then

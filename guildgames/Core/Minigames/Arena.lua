@@ -341,6 +341,17 @@ function Arena.SameVersion(records, opponent)
     return theirs ~= nil and theirs == addon.VERSION, theirs
 end
 
+-- Whether my stored record needs my arena section written again: it has none, or it carries another version than this
+-- build (the section is otherwise only rewritten by arena actions, so an update or a member who never used the arena
+-- would stay "another version" for everybody). False when I have no record yet.
+---@param myRecord table|nil
+---@return boolean
+function Arena.SectionStale(myRecord)
+    if type(myRecord) ~= "table" then return false end
+    local section = myRecord.arena
+    return type(section) ~= "table" or section.ver ~= addon.VERSION
+end
+
 ------------------------------------------------------------------ the battle
 
 local MODULUS, MULTIPLIER = 2147483647, 48271   -- Park-Miller: exact in doubles, the same on every client

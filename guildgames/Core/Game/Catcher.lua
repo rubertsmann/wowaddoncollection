@@ -1005,7 +1005,13 @@ function Catcher.Start()
         Catcher.ticker = C_Timer.NewTicker(1, function()
             addon.Log.Protected("caught.tick", "the AZEcaught tick failed", Catcher.OnTick)
         end)
-        C_Timer.After(5, function() addon.Log.Protected("caught.publish", "publishing failed", Catcher.PublishSoon, true) end)
+        C_Timer.After(5, function()
+            addon.Log.Protected("caught.publish", "publishing failed", Catcher.PublishSoon, true)
+            -- my arena section carries my version: write it when it is missing or from an older build
+            addon.Log.Protected("caught.arenaversion", "publishing the arena version failed", function()
+                if addon.Arena.SectionStale(addon.Games.Mine(me())) then Catcher.PublishArena() end
+            end)
+        end)
         -- after the first records arrived: last week's place (the stored records of the last session count too)
         C_Timer.After(60, function() addon.Log.Protected("caught.payout", "the weekly payout failed", Catcher.RunPayout) end)
     end

@@ -1,3 +1,16 @@
+# GuildGames 0.14.0
+
+Arena fights work between updated players again. Your arena entry, which tells the guild which version you run, was only
+refreshed when you did something in the arena, so after an update (or if you never used the arena) the guild still saw
+an old or unknown version and nobody could challenge you. It is now refreshed a few seconds after you log in.
+
+Coin flip, slots and Survivor together can raise your money pool by at most 500g per day (UTC). You can keep playing
+after that, a win just pays nothing more; `/gg caught wallet` shows where you stand. A stake of 0 is free play in all
+three games. Survivor pays less per run (105% to 140% depending on the time you bet on, endless up to 130%), and from
+4:00 the monsters get much stronger quickly, so no run lasts past 8:00.
+
+Everyone should update: fights need the same version on both sides.
+
 # GuildGames 0.13.0
 
 **English:** Survivor and Companion Dash look better: big creatures are no longer cut off, and a softly pulsing outline

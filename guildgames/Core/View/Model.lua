@@ -636,3 +636,87 @@ function Model.KeepOnScreen(left, top, width, height, screenWidth, screenHeight)
     top = math.min(screenHeight, math.max(math.min(height, screenHeight), top))
     return left, top
 end
+
+------------------------------------------------------------------ member builds (one viewer)
+
+-- The "member builds" button (bottom left of the window) is for one maintainer character only. The repository is
+-- public and holds no real character names, so the name is kept as a hash (djb2 of the lower-case name without realm;
+-- the same hash as ProfessionShare's). Not a secret or a security boundary: the list only shows what this client
+-- already received.
+Model.BUILD_VIEWER_HASHES = { [3558222112] = true }
+
+-- djb2 (mod 2^32) of `text`
+---@param text string
+---@return integer
+function Model.NameHash(text)
+    local hash = 5381
+    for index = 1, #text do hash = (hash * 33 + text:byte(index)) % 4294967296 end
+    return hash
+end
+
+-- Whether `playerName` ("Name" or "Name-Realm") may see the member builds button.
+---@param playerName any
+---@return boolean
+function Model.IsBuildViewer(playerName)
+    if type(playerName) ~= "string" or playerName == "" then return false end
+    local shortName = (playerName:match("^([^%-]+)") or playerName):lower():match("^%s*(.-)%s*$")
+    return Model.BUILD_VIEWER_HASHES[Model.NameHash(shortName)] == true
+end
+
+---@class MemberBuildRow
+---@field name string escaped player name
+---@field live string|nil the build tag from their last HELLO this session ("0.13.0/3"), nil when none was seen
+---@field record string|nil the version their synced record carries (arena.ver: what the fight rules compare)
+---@field rev integer|nil when their record last changed (server time)
+---@field t integer the newest of the HELLO time and the record time (0: unknown)
+---@field mismatch boolean live build and record version disagree (a stale record)
+
+local function liveTag(value)
+    if type(value) ~= "string" or value == "" or #value > 40 or not value:match("^[%w%.%-%+/_]+$") then return nil end
+    return value
+end
+
+-- Every other member with a record or a HELLO this session: the live build next to the record version. Rows where the
+-- two disagree come first, then the most recent. Pure.
+---@param records table<string, table>|nil the stored records (Games.AllRecords without the simulated ones)
+---@param versionRows table[]|nil Channel.PeerVersions rows { name, ver, t }
+---@param myName string|nil
+---@return MemberBuildRow[]
+function Model.MemberBuilds(records, versionRows, myName)
+    local byName, rows = {}, {}
+    local function rowFor(playerName)
+        local row = byName[playerName]
+        if not row then
+            row = { name = escape(playerName), t = 0, mismatch = false }
+            byName[playerName] = row; rows[#rows + 1] = row
+        end
+        return row
+    end
+    for playerName, gameRecord in pairs(records or {}) do
+        if type(playerName) == "string" and playerName ~= "" and playerName ~= myName and type(gameRecord) == "table" then
+            local row = rowFor(playerName)
+            local section = gameRecord.arena
+            row.record = type(section) == "table" and addon.Arena.SanitizeVersion(section.ver) or nil
+            if type(gameRecord.rev) == "number" then row.rev = gameRecord.rev; row.t = math.max(row.t, gameRecord.rev) end
+        end
+    end
+    for _, versionRow in ipairs(versionRows or {}) do
+        if type(versionRow) == "table" and type(versionRow.name) == "string" and versionRow.name ~= ""
+            and versionRow.name ~= myName then
+            local row = rowFor(versionRow.name)
+            row.live = liveTag(versionRow.ver)
+            if type(versionRow.t) == "number" then row.t = math.max(row.t, versionRow.t) end
+        end
+    end
+    for _, row in ipairs(rows) do
+        local liveVersion = row.live and row.live:match("^([^/]+)")
+        row.mismatch = (liveVersion ~= nil and row.record ~= nil and liveVersion ~= row.record)
+        if row.live then row.live = escape(row.live) end
+    end
+    table.sort(rows, function(left, right)
+        if left.mismatch ~= right.mismatch then return left.mismatch end
+        if left.t ~= right.t then return left.t > right.t end
+        return left.name < right.name
+    end)
+    return rows
+end
