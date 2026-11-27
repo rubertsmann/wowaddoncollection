@@ -491,7 +491,7 @@ function GamesTab.Refresh()
         widgets.emptyText:SetText(Text["The guild's companions are in AZEcaught under Arena > Guild."]); widgets.emptyText:SetShown(true)
         widgets.feedTitle:SetText(""); widgets.playsHeader:SetText("")
         local winner = addon.Model.CompanionWinner(addon.Store.db.games, addon.Games.PreviousPeriodKey(now), myName)
-        widgets.winnerText:SetText(winner and Format(Text["Last week's best: {name} ({level})"], { name = winner.name, level = winner.peak }) or "")
+        widgets.winnerText:SetText(winner and Format(Text["Last week's best: {name} (TLevel {level})"], { name = winner.name, level = winner.peak }) or "")
         addon.AzeCaughtPanel.Refresh()
         return
     end

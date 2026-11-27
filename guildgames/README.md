@@ -94,7 +94,7 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
     trains that stat.
   - Food costs 50s and water 25s from the pool; petting and sleep are free. Care in time earns hearts (red heart counter) and a care streak (at most +1 per hour);
     a critical need costs a heart every 10 minutes, into the negatives. Two hours without food or water and it dies.
-  - **Guild** view: everyone's companion, ranked by NPC level + rarity + hearts. Last week's place pays 500g, 300g, 150g,
+  - **Guild** view: everyone's companion, ranked by its **TLevel** (training level = NPC level + rarity + hearts). Last week's place pays 500g, 300g, 150g,
     or 25g into your pool. The minimap button shows a badge when a need is due; `/gg notify off` turns reminders off.
   - **Arena:** every fight is **3 against 3**. Request a fight on the **Fights** page: pick a guild member in the
     dropdown (members on another version, with fewer than 3 companions, in a fight or offline are greyed out; hover

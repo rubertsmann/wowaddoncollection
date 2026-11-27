@@ -608,8 +608,9 @@ end
 ---@param owner table
 ---@param npcID integer
 ---@param entry CollectionEntry
+---@param extra? { label: string, value: string, color: number[] }[] rows under the subtitle
 ---@return integer lines
-function Panel.ShowNpcInfo(tooltip, owner, npcID, entry)
+function Panel.ShowNpcInfo(tooltip, owner, npcID, entry, extra)
     local npcView = addon.Model.BuildNpcInfo(npcID, entry)
     local count = 0
     local function line(...) tooltip:AddLine(...) count = count + 1 end
@@ -618,6 +619,11 @@ function Panel.ShowNpcInfo(tooltip, owner, npcID, entry)
     local red, green, blue = hexColor(npcView.rarityColor)
     tooltip:SetText(npcView.title, red, green, blue)
     line(npcView.subtitle, 0.75, 0.75, 0.75)
+    -- extra rows right under the subtitle (a guild member's companion: its level and hearts)
+    if extra and #extra > 0 then
+        line(" ")
+        for _, row in ipairs(extra) do double(row.label, row.value, 0.65, 0.65, 0.65, row.color[1], row.color[2], row.color[3]) end
+    end
     if #npcView.facts > 0 or npcView.hiddenCount > 0 then
         line(" ")
         for _, fact in ipairs(npcView.facts) do double(fact.label, fact.value, 0.65, 0.65, 0.65, 1, 1, 1) end
@@ -626,15 +632,18 @@ function Panel.ShowNpcInfo(tooltip, owner, npcID, entry)
                 0.5, 0.5, 0.5)
         end
     end
-    -- the history: how often seen, killed, caught x/y, first and last seen
+    -- the history: how often seen, killed, caught x/y, first and last seen (none for an NPC I never met: a guild
+    -- member's companion)
     local history, timeAgo = npcView.history, addon.UI.Widgets.TimeAgo
-    line(" ")
-    line(Text["History"], 1, 0.82, 0)
-    double(inlineIcon("seen") .. " " .. Text["Seen"], Format(Text["{n} times"], { n = history.seen }), 0.65, 0.65, 0.65, 1, 1, 1)
-    double(inlineIcon("kills") .. " " .. Text["Killed"], tostring(history.kills), 0.65, 0.65, 0.65, 1, 1, 1)
-    double(inlineIcon("caught") .. " " .. Text["Caught"], history.caught .. "/" .. history.throws, 0.65, 0.65, 0.65, 1, 1, 1)
-    double(inlineIcon("first") .. " " .. Text["First seen"], timeAgo(history.first), 0.65, 0.65, 0.65, 1, 1, 1)
-    double(inlineIcon("last") .. " " .. Text["Last seen"], timeAgo(history.last), 0.65, 0.65, 0.65, 1, 1, 1)
+    if history.seen > 0 and history.first then
+        line(" ")
+        line(Text["History"], 1, 0.82, 0)
+        double(inlineIcon("seen") .. " " .. Text["Seen"], Format(Text["{n} times"], { n = history.seen }), 0.65, 0.65, 0.65, 1, 1, 1)
+        double(inlineIcon("kills") .. " " .. Text["Killed"], tostring(history.kills), 0.65, 0.65, 0.65, 1, 1, 1)
+        double(inlineIcon("caught") .. " " .. Text["Caught"], history.caught .. "/" .. history.throws, 0.65, 0.65, 0.65, 1, 1, 1)
+        double(inlineIcon("first") .. " " .. Text["First seen"], timeAgo(history.first), 0.65, 0.65, 0.65, 1, 1, 1)
+        double(inlineIcon("last") .. " " .. Text["Last seen"], timeAgo(history.last), 0.65, 0.65, 0.65, 1, 1, 1)
+    end
     line(" ")
     line(Text["Combat"], 1, 0.82, 0)
     for _, stat in ipairs(npcView.combat) do double(stat.label, stat.value .. " " .. Panel.StatBar(stat), 0.65, 0.65, 0.65, 1, 1, 1) end
@@ -699,6 +708,39 @@ local function previewNpc()
     return npcID, npcID and AzeCaught.State().collection[npcID] or nil
 end
 Panel.CompanionNpc, Panel.PreviewNpc = companionNpc, previewNpc
+
+-- The info panel entry of a guild member's companion: my own collection entry of that NPC (its stats and my history
+-- with it) with the companion's name, level and rarity; without one, only what the guild record tells (no history).
+---@param row CompanionRow|nil
+---@return integer|nil npcID
+---@return CollectionEntry|nil
+function Panel.GuildNpc(row)
+    if type(row) ~= "table" or not row.npc then return nil, nil end
+    local entry = { cnt = 0 }
+    for key, value in pairs(AzeCaught.State().collection[row.npc] or {}) do entry[key] = value end
+    -- the row's species name is already escaped (BuildNpcInfo escapes once more: shown literally, still safe)
+    entry.n = entry.n or row.species or "?"
+    entry.lvl, entry.cls, entry.disp = row.lvl, row.cls, row.disp or entry.disp
+    return row.npc, entry
+end
+
+-- The info panel of a guild member's companion, with its TLevel (the ranking value) and its hearts on top.
+---@param tooltip table
+---@param owner table
+---@param row CompanionRow|nil
+---@return integer|nil lines nil: no companion
+function Panel.ShowGuildNpcInfo(tooltip, owner, row)
+    local npcID, entry = Panel.GuildNpc(row)
+    if not entry then return nil end
+    local hearts = tonumber(row.hearts) or 0
+    local extra = {
+        { label = "|TInterface\\Icons\\Ability_Hunter_BeastTraining:14:14:0:0:64:64:5:59:5:59|t " .. Text["TLevel"],
+          value = tostring(row.level or AzeCaught.CompanionLevel(row) or 0), color = { 1, 0.82, 0.2 } },
+        { label = "|TInterface\\Icons\\INV_ValentinesCandy:14:14:0:0:64:64:5:59:5:59|t " .. Text["Hearts"],
+          value = ("%+d"):format(hearts), color = { 1, 0.25, 0.4 } },
+    }
+    return Panel.ShowNpcInfo(tooltip, owner, npcID, entry, extra)
+end
 
 ---@param panel table
 local function buildCompanionView(panel)
@@ -995,13 +1037,16 @@ local function createGuildRow(list)
     row.hover = row:CreateTexture(nil, "BACKGROUND"); row.hover:SetAllPoints(); row.hover:SetColorTexture(1, 1, 1, 0.07); row.hover:Hide()
     row.mine = row:CreateTexture(nil, "BACKGROUND", nil, 1); row.mine:SetAllPoints(); row.mine:SetColorTexture(1, 0.8, 0.2, 0.14); row.mine:Hide()
     row.rank = Widgets.CreateFontString(row, "GameFontHighlightSmall", "RIGHT"); row.rank:SetPoint("LEFT", 0, 0); row.rank:SetWidth(18)
-    row.owner = Widgets.CreateFontString(row, "GameFontHighlightSmall", "LEFT"); row.owner:SetPoint("LEFT", 22, 0); row.owner:SetWidth(80)
-    row.level = Widgets.CreateFontString(row, "GameFontNormalSmall", "RIGHT"); row.level:SetPoint("RIGHT", -2, 0); row.level:SetWidth(76)
+    row.owner = Widgets.CreateFontString(row, "GameFontHighlightSmall", "LEFT"); row.owner:SetPoint("LEFT", 22, 0); row.owner:SetWidth(76)
+    row.level = Widgets.CreateFontString(row, "GameFontNormalSmall", "RIGHT"); row.level:SetPoint("RIGHT", -2, 0); row.level:SetWidth(88)
     row.selected = row:CreateTexture(nil, "BACKGROUND", nil, 2); row.selected:SetAllPoints(); row.selected:SetColorTexture(0.3, 0.6, 1, 0.22)
     row.selected:Hide()
-    -- a click selects the pet (hovering does not)
-    row:SetScript("OnEnter", function(self) self.hover:Show() end)
-    row:SetScript("OnLeave", function(self) self.hover:Hide() end)
+    -- a click selects the pet; hovering shows its info panel (like the collection's preview)
+    row:SetScript("OnEnter", function(self)
+        self.hover:Show()
+        if GameTooltip then Panel.ShowGuildNpcInfo(GameTooltip, self, self.entry) end
+    end)
+    row:SetScript("OnLeave", function(self) self.hover:Hide(); if GameTooltip then GameTooltip:Hide() end end)
     row:SetScript("OnClick", function(self) if self.entry then Panel.SelectGuildRow(self.entry) end end)
     return row
 end
@@ -1014,7 +1059,8 @@ local function fillGuildRow(row, entry)
     row.rank:SetText(tostring(entry.rank))
     local owner = entry.nameRaw:match("^([^%-]+)") or entry.nameRaw
     row.owner:SetText(addon.Utility.Escape(owner))
-    row.level:SetText(("%d |cffff4060(%+d)|r"):format(entry.level, entry.hearts))
+    -- the TLevel (training level: NPC level + rarity + hearts, the ranking value) and the hearts in it
+    row.level:SetText(("|cff999999%s|r %d |cffff4060(%+d)|r"):format(Text["TLevel"], entry.level, entry.hearts))
 end
 
 ---@param panel table
@@ -1030,6 +1076,11 @@ local function buildGuildView(panel)
     local preview = createModel(panel, 104, 116)
     preview:SetPoint("TOPRIGHT", -2, -78)
     widgets.guildModel = preview
+    -- hovering the model shows the same info panel as the collection's preview
+    preview:HookScript("OnEnter", function(self)
+        if GameTooltip then Panel.ShowGuildNpcInfo(GameTooltip, self, Panel.state.guildRow) end
+    end)
+    preview:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
     -- the selected pet's name above the model, its stats as icon badges with numbers below (like the collection's caught
     -- view)
     widgets.guildPreviewName = Widgets.CreateFontString(panel, "GameFontNormal", "CENTER")
@@ -1044,7 +1095,7 @@ for rarity, hex in pairs(RARITY_COLOR) do
     RARITY_RGB[rarity] = { tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255 }
 end
 local GUILD_STATS = {
-    { key = "level", label = function() return Text["Level"] end, icon = "Interface\\Icons\\Ability_Hunter_BeastTraining", color = { 1, 0.82, 0.2 } },
+    { key = "level", label = function() return Text["TLevel"] end, icon = "Interface\\Icons\\Ability_Hunter_BeastTraining", color = { 1, 0.82, 0.2 } },
     { key = "hearts", label = function() return Text["Hearts"] end, icon = "Interface\\Icons\\INV_ValentinesCandy", color = { 1, 0.25, 0.4 } },
     { key = "wins", label = function() return Text["Arena wins"] end, icon = "Interface\\Icons\\INV_Sword_27", color = { 0.35, 0.85, 0.35 } },
     { key = "losses", label = function() return Text["Arena losses"] end, icon = "Interface\\Icons\\Ability_Rogue_FeignDeath", color = { 0.9, 0.3, 0.3 } },
@@ -1097,8 +1148,9 @@ function Panel.GuildStats(row)
     local arena = row.mine and addon.Arena.State() or (addon.Games.Get(row.nameRaw) or {}).arena
     arena = type(arena) == "table" and arena or {}
     local stats = {
-        level = { count = tostring(row.lvl), tip = { ("%s %d · %s"):format(Text["Level"], row.lvl, rarityText(row.cls)),
-            Format(Text["Level = NPC level + rarity + hearts. Weekly pay: {first}, {second}, {third}, others {other}."],
+        level = { count = tostring(row.level or AzeCaught.CompanionLevel(row) or 0),
+            tip = { ("%s %d · %s"):format(Text["Level"], row.lvl, rarityText(row.cls)),
+            Format(Text["TLevel (training level) = NPC level + rarity + hearts. Weekly pay: {first}, {second}, {third}, others {other}."],
                 { first = money(AzeCaught.PAYOUTS[1]), second = money(AzeCaught.PAYOUTS[2]), third = money(AzeCaught.PAYOUTS[3]),
                   other = money(AzeCaught.PAYOUT_OTHER) }) } },
         hearts = { count = tostring(row.hearts or 0), tip = { tostring(row.hearts or 0) } },
@@ -1348,7 +1400,7 @@ function Panel.RefreshCompanion()
     addon.UI.Widgets.FitText(widgets.nameText, ("|cff%s%s|r  |cffaaaaaa%s %d · %s|r"):format(RARITY_COLOR[companion.cls] or "ffffff",
         addon.Utility.Escape(addon.Utility.ShortText(AzeCaught.ShownName(companion), 28)), Text["Level"], companion.lvl, rarityText(companion.cls)))
     widgets.heartText:SetText((companion.hearts < 0 and "|cff993333" or "|cffff4060") .. companion.hearts .. "|r")
-    widgets.streakText:SetText(Format(Text["Fed streak {fed} · care streak {care} · rank {rank}"],
+    widgets.streakText:SetText(Format(Text["Fed streak {fed} · care streak {care} · TLevel {rank}"],
         { fed = companion.fedStreak, care = companion.careStreak, rank = AzeCaught.CompanionLevel(companion) }))
     widgets.sleepText:SetText(companion.asleep and Format(Text["Asleep, wakes in {time}"], { time = duration(companion.asleep) }) or "")
     for _, need in ipairs(NEED_ORDER) do fillBar(widgets.bars[need], need, companion[need], companion) end
@@ -1558,7 +1610,7 @@ function Panel.RefreshGuild()
         widgets.guildList:SetData(rows)
         widgets.guildEmpty:SetShown(#rows == 0)
         local winner = addon.Model.CompanionWinner(addon.Store.db.games, addon.Games.PreviousPeriodKey(now), me())
-        widgets.guildWinner:SetText(winner and Format(Text["Last week's best: {name} ({level})"], { name = winner.name, level = winner.peak }) or "")
+        widgets.guildWinner:SetText(winner and Format(Text["Last week's best: {name} (TLevel {level})"], { name = winner.name, level = winner.peak }) or "")
         Panel.RefreshGuildPreview()
     end
 end

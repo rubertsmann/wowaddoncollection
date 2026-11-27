@@ -28,16 +28,23 @@ local ICON_PROJECTILES = { arrows = "point", knives = "point", axe = "spin" }
 local MAXIMUM_DRAWN_ENEMIES = 120
 local SWORD_TEXTURE = "Interface\\Icons\\INV_Sword_04"
 local CARD_WIDTH, CARD_HEIGHT = 88, 104
+local START_SIZE = 38
+local DROPDOWN_WIDTH, TARGET_ROW_HEIGHT = 180, 20
+local DROPDOWN_ARROW = "Interface\\Buttons\\Arrow-Down-Up"
 -- the companion in the tower's place: seen from above when the client lets the model camera be placed, else from the
 -- front; it turns to the nearest monster and attacks whenever a weapon fires
 local PET_MODEL_SIZE = 64
+local PET_PAD = 2                    -- the model frame is this much larger (camera further out): a big creature is not cut off
 local PET_FALLBACK_ICON = "Interface\\Icons\\Ability_Hunter_Pet_Wolf"   -- while the model is not drawn
-local TOP_CAMERA_HEIGHT = 4
+local TOP_CAMERA_HEIGHT = 4          -- yards, while the fitted distance is not known
+local TOP_CAMERA_FIT = 1.15          -- the camera above sits this much further out than the client's fitted side view
+local TOP_CAMERA_MINIMUM, TOP_CAMERA_MAXIMUM = 1.5, 80
+local TOP_CAMERA_BACK = 1.25         -- and a little further back still (the fitted view looked slightly too big in game)
 local FACING_OFFSET_TOP, FACING_OFFSET_SIDE = -math.pi / 2, math.pi / 2
 local ATTACK_EVENTS = { shot = true, zap = true, cleave = true, nova = true, blast = true }
 local ATTACK_SECONDS, ATTACK_GAP = 0.45, 0.3
 local GRASS_DISC = "Interface\\AddOns\\" .. addonName .. "\\UI\\Textures\\Disc"
----@type { topView: boolean, attackReadyAt: number, attackUntil: number|nil }
+---@type { topView: boolean, attackReadyAt: number, attackUntil: number|nil, cameraHeight: number|nil, fitted: boolean|nil, rawDistance: number|nil }
 local petState = { topView = false, attackReadyAt = 0, attackUntil = nil }
 
 ---@class SurvivorArenaState
@@ -338,13 +345,30 @@ end
 
 ------------------------------------------------------------------ the companion in the tower's place
 
+-- The camera height above the companion: the distance the client chose to fit it from the side (it grows with the
+-- creature), so a big creature fits the tower spot like a small one. The fixed height while that is unknown. Both are
+-- scaled by the frame's padding, so the drawn size stays and a big creature has room instead of being cut off.
+---@param model table
+---@return number height
+---@return number tx, number ty, number tz
+---@return boolean fitted
+function SurvivorArena.TopCamera(model)
+    local distance, tx, ty, tz = addon.CompanionModel.FitDistance(model)
+    petState.rawDistance = distance
+    if not distance then return TOP_CAMERA_HEIGHT * PET_PAD, 0, 0, 0, false end
+    local height = math.max(TOP_CAMERA_MINIMUM, math.min(TOP_CAMERA_MAXIMUM, distance * TOP_CAMERA_FIT))
+    return height * TOP_CAMERA_BACK * PET_PAD, tx, ty, tz, true
+end
+
 -- Tries to look at the model from straight above (a custom camera). Returns true when the client allowed it.
 ---@param model table
 ---@return boolean
 local function lookFromAbove(model)
     if not (model.MakeCurrentCameraCustom and model.SetCameraPosition and model.SetCameraTarget) then return false end
-    return pcall(model.MakeCurrentCameraCustom, model) and pcall(model.SetCameraTarget, model, 0, 0, 0)
-        and pcall(model.SetCameraPosition, model, 0.01, 0, TOP_CAMERA_HEIGHT) or false
+    local height, tx, ty, tz, fitted = SurvivorArena.TopCamera(model)
+    petState.cameraHeight, petState.fitted = height, fitted
+    return pcall(model.MakeCurrentCameraCustom, model) and pcall(model.SetCameraTarget, model, tx, ty, tz)
+        and pcall(model.SetCameraPosition, model, tx + 0.01, ty, tz + height) or false
 end
 
 -- Shows my companion instead of the tower icon (the icon stays without a companion or when no model loads).
@@ -386,6 +410,16 @@ local function petSettle()
     end
 end
 
+-- The start button's look: start, give up (a run is open) or cash out (an endless run reached a minute).
+---@param mode "start"|"giveup"|"cashout"
+local function paintStart(mode)
+    local button = widgets.startButton
+    local labels = { start = Text["Start"], giveup = Text["Give up"], cashout = Text["Cash out"] }
+    if button.SetKind then button:SetKind(mode) end
+    if button.SetLabel then button:SetLabel(labels[mode]) else button:SetText(labels[mode]) end
+    button.mode = mode
+end
+
 ---@param event SurvivorEvent
 local function handleEvent(event)
     local Animate = addon.Animate
@@ -418,7 +452,7 @@ local function handleEvent(event)
         Animate.Ring("survivorMilestone", widgets.effects, widgets.towerAnchor, 30, 300, { 1, 0.85, 0.3 }, 0.8)
         Animate.Burst("survivor", widgets.effects, widgets.towerAnchor, 0, 0, { count = 18, speed = 170, gravity = 200, size = 13 })
         Animate.FloatText("survivor", widgets.floatText, widgets.towerAnchor, 0, 24, label, { 1, 0.85, 0.3 })
-        widgets.startButton:SetText(Text["Cash out"])
+        paintStart("cashout")
         addon.Api.PlaySoundNamed({ "LOOT_WINDOW_COIN_SOUND", "UI_EPICLOOT_TOAST" })
     elseif event.kind == "bomb" then
         Animate.Ring("survivorBomb", widgets.effects, widgets.towerAnchor, 20, 360, { 1, 0.55, 0.2 }, 0.6)
@@ -465,14 +499,33 @@ end
 
 ------------------------------------------------------------------ controls
 
+---@param index integer
+---@return string
+local function targetLabel(index)
+    local target = addon.Survivor.Target(index)
+    if not target then return "" end
+    return target.endless and Text["Endless"] or Format(Text["{time} x{n}"], { time = clock(target.seconds), n = target.factor })
+end
+
 ---@param running boolean
 local function setControls(running)
-    widgets.startButton:SetText(running and Text["Give up"] or Text["Start"])
+    paintStart(running and "giveup" or "start")
     widgets.stake.SetEnabled(not running)
-    for index, button in ipairs(widgets.targetButtons) do
-        button:SetEnabled(not running and index ~= SurvivorArena.state.targetIndex)
-        if button.SetSelected then button:SetSelected(index == SurvivorArena.state.targetIndex) end
+    widgets.targetDropdown:SetEnabled(not running)
+    widgets.targetDropdown:SetText(targetLabel(SurvivorArena.state.targetIndex))
+    for index, row in ipairs(widgets.targetRows) do
+        if row.SetSelected then row:SetSelected(index == SurvivorArena.state.targetIndex) end
     end
+    if running then widgets.targetMenu:Hide() end
+end
+
+-- Opens the target list under the dropdown, or closes it. Locked during a run.
+function SurvivorArena.ToggleTargets()
+    local menu = widgets.targetMenu
+    if not menu then return end
+    if menu:IsShown() or SurvivorArena.state.run then menu:Hide() return end
+    menu:Show()
+    if widgets.targetCatcher then widgets.targetCatcher:Show() end
 end
 
 ---@param target SurvivorTarget
@@ -488,6 +541,7 @@ end
 
 ---@param index integer
 local function selectTarget(index)
+    widgets.targetMenu:Hide()
     if SurvivorArena.state.run or not addon.Survivor.Target(index) then return end
     SurvivorArena.state.targetIndex = index
     addon.UIHelpers.Settings().survivorTarget = index
@@ -736,6 +790,37 @@ local function buildGrass(arena)
     end
 end
 
+-- The bet target: one dropdown button with the chosen target ("1:30 x3"), a list of every target under it. The list
+-- closes on a pick, on a click elsewhere and when the panel hides.
+---@param panel table
+local function buildTargetDropdown(panel)
+    local Widgets = addon.UI.Widgets
+    local dropdown = Widgets.CreateButton(panel, "", DROPDOWN_WIDTH, 22, function() SurvivorArena.ToggleTargets() end)
+    dropdown:SetPoint("TOP", panel, "TOP", 0, -206)
+    local arrow = dropdown:CreateTexture(nil, "OVERLAY")
+    arrow:SetSize(14, 14); arrow:SetPoint("RIGHT", dropdown, "RIGHT", -4, -1); arrow:SetTexture(DROPDOWN_ARROW)
+    widgets.targetDropdown = dropdown
+    local count = addon.Survivor.ENDLESS_INDEX
+    local menu = CreateFrame("Frame", nil, panel)
+    menu:SetSize(DROPDOWN_WIDTH, count * (TARGET_ROW_HEIGHT + 2) + 4); menu:SetPoint("TOP", dropdown, "BOTTOM", 0, -2)
+    menu:SetFrameLevel(addon.UIHelpers.FrameLevel(panel) + 40); menu:EnableMouse(true); menu:Hide()
+    if menu.SetIgnoreParentAlpha then menu:SetIgnoreParentAlpha(true) end
+    local plate = menu:CreateTexture(nil, "BACKGROUND"); plate:SetAllPoints(); plate:SetColorTexture(0.06, 0.05, 0.08, 1)
+    local edge = menu:CreateTexture(nil, "BORDER"); edge:SetHeight(1); edge:SetPoint("TOPLEFT"); edge:SetPoint("TOPRIGHT")
+    edge:SetColorTexture(1, 0.78, 0.25, 0.8)
+    widgets.targetRows = {}
+    for index = 1, count do
+        local row = Widgets.CreateButton(menu, targetLabel(index), DROPDOWN_WIDTH - 4, TARGET_ROW_HEIGHT, function() selectTarget(index) end)
+        row:SetPoint("TOP", menu, "TOP", 0, -3 - (index - 1) * (TARGET_ROW_HEIGHT + 2))
+        widgets.targetRows[index] = row
+    end
+    widgets.targetMenu = menu
+    local _, catcher = addon.UIHelpers.CloseOnClickAway(menu, { dropdown }, function() menu:Hide() end, addon.UIHelpers.FrameLevel(panel) + 39)
+    widgets.targetCatcher = catcher
+    menu:SetScript("OnHide", function() if widgets.targetCatcher then widgets.targetCatcher:Hide() end end)
+    panel:HookScript("OnHide", function() menu:Hide() end)
+end
+
 ---@param panel table the Games tab's survivor panel (300 wide)
 function SurvivorArena.Build(panel)
     local Widgets = addon.UI.Widgets
@@ -779,14 +864,21 @@ function SurvivorArena.Build(panel)
     addon.UIHelpers.SetTextureOr(widgets.tower, addon.Survivor.TOWER_ICON, { 1, 0.85, 0.3 })
     widgets.tower:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     addon.GamesTab.MaskCircle(towerLayer, widgets.tower)
-    widgets.pet = addon.CompanionModel.Create(towerLayer, PET_MODEL_SIZE, PET_MODEL_SIZE, {
+    widgets.pet = addon.CompanionModel.Create(towerLayer, PET_MODEL_SIZE, PET_MODEL_SIZE, { pad = PET_PAD,
         fallback = { icon = PET_FALLBACK_ICON, size = TOWER_SIZE, y = (PET_MODEL_SIZE - TOWER_SIZE) / 2 },
         afterLoad = function(model)
         petState.topView = lookFromAbove(model)
-        addon.AzeCaught.Journal("DEBUG", "model.survivor", "the survivor companion was framed", { topView = petState.topView })
+        addon.AzeCaught.Journal("DEBUG", "model.survivor", "the survivor companion was framed",
+            { topView = petState.topView, height = petState.cameraHeight, fitted = petState.fitted, distance = petState.rawDistance })
     end })
     widgets.pet:SetPoint("CENTER", arena, "CENTER", 0, 4)
     widgets.pet:Hide()
+    -- the tower's real hit circle, pulsing above the companion (which may be drawn larger)
+    local hitLayer = CreateFrame("Frame", nil, towerLayer)
+    hitLayer:SetAllPoints(); hitLayer:SetFrameLevel(addon.UIHelpers.FrameLevel(towerLayer) + 2)
+    widgets.towerHitbox = addon.UIHelpers.CreateHitbox(hitLayer, { 1, 0.85, 0.35 }, true)
+    widgets.towerHitbox:SetSize(addon.Survivor.TOWER_RADIUS * 2, addon.Survivor.TOWER_RADIUS * 2)
+    widgets.towerHitbox:SetPoint("CENTER", arena, "CENTER", 0, 0)
     local hpBack = towerLayer:CreateTexture(nil, "ARTWORK", nil, 1)
     hpBack:SetSize(44, 4); hpBack:SetPoint("TOP", widgets.tower, "BOTTOM", 0, -3); hpBack:SetColorTexture(0, 0, 0, 0.7)
     widgets.hpFill = towerLayer:CreateTexture(nil, "ARTWORK", nil, 2)
@@ -795,7 +887,7 @@ function SurvivorArena.Build(panel)
 
     -- actors (monsters, projectiles, blasts, puffs) on their own layer above the tower
     local actors = CreateFrame("Frame", nil, arena)
-    actors:SetAllPoints(); actors:SetFrameLevel(addon.UIHelpers.FrameLevel(towerLayer) + 2)
+    actors:SetAllPoints(); actors:SetFrameLevel(addon.UIHelpers.FrameLevel(towerLayer) + 3)
     widgets.actors = actors
     widgets.enemyPool, widgets.boltPool = {}, {}
     widgets.puffs, widgets.puffIndex = {}, 0
@@ -847,30 +939,22 @@ function SurvivorArena.Build(panel)
     widgets.cards = {}
     for index = 1, 3 do widgets.cards[index] = buildCard(cardLayer, index) end
 
-    -- controls: bet target, stake, start / give up, result
-    widgets.targetButtons = {}
-    local buttonWidth, gap = 54, 4
-    local buttonCount = addon.Survivor.ENDLESS_INDEX
-    local rowWidth = buttonCount * buttonWidth + (buttonCount - 1) * gap
-    for index = 1, buttonCount do
-        local target, targetIndex = addon.Survivor.Target(index), index
-        local label = target.endless and Text["Endless"] or Format(Text["{time} x{n}"], { time = clock(target.seconds), n = target.factor })
-        local button = Widgets.CreateButton(panel, label, buttonWidth, 18, function() selectTarget(targetIndex) end)
-        button:SetPoint("TOPLEFT", panel, "TOP", -rowWidth / 2 + (index - 1) * (buttonWidth + gap), -208)
-        widgets.targetButtons[index] = button
-    end
-    widgets.stake = addon.GamesTab.CreateStakeRow(panel, 36, -234, function() SurvivorArena.Start() end)
+    -- controls: the bet target as a dropdown, the stake, the start / give up / cash out icon, the result
+    buildTargetDropdown(panel)
+    widgets.stake = addon.GamesTab.CreateStakeRow(panel, 36, -236, function() SurvivorArena.Start() end)
     widgets.stake.Write(addon.UIHelpers.Settings().lastSurvivorStakeCopper or DEFAULT_STAKE)
-    widgets.startButton = Widgets.CreateButton(panel, Text["Start"], 180, 28, function() SurvivorArena.Start() end)
+    widgets.startButton = Widgets.CreateIconButton(panel, "start", START_SIZE, Text["Start"], function() SurvivorArena.Start() end)
     widgets.startButton:SetPoint("TOP", panel, "TOP", 0, -262)
-    if Widgets.MakePrimary then Widgets.MakePrimary(widgets.startButton) end
     widgets.resultText = Widgets.CreateFontString(panel, "GameFontNormal", "CENTER")
-    widgets.resultText:SetPoint("TOP", panel, "TOP", 0, -298); widgets.resultText:SetWidth(290)
+    widgets.resultText:SetPoint("TOP", panel, "TOP", 0, -306); widgets.resultText:SetWidth(290)
 
     -- the run (and the idle glow) advance only while the panel is visible
     widgets.idleTime = 0
+    widgets.shimmerTime = 0
     panel:SetScript("OnUpdate", function(_, elapsedSeconds)
         SurvivorArena.Update(elapsedSeconds)
+        widgets.shimmerTime = widgets.shimmerTime + elapsedSeconds
+        addon.UIHelpers.Shimmer(widgets.towerHitbox, widgets.shimmerTime)
         if not state.run then
             widgets.idleTime = widgets.idleTime + elapsedSeconds
             widgets.towerGlow:SetAlpha(0.25 + 0.2 * math.sin(widgets.idleTime * 2.2))

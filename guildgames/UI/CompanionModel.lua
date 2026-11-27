@@ -22,13 +22,18 @@ CompanionModel.ANIMATION = {
 ---@field shownKey string|nil "npc:display" of the loaded creature
 ---@field loaded boolean
 ---@field animation integer|nil the animation playing
----@field camera number camera distance scale
+---@field camera number camera distance scale (the padding included)
+---@field pad number how much larger the frame is than the space the creature is drawn in
 ---@field facing number radians
 ---@field afterLoad fun(model: table)|nil runs after every (re)load, before the animation is set again
 ---@field rendered boolean the client drew the loaded model (OnModelLoaded fired or it reports a model file)
 ---@field fallback table|nil a child frame with an icon, shown until the model is drawn
+---@field fitDistance number|nil the camera distance the client chose to fit the drawn model (FitDistance)
+---@field fitKey string|nil the creature `fitDistance` belongs to
 
 local modelStates = setmetatable({}, { __mode = "k" })
+-- every model made here, so a change of the window's scale can frame them all again
+local models = setmetatable({}, { __mode = "k" })
 
 -- The helper's memory of `model` (created on first use).
 ---@param model table
@@ -78,14 +83,20 @@ end
 ---@param parent table
 ---@param width number
 ---@param height number
----@param options? { camera: number, facing: number, afterLoad: fun(model: table), fallback: { icon: string, size: number, y: number, mirror: boolean } }
+-- `options.pad` makes the frame that much larger and the camera that much further out: the creature is drawn at the same
+-- size, but a big one has room around it instead of being cut off at the frame's edge. Callers place the frame by its
+-- centre (`width` x `height` is the space the creature is drawn in).
+---@param options? { camera: number, pad: number, facing: number, afterLoad: fun(model: table), fallback: { icon: string, size: number, y: number, mirror: boolean } }
 ---@return table model
 function CompanionModel.Create(parent, width, height, options)
     local model = CreateFrame("PlayerModel", nil, parent)
-    model:SetSize(width, height)
+    local pad = options and options.pad or 1
+    model:SetSize(width * pad, height * pad)
+    models[model] = true
     if model.SetKeepModelOnHide then pcall(model.SetKeepModelOnHide, model, true) end
     local state = stateOf(model)
-    state.camera = options and options.camera or 1
+    state.pad = pad
+    state.camera = (options and options.camera or 1) * pad
     state.facing = options and options.facing or 0
     state.afterLoad = options and options.afterLoad
     local fallbackOptions = options and options.fallback
@@ -94,7 +105,7 @@ function CompanionModel.Create(parent, width, height, options)
         fallback:SetAllPoints()
         fallback.icon = fallback:CreateTexture(nil, "ARTWORK")
         fallback.icon:SetSize(fallbackOptions.size, fallbackOptions.size)
-        fallback.icon:SetPoint("BOTTOM", model, "BOTTOM", 0, fallbackOptions.y or 0)
+        fallback.icon:SetPoint("BOTTOM", model, "BOTTOM", 0, (fallbackOptions.y or 0) + (pad - 1) * height / 2)
         state.fallback = fallback
         CompanionModel.SetFallbackIcon(model, fallbackOptions.icon, fallbackOptions.mirror)
         fallback:SetScript("OnUpdate", function() updateFallback(model) end)
@@ -104,7 +115,62 @@ function CompanionModel.Create(parent, width, height, options)
         updateFallback(self)
         CompanionModel.Frame(self)
     end)
+    -- the window may have been scaled while the model was hidden
+    if model.HookScript then pcall(model.HookScript, model, "OnShow", function(self) CompanionModel.Refresh(self) end) end
     return model
+end
+
+-- Frames a shown, loaded model again: the client fits a model to its frame when it is loaded, so after the frame's
+-- drawn size changed (the window was scaled) the camera is refreshed and the framing re-applied.
+---@param model table
+function CompanionModel.Refresh(model)
+    local state = stateOf(model)
+    if not state.loaded or not model:IsShown() then return end
+    if model.RefreshCamera then pcall(model.RefreshCamera, model) end
+    CompanionModel.Frame(model)
+end
+
+-- Frames every shown game model again (the window's scale changed).
+function CompanionModel.RefreshAll()
+    for model in pairs(models) do CompanionModel.Refresh(model) end
+end
+
+-- The camera distance the client chose to fit the drawn creature (it grows with the creature's size), measured once per
+-- creature while the client's own camera is in use. Nil until the model is drawn or when the client cannot tell.
+---@param model table
+---@return number|nil distance
+---@return number tx, number ty, number tz the point the camera looks at
+function CompanionModel.FitDistance(model)
+    local state = stateOf(model)
+    if state.fitKey == state.shownKey and state.fitDistance then
+        return state.fitDistance, state.fitTarget[1], state.fitTarget[2], state.fitTarget[3]
+    end
+    if not state.shownKey or not CompanionModel.IsRendered(model) then return nil, 0, 0, 0 end
+    -- back to the client's own camera (a custom one may still be current), framed as Frame does
+    if model.SetCamera then pcall(model.SetCamera, model, 0) end
+    if model.SetPortraitZoom then pcall(model.SetPortraitZoom, model, 0) end
+    if model.SetCamDistanceScale then pcall(model.SetCamDistanceScale, model, state.camera) end
+    local function numbers(method)
+        if not model[method] then return nil end
+        local ok, x, y, z = pcall(model[method], model)
+        if ok and type(x) == "number" and type(y) == "number" and type(z) == "number" then return x, y, z end
+        return nil
+    end
+    local tx, ty, tz = numbers("GetCameraTarget")
+    if not tx then tx, ty, tz = 0, 0, 0 end
+    local distance
+    if model.GetCameraDistance then
+        local ok, value = pcall(model.GetCameraDistance, model)
+        if ok and type(value) == "number" then distance = value end
+    end
+    if not distance then
+        local px, py, pz = numbers("GetCameraPosition")
+        if px then distance = math.sqrt((px - tx) ^ 2 + (py - ty) ^ 2 + (pz - tz) ^ 2) end
+    end
+    -- nothing usable (0, NaN, infinite): leave it to the caller's default
+    if not distance or distance ~= distance or distance <= 0.05 or distance > 1000 then return nil, 0, 0, 0 end
+    state.fitKey, state.fitDistance, state.fitTarget = state.shownKey, distance, { tx, ty, tz }
+    return distance, tx, ty, tz
 end
 
 -- Re-applies the framing, the facing and the animation (a load resets them).

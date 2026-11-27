@@ -64,6 +64,12 @@ local function setup(harness, options)
             local button = newWidget(world, "Button"); button.text = label; button.scripts.OnClick = onClick
             return button
         end,
+        CreateIconButton = function(_, kind, _, tooltip, onClick)
+            local button = newWidget(world, "Button"); button.kind, button.tooltip = kind, tooltip; button.scripts.OnClick = onClick
+            function button:SetKind(newKind) self.kind = newKind end
+            function button:SetLabel(text) self.tooltip = text end
+            return button
+        end,
         CreateScrollList = function(_, _, _, createRow, fillRow)
             local list = newWidget(world, "List")
             function list:SetData(entries)
@@ -96,6 +102,49 @@ local function withSetup(harness, options, body)
 end
 
 return {
+    ["games ui: models are framed by their size and framed again after the window scaled"] = function(harness)
+        withSetup(harness, nil, function(addon, world)
+            local CompanionModel, Arena = addon.CompanionModel, addon.SurvivorArena
+            -- a drawn model whose client camera fits it at `distance`
+            local distance, calls = 12, { refresh = 0, default = 0 }
+            local model = CompanionModel.Create(newWidget(world, "Frame"), 64, 64)
+            model.SetDisplayInfo = function() end
+            model.GetModelFileID = function() return 99 end
+            model.GetCameraDistance = function() return distance end
+            model.GetCameraTarget = function() return 0, 0, 0.5 end
+            model.SetCamera = function() calls.default = calls.default + 1 end
+            model.RefreshCamera = function() calls.refresh = calls.refresh + 1 end
+            harness.truthy(CompanionModel.Load(model, { npc = 1, disp = 5 }))
+            local height, _, _, tz, fitted = Arena.TopCamera(model)
+            harness.truthy(fitted); harness.equal(tz, 0.5)
+            -- fitted distance x1.15, x1.25 further back, x2 for the padded frame
+            local scale = 1.15 * 1.25 * 2
+            harness.truthy(math.abs(height - 12 * scale) < 1e-9, "the top camera follows the fitted distance: " .. height)
+            distance = 3
+            harness.truthy(math.abs(Arena.TopCamera(model) - 12 * scale) < 1e-9, "measured once per creature")
+            CompanionModel.Load(model, { npc = 2, disp = 6 })
+            harness.truthy(math.abs(Arena.TopCamera(model) - 3 * scale) < 1e-9, "a new creature is measured again")
+            distance = 500
+            CompanionModel.Load(model, { npc = 3, disp = 7 })
+            harness.equal(Arena.TopCamera(model), 80 * 1.25 * 2, "clamped")
+            -- nothing usable from the client: the fixed height
+            distance = 0 / 0
+            model.GetCameraPosition = function() return "secret" end
+            CompanionModel.Load(model, { npc = 4, disp = 8 })
+            local fallbackHeight, _, _, _, fallbackFitted = Arena.TopCamera(model)
+            harness.equal(fallbackHeight, 8, "the old fixed height, padded"); harness.equal(fallbackFitted, false)
+            -- a padded frame: larger by the padding, the camera further out by it, the creature drawn at the same size
+            local padded = CompanionModel.Create(newWidget(world, "Frame"), 64, 64, { pad = 2, camera = 1.5 })
+            harness.equal(CompanionModel.StateOf(padded).camera, 3)
+            -- the window scaled: shown loaded models are framed again, hidden ones wait for their OnShow
+            CompanionModel.RefreshAll()
+            harness.equal(calls.refresh, 1)
+            model.shown = false
+            CompanionModel.RefreshAll()
+            harness.equal(calls.refresh, 1, "a hidden model is left alone")
+        end)
+    end,
+
     ["games ui: a model's stand-in icon shows until the model is drawn (OnModelLoaded or a model file)"] = function(harness)
         withSetup(harness, nil, function(addon)
             local CompanionModel = addon.CompanionModel
@@ -134,14 +183,25 @@ return {
             GamesTab.widgets.gameButtons.survivor.scripts.OnClick()
             harness.equal(GamesTab.state.game, "survivor"); harness.equal(GamesTab.widgets.playsHeader.text, "Runs")
             local widgets = Arena.widgets
-            widgets.targetButtons[2].scripts.OnClick()
+            -- the target dropdown: opens, a pick closes it and is saved
+            harness.equal(widgets.targetMenu.shown, false)
+            widgets.targetDropdown.scripts.OnClick()
+            harness.equal(widgets.targetMenu.shown, true, "the dropdown opens its list")
+            widgets.targetRows[2].scripts.OnClick()
             harness.equal(Arena.state.targetIndex, 2); harness.equal(addon.db.ui.survivorTarget, 2)
+            harness.equal(widgets.targetMenu.shown, false, "a pick closes the list")
+            harness.equal(widgets.targetDropdown.text, "1:30 x3", "the dropdown shows the pick")
+            harness.equal(widgets.startButton.kind, "start")
+            widgets.targetDropdown.scripts.OnClick()
             widgets.stake.Write(400)
             local run = assert(Arena.Start())
             harness.equal(addon.db.ui.survivorPending.c, 400, "the stake is pending while the run is open")
-            harness.equal(widgets.startButton.text, "Give up")
+            harness.equal(widgets.startButton.kind, "giveup"); harness.equal(widgets.startButton.tooltip, "Give up")
             harness.equal(GamesTab.widgets.gameButtons.coin.enabled, false, "selector locked during the run")
-            harness.equal(widgets.targetButtons[1].enabled, false, "target locked during the run")
+            harness.equal(widgets.targetDropdown.enabled, false, "target locked during the run")
+            harness.equal(widgets.targetMenu.shown, false, "an open list closes when the run starts")
+            widgets.targetDropdown.scripts.OnClick()
+            harness.equal(widgets.targetMenu.shown, false, "the list stays shut during a run")
             local sawCards, frames = false, 0
             while Arena.state.run and frames < 20000 do
                 frames = frames + 1
@@ -158,7 +218,8 @@ return {
             harness.equal(addon.db.ui.survivorPending, nil)
             local section = addon.Games.Get("Me-R").survivor
             harness.equal(section.total.wins + section.total.losses, 1)
-            harness.equal(widgets.startButton.text, "Start"); harness.equal(GamesTab.widgets.gameButtons.coin.enabled, true)
+            harness.equal(widgets.startButton.kind, "start"); harness.equal(GamesTab.widgets.gameButtons.coin.enabled, true)
+            harness.equal(widgets.targetDropdown.enabled, true)
             harness.equal(#GamesTab.widgets.leaderboardList.entries, 1, "my run is on the survivor board")
             -- give up: the same button ends an open run as a loss
             assert(Arena.Start())
@@ -179,7 +240,7 @@ return {
             harness.equal(#failures, 0, table.concat(failures, "; "))
             Arena.Start()   -- give up
             -- endless: the button cashes out once a minute was reached
-            widgets.targetButtons[addon.Survivor.ENDLESS_INDEX].scripts.OnClick()
+            widgets.targetRows[addon.Survivor.ENDLESS_INDEX].scripts.OnClick()
             harness.equal(Arena.state.targetIndex, addon.Survivor.ENDLESS_INDEX)
             local endless = assert(Arena.Start())
             for _ = 1, 1300 do
@@ -187,7 +248,7 @@ return {
                 Arena.Update(0.05)
                 if endless.choices then widgets.cards[1].scripts.OnClick() end
             end
-            harness.truthy(endless.time >= 60, "a minute passed"); harness.equal(widgets.startButton.text, "Cash out")
+            harness.truthy(endless.time >= 60, "a minute passed"); harness.equal(widgets.startButton.kind, "cashout")
             local before = addon.Games.Get("Me-R").survivor.total.won
             Arena.Start()
             harness.equal(Arena.state.run, nil)

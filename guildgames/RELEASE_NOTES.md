@@ -1,3 +1,25 @@
+# GuildGames 0.13.0
+
+**English:** Survivor and Companion Dash look better: big creatures are no longer cut off, and a softly pulsing outline
+shows what really counts as a hit (a gold ring around the Survivor tower, boxes around your runner and the monsters in
+Companion Dash). Models keep their size when you scale the window. In Survivor, the time you bet on is now picked from
+one dropdown (the buttons used to overlap), and Start is an icon: a charge to start, a red X to give up, a coin to cash
+out. Companion Dash shows your best distance, today's gold and the last run in a framed box.
+In Arena > Guild, hover over a member's companion to see its full info panel. The ranking value is now called TLevel
+(training level = NPC level + rarity + hearts), and hovering a fighter in a fight shows its TLevel.
+Arena fights need the same version on both sides, so everyone should update.
+
+**Deutsch:** Überleben und Begleiter-Sprint sehen besser aus: Große Wesen werden nicht mehr abgeschnitten, und ein sanft
+pulsierender Rahmen zeigt, was wirklich als Treffer zählt (ein goldener Ring um den Turm in Überleben, Kästen um deinen
+Läufer und die Monster in Begleiter-Sprint). Modelle behalten ihre Größe, wenn du das Fenster skalierst. In Überleben wählst
+du die Zeit für deinen Einsatz jetzt in einer Auswahlliste (die Knöpfe haben sich überlappt), und Start ist ein Symbol:
+Sturmangriff zum Starten, rotes X zum Aufgeben, eine Münze zum Auszahlen. Begleiter-Sprint zeigt deine beste Strecke, das
+Gold von heute und den letzten Lauf in einem umrahmten Kasten.
+Unter Arena > Gilde zeigt das Darüberfahren über den Begleiter eines Mitglieds seine ganze Infotafel. Der Ranglistenwert
+heißt jetzt TStufe (Trainingsstufe = NPC-Stufe + Seltenheit + Herzen), und beim Darüberfahren über einen Kämpfer steht
+seine TStufe.
+Arenakämpfe brauchen auf beiden Seiten dieselbe Version, also bitte alle aktualisieren.
+
 # GuildGames 0.12.0
 
 **English:** Arena fights are now requested on the Fights page: pick a guild member from the list (members who can't

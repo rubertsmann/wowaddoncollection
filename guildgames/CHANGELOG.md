@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.13.0 (2026-11-27, protocol 1.8, schema 3, LibGuildSync MINOR 6)
+- Survivor and Companion Dash polish (feature 043): game models are no longer cut off (their frames have room around the creature) and are framed again when the window is scaled or shown; the companion seen from above in Survivor is framed by its own size; pulsing outlines show the real hitboxes (the Survivor tower's ring, the Companion Dash runner and monsters). Survivor's target buttons (which overlapped) are one dropdown, and Start is an icon (charge to start, red X to give up, coin to cash out; the word is in the tooltip). Companion Dash's stats and last result sit in a framed box.
+- Arena > Guild: hovering a member's row or the companion model shows the same info panel as Collection > Caught (level, rarity, type, combat stats, needs, traits), with the companion's TLevel and hearts on top. The ranking value (NPC level + rarity + hearts) is now called TLevel (training level) everywhere: the guild list, its badge, the companion view and "last week's best"; plain "Level" is only the NPC level. Hovering a fighter in a fight card (Fights page and team picker) also shows its TLevel from when the team was sent (new optional `tl` on each fighter; older teams show none). Your own history with that NPC is shown only if you met it.
+
 ## 0.12.0 (2026-11-27, protocol 1.7, schema 3, LibGuildSync MINOR 6)
 - Arena fight requests move to the Fights page: a dropdown of the guild members (another version, fewer than 3 companions, in a fight or offline: greyed out with the reason on hover), "Fight!" opens the team picker with your wager, Send plays a swords clash. The fight icon in the Guild view is gone (feature 041).
 - Each fighter sets their own wager (at least 1g); the accepting player picks their team and wager in the same picker. Counter offers are gone.

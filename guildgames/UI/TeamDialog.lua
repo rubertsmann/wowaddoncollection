@@ -112,6 +112,8 @@ function TeamDialog.BuildCard(parent, side, options)
         if not GameTooltip or not self.fighter then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         TeamDialog.AddFighterName(GameTooltip, self.fighter)
+        -- the TLevel when the team was sent (older teams have none)
+        if self.fighter.tl then GameTooltip:AddLine(Text["TLevel"] .. " " .. self.fighter.tl, 1, 0.82, 0.2) end
         GameTooltip:AddLine(TeamDialog.CardText(self.fighter), 1, 1, 1, true)
         GameTooltip:Show()
     end)

@@ -83,7 +83,7 @@ return {
                 harness.equal(addon.IS_DEVELOPMENT_BUILD, development)
                 harness.equal(addon.PREFIX, development and "GGamesDev" or "GGames")
                 harness.equal(addon.SAVED_VARIABLES_NAME, development and "GuildGamesDevDB" or "GuildGamesDB")
-                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 7); harness.equal(addon.Store.SCHEMA, 3)
+                harness.equal(addon.PROTOCOL_MAJOR, 1); harness.equal(addon.PROTOCOL_MINOR, 8); harness.equal(addon.Store.SCHEMA, 3)
                 -- the key binding's globals carry this build's names (live + dev installed together)
                 local binding = addon.Catcher.BindingNames(development)
                 harness.equal(binding.name, development and "AZECAUGHT_THROW_DEV" or "AZECAUGHT_THROW")
@@ -252,6 +252,32 @@ return {
                     AddDoubleLine = function(_, left, right) tooltipLines[#tooltipLines + 1] = left .. " | " .. right end }
                 local okInfo, lineCount = pcall(addon.AzeCaughtPanel.ShowNpcInfo, fakeTooltip, addon.AzeCaughtPanel.widgets.model, npcID, infoEntry)
                 harness.truthy(okInfo and lineCount > 5, "the info panel: " .. tostring(lineCount))
+                -- a guild member's companion: my entry of that NPC with their level, or (unknown NPC) no history lines
+                do
+                    local Panel = addon.AzeCaughtPanel
+                    local guildNpc, guildEntry = Panel.GuildNpc({ npc = npcID, lvl = 77, cls = "rare", species = "Wolf" })
+                    harness.equal(guildNpc, npcID); harness.equal(guildEntry.lvl, 77); harness.equal(guildEntry.cls, "rare")
+                    harness.truthy(guildEntry ~= infoEntry and infoEntry.lvl ~= 77, "my collection entry is not changed")
+                    local _, strangerEntry = Panel.GuildNpc({ npc = 987654, lvl = 12, cls = "elite", species = "Stranger" })
+                    tooltipLines = {}
+                    local okStranger, strangerCount = pcall(Panel.ShowNpcInfo, fakeTooltip, {}, 987654, strangerEntry)
+                    harness.truthy(okStranger and strangerCount > 5, "the stranger's info panel: " .. tostring(strangerCount))
+                    local hasHistory = false
+                    for _, text in ipairs(tooltipLines) do if text == addon.Text["History"] then hasHistory = true end end
+                    harness.truthy(not hasHistory, "no history for an NPC I never met")
+                    harness.equal(select(2, Panel.GuildNpc(nil)), nil)
+                    -- the guild panel adds the TLevel and the hearts under the subtitle
+                    tooltipLines = {}
+                    local okGuild = pcall(Panel.ShowGuildNpcInfo, fakeTooltip, {},
+                        { npc = 987654, lvl = 12, cls = "elite", species = "Stranger", level = 27, hearts = 12 })
+                    local levelLine, heartsLine
+                    for _, text in ipairs(tooltipLines) do
+                        if text:find(addon.Text["TLevel"] .. " | 27", 1, true) then levelLine = true end
+                        if text:find(addon.Text["Hearts"] .. " | +12", 1, true) then heartsLine = true end
+                    end
+                    harness.truthy(okGuild and levelLine and heartsLine, table.concat(tooltipLines, " / "))
+                    harness.equal(Panel.ShowGuildNpcInfo(fakeTooltip, {}, nil), nil)
+                end
                 -- the model returns to idle after an action and whenever the panel shows
                 do
                     local Panel = addon.AzeCaughtPanel

@@ -211,7 +211,8 @@ function Arena.Fighter(companion)
     local morale = 1 + addon.Utility.Clamp(companion.hearts or 0, -10, 10) / 100
     local fighter = { npc = companion.npc, n = entry.n, cls = entry.cls, disp = entry.disp or 0,
         ty = type(entry.st) == "table" and entry.st.type or 0, al = level,
-        nk = type(companion.info) == "table" and companion.info.nick or nil }
+        nk = type(companion.info) == "table" and companion.info.nick or nil,
+        tl = AzeCaught.CompanionLevel(companion) }   -- the TLevel when the team was sent (display only)
     for _, stat in ipairs(Arena.STATS) do
         local factor = (1 + Arena.TRAIN_BONUS * npc.tr[stat]) * (1 + Arena.LEVEL_BONUS * (level - 1)) * morale
         fighter[stat] = math.max(1, math.min(Arena.MAXIMUM_STAT, math.floor(values[stat] * factor + 0.5)))
@@ -267,6 +268,8 @@ function Arena.SanitizeFighter(raw)
     end
     clean.bf = Arena.SanitizeBuffs(raw.bf)
     clean.nk = AzeCaught.CleanNickname(raw.nk)   -- optional: a bad one is dropped alone
+    -- optional, display only: the TLevel (NPC level + rarity + hearts) when the team was sent
+    clean.tl = SafeInteger(raw.tl, -AzeCaught.MAXIMUM_HEARTS, AzeCaught.MAXIMUM_HEARTS + AzeCaught.MAXIMUM_LEVEL + 25)
     return clean
 end
 

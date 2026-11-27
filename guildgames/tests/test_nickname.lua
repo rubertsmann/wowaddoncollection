@@ -233,6 +233,12 @@ return {
         local clean = Arena.SanitizeFighter(bad)
         harness.truthy(clean, "the fighter survives")
         harness.equal(clean.nk, nil)
+        -- the TLevel rides along (display only): kept when sane, a bad one is dropped alone
+        harness.equal(fighter.tl, AzeCaught.CompanionLevel(AzeCaught.Companion(result.uid)))
+        harness.equal(Arena.SanitizeFighter(fighter).tl, fighter.tl)
+        local badLevel = addon.Utility.DeepCopy(fighter); badLevel.tl = "lots"
+        local cleanLevel = Arena.SanitizeFighter(badLevel)
+        harness.truthy(cleanLevel, "the fighter survives a bad TLevel"); harness.equal(cleanLevel.tl, nil)
         local plain = addon.Utility.DeepCopy(fighter); plain.nk = nil
         local other = addon.Utility.DeepCopy(fighter); other.nk = nil; other.atk = other.atk + 3
         local named = addon.Utility.DeepCopy(fighter)

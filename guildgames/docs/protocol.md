@@ -133,3 +133,8 @@ protocol, so ProfessionShare and GuildGames never read each other's messages.
   roster `uid` (mine) or `npc` id (a peer's). The species shown on hover comes from my collection by `npc` id first,
   then from the `n` the peer sent.
 - Not sent: where and when a companion was caught (`info.at`, `info.map`, below) stays on the owner's client.
+
+## Fighter TLevel (protocol 1.8, additive)
+- Each arena team fighter's optional `tl`: the companion's TLevel (NPC level + rarity bonus + hearts) when the team
+  was sent, an integer within the weekly peak bounds. Display only (the card hover), never part of the fight math; a bad
+  `tl` is dropped alone, and a peer without it shows no TLevel.

@@ -74,10 +74,15 @@ local function createFlatButton(parent, label, minimumWidth, height, onClick)
 end
 
 -- A yes/no decision as an icon: "accept" is a green tick, "decline" a red X, on a dark plate tinted green/red on hover; the word stays in
--- the tooltip. Disabled: grey. :SetLabel only changes the tooltip (callers that relabel buttons keep working).
+-- the tooltip. Disabled: grey. :SetLabel only changes the tooltip (callers that relabel buttons keep working), :SetKind
+-- swaps the look (a start button that turns into give up).
 local ICON_BUTTON = {
     accept = { texture = "Interface\\RaidFrame\\ReadyCheck-Ready", color = { 0.25, 0.85, 0.3 } },
     decline = { texture = "Interface\\RaidFrame\\ReadyCheck-NotReady", color = { 0.95, 0.3, 0.25 } },
+    -- a game's start / give up / cash out
+    start = { texture = "Interface\\Icons\\Ability_Warrior_Charge", color = { 1, 0.82, 0.25 }, crop = true },
+    giveup = { texture = "Interface\\RaidFrame\\ReadyCheck-NotReady", color = { 0.95, 0.3, 0.25 } },
+    cashout = { texture = "Interface\\Icons\\INV_Misc_Coin_02", color = { 1, 0.82, 0.2 }, crop = true },
     -- dev build tools: add a debug thing / make a timer run out / the fake arena events
     debug = { texture = "Interface\\Icons\\Trade_Engineering", color = { 1, 0.55, 0.15 }, crop = true, dev = true },
     skip = { texture = "Interface\\Icons\\INV_Misc_PocketWatch_01", color = { 0.35, 0.75, 1 }, crop = true, dev = true },
@@ -104,8 +109,13 @@ local function createIconButton(parent, kind, size, tooltip, onClick)
     button.plate = button:CreateTexture(nil, "BACKGROUND"); button.plate:SetAllPoints()
     button.icon = button:CreateTexture(nil, "ARTWORK")
     button.icon:SetPoint("CENTER"); button.icon:SetSize(size - 4, size - 4)
-    addon.UIHelpers.SetTextureOr(button.icon, look.texture, look.color)
-    if look.crop and button.icon.SetTexCoord then button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    local function applyLook()
+        addon.UIHelpers.SetTextureOr(button.icon, look.texture, look.color)
+        if button.icon.SetTexCoord then
+            if look.crop then button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) else button.icon:SetTexCoord(0, 1, 0, 1) end
+        end
+    end
+    applyLook()
     if look.dev then   -- dev tools wear an orange "DEV" corner tag
         button.tag = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         button.tag:SetPoint("BOTTOMRIGHT", 3, -3); button.tag:SetText("|cffff9020dev|r")
@@ -122,6 +132,11 @@ local function createIconButton(parent, kind, size, tooltip, onClick)
         self.icon:SetAlpha(enabled and 1 or 0.4)
     end
     function button:SetLabel(text) self.tooltip = text end
+    function button:SetKind(newKind)
+        if self.kind == newKind or not ICON_BUTTON[newKind] then return end
+        self.kind, look = newKind, ICON_BUTTON[newKind]
+        applyLook(); paint(self)
+    end
     button:SetScript("OnClick", onClick)
     button:SetScript("OnEnter", function(self)
         self.hovered = true; paint(self)
@@ -269,9 +284,12 @@ end
 ---@param top number
 ---@param scale number
 local function placeWindow(left, top, scale)
+    local changed = math.abs((tonumber(mainFrame:GetScale()) or 1) - scale) > 0.0001
     mainFrame:SetScale(scale)
     mainFrame:ClearAllPoints()
     mainFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left / scale, top / scale)
+    -- the game models were fitted to their old drawn size
+    if changed and addon.CompanionModel then addon.CompanionModel.RefreshAll() end
 end
 
 local function savePlacement()

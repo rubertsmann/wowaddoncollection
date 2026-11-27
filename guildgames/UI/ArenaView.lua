@@ -358,20 +358,7 @@ local function fillMemberRow(row, entry)
     row.info:SetText(available and "" or ArenaView.CandidateShort(entry.reason))
 end
 
--- A dark shade and a 1 px border in `color` around `frame`.
----@param frame table
----@param color number[]
----@param shade number the shade's alpha
-local function addBorder(frame, color, shade)
-    local back = frame:CreateTexture(nil, "BACKGROUND"); back:SetAllPoints(); back:SetColorTexture(0, 0, 0, shade)
-    for _, edge in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
-        { "TOPLEFT", "BOTTOMLEFT", false }, { "TOPRIGHT", "BOTTOMRIGHT", false } }) do
-        local line = frame:CreateTexture(nil, "BORDER")
-        line:SetPoint(edge[1]); line:SetPoint(edge[2])
-        if edge[3] then line:SetHeight(1) else line:SetWidth(1) end
-        line:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
-    end
-end
+local addBorder = addon.UIHelpers.AddBorder
 
 -- An action panel in the fight box (answer a challenge, place a bet): a gold border, a header on a gold strip, room
 -- for one row of controls. Returns the frame and its header.
