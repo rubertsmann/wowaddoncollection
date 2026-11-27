@@ -466,14 +466,16 @@ end
 ---@field canWithdraw boolean
 ---@field canDone boolean
 ---@field canCancel boolean
+---@field unreadChat integer chat messages by others I have not read (only on orders I requested or claim)
 
 ---@param store StoreModule
 ---@param orderBoard OrderBoard
 ---@param filterKey OrderFilterKey
 ---@param showClosed boolean
 ---@param myName string|nil
+---@param chatSeen? table<string, integer> db.ui.chatSeen
 ---@return OrderRow[]
-function Model.BuildOrderRows(store, orderBoard, filterKey, showClosed, myName)
+function Model.BuildOrderRows(store, orderBoard, filterKey, showClosed, myName, chatSeen)
     local myRecord = store.GetCharacter(myName)
     local function iKnow(recipeID) return addon.Store.Knows(myRecord, recipeID) end
     local orderRows = {}
@@ -504,10 +506,96 @@ function Model.BuildOrderRows(store, orderBoard, filterKey, showClosed, myName)
                 claimersRaw = claimers,
                 canWithdraw = isLive and iClaimed or false,
                 canDone = isLive and (order.requester == myName or iClaimed) or false,
-                canCancel = isLive and order.requester == myName }
+                canCancel = isLive and order.requester == myName,
+                unreadChat = addon.Notify.Involved(order, myName) and (addon.Notify.ChatUnread(order, myName, chatSeen)) or 0 }
         end
     end
     return orderRows
+end
+
+------------------------------------------------------------------ order window
+
+---@class OrderHistoryRow
+---@field t integer server time
+---@field kind "created"|"claim"|"withdraw"|"done"|"cancel"
+---@field who string raw canonical name (escape before display)
+
+-- Every status change of an order, oldest first: the recorded events (protocol 2.9) plus what the order's own fields
+-- show (creation, each crafter's last claim or withdrawal, the close), so changes made by older addon versions appear too.
+---@param order Order
+---@return OrderHistoryRow[]
+function Model.OrderHistory(order)
+    local historyRows, seenKeys = {}, {}
+    local function add(eventTime, kind, who)
+        if type(eventTime) ~= "number" or type(who) ~= "string" then return end
+        local key = kind .. "\0" .. who .. "\0" .. eventTime
+        if seenKeys[key] then return end
+        seenKeys[key] = true
+        historyRows[#historyRows + 1] = { t = eventTime, kind = kind, who = who }
+    end
+    add(order.createdAt, "created", order.requester)
+    for _, event in ipairs(order.ev or {}) do add(event.t, event.k, event.b) end
+    for crafter, claim in pairs(order.claims or {}) do add(claim.t, claim.state == "claimed" and "claim" or "withdraw", crafter) end
+    if order.closed then add(order.closedAt, order.closed == "done" and "done" or "cancel", order.closedBy or order.requester) end
+    table.sort(historyRows, function(left, right)
+        if left.t ~= right.t then return left.t < right.t end
+        if left.kind == "created" or right.kind == "created" then return left.kind == "created" and right.kind ~= "created" end
+        if left.kind ~= right.kind then return left.kind < right.kind end
+        return left.who < right.who
+    end)
+    return historyRows
+end
+
+---@class OrderChatRow
+---@field t integer server time
+---@field author string raw canonical name
+---@field text string escaped
+---@field mine boolean
+
+---@param order Order
+---@param myName string|nil
+---@return OrderChatRow[]
+function Model.OrderChatRows(order, myName)
+    local chatRows = {}
+    for index, message in ipairs(order.msgs or {}) do
+        chatRows[index] = { t = message.t, author = message.b, text = escape(message.x), mine = message.b == myName }
+    end
+    return chatRows
+end
+
+---@class OrderOverview
+---@field recipeName string escaped
+---@field icon any
+---@field qty integer
+---@field status OrderStatus
+---@field requester string raw
+---@field claimers string[] raw
+---@field createdAt integer
+---@field closedAt integer|nil
+---@field closedBy string|nil raw
+---@field note string escaped
+---@field reagents ReagentRow[] counts for the whole order (recipe count x quantity)
+---@field tools string[] escaped; empty when unknown
+---@field crafters CrafterRow[] guild members who know the recipe
+
+---@param store StoreModule
+---@param orderBoard OrderBoard
+---@param order Order
+---@param heldCountFunction? fun(itemID: integer): integer
+---@param itemNameFunction? fun(itemID: integer): string|nil
+---@return OrderOverview
+function Model.OrderOverview(store, orderBoard, order, heldCountFunction, itemNameFunction)
+    local recipeDetail = Model.RecipeDetail(store, order.recipeID, heldCountFunction, itemNameFunction)
+    for _, reagentRow in ipairs(recipeDetail.reagents) do
+        reagentRow.count = reagentRow.count * order.qty
+        reagentRow.enough = reagentRow.have >= reagentRow.count
+    end
+    local catalogEntry = store.GetRecipe(order.recipeID)
+    return { recipeName = Model.OrderRecipeName(store, order), icon = recipeDetail.icon, qty = order.qty,
+        status = orderBoard:Status(order), requester = order.requester, claimers = orderBoard:Claimers(order),
+        createdAt = order.createdAt, closedAt = order.closedAt, closedBy = order.closedBy, note = escape(order.note or ""),
+        reagents = recipeDetail.reagents, tools = escapeAll(catalogEntry and catalogEntry.tools or {}),
+        crafters = recipeDetail.crafters }
 end
 
 ------------------------------------------------------------------ mail queue

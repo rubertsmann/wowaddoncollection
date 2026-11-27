@@ -5,11 +5,14 @@ local addonName, addon = ...
 -- what is ProfessionShare's own. Pure: all I/O goes through `environment`, so it is testable offline.
 -- OnMessage returns (status, reason): "ok" | "ignored" | "dropped" | "error", for the network trace (Core/Debug/Trace.lua).
 -- Messages (every message carries v = addon.PROTOCOL and a string type t). The field names are the WIRE FORMAT and stay:
---   HELLO {rev, login?, odig, orev?, ver?}  broadcast (GUILD) or reply (WHISPER): my record versions + digest of my orders
+--   HELLO {rev, login?, odig, xdig?, orev?, ver?}  broadcast (GUILD) or reply (WHISPER): my record versions + digest of
+--                               my orders; xdig = digest of their chat and history (2.9+)
 --   WANT  {names, via?}         "send me your record"; only the sender's own name is honoured
 --   SNAP  {char, catalog}       a character record + catalog entries of its recipes
 --   OPUSH {orders}              whisper: orders the receiver lacks (<= 10 per message)
 --   ORDER {order}               broadcast: one order changed (order may carry a recipe name snapshot, 2.2+)
+--   OMSG {id, m}                broadcast: one chat message on an order, only in the sender's own name (2.9+); orders
+--                               carry optional msgs (chat) and ev (history); ORDER leaves msgs out
 --   WANTO {names, via?}         "send me your offers record" (2.1+)
 --   OFFERS {offers}             a character's offers/dibs record (2.1+)
 --   HELLO.arev, WANTA {names, via?}, ACCESS {access}   a character's dungeon keys and raid attunements (2.4+)
@@ -42,6 +45,7 @@ addon.Sync = Sync
 
 local library = LibStub("LibGuildSync-1.0")
 local ORDERS_PER_PUSH = 10
+local MAXIMUM_PUSH_BYTES = 8000
 
 -- the engine's names, so older callers keep working (Sync.AskNames, Sync.GIVE_UP_RESET_SECONDS, ...)
 setmetatable(Sync, { __index = library.Sync })
@@ -63,6 +67,21 @@ local function canonicalOrder(order)
         local claims = {}
         for crafter, claim in pairs(order.claims) do claims[type(crafter) == "string" and canonical(crafter) or crafter] = claim end
         copy.claims = claims
+    end
+    for _, listField in ipairs({ "msgs", "ev" }) do
+        if type(order[listField]) == "table" then
+            local entries = {}
+            for index, entry in ipairs(order[listField]) do
+                if type(entry) == "table" and type(entry.b) == "string" then
+                    local entryCopy = {}
+                    for key, value in pairs(entry) do entryCopy[key] = value end
+                    entryCopy.b = canonical(entry.b)
+                    entry = entryCopy
+                end
+                entries[index] = entry
+            end
+            copy[listField] = entries
+        end
     end
     return copy
 end
@@ -229,21 +248,51 @@ local function feedbackKind()
     }
 end
 
--- HELLO.odig: the digest of my orders; a peer that lacks some gets them pushed (OPUSH, 10 per message).
+-- A rough size of an order on the wire before compression, so an OPUSH with long chats stays well below the codec's size limit.
+---@param order Order
+---@return integer
+local function estimatedBytes(order)
+    local bytes = 200 + #(order.note or "") + 40 * #(order.ev or {})
+    for _ in pairs(order.claims or {}) do bytes = bytes + 40 end
+    for _, message in ipairs(order.msgs or {}) do bytes = bytes + 50 + #message.x end
+    return bytes
+end
+Sync.EstimatedOrderBytes = estimatedBytes
+
+-- `orders` cut into OPUSH batches of at most ORDERS_PER_PUSH orders and about MAXIMUM_PUSH_BYTES each
+---@param orders Order[]
+---@return Order[][]
+local function pushBatches(orders)
+    local batches, batch, batchBytes = {}, {}, 0
+    for _, order in ipairs(orders) do
+        local bytes = estimatedBytes(order)
+        if #batch > 0 and (#batch >= ORDERS_PER_PUSH or batchBytes + bytes > MAXIMUM_PUSH_BYTES) then
+            batches[#batches + 1] = batch
+            batch, batchBytes = {}, 0
+        end
+        batch[#batch + 1] = order
+        batchBytes = batchBytes + bytes
+    end
+    if #batch > 0 then batches[#batches + 1] = batch end
+    return batches
+end
+Sync.PushBatches = pushBatches
+
+-- HELLO.odig: the digest of my orders; HELLO.xdig (2.9): the digest of their chat and history. A peer that lacks some
+-- gets them pushed (OPUSH, at most 10 orders per message, fewer when they carry long chats).
 ---@param environment ProfessionShareSyncEnvironment
 ---@return SyncHelloHook
 local function ordersHelloHook(environment)
     return {
-        build = function(_, message) message.odig = environment.orders:Digest(100) end,
+        build = function(_, message)
+            message.odig = environment.orders:Digest(100)
+            message.xdig = environment.orders:ExtraDigest(100)
+        end,
         handle = function(sync, message, sender, notes)
             if type(message.odig) ~= "table" then return end
-            local missingOrders = environment.orders:Missing(message.odig, 40)
-            local batchStart = 1
-            while batchStart <= #missingOrders do
-                local batch = {}
-                for index = batchStart, math.min(batchStart + ORDERS_PER_PUSH - 1, #missingOrders) do batch[#batch + 1] = missingOrders[index] end
+            local missingOrders = environment.orders:Missing(message.odig, 40, message.xdig)
+            for _, batch in ipairs(pushBatches(missingOrders)) do
                 sync:_later(1 + environment.random() * 5, { t = "OPUSH", orders = batch }, "WHISPER", sender)
-                batchStart = batchStart + ORDERS_PER_PUSH
             end
             if #missingOrders > 0 then notes[#notes + 1] = ("orders: peer lacks %d -> OPUSH"):format(#missingOrders) end
         end,
@@ -288,6 +337,27 @@ local function onOrder(sync, message)
         sync:_note("ok", "merged")
     else
         sync:_note("ignored", addon.Orders.Sanitize(message.order) and "no change" or "invalid order")
+    end
+end
+
+-- OMSG {id, m}: one chat message on an order (2.9). Only in the sender's own name; an order this client does not hold
+-- yet is ignored (the message comes with the order through OPUSH).
+---@param sync table
+---@param message table
+---@param sender string
+local function onOrderMessage(sync, message, sender)
+    local chatMessage = message.m
+    if type(message.id) ~= "string" or type(chatMessage) ~= "table" then error("bad message") end
+    if canonical(chatMessage.b) ~= sender then
+        sync:_note("dropped", "chat message in another member's name")
+        return
+    end
+    local canonicalMessage = { b = sender, t = chatMessage.t, x = chatMessage.x }
+    if sync.environment.orders:MergeMessage(message.id, canonicalMessage) then
+        sync.environment.onChange("orders")
+        sync:_note("ok", "chat message")
+    else
+        sync:_note("ignored", sync.environment.orders:Get(message.id) and "known or invalid" or "unknown order")
     end
 end
 
@@ -338,10 +408,15 @@ function Sync.New(environment)
     sync:AddHelloHook(windowSpellsHelloHook(environment))
     sync:AddHandler("OPUSH", onOrderPush)
     sync:AddHandler("ORDER", onOrder)
+    sync:AddHandler("OMSG", onOrderMessage)
     sync:AddHandler("DROP", onRecipeDrop)
     sync:AddHandler("DROPA", onRecipeDropAnswer)
+    -- the order without its chat: chat messages go out one by one (BroadcastOrderMessage)
     ---@param order Order
-    function sync:BroadcastOrder(order) self:_send({ t = "ORDER", order = order }, "GUILD") end
+    function sync:BroadcastOrder(order) self:_send({ t = "ORDER", order = addon.Orders.WithoutChat(order) }, "GUILD") end
+    ---@param orderID string
+    ---@param chatMessage OrderMessage
+    function sync:BroadcastOrderMessage(orderID, chatMessage) self:_send({ t = "OMSG", id = orderID, m = chatMessage }, "GUILD") end
     ---@param itemID integer
     function sync:BroadcastDrop(itemID) self:_send({ t = "DROP", item = itemID }, "GUILD") end
     ---@param target string the looter

@@ -22,6 +22,18 @@ local addonName, addon = ...
 ---@field closedAt? integer
 ---@field closedBy? string
 ---@field claims table<string, OrderClaim> by crafter
+---@field msgs? OrderMessage[] chat, oldest first (protocol 2.9)
+---@field ev? OrderEvent[] status changes, oldest first (protocol 2.9)
+
+---@class OrderMessage
+---@field b string author
+---@field t integer server time
+---@field x string text, at most MAXIMUM_MESSAGE_BYTES
+
+---@class OrderEvent
+---@field k "claim"|"withdraw"|"done"|"cancel"
+---@field b string who
+---@field t integer server time
 
 ---@alias OrderStatus "open"|"claimed"|"done"|"cancelled"
 
@@ -33,6 +45,11 @@ addon.Orders = Orders
 Orders.__index = Orders
 
 local MAXIMUM_CLAIMS, MAXIMUM_NOTE_BYTES, MAXIMUM_ID_BYTES = 50, 80, 80
+-- chat and history per order: the newest MAXIMUM_ENTRIES of each are kept; longer incoming lists are not read at all
+local MAXIMUM_ENTRIES, MAXIMUM_INCOMING_ENTRIES, MAXIMUM_MESSAGE_BYTES = 30, 120, 160
+Orders.MAXIMUM_ENTRIES, Orders.MAXIMUM_MESSAGE_BYTES = MAXIMUM_ENTRIES, MAXIMUM_MESSAGE_BYTES
+---@type table<string, boolean>
+local EVENT_KINDS = { claim = true, withdraw = true, done = true, cancel = true }
 local SECONDS_PER_DAY = 86400
 
 ---@param now fun(): integer server time
@@ -51,6 +68,89 @@ local function orderVersion(order)
     return orderVersionSum + (order.closedAt or 0)
 end
 Orders.Version = orderVersion
+
+-- The same for the chat and the history (kept apart from orderVersion, which peers before protocol 2.9 compute too).
+---@param order Order
+---@return number
+local function extraVersion(order)
+    local extraVersionSum = 0
+    for _, message in ipairs(order.msgs or {}) do extraVersionSum = extraVersionSum + message.t end
+    for _, event in ipairs(order.ev or {}) do extraVersionSum = extraVersionSum + event.t end
+    return extraVersionSum
+end
+Orders.ExtraVersion = extraVersion
+
+---@param message OrderMessage
+---@return string
+local function messageKey(message) return message.b .. "\0" .. message.t end
+---@param event OrderEvent
+---@return string
+local function eventKey(event) return event.k .. "\0" .. event.b .. "\0" .. event.t end
+
+-- the newest MAXIMUM_ENTRIES of `entries`, oldest first, one entry per key. Ties are broken by key and text, so every
+-- client keeps the same entries in the same order whatever order they arrived in.
+---@param entries table[]
+---@param keyOf fun(entry: table): string
+---@return table[]
+local function normalizeEntries(entries, keyOf)
+    table.sort(entries, function(left, right)
+        if left.t ~= right.t then return left.t < right.t end
+        local leftKey, rightKey = keyOf(left), keyOf(right)
+        if leftKey ~= rightKey then return leftKey < rightKey end
+        return (left.x or "") < (right.x or "")
+    end)
+    local unique, seenKeys = {}, {}
+    for _, entry in ipairs(entries) do
+        local key = keyOf(entry)
+        if not seenKeys[key] then seenKeys[key] = true; unique[#unique + 1] = entry end
+    end
+    while #unique > MAXIMUM_ENTRIES do table.remove(unique, 1) end
+    return unique
+end
+
+-- Allow-list copy of a chat or history list. A bad entry is dropped, never the whole order (the rest of the order is
+-- still good); a list that is not a table, or one too long to read, counts as empty.
+---@param list any
+---@param kind "msgs"|"ev"
+---@return table[]|nil
+local function sanitizeEntries(list, kind)
+    if type(list) ~= "table" or #list > MAXIMUM_INCOMING_ENTRIES then return nil end
+    local Utility, horizon = addon.Utility, addon.Store.Horizon()
+    local clean = {}
+    for _, entry in ipairs(list) do
+        if type(entry) == "table" and Utility.IsSafeName(entry.b) and Utility.SafeInteger(entry.t, 0, horizon) then
+            if kind == "msgs" then
+                local text = Utility.CleanString(entry.x, MAXIMUM_MESSAGE_BYTES)
+                if text and text:find("%S") then clean[#clean + 1] = { b = entry.b, t = entry.t, x = text } end
+            elseif EVENT_KINDS[entry.k] then
+                clean[#clean + 1] = { k = entry.k, b = entry.b, t = entry.t }
+            end
+        end
+    end
+    if #clean == 0 then return nil end
+    return normalizeEntries(clean, kind == "msgs" and messageKey or eventKey)
+end
+
+-- stored list + incoming list -> the merged list and whether it differs from the stored one
+---@param stored table[]|nil
+---@param incoming table[]|nil
+---@param keyOf fun(entry: table): string
+---@return table[]|nil merged
+---@return boolean changed
+local function mergeEntries(stored, incoming, keyOf)
+    if not incoming then return stored, false end
+    local combined = {}
+    for _, entry in ipairs(stored or {}) do combined[#combined + 1] = entry end
+    for _, entry in ipairs(incoming) do combined[#combined + 1] = entry end
+    local merged = normalizeEntries(combined, keyOf)
+    local changed = #merged ~= #(stored or {})
+    if not changed then
+        for index, entry in ipairs(merged) do
+            if keyOf(entry) ~= keyOf(stored[index]) or entry.x ~= stored[index].x then changed = true; break end
+        end
+    end
+    return merged, changed
+end
 
 ---@param orderID string
 ---@return Order|nil
@@ -126,7 +226,8 @@ local function sanitize(order)
     end
     return { id = order.id, requester = order.requester, recipeID = order.recipeID, qty = order.qty, note = note or "",
         createdAt = order.createdAt, closed = order.closed, closedAt = order.closed and order.closedAt or nil,
-        closedBy = order.closedBy, claims = claims, name = recipeName, loc = recipeName and languageCode or nil }
+        closedBy = order.closedBy, claims = claims, name = recipeName, loc = recipeName and languageCode or nil,
+        msgs = sanitizeEntries(order.msgs, "msgs"), ev = sanitizeEntries(order.ev, "ev") }
 end
 Orders.Sanitize = sanitize
 
@@ -169,7 +270,64 @@ function Orders:Merge(incomingOrder)
             changed = true
         end
     end
-    return changed or orderVersion(stored) ~= versionBefore
+    local messagesChanged, eventsChanged
+    stored.msgs, messagesChanged = mergeEntries(stored.msgs, incoming.msgs, messageKey)
+    stored.ev, eventsChanged = mergeEntries(stored.ev, incoming.ev, eventKey)
+    return changed or messagesChanged or eventsChanged or orderVersion(stored) ~= versionBefore
+end
+
+-- A copy of the order without its chat (ORDER broadcasts: the chat travels as OMSG and with OPUSH).
+---@param order Order
+---@return Order
+function Orders.WithoutChat(order)
+    local copy = {}
+    for key, value in pairs(order) do copy[key] = value end
+    copy.msgs = nil
+    return copy
+end
+
+-- Adds a chat message by `author`; its time is after the author's previous message on this order, so the key is unique.
+-- Returns the message, or nil (unknown order, empty or invalid text). Text longer than MAXIMUM_MESSAGE_BYTES is cut.
+---@param orderID string
+---@param author string
+---@param text string
+---@return OrderMessage|nil
+function Orders:AddMessage(orderID, author, text)
+    local order = self.db[orderID]
+    if not order or type(text) ~= "string" then return nil end
+    local Utility = addon.Utility
+    text = Utility.StripControlCharacters(text):gsub("^%s+", ""):gsub("%s+$", "")
+    if text == "" or not Utility.IsValidUtf8(text) then return nil end
+    text = Utility.TruncateUtf8(text, MAXIMUM_MESSAGE_BYTES)
+    local messageTime = self.now()
+    for _, message in ipairs(order.msgs or {}) do
+        if message.b == author and message.t >= messageTime then messageTime = message.t + 1 end
+    end
+    local message = { b = author, t = messageTime, x = text }
+    order.msgs = mergeEntries(order.msgs, { message }, messageKey)
+    return message
+end
+
+-- Merges one chat message (OMSG) into a known order. Returns true when it was new.
+---@param orderID any
+---@param message any
+---@return boolean
+function Orders:MergeMessage(orderID, message)
+    local order = type(orderID) == "string" and self.db[orderID]
+    if not order then return false end
+    local clean = sanitizeEntries({ message }, "msgs")
+    if not clean then return false end
+    local changed
+    order.msgs, changed = mergeEntries(order.msgs, clean, messageKey)
+    return changed
+end
+
+---@param order Order
+---@param kind "claim"|"withdraw"|"done"|"cancel"
+---@param who string
+---@param eventTime integer
+local function recordEvent(order, kind, who, eventTime)
+    order.ev = mergeEntries(order.ev, { { k = kind, b = who, t = eventTime } }, eventKey)
 end
 
 -- recipeName/languageCode: the recipe name as the requester sees it (catalog entry), sent along so every viewer can show it
@@ -210,6 +368,7 @@ local function setClaim(orderBoard, orderID, crafter, state)
     if not order then return nil end
     local previousClaim = order.claims[crafter]
     order.claims[crafter] = { state = state, t = math.max(orderBoard.now(), (previousClaim and previousClaim.t or 0) + 1) }
+    recordEvent(order, state == "claimed" and "claim" or "withdraw", crafter, order.claims[crafter].t)
     return order
 end
 
@@ -240,6 +399,7 @@ function Orders:Close(orderID, closedBy, closeKind)
         return nil
     end
     order.closed, order.closedAt, order.closedBy = closeKind, self.now(), closedBy
+    recordEvent(order, closeKind == "done" and "done" or "cancel", closedBy, order.closedAt)
     return order
 end
 
@@ -292,17 +452,40 @@ function Orders:Digest(limit)
     return digest
 end
 
--- Orders I hold that the remote digest lacks or has an older version of (at most `limit`, newest first).
+-- { [orderID] = ExtraVersion } for those of the newest `limit` orders that have chat or history (the "xdig" field of
+-- HELLO, protocol 2.9)
+---@param limit? integer default 100
+---@return table<string, number>
+function Orders:ExtraDigest(limit)
+    local orders = {}
+    for _, order in pairs(self.db) do orders[#orders + 1] = order end
+    table.sort(orders, function(left, right) return left.createdAt > right.createdAt end)
+    local digest = {}
+    for index = 1, math.min(limit or 100, #orders) do
+        local version = extraVersion(orders[index])
+        if version > 0 then digest[orders[index].id] = version end
+    end
+    return digest
+end
+
+-- Orders I hold that the remote digest lacks or has an older version of (at most `limit`, newest first). With the
+-- remote's extra digest (a 2.9 peer) also the orders whose chat or history the peer has less of; a peer without it
+-- (2.8 or older) is never sent an order for its chat, it would drop the chat anyway.
 ---@param remoteDigest table<string, any>
 ---@param limit? integer default 40
+---@param remoteExtraDigest? table<string, any>
 ---@return Order[]
-function Orders:Missing(remoteDigest, limit)
+function Orders:Missing(remoteDigest, limit, remoteExtraDigest)
     local missingOrders = {}
     for orderID, order in pairs(self.db) do
         local remoteVersion = remoteDigest[orderID]
-        if remoteVersion == nil or (type(remoteVersion) == "number" and remoteVersion < orderVersion(order)) then
-            missingOrders[#missingOrders + 1] = order
+        local missing = remoteVersion == nil or (type(remoteVersion) == "number" and remoteVersion < orderVersion(order))
+        if not missing and type(remoteExtraDigest) == "table" then
+            local remoteExtra = remoteExtraDigest[orderID]
+            local myExtra = extraVersion(order)
+            missing = myExtra > 0 and (remoteExtra == nil or (type(remoteExtra) == "number" and remoteExtra < myExtra))
         end
+        if missing then missingOrders[#missingOrders + 1] = order end
     end
     table.sort(missingOrders, function(left, right) return left.createdAt > right.createdAt end)
     while #missingOrders > (limit or 40) do table.remove(missingOrders) end

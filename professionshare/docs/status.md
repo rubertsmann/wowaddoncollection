@@ -92,3 +92,12 @@ top bar; mailbox panel lists the mail queue, Fill/Done/Delete per mail; UI + loc
 (suite `384 passed`). Supersedes the tick boxes and controls of 044/045. NOT verified in game: the dropdown, the
 right-click menu, the icons, the buy-list dialog, the mailbox panel. Checklist:
 `features/046-order-row-actions-and-mailbox-queue-list/verify.md`.
+
+**Feature 047 (Settings: "Tell me about" dropdown, new scope "Orders I have the profession level for"; UI + local
+setting):** built and proven OFFLINE (`tests/test_notify.lua`, `test_load.lua`; suite `387 passed`). NOT verified in
+game: the dropdown and hint. Checklist: `features/047-notification-scope-dropdown-and-profession-level-scope/verify.md`.
+**Feature 048 (order window: overview, chat, history; protocol 2.9, schema unchanged):** built and proven OFFLINE
+(`tests/test_order_chat.lua`, `test_sync.lua`, `test_load.lua`; suite `402 passed, 0 failed`). NOT verified in game: the
+window look, typing and Enter, `GetTradeSkillTools` on Forever, chat between two members. Checklist:
+`features/048-order-detail-window-with-chat-and-history/verify.md`.
+Released in 1.6.0 (features 047, 048 done): the user confirmed the order window, chat and alert in game on one client (2026-11-27); two members chatting and the tools API remain unchecked (accepted).

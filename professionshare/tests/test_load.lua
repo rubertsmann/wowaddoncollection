@@ -113,6 +113,21 @@ return {
                 harness.equal(#addon.db.ui.buyListOrders[addon.Utility.Me()], 0)
                 Auctionator = nil
                 addon.AuctionatorBridge.SetPendingSearch(nil)
+                -- the order window: every tab, a chat message sent from it, a peer's message counts as unread
+                addon.orders:Claim(buyOrderA.id, addon.Utility.Me())
+                for _, tabKey in ipairs({ "overview", "history", "chat" }) do
+                    local okWindow, errWindow = pcall(addon.OrderWindow.Open, buyOrderA.id, tabKey)
+                    harness.truthy(okWindow, "the order window failed on " .. tabKey .. ": " .. tostring(errWindow))
+                end
+                addon.orders:MergeMessage(buyOrderA.id, { b = "B-R", t = addon.Utility.Now() + 5, x = "when | can you?" })
+                harness.truthy(pcall(addon.UI.Refresh), "the orders tab with an unread chat failed")
+                local unreadRows = addon.Model.BuildOrderRows(addon.Store, addon.orders, "all", false, addon.Utility.Me(), addon.db.ui.chatSeen)
+                local unreadFound = false
+                for _, orderRow in ipairs(unreadRows) do if orderRow.id == buyOrderA.id then unreadFound = orderRow.unreadChat == 1 end end
+                harness.truthy(unreadFound, "the peer's message is unread on the row")
+                harness.truthy(pcall(addon.OrderWindow.Open, buyOrderA.id, "chat"))
+                harness.equal(addon.Notify.ChatUnread(addon.orders:Get(buyOrderA.id), addon.Utility.Me(), addon.db.ui.chatSeen), 0,
+                    "showing the chat marks it read")
                 -- the row's mail action queues a mail for the requester
                 local okMailOrder, errMailOrder = pcall(addon.UI.MailOrder, buyOrderA.id, "item", nil)
                 harness.truthy(okMailOrder, "the mail action failed: " .. tostring(errMailOrder))
@@ -204,6 +219,13 @@ return {
                     harness.truthy(addon.Store.db.chars["Fake Enchanter"], "the realm-free fake enchanter was added")
                     harness.truthy(addon.Store.keptNames["Fake Enchanter"], "and kept from the prune")
                     -- dev fake key holder: keys, then Naxxramas on the same local-only record
+                    -- dev fake chat answer: lands on an order as a message from someone else
+                    local chatOrder = addon.orders:Create(addon.Utility.Me(), 1, 1, "")
+                    local okChat, chatResult = pcall(addon.DevProbe.AddFakeChatMessage, {})
+                    harness.truthy(okChat and chatResult and chatResult.ok, "fake chat failed: " .. tostring(chatResult and (chatResult.why or chatResult)))
+                    harness.truthy(#(addon.orders:Get(chatResult.orderID).msgs or {}) >= 1)
+                    harness.truthy(chatResult.author ~= addon.Utility.Me(), "the fake answer is not from me")
+                    addon.orders.db[chatOrder.id] = nil
                     local okK, errK = pcall(addon.DevProbe.AddFakeKeys)
                     harness.truthy(okK, "fake keys failed: " .. tostring(errK))
                     local okX, errX = pcall(addon.DevProbe.AddFakeNaxxramas)

@@ -508,6 +508,66 @@ function DevProbe.AddFakeLinenOrder(arguments)
     return DevProbe.AddFakeOrder({ recipeID, (arguments and arguments[1]) or 3 })
 end
 
+---@type string[]
+local FAKE_CHAT_LINES = { "Do you have the mats, or should I bring them?", "I can craft it tonight after the raid.",
+    "Sent you the reagents by mail.", "Done, check your mailbox!", "Could you make one more?" }
+local fakeChatCount = 0
+
+-- The order a fake chat message goes to: the one open in the order window, else the newest order I requested or
+-- claim, else the newest order.
+---@return Order|nil
+local function fakeChatOrder()
+    local shownOrderID = addon.OrderWindow and addon.OrderWindow.ShownOrder()
+    if shownOrderID and addon.orders:Get(shownOrderID) then return addon.orders:Get(shownOrderID) end
+    local myName, newestInvolved, newestAny = addon.Utility.Me(), nil, nil
+    for _, order in pairs(addon.orders.db) do
+        if not newestAny or order.createdAt > newestAny.createdAt then newestAny = order end
+        if addon.Notify.Involved(order, myName) and (not newestInvolved or order.createdAt > newestInvolved.createdAt) then
+            newestInvolved = order
+        end
+    end
+    return newestInvolved or newestAny
+end
+
+-- A chat message from a fake member on an order, merged as if it had arrived from the guild (unread count, sound, chat
+-- line when the order is mine or claimed by me). The author is the order's requester or a claimer other than me, else a
+-- fake member. arguments[1] = seconds to wait first (close the window to see the alert). Local only, never sent.
+---@param arguments? integer[]
+---@return table result
+function DevProbe.AddFakeChatMessage(arguments)
+    local delaySeconds = math.max(0, math.min(300, (arguments and arguments[1]) or 0))
+    local function post()
+        local order = addon.orders and fakeChatOrder()
+        if not order then
+            addon.Print("fake chat: no order yet (/psd fake order makes one)")
+            return recordCheck("chat", { ok = false, why = "no order" })
+        end
+        local myName, author = addon.Utility.Me(), nil
+        if order.requester ~= myName then author = order.requester end
+        for _, crafter in ipairs(addon.orders:Claimers(order)) do if not author and crafter ~= myName then author = crafter end end
+        author = author or fakeMember(order.requester == myName and "Crafter" or "Requester")
+        fakeChatCount = fakeChatCount + 1
+        local text = FAKE_CHAT_LINES[(fakeChatCount - 1) % #FAKE_CHAT_LINES + 1]
+        local messageTime = addon.Utility.Now()
+        for _, message in ipairs(order.msgs or {}) do
+            if message.b == author and message.t >= messageTime then messageTime = message.t + 1 end
+        end
+        if not addon.orders:MergeMessage(order.id, { b = author, t = messageTime, x = text }) then
+            addon.Print("fake chat: the message was not taken")
+            return recordCheck("chat", { ok = false, why = "not merged" })
+        end
+        addon.Events.Fire("DATA_CHANGED", "orders")
+        addon.Print(("fake chat: %s wrote on %s. Not sent to the guild."):format(author, addon.Utility.ChatSafe(order.name or tostring(order.recipeID))))
+        return recordCheck("chat", { ok = true, orderID = order.id, author = author })
+    end
+    if delaySeconds > 0 and C_Timer then
+        addon.Print(("fake chat: a message arrives in %d s"):format(delaySeconds))
+        C_Timer.After(delaySeconds, post)
+        return { ok = true, delayed = delaySeconds }
+    end
+    return post()
+end
+
 -- Deletes the fake orders and the mail jobs made from them; returns what was removed.
 ---@param fakeNames table<string, boolean>
 ---@return string[]
@@ -1201,6 +1261,7 @@ DevProbe.ENTRIES = {
     { key = "feedback", section = "Members", label = "Tester: 3 feedback messages", run = function() DevProbe.AddFakeFeedback() end },
     { key = "order", section = "Members", label = "Order from a fake member (mail queue)", run = function(arguments) DevProbe.AddFakeOrder(arguments) end },
     { key = "linen", section = "Members", label = "Order needing Linen Cloth (mail queue)", run = function(arguments) DevProbe.AddFakeLinenOrder(arguments) end },
+    { key = "chat", section = "Triggers", label = "Chat answer on an order (n = delay in s)", run = function(arguments) DevProbe.AddFakeChatMessage(arguments) end },
     { key = "cooldowns", section = "Members", label = "Crafters: cooldowns in every state", run = function() DevProbe.AddFakeCooldowns() end },
     { key = "cdsoon", section = "Triggers", label = "A cooldown ends in 20 s", run = function() DevProbe.AddFakeCooldownEnding() end },
     { key = "cdprobe", section = "Probes", label = "Craft cooldowns (/ps cd)", run = function() addon.SlashCommands.cd("") end },

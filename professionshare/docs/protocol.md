@@ -259,3 +259,26 @@ Diagnosis only, like `ver` (section 11): a 2.8 peer without it ignores the unkno
   `/ps spellids` compares it with the static `ProfessionSpells.WINDOW`, which is edited by hand.
 - Stored: `windowSpells` (mine) and `windowSpellReports` (developer only), created empty by `withAllTables`, kept
   through `/ps clean` and the version reset.
+
+## 18. Order chat and history (protocol 2.9, schema unchanged; feature 048)
+Additive minor change: a 2.8 peer drops `OMSG` as an unknown message type, ignores `xdig`, and its `Orders.Sanitize`
+(allow-list) drops the new order fields, so orders keep syncing between both versions.
+- **Order fields (optional):** `msgs = { {b, t, x} }` chat messages (author, server time, text) and `ev = { {k, b, t} }`
+  status changes (`k` one of `claim withdraw done cancel`), each oldest first. Merge = union, one entry per `b`+`t`
+  (`k`+`b`+`t` for events), the newest 30 of each kept; ties sort by key and text, so every client keeps the same set.
+  Validation: names safe, times in `[0, now + 1 day]`, text UTF-8 <= 160 bytes without control characters and not
+  blank; a bad entry is dropped (never the whole order), a list longer than 120 is not read.
+- **`Orders.Version` unchanged** (2.8 peers compute the same number). The chat and the history have their own number
+  `ExtraVersion` = sum of the entry times.
+- **`HELLO` field `xdig`:** `{ [orderID] = ExtraVersion }` for those of the newest 100 orders that have chat or events
+  (always sent, `{}` when none). A receiver pushes (OPUSH) an order whose extra part the peer lacks only when the peer
+  sent `xdig`; a 2.8 peer is never sent orders for their chat.
+- **`OMSG {id, m = {b, t, x}}` on GUILD:** one new chat message. `m.b` must equal the sender (canonical form), else it is
+  dropped; an unknown order id is ignored (the message arrives later with OPUSH).
+- **`ORDER`** broadcasts carry `ev` but not `msgs` (chat travels as `OMSG` and with OPUSH). OPUSH batches are cut at 10
+  orders or about 8000 estimated bytes, whichever comes first.
+- **Catalog field `tools` (optional):** up to 4 tool or place names (<= 60 bytes, no `|`) a recipe needs, read from
+  `GetTradeSkillTools` where the client has it. A 2.8 peer drops it.
+- Trust: relayed chat (OPUSH) is trusted like claims (guild members are trusted); live messages only in the sender's
+  name. Display: chat text and names are escaped (`Utility.Escape`); chat lines in the chat frame use `Utility.ChatSafe`.
+- Local data: `ui.chatSeen[orderID] = time of the newest message read`, pruned with the orders.

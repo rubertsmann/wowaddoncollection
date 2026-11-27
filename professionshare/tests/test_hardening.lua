@@ -170,7 +170,7 @@ return {
     ["comm: a newer MINOR is processed and noted; an older minor is processed silently (RF7)"] = function(harness)
         local c = commNs(harness, "Me-R", {})
         local enc = c.addon.Codec.Encode({ t = "HELLO", rev = 0 })
-        c.C.OnAddonMessage("PShare", "2.9|a1|1|1|" .. enc, "GUILD", "A-R")
+        c.C.OnAddonMessage("PShare", "2.99|a1|1|1|" .. enc, "GUILD", "A-R")
         harness.equal(c.C.sync.statistics.received, 1); harness.equal(#c.prints, 1)
         c.C.OnAddonMessage("PShare", "2.0|a2|1|1|" .. enc, "GUILD", "B-R")
         harness.equal(c.C.sync.statistics.received, 2); harness.equal(#c.prints, 1)

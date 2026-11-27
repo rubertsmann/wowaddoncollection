@@ -12,7 +12,7 @@ local Text = addon.Text
 local library = LibStub("LibGuildSync-1.0")
 
 ---@type table<string, boolean> small single-chunk control messages that jump the queue
-local PRIORITY_TYPES = { ORDER = true, WANT = true, WANTO = true, WANTA = true, WANTF = true, HELLO = true, DROP = true, DROPA = true }
+local PRIORITY_TYPES = { ORDER = true, OMSG = true, WANT = true, WANTO = true, WANTA = true, WANTF = true, HELLO = true, DROP = true, DROPA = true }
 -- record answers: a newer one to the same recipient replaces one that is still waiting (it would be outdated on arrival)
 ---@type table<string, boolean>
 local REPLACEABLE_TYPES = { SNAP = true, OFFERS = true, ACCESS = true, FEEDBACK = true }
@@ -73,6 +73,12 @@ addon.Communication = Communication
 ---@param order Order
 function Communication.BroadcastOrder(order)
     if Communication.active then Communication.sync:BroadcastOrder(order) end
+end
+
+---@param orderID string
+---@param chatMessage OrderMessage
+function Communication.BroadcastOrderMessage(orderID, chatMessage)
+    if Communication.active then Communication.sync:BroadcastOrderMessage(orderID, chatMessage) end
 end
 
 ---@param itemID integer

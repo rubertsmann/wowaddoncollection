@@ -13,6 +13,10 @@ shared crafting-order board.
 * **Orders tab** – guild-wide board: requests, "I'll craft it" claims, done/cancel; everyone sees who claimed what. One
   filter dropdown; right-click an order for its actions. **Craft** (top bar) opens the selected order's profession with
   the recipe selected, a second click crafts the ordered quantity.
+* **Order window** – the speech-bubble icon on an order opens it: **Overview** (status, who and when, note, reagents for
+  the whole quantity with what you hold, tools, who knows the recipe), **Chat** (the whole guild reads and writes; new
+  messages on your own or claimed orders notify you and show as a number on the icon) and **History** (every status
+  change with date and time).
 * **Row actions** – icons on each order: mail the reagents to the crafter, mail the crafted item to the requester and,
   with Auctionator installed, add the reagents to a collected buy list that Auctionator searches the next time you open
   the auction house (**Subtract what I have** buys only what bags and bank are missing).
@@ -20,7 +24,9 @@ shared crafting-order board.
   subject, exact amounts), you press Send; **Done** and **Delete** per mail. The **Mail** tab lists the queue too.
 * Hover a recipe icon in any list to see the recipe; click it to whisper the crafter/requester with the link typed in.
 * **Notifications** – new orders for your professions (and claims/completions of your own orders) show as a number on the
-  minimap button, plus a sound and a chat line; screen message and taskbar flash optional. `/ps options` to configure.
+  minimap button, plus a sound and a chat line; screen message and taskbar flash optional. `/ps options` to configure;
+  "Tell me about" picks which orders count: recipes you know, recipes your profession rank is high enough for, your
+  professions, or all.
 * **Find recipes by what they make** – profession dropdown, category checkboxes (head, chest, food, ...) and a free-text
   search that also matches item effects and stats ("intellect", "agility").
 * **Misc Items tab** – a dropdown switches between four lists, each a table with its own columns (choose them in the
@@ -103,7 +109,7 @@ The UI is available in English and German; profession and recipe names always fo
   | `Core/Net/` | addon-channel communication on LibGuildSync | Codec, Guard, Sync, Communication |
   | `Core/Game/` | the WoW API boundary | Api, Events, Drops, Auctionator (optional bridge, the only file touching Auctionator), MailSender (fills the Send Mail form) |
   | `Core/View/` | view-models for the UI (pure) | Model, Names, ItemText, Notify |
-  | `UI/` | frames | Window, MailPanel, CooldownGrid, Alerts, DevProbe and MailProbe (dev build only) |
+  | `UI/` | frames | Window, OrderWindow (one order: overview, chat, history), MailPanel, CooldownGrid, Alerts, DevProbe and MailProbe (dev build only) |
   | `Libs/LibGuildSync/` | shared with GuildGames: transport, record-pull engine, names, log, trace, widgets | junction to `../libguildsync` in a working copy (`tools/deploy.ps1`), real files in the zip |
 
   Everything in `Core/` except `Core/Game/` is pure Lua and runs in the offline tests.

@@ -98,7 +98,7 @@ function Scanner.Refresh(now)
         for _, openRecipe in ipairs(openProfession.recipes) do
             knownRecipes[openRecipe.recipeID] = true
             catalogEntries[openRecipe.recipeID] = { name = openRecipe.name, loc = clientLanguageCode, icon = openRecipe.icon,
-                produces = openRecipe.produces, reagents = openRecipe.reagents }
+                produces = openRecipe.produces, reagents = openRecipe.reagents, tools = openRecipe.tools }
         end
         profession.recipes = knownRecipes
         characterRecord.professions[openProfession.name] = profession

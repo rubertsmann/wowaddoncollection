@@ -49,6 +49,10 @@ local function describe(unseenOrder)
             if crafter ~= me() then crafterNames[#crafterNames + 1] = addon.Utility.ShortName(crafter) end
         end
         return Format(Text["{who} will craft your order {name}"], { who = table.concat(crafterNames, ", "), name = plainRecipeName(order) })
+    elseif unseenOrder.kind == "chat" then
+        local message = unseenOrder.message
+        return Format(Text["{who} about {name}: {text}"], { who = addon.Utility.ShortName(message.b), name = plainRecipeName(order),
+            text = addon.Utility.ChatSafe(message.x) })
     end
     return Format(Text["{who} finished your order {name}"],
         { who = addon.Utility.ShortName(order.closedBy or "?"), name = plainRecipeName(order) })
@@ -134,8 +138,10 @@ function Alerts.Update()
     if not alertState.started or not settings or not addon.orders then return end
     if settings.notifySeen == nil then settings.notifySeen = Notify.MarkSeen(addon.orders, nil) end   -- first run: the existing board is not news
     if ordersTabVisible() then settings.notifySeen = Notify.MarkSeen(addon.orders, settings.notifySeen) end
+    if settings.chatSeen == nil then settings.chatSeen = Notify.MarkAllChatSeen(addon.orders, nil) end   -- older chat is not news
     local unseenOrders = Notify.Unseen(addon.Store, addon.orders, me(), settings.notifySeen,
         { scope = setting("scope"), mine = setting("mine") })
+    for _, unseenChat in ipairs(Notify.UnseenChat(addon.orders, me(), settings.chatSeen)) do unseenOrders[#unseenOrders + 1] = unseenChat end
     local freshOrders, currentKeys = Notify.Fresh(alertState.previousKeys, unseenOrders)
     local primed = alertState.previousKeys ~= nil
     alertState.previousKeys = currentKeys
@@ -152,9 +158,22 @@ function Alerts.Seen()
     if not settings or not addon.orders then return end
     settings.notifySeen = Notify.MarkSeen(addon.orders, settings.notifySeen)
     if alertState.started then
-        alertState.previousKeys = {}   -- nothing is unseen now; what comes later is fresh again
-        addon.UI.SetNotice(0, false)
+        -- only unread chat is left; it is read in the order window (Alerts.ChatSeen)
+        local unseenChats = Notify.UnseenChat(addon.orders, me(), settings.chatSeen)
+        local remainingKeys = {}
+        for _, unseenChat in ipairs(unseenChats) do remainingKeys[unseenChat.id .. "|" .. unseenChat.key] = true end
+        alertState.previousKeys = remainingKeys   -- what comes later is fresh again
+        addon.UI.SetNotice(#unseenChats, #unseenChats > 0 and setting("icon"), not setting("badge"))
     end
+end
+
+-- The player read the chat of `order` (the order window shows it).
+---@param order Order
+function Alerts.ChatSeen(order)
+    local settings = interfaceSettings()
+    if not settings or not order then return end
+    settings.chatSeen = Notify.MarkChatSeen(Notify.PruneChatSeen(addon.orders, settings.chatSeen), order)
+    Alerts.Update()
 end
 
 function Alerts.Start()
@@ -177,8 +196,21 @@ local settingsCategory
 ---@param scope NotifyScope
 ---@return string
 local function scopeLabel(scope)
-    local labels = { profession = Text["Orders for my professions"], known = Text["Orders for recipes I know"], all = Text["All orders"] }
+    local labels = { profession = Text["Orders for my professions"], known = Text["Orders for recipes I know"],
+        level = Text["Orders I have the profession level for"], all = Text["All orders"] }
     return labels[scope] or scope
+end
+
+-- what the selected scope means (shown under the dropdown)
+---@param scope NotifyScope
+---@return string
+local function scopeHint(scope)
+    if scope == "known" then return Text["Only orders for recipes you know: you can craft them now."] end
+    if scope == "level" then
+        return Text["Also orders for recipes you do not know yet when your profession rank is high enough: the rank of the guild member who learned the recipe at the lowest rank counts."]
+    end
+    if scope == "profession" then return Text["My professions: also orders for recipes of a profession you have that you do not know yet."] end
+    return Text["Every open order of the guild."]
 end
 
 ---@param soundName string
@@ -318,16 +350,32 @@ local function buildOptionsPanel()
 
     local scopeLabelText = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     scopeLabelText:SetPoint("TOPLEFT", 20, nextTop - 6); scopeLabelText:SetText(Text["Tell me about"])
-    local scopeButton = newButton(220, 22); scopeButton:SetPoint("LEFT", scopeLabelText, "RIGHT", 10, 0)
-    scopeButton:SetScript("OnClick", function()
-        Notify.Set(interfaceSettings(), "scope", nextChoice(Notify.SCOPES, setting("scope"))); refreshPanel(); Alerts.Update()
-    end)
-    refreshers[#refreshers + 1] = function() scopeButton:SetText(scopeLabel(setting("scope"))) end
+    local function chooseScope(scope)
+        Notify.Set(interfaceSettings(), "scope", scope); refreshPanel(); Alerts.Update()
+    end
+    -- a dropdown listing every scope; the old cycling button where the client has no menu dropdowns
+    local dropdownOk, scopeDropdown = pcall(CreateFrame, "DropdownButton", nil, content, "WowStyle1DropdownTemplate")
+    if dropdownOk and type(scopeDropdown) == "table" and scopeDropdown.SetupMenu then
+        scopeDropdown:SetWidth(280)
+        scopeDropdown:SetupMenu(function(_, rootMenu)
+            local function isSelectedScope(scope) return setting("scope") == scope end
+            for _, scope in ipairs(Notify.SCOPES) do rootMenu:CreateRadio(scopeLabel(scope), isSelectedScope, chooseScope, scope) end
+        end)
+        refreshers[#refreshers + 1] = function()
+            if scopeDropdown.OverrideText then scopeDropdown:OverrideText(scopeLabel(setting("scope")))
+            elseif scopeDropdown.GenerateMenu then scopeDropdown:GenerateMenu() end
+        end
+    else
+        scopeDropdown = newButton(280, 22)
+        scopeDropdown:SetScript("OnClick", function() chooseScope(nextChoice(Notify.SCOPES, setting("scope"))) end)
+        refreshers[#refreshers + 1] = function() scopeDropdown:SetText(scopeLabel(setting("scope"))) end
+    end
+    scopeDropdown:SetPoint("LEFT", scopeLabelText, "RIGHT", 10, 0)
     nextTop = nextTop - 30
     local scopeHintText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     scopeHintText:SetPoint("TOPLEFT", 20, nextTop); scopeHintText:SetWidth(560); scopeHintText:SetJustifyH("LEFT")
-    scopeHintText:SetText(Text["My professions: also orders for recipes of a profession you have that you do not know yet."])
-    nextTop = nextTop - 24
+    refreshers[#refreshers + 1] = function() scopeHintText:SetText(scopeHint(setting("scope"))) end
+    nextTop = nextTop - 34
     local testAllButton = newButton(220, 24); testAllButton:SetPoint("TOPLEFT", 20, nextTop)
     testAllButton:SetText(Text["Test all notifications"])
     testAllButton:SetScript("OnClick", function() Alerts.Test() end)

@@ -50,6 +50,37 @@ return {
         harness.equal(#addon.Notify.Unseen(addon.Store, orders, ME, {}, ALL), 2)
     end,
 
+    ["notify: level scope: my rank reaches the lowest rank of those who know the recipe"] = function(harness)
+        local LEVEL = { scope = "level", mine = false }
+        local function ranked(name, id, rank, recipes)
+            local entry = prof(name, id, recipes); entry.rank = rank
+            return entry
+        end
+        local addon, orders = setup(harness, { Cooking = ranked("Cooking", 185, 60, { 100 }), Tailoring = ranked("Tailoring", 197, 40, {}) })
+        -- Mira knows 101 at Cooking 50 and 300 at Tailoring 50; Orin knows 101 at Cooking 120 (the lowest knower counts)
+        addon.Store.PutCharacter({ name = "Orin Vale", class = "MAGE", level = 60, rev = 1, professions = {
+            Cooking = ranked("Cooking", 185, 120, { 101 }) } })
+        orders:Create("Mira Holt", 101, 1, "")   -- Cooking: lowest knower 50, my Cooking 60 -> news
+        orders:Create("Mira Holt", 300, 1, "")   -- Tailoring: lowest knower 50, my Tailoring 40 -> not news
+        orders:Create("Mira Holt", 100, 1, "")   -- I know it -> news
+        orders:Create("Mira Holt", 555, 1, "")   -- nobody knows it, no catalog rank -> not news
+        local found = {}
+        for _, unseen in ipairs(addon.Notify.Unseen(addon.Store, orders, ME, {}, LEVEL)) do found[#found + 1] = unseen.order.recipeID end
+        table.sort(found)
+        harness.equal(table.concat(found, ","), "100,101")
+    end,
+
+    ["notify: level scope uses the catalog rank when there is one; no rank data means no"] = function(harness)
+        local LEVEL = { scope = "level", mine = false }
+        local addon, orders = setup(harness, { Tailoring = prof("Tailoring", 197, {}) })   -- my Tailoring rank 50
+        addon.Store.PutCatalog({ [300] = { name = "Bolt", reagents = {}, minSkill = 75 } })
+        orders:Create("Mira Holt", 300, 1, "")   -- catalog says 75, Mira knows it at 50: the catalog wins -> not news
+        harness.equal(#addon.Notify.Unseen(addon.Store, orders, ME, {}, LEVEL), 0)
+        harness.equal(addon.Notify.RecipeRanks(addon.Store, 300)[197], 75)
+        harness.equal(addon.Notify.RecipeRanks(addon.Store, 555)[197], nil)
+        harness.equal(addon.Notify.Get({ notify = { scope = "level" } }, "scope"), "level", "the new value is a valid setting")
+    end,
+
     ["notify: without any profession nothing is relevant"] = function(harness)
         local addon, orders = setup(harness, {})
         orders:Create("Mira Holt", 101, 1, "")

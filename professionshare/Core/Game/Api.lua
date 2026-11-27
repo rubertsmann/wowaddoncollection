@@ -167,6 +167,7 @@ end
 ---@field icon any
 ---@field produces integer|nil
 ---@field reagents ReagentEntry[]
+---@field tools? string[] names of the tools or places the recipe needs (Blacksmith Hammer, Anvil), legacy API only
 
 ---@class OpenProfession
 ---@field name string
@@ -235,6 +236,18 @@ local function readOpenProfessionLegacy()
                     local reagentItemID = itemIDOf(GetTradeSkillReagentItemLink and GetTradeSkillReagentItemLink(skillIndex, reagentIndex))
                     if reagentItemID then
                         openRecipe.reagents[#openRecipe.reagents + 1] = { itemID = reagentItemID, count = reagentCount or 1, name = reagentName }
+                    end
+                end
+                -- GetTradeSkillTools returns name, has, name, has, ... (the has flags are this player's and are not kept)
+                local toolValues = GetTradeSkillTools and { pcall(GetTradeSkillTools, skillIndex) }
+                if toolValues and toolValues[1] then
+                    for valueIndex = 2, #toolValues, 2 do
+                        local toolName = toolValues[valueIndex]
+                        if type(toolName) == "string" and toolName ~= "" and #toolName <= 60 and not toolName:find("|", 1, true)
+                            and #(openRecipe.tools or {}) < 4 then
+                            openRecipe.tools = openRecipe.tools or {}
+                            openRecipe.tools[#openRecipe.tools + 1] = toolName
+                        end
                     end
                 end
                 recipes[#recipes + 1] = openRecipe

@@ -2,6 +2,16 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.6.0 (2026-11-27, protocol 2.9, schema 9)
+- **Order window** (feature 048): the speech-bubble icon on an order row opens the order with three tabs: **Overview**
+  (status, people, dates, note, reagents for the whole quantity with what you hold, tools, who knows the recipe),
+  **Chat** (every guild member reads and writes; messages on your own or claimed orders notify you and show as a
+  number on the icon) and **History** (every status change with date and time). Protocol 2.9 (additive): order fields
+  `msgs`/`ev`, HELLO `xdig`, message `OMSG`, catalog `tools`; 2.8 members keep syncing orders without the chat.
+- Settings, Order notifications: **Tell me about** is a dropdown listing every choice, with a new one: **Orders I have
+  the profession level for** (also recipes you do not know yet when your rank is high enough; the lowest rank of a guild
+  member who knows the recipe counts). No protocol or schema change.
+
 ## 1.5.0 (2026-11-27, protocol 2.8, schema 9)
 - **Orders tab reworked:** one filter dropdown (which orders, plus "Show finished"); right-click an order for its
   actions (I'll craft it, Withdraw, Mark done, Cancel, Whisper, the mail and buy-list actions); the bottom button row is

@@ -46,6 +46,7 @@ local addonName, addon = ...
 ---@field produces? integer item id the recipe makes
 ---@field minSkill? integer
 ---@field reagents ReagentEntry[]
+---@field tools? string[] names of the tools or places the recipe needs (Blacksmith Hammer, Anvil), legacy API only
 
 ---@class CrafterRow
 ---@field name string
@@ -667,8 +668,18 @@ function Store.SanitizeCatalogEntry(catalogEntry)
         if reagent.name ~= nil and (not Utility.CleanString(reagent.name, 100) or reagent.name:find("|", 1, true)) then return nil end
         reagents[index] = { itemID = reagent.itemID, count = reagent.count, name = reagent.name }
     end
+    local tools
+    if catalogEntry.tools ~= nil then
+        if type(catalogEntry.tools) ~= "table" or #catalogEntry.tools > 4 then return nil end
+        tools = {}
+        for index, toolName in ipairs(catalogEntry.tools) do
+            if not Utility.CleanString(toolName, 60) or toolName == "" or toolName:find("|", 1, true) then return nil end
+            tools[index] = toolName
+        end
+        if #tools == 0 then tools = nil end
+    end
     return { name = catalogEntry.name, loc = catalogEntry.loc, icon = catalogEntry.icon, produces = catalogEntry.produces,
-        minSkill = catalogEntry.minSkill, reagents = reagents }
+        minSkill = catalogEntry.minSkill, reagents = reagents, tools = tools }
 end
 
 ---@param catalogEntry any

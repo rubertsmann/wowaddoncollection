@@ -1,4 +1,22 @@
-# ProfessionShare 1.5.0
+# ProfessionShare 1.6.0
+
+Every order now has its own window. Click the speech-bubble icon on an order: the Overview shows everything about it
+at a glance (who asked for it and when, who is crafting it, the note, the reagents for the whole order with how many
+you have, the tools the recipe needs, and who in the guild knows the recipe). The History tab lists every step of the
+order with date and time: placed, claimed, withdrawn, done or cancelled.
+
+New: talk about an order right where it is. The Chat tab of the order window lets everyone in the guild who uses the
+addon read and write about that order. When someone writes on an order you placed or are crafting, you are told like
+for other order news (the number on the minimap button and on the order's icon, the sound and a chat line); opening
+the chat marks it read.
+
+Settings: "Tell me about" is now a dropdown with every choice, and there is a new one, "Orders I have the profession
+level for": you also hear about orders for recipes you do not know yet when your profession is high enough to learn
+them.
+
+Guild members on an older version keep seeing and syncing orders as before; they just do not see the chat. Update to
+chat with them.
+
 
 The Orders tab is easier to use. One filter menu at the top replaces the "Show" and "Show finished" buttons, and you
 can right-click any order to claim it, withdraw, mark it done, cancel it or whisper. Each order also has small icons

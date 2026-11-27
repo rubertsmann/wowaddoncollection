@@ -122,4 +122,69 @@ return {
         -- 1 hello + <= 20 login replies + one WANT and one SNAP per other peer: linear, no duplicate pulls
         harness.truthy(maxSent <= 3 * #peers, "a peer sent " .. maxSent .. " messages")
     end,
+
+    ["sync: order chat travels live (OMSG) and after login (HELLO xdig -> OPUSH)"] = function(harness)
+        local bus = newBus()
+        local a, b = peer(harness, bus, "A-R", 1), peer(harness, bus, "B-R", 2)
+        local ord = a.orders:Create("A-R", 7, 1, "")
+        a.sync:BroadcastOrder(ord); pump(harness, bus)
+        harness.clock = harness.clock + 1
+        a.sync:BroadcastOrderMessage(ord.id, a.orders:AddMessage(ord.id, "A-R", "need it by friday"))
+        pump(harness, bus)
+        harness.equal(b.orders:Get(ord.id).msgs[1].x, "need it by friday")
+        -- C missed the message: its HELLO carries an extra digest without the chat, so it is pushed
+        local c = peer(harness, bus, "C-R", 3)
+        c.orders:Merge(a.addon.Orders.WithoutChat(ord))
+        c.sync:Hello(false); pump(harness, bus); advance(harness, bus, 8)
+        harness.equal(#(c.orders:Get(ord.id).msgs or {}), 1)
+    end,
+
+    ["sync: ORDER broadcasts leave the chat out; a forged chat author is dropped (RF2)"] = function(harness)
+        local bus = newBus()
+        local a, b = peer(harness, bus, "A-R", 1), peer(harness, bus, "B-R", 2)
+        local ord = a.orders:Create("A-R", 7, 1, "")
+        a.orders:AddMessage(ord.id, "A-R", "first")
+        a.sync:BroadcastOrder(ord); pump(harness, bus)
+        harness.equal(b.orders:Get(ord.id).msgs, nil)
+        harness.truthy(a.orders:Get(ord.id).msgs, "the sender keeps its own chat")
+        a.sync:BroadcastOrderMessage(ord.id, { b = "C-R", t = harness.clock, x = "I am C" }); pump(harness, bus)
+        harness.equal(b.orders:Get(ord.id).msgs, nil)
+    end,
+
+    ["sync: a HELLO without xdig (2.8 peer) gets no OPUSH for chat (RF1)"] = function(harness)
+        local bus = newBus()
+        local a, b = peer(harness, bus, "A-R", 1), peer(harness, bus, "B-R", 2)
+        local ord = a.orders:Create("A-R", 7, 1, "")
+        a.sync:BroadcastOrder(ord); pump(harness, bus)
+        a.orders:AddMessage(ord.id, "A-R", "hi")
+        a.sync:OnMessage({ v = a.addon.PROTOCOL, t = "HELLO", rev = 0, odig = b.orders:Digest(100) }, "B-R")
+        advance(harness, bus, 8)
+        harness.equal(b.orders:Get(ord.id).msgs, nil)
+        b.sync:Hello(false); pump(harness, bus); advance(harness, bus, 8)
+        harness.equal(#b.orders:Get(ord.id).msgs, 1, "a 2.9 HELLO does get it")
+    end,
+
+    ["sync: OPUSH batches with full chats stay under the message size limit (RF4)"] = function(harness)
+        local addon = harness.addon()
+        local orders = addon.Orders.New(function() return harness.clock end, {})
+        local list = {}
+        for orderIndex = 1, 10 do
+            harness.clock = harness.clock + 1
+            local ord = orders:Create("Requester" .. orderIndex .. "-R", orderIndex, 1, string.rep("n", 80))
+            for messageIndex = 1, 30 do
+                harness.clock = harness.clock + 1
+                orders:AddMessage(ord.id, "Author" .. messageIndex .. "-SomeRealm", string.rep(string.char(65 + messageIndex % 26), 160))
+            end
+            list[#list + 1] = ord
+        end
+        local batches = addon.Sync.PushBatches(list)
+        harness.truthy(#batches > 1, "long chats split the push")
+        local total = 0
+        for _, batch in ipairs(batches) do
+            total = total + #batch
+            local wire = addon.Codec.Encode({ v = addon.PROTOCOL, t = "OPUSH", orders = batch })
+            harness.truthy(#wire < addon.Codec.MAXIMUM_ENCODED_BYTES / 2, "batch of " .. #batch .. " encodes to " .. #wire)
+        end
+        harness.equal(total, 10)
+    end,
 }

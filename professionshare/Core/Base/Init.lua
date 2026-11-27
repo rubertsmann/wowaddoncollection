@@ -8,14 +8,14 @@ local addonName, addon = ...
 -- The fallback version only matters for the offline tests, which have no client; tests/test_hardening.lua checks it
 -- against the TOC.
 LibStub("LibGuildSync-1.0").Addon.Setup(addon, addonName,
-    { name = "ProfessionShare", prefix = "PShare", command = "ps", fallbackVersion = "1.5.0", color = "33ccff" })
+    { name = "ProfessionShare", prefix = "PShare", command = "ps", fallbackVersion = "1.6.0", color = "33ccff" })
 
 -- Wire protocol (docs/protocol.md): MAJOR must match exactly between peers, MINOR may differ (additive changes only).
 -- Bump MAJOR for any breaking change to the chunk header, serializer, compression or message meaning.
 ---@type integer
 addon.PROTOCOL_MAJOR = 2
 ---@type integer
-addon.PROTOCOL_MINOR = 8
+addon.PROTOCOL_MINOR = 9
 ---@type integer alias: the major is what the payload "v" field carries
 addon.PROTOCOL = addon.PROTOCOL_MAJOR
 

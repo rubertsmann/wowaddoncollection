@@ -481,7 +481,8 @@ refreshOrders = function()
     local filterLabel = Format(Text["Show: {filter}"], { filter = orderFilter[2] })
     if windowState.showClosed then filterLabel = filterLabel .. " " .. Text["+ finished"] end
     setDropdownText(mainFrame.orderFilterButton, filterLabel)
-    local orderRows = addon.Model.BuildOrderRows(addon.Store, addon.orders, orderFilter[1], windowState.showClosed, me())
+    local orderRows = addon.Model.BuildOrderRows(addon.Store, addon.orders, orderFilter[1], windowState.showClosed, me(),
+        interfaceSettings() and interfaceSettings().chatSeen)
     orderList:SetData(orderRows)
     local selectedOrderRow
     for _, orderRow in ipairs(orderRows) do if orderRow.id == windowState.selectedOrder then selectedOrderRow = orderRow end end
@@ -1684,7 +1685,7 @@ end
 
 local ACTION_ICON_SIZE = ROW_HEIGHT - 4
 local ACTION_STEP = ACTION_ICON_SIZE + 3   -- icon plus gap
-local ACTION_SLOTS = 7
+local ACTION_SLOTS = 8
 
 ---@class RowAction
 ---@field key string
@@ -1701,6 +1702,8 @@ local function addRowActionButtons(row, count)
         actionButton:SetSize(ACTION_ICON_SIZE, ACTION_ICON_SIZE)
         actionButton.icon = actionButton:CreateTexture(nil, "ARTWORK"); actionButton.icon:SetAllPoints()
         actionButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+        actionButton.countText = actionButton:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+        actionButton.countText:SetPoint("BOTTOMRIGHT", 2, -2)
         actionButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
         row.actionButtons[slot] = actionButton
     end
@@ -1708,13 +1711,14 @@ end
 
 -- Shows `actions` in the row's action column, packed against the right text (rightWidth px from the row's edge):
 -- tooltip per icon, greyed out and unclickable when enabledByKey[key] is not true; a click calls onAction(key, button).
--- The row label ends left of the icons.
+-- countByKey (optional) puts a number on an icon (nothing for 0). The row label ends left of the icons.
 ---@param row table
 ---@param actions RowAction[]
 ---@param enabledByKey table<string, any>
 ---@param onAction fun(key: string, button: table)
 ---@param rightWidth number
-local function layoutRowActions(row, actions, enabledByKey, onAction, rightWidth)
+---@param countByKey? table<string, integer>
+local function layoutRowActions(row, actions, enabledByKey, onAction, rightWidth, countByKey)
     row.label:SetPoint("RIGHT", -(rightWidth + 4) - #actions * ACTION_STEP, 0)
     for slot, actionButton in ipairs(row.actionButtons) do
         local action = actions[slot]
@@ -1727,9 +1731,12 @@ local function layoutRowActions(row, actions, enabledByKey, onAction, rightWidth
             if actionButton.icon.SetDesaturated then actionButton.icon:SetDesaturated(not enabled) end
             actionButton.icon:SetAlpha(enabled and 1 or 0.4)
             actionButton:SetEnabled(enabled)
+            local count = countByKey and countByKey[action.key] or 0
+            actionButton.countText:SetText(count > 0 and tostring(count) or "")
             actionButton:SetScript("OnEnter", function(self)
                 GameTooltip:SetOwner(self, "ANCHOR_TOP")
                 GameTooltip:SetText(action.tooltip, 1, 1, 1)
+                if count > 0 then GameTooltip:AddLine(Format(Text["{n} unread messages"], { n = count }), 0.4, 1, 0.6) end
                 GameTooltip:Show()
             end)
             actionButton:SetScript("OnClick", function(self) onAction(action.key, self) end)
@@ -1748,11 +1755,13 @@ local function mailRowActions()
     }
 end
 
--- The action column of an order row, left to right: the order actions, then mail and buy list (the Auctionator action
+-- The action column of an order row, left to right: the order window (with the unread chat count), the order actions,
+-- then mail and buy list (the Auctionator action
 -- only with Auctionator). Craft is not here: it casts, which needs the secure button in the top bar.
 ---@return { key: string, icon: string, tooltip: string }[]
 local function rowActions()
     local actions = {
+        { key = "details", icon = "Interface\\GossipFrame\\GossipGossipIcon", tooltip = Text["Order details, chat and history"] },
         { key = "claim", icon = "Interface\\Icons\\Trade_BlackSmithing", tooltip = Text["I'll craft it"] },
         { key = "withdraw", icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up", tooltip = Text["Withdraw"] },
         { key = "done", icon = "Interface\\RaidFrame\\ReadyCheck-Ready", tooltip = Text["Mark done"] },
@@ -1822,13 +1831,15 @@ local function buildOrdersTab(ordersTab)
             if mouseButton == "RightButton" then showOrderMenu(self, orderRow) end
         end)
         -- the action column, packed against the status text
-        layoutRowActions(row, rowActions(), { claim = orderRow.canClaim, withdraw = orderRow.canWithdraw, done = orderRow.canDone,
-            cancel = orderRow.canCancel, mats = orderRow.canMailMats, item = orderRow.canMailItem, buy = orderRow.hasReagents },
+        layoutRowActions(row, rowActions(), { details = true, claim = orderRow.canClaim, withdraw = orderRow.canWithdraw,
+            done = orderRow.canDone, cancel = orderRow.canCancel, mats = orderRow.canMailMats, item = orderRow.canMailItem,
+            buy = orderRow.hasReagents },
             function(key, button)
-                if key == "buy" then showBuyDialog(orderRow.id)
+                if key == "details" then addon.OrderWindow.Open(orderRow.id)
+                elseif key == "buy" then showBuyDialog(orderRow.id)
                 elseif key == "mats" or key == "item" then mailOrder(orderRow.id, key, button)
                 else runOrderAction(key, orderRow.id) end
-            end, 126)
+            end, 126, { details = orderRow.unreadChat })
         local contactName = addon.Model.OrderContact(orderRow, me())
         row.onIconEnter = function(iconButton)
             showRecipeTooltip(iconButton, orderRow.recipeID,

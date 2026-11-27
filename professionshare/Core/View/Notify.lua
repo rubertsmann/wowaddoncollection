@@ -7,7 +7,7 @@ local addonName, addon = ...
 --     * MY order got a new claimer or was marked done by someone and I have not looked since.
 -- The setting keys below are stored in SavedVariables (db.ui.notify) and stay as they are.
 
----@alias NotifyScope "profession"|"known"|"all"
+---@alias NotifyScope "profession"|"known"|"level"|"all"
 
 ---@class NotifySettings
 ---@field badge boolean number of unseen orders on the minimap button and the Orders tab
@@ -22,16 +22,18 @@ local addonName, addon = ...
 
 ---@class UnseenOrder
 ---@field id string order id
----@field kind "new"|"claimed"|"done"
+---@field kind "new"|"claimed"|"done"|"chat"
 ---@field key string the state key that was not seen
 ---@field order Order
+---@field message? OrderMessage kind "chat": the newest unseen message
+---@field count? integer kind "chat": unseen messages
 
 ---@class NotifyModule
 local Notify = {}
 addon.Notify = Notify
 
 ---@type NotifyScope[]
-Notify.SCOPES = { "profession", "known", "all" }
+Notify.SCOPES = { "known", "level", "profession", "all" }   -- narrow to broad (the order of the settings dropdown)
 ---@type NotifySettings
 Notify.DEFAULTS = {
     badge = true,
@@ -105,9 +107,35 @@ local function professionsWithRecipe(store, recipeID)
     return professionKeys
 end
 
+-- The rank a recipe needs, by profession key: the catalog's minSkill when it is known, else the lowest rank among the
+-- guild members who know the recipe (they learned it at that rank or lower, so this never claims too little).
+-- Professions nobody with a rank knows it in are missing.
+---@param store StoreModule
+---@param recipeID integer
+---@return table<integer|string, integer>
+function Notify.RecipeRanks(store, recipeID)
+    local ranks = {}
+    for _, characterRecord in ipairs(store.ListCharacters()) do
+        for professionKey, profession in pairs(characterRecord.professions or {}) do
+            if type(profession) == "table" and type(profession.recipes) == "table" and profession.recipes[recipeID]
+                and type(profession.rank) == "number" then
+                local canonicalKey = addon.Names.ProfessionKey(professionKey, profession)
+                if not ranks[canonicalKey] or profession.rank < ranks[canonicalKey] then ranks[canonicalKey] = profession.rank end
+            end
+        end
+    end
+    local catalogEntry = store.GetRecipe(recipeID)
+    local catalogRank = catalogEntry and catalogEntry.minSkill
+    if type(catalogRank) == "number" then
+        for canonicalKey in pairs(ranks) do ranks[canonicalKey] = catalogRank end
+    end
+    return ranks
+end
+
 -- Is someone else's order for recipeID something I could craft?
---   "known": I know the recipe; "profession": I know it, or I have the profession it belongs to (taken from the guild
---   members who know it); "all": every order.
+--   "known": I know the recipe; "level": I know it, or my rank in its profession reaches the rank the recipe needs
+--   (Notify.RecipeRanks), so I could learn and craft it; "profession": I know it, or I have the profession it belongs to
+--   (taken from the guild members who know it); "all": every order.
 ---@param store StoreModule
 ---@param myName string|nil
 ---@param recipeID integer
@@ -118,6 +146,14 @@ function Notify.Relevant(store, myName, recipeID, scope)
     local myRecord = store.GetCharacter(myName or "")
     if not myRecord then return false end
     if addon.Store.Knows(myRecord, recipeID) then return true end
+    if scope == "level" then
+        local recipeRanks = Notify.RecipeRanks(store, recipeID)
+        for professionKey, profession in pairs(myRecord.professions or {}) do
+            local neededRank = type(profession) == "table" and recipeRanks[addon.Names.ProfessionKey(professionKey, profession)]
+            if neededRank and type(profession.rank) == "number" and profession.rank >= neededRank then return true end
+        end
+        return false
+    end
     if scope ~= "profession" then return false end
     local recipeProfessionKeys = professionsWithRecipe(store, recipeID)
     for professionKey, profession in pairs(myRecord.professions or {}) do
@@ -177,6 +213,96 @@ function Notify.MarkSeen(orderBoard, seen)
     end
     for orderID, order in pairs(orderBoard.db) do seen[orderID] = Notify.StateKey(orderBoard, order) end
     return seen
+end
+
+------------------------------------------------------------------ order chat
+--   chatSeen[orderID] = time of the newest chat message the player has seen on that order (opened its chat). Only
+--   orders the player is involved in (requested it, or claims it now) count; their unseen messages are order news.
+
+-- Am I the requester or an active claimer of `order`?
+---@param order Order
+---@param myName string|nil
+---@return boolean
+function Notify.Involved(order, myName)
+    if not myName then return false end
+    if order.requester == myName then return true end
+    local claim = order.claims and order.claims[myName]
+    return claim ~= nil and claim.state == "claimed"
+end
+
+-- Messages by others newer than what I saw on this order, and the newest of them.
+---@param order Order
+---@param myName string|nil
+---@param chatSeen table<string, integer>|nil
+---@return integer count
+---@return OrderMessage|nil newest
+function Notify.ChatUnread(order, myName, chatSeen)
+    local seenUntil = type(chatSeen) == "table" and tonumber(chatSeen[order.id]) or 0
+    local unreadCount, newestMessage = 0, nil
+    for _, message in ipairs(order.msgs or {}) do
+        if message.b ~= myName and message.t > seenUntil then
+            unreadCount = unreadCount + 1
+            newestMessage = message
+        end
+    end
+    return unreadCount, newestMessage
+end
+
+-- Unseen chat on the orders I am involved in, as items of kind "chat" (key = the newest unseen message, so a further
+-- message counts as fresh again).
+---@param orderBoard OrderBoard
+---@param myName string|nil
+---@param chatSeen table<string, integer>|nil
+---@return UnseenOrder[]
+function Notify.UnseenChat(orderBoard, myName, chatSeen)
+    local unseenChats = {}
+    for orderID, order in pairs(orderBoard.db) do
+        if Notify.Involved(order, myName) then
+            local unreadCount, newestMessage = Notify.ChatUnread(order, myName, chatSeen)
+            if unreadCount > 0 then
+                unseenChats[#unseenChats + 1] = { id = orderID, kind = "chat", key = "chat:" .. newestMessage.t .. ":" .. newestMessage.b,
+                    order = order, message = newestMessage, count = unreadCount }
+            end
+        end
+    end
+    table.sort(unseenChats, function(left, right)
+        if left.message.t ~= right.message.t then return left.message.t < right.message.t end
+        return left.id < right.id
+    end)
+    return unseenChats
+end
+
+-- The player read this order's chat. Returns the (same or new) table.
+---@param chatSeen table<string, integer>|nil
+---@param order Order
+---@return table<string, integer>
+function Notify.MarkChatSeen(chatSeen, order)
+    chatSeen = type(chatSeen) == "table" and chatSeen or {}
+    local newestTime = tonumber(chatSeen[order.id]) or 0
+    for _, message in ipairs(order.msgs or {}) do newestTime = math.max(newestTime, message.t) end
+    if newestTime > 0 then chatSeen[order.id] = newestTime end
+    return chatSeen
+end
+
+-- Every order's chat counts as seen (the first start with chat: older messages are not news); forgets pruned orders.
+---@param orderBoard OrderBoard
+---@param chatSeen table<string, integer>|nil
+---@return table<string, integer>
+function Notify.MarkAllChatSeen(orderBoard, chatSeen)
+    chatSeen = Notify.PruneChatSeen(orderBoard, chatSeen)
+    for _, order in pairs(orderBoard.db) do Notify.MarkChatSeen(chatSeen, order) end
+    return chatSeen
+end
+
+---@param orderBoard OrderBoard
+---@param chatSeen table<string, integer>|nil
+---@return table<string, integer>
+function Notify.PruneChatSeen(orderBoard, chatSeen)
+    chatSeen = type(chatSeen) == "table" and chatSeen or {}
+    for orderID, seenTime in pairs(chatSeen) do
+        if orderBoard.db[orderID] == nil or type(seenTime) ~= "number" then chatSeen[orderID] = nil end
+    end
+    return chatSeen
 end
 
 -- Items of `unseenOrders` that were not in the previous result (id + state key: a new claimer counts again), and the new
