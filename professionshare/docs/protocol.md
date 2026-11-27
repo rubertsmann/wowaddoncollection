@@ -303,3 +303,15 @@ syncing between both versions.
 - Trust: guild members are trusted (like claims); an entry is written only by the sending client for its own mails.
   Display: names escaped, item names from the viewer's client, escaped.
 - Local data: `ui.mailSeen[orderID] = time of the newest mail entry seen`, pruned with the orders.
+
+## 20. Mail pickups (protocol 2.11, schema unchanged; feature 050)
+Additive minor change: a 2.10 peer ignores `rdig` and drops `rcv` (allow-list), so orders keep syncing.
+- **Mail tag (not on the wire):** a queued mail's subject ends with `[#xxxxxx]`, six characters `[0-9a-z]` from a hash
+  of `orderID .. ":" .. kind` (`MailQueue.Tag`), the same on every client; the subject stays <= 64 bytes.
+- **Order field `rcv` (optional):** `{ {m, b, r, t, i?} }`, oldest first: `m` = `item`|`mats`, `b` who took the items
+  out, `r` the mail's sender, `t` time, `i` flat `{itemID, count, ...}` (same bounds as `ml`). Merge = union by
+  `m`+`b`+`t`, newest 30. Written only by the client of the player who took the items out, and only when that player is
+  the requester (item) or holds a claim (reagents). An item pickup also closes the order as done (a normal close).
+- **`PickupVersion`** = sum of the entry times; **`HELLO` field `rdig`** `{ [orderID] = PickupVersion }` (newest 100
+  orders with pickups); OPUSH for pickups only to peers that send it.
+- Local data: `ui.mailSeen` also covers pickups (news for the mail's sender).

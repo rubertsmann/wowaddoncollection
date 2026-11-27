@@ -159,16 +159,144 @@ end
 ---@param byHand boolean
 ---@return table
 function MailQueue.MailEntry(job, sender, delivered, complete, byHand)
+    return { m = job.mode, b = sender, r = job.recipient, c = complete or nil, h = byHand or nil,
+        i = MailQueue.FlatItems(delivered) }
+end
+
+-- { itemID, count, ... } sorted by item id, at most Orders.MAXIMUM_MAIL_ITEMS pairs; nil when the map is empty
+---@param itemMap table<integer, integer>|nil
+---@return integer[]|nil
+function MailQueue.FlatItems(itemMap)
     local itemIDs = {}
-    for itemID in pairs(delivered or {}) do itemIDs[#itemIDs + 1] = itemID end
+    for itemID in pairs(itemMap or {}) do itemIDs[#itemIDs + 1] = itemID end
     table.sort(itemIDs)
     local items = {}
     for index = 1, math.min(#itemIDs, addon.Orders.MAXIMUM_MAIL_ITEMS) do
         items[#items + 1] = itemIDs[index]
-        items[#items + 1] = delivered[itemIDs[index]]
+        items[#items + 1] = itemMap[itemIDs[index]]
     end
-    return { m = job.mode, b = sender, r = job.recipient, c = complete or nil, h = byHand or nil,
-        i = #items > 0 and items or nil }
+    return #items > 0 and items or nil
+end
+
+------------------------------------------------------------------ mail tags (pickup tracking)
+-- A queued mail's subject ends with "[#xxxxxx]": a code of the order id and the mail kind, the same on every client, so
+-- the recipient's client finds the order when the items are taken out (Core/Game/MailReceiver.lua).
+
+local TAG_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"
+local TAG_LENGTH, TAG_MODULUS = 6, 2147483647
+MailQueue.SUBJECT_BYTES = 64
+
+---@param orderID string
+---@param mode MailMode
+---@return string six characters of [0-9a-z]
+function MailQueue.Tag(orderID, mode)
+    local text = tostring(orderID) .. ":" .. tostring(mode)
+    local hash = 5381
+    for index = 1, #text do hash = (hash * 33 + text:byte(index)) % TAG_MODULUS end
+    local characters = {}
+    for index = TAG_LENGTH, 1, -1 do
+        local digit = hash % 36
+        characters[index] = TAG_ALPHABET:sub(digit + 1, digit + 1)
+        hash = (hash - digit) / 36
+    end
+    return table.concat(characters)
+end
+
+---@param subject any
+---@return string|nil tag
+function MailQueue.ParseTag(subject)
+    if type(subject) ~= "string" then return nil end
+    return subject:match("%[#([0-9a-z][0-9a-z][0-9a-z][0-9a-z][0-9a-z][0-9a-z])%]")
+end
+
+-- `text` with the tag appended, at most SUBJECT_BYTES bytes: the text is cut (never inside a character), never the tag.
+---@param text string
+---@param tag string
+---@return string
+function MailQueue.TaggedSubject(text, tag)
+    local suffix = " [#" .. tag .. "]"
+    return addon.Utility.TruncateUtf8(text, MailQueue.SUBJECT_BYTES - #suffix) .. suffix
+end
+
+---@class InboxMail
+---@field subject string
+---@field sender string
+---@field returned boolean
+---@field items table<integer, integer> itemID -> count still attached
+
+---@class InboxTotal
+---@field tag string
+---@field sender string
+---@field items table<integer, integer>
+
+-- What the tagged mails of the inbox still carry, summed by tag and sender (returned mails left out).
+---@param mails InboxMail[]
+---@return table<string, InboxTotal>
+function MailQueue.InboxTotals(mails)
+    local totals = {}
+    for _, mail in ipairs(mails or {}) do
+        local tag = MailQueue.ParseTag(mail.subject)
+        if tag and not mail.returned and type(mail.sender) == "string" and mail.sender ~= "" then
+            local key = tag .. "\0" .. mail.sender
+            local total = totals[key] or { tag = tag, sender = mail.sender, items = {} }
+            for itemID, count in pairs(mail.items or {}) do total.items[itemID] = (total.items[itemID] or 0) + count end
+            totals[key] = total
+        end
+    end
+    return totals
+end
+
+---@class MailPickup
+---@field tag string
+---@field sender string
+---@field items table<integer, integer> taken out
+
+-- What was taken out between two inbox readings, only for tags the player was taking items from (a mail that is
+-- returned or expires also leaves the inbox, but nobody took it).
+---@param before table<string, InboxTotal>
+---@param after table<string, InboxTotal>
+---@param taking table<string, any> tags the player is taking items from
+---@return MailPickup[]
+function MailQueue.Pickups(before, after, taking)
+    local pickups = {}
+    for key, total in pairs(before or {}) do
+        if taking[total.tag] then
+            local remaining = (after[key] or { items = {} }).items
+            local taken = {}
+            for itemID, count in pairs(total.items) do
+                local difference = count - (remaining[itemID] or 0)
+                if difference > 0 then taken[itemID] = difference end
+            end
+            if next(taken) then pickups[#pickups + 1] = { tag = total.tag, sender = total.sender, items = taken } end
+        end
+    end
+    table.sort(pickups, function(left, right)
+        if left.tag ~= right.tag then return left.tag < right.tag end
+        return left.sender < right.sender
+    end)
+    return pickups
+end
+
+-- I (`myName`) took the items of a tagged mail out: records the pickup on its order when I am the one the mail was
+-- for (the requester for the crafted item, a crafter with a claim for reagents); the crafted item also closes the
+-- order as done while it is open. Returns the order (nil: not mine or unknown) and whether it was closed.
+---@param orderBoard OrderBoard
+---@param pickup MailPickup
+---@param myName string|nil
+---@return Order|nil
+---@return boolean closed
+function MailQueue.ApplyPickup(orderBoard, pickup, myName)
+    if not myName or type(pickup) ~= "table" then return nil, false end
+    local order, mode = orderBoard:FindByTag(pickup.tag)
+    if not order then return nil, false end
+    if mode == "item" and order.requester ~= myName then return nil, false end
+    if mode == "mats" and not order.claims[myName] then return nil, false end
+    local entry = orderBoard:RecordPickup(order.id, { m = mode, b = myName, r = canonical(pickup.sender) or pickup.sender,
+        i = MailQueue.FlatItems(pickup.items) })
+    if not entry then return nil, false end
+    local closed = false
+    if mode == "item" and not order.closed then closed = orderBoard:Close(order.id, myName, "done") ~= nil end
+    return order, closed
 end
 
 -- What a sent mail carried (by item) is taken off the job; returns false when the job is done (and removed).

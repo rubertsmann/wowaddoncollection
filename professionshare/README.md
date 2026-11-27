@@ -21,6 +21,9 @@ shared crafting-order board.
 * **Mailed status** – a mail sent through the mail queue is written into its order by itself: the crafted item, once
   nothing of it is left to send, makes the order **Mailed** (mail icon on the row, own filter); the requester still
   marks it done after picking it up. The recipient of a mail gets order news.
+* **Pickup tracking** – queued mails carry a short tag in the subject (`[#k3f9ab]`). When the requester takes the
+  crafted item out of such a mail, the order closes as done by itself; a crafter taking out reagents adds a history
+  row. The sender is told the mail was picked up.
 * **Row actions** – icons on each order: mail the reagents to the crafter, mail the crafted item to the requester and,
   with Auctionator installed, add the reagents to a collected buy list that Auctionator searches the next time you open
   the auction house (**Subtract what I have** buys only what bags and bank are missing).

@@ -7,14 +7,14 @@ local addonName, addon = ...
 -- Messages (every message carries v = addon.PROTOCOL and a string type t). The field names are the WIRE FORMAT and stay:
 --   HELLO {rev, login?, odig, xdig?, mdig?, orev?, ver?}  broadcast (GUILD) or reply (WHISPER): my record versions +
 --                               digest of my orders; xdig = digest of their chat and history (2.9+), mdig = digest of
---                               their mail entries (2.10+)
+--                               their mail entries (2.10+); rdig = digest of their pickup entries (2.11+)
 --   WANT  {names, via?}         "send me your record"; only the sender's own name is honoured
 --   SNAP  {char, catalog}       a character record + catalog entries of its recipes
 --   OPUSH {orders}              whisper: orders the receiver lacks (<= 10 per message)
 --   ORDER {order}               broadcast: one order changed (order may carry a recipe name snapshot, 2.2+)
 --   OMSG {id, m}                broadcast: one chat message on an order, only in the sender's own name (2.9+); orders
 --                               carry optional msgs (chat) and ev (history); ORDER leaves msgs out; orders carry
---                               optional ml (mails sent for the order, 2.10+)
+--                               optional ml (mails sent for the order, 2.10+) and rcv (tagged mails picked up, 2.11+)
 --   WANTO {names, via?}         "send me your offers record" (2.1+)
 --   OFFERS {offers}             a character's offers/dibs record (2.1+)
 --   HELLO.arev, WANTA {names, via?}, ACCESS {access}   a character's dungeon keys and raid attunements (2.4+)
@@ -70,7 +70,7 @@ local function canonicalOrder(order)
         for crafter, claim in pairs(order.claims) do claims[type(crafter) == "string" and canonical(crafter) or crafter] = claim end
         copy.claims = claims
     end
-    for _, listField in ipairs({ "msgs", "ev", "ml" }) do
+    for _, listField in ipairs({ "msgs", "ev", "ml", "rcv" }) do
         if type(order[listField]) == "table" then
             local entries = {}
             for index, entry in ipairs(order[listField]) do
@@ -255,7 +255,7 @@ end
 ---@param order Order
 ---@return integer
 local function estimatedBytes(order)
-    local bytes = 200 + #(order.note or "") + 40 * #(order.ev or {}) + 160 * #(order.ml or {})
+    local bytes = 200 + #(order.note or "") + 40 * #(order.ev or {}) + 160 * (#(order.ml or {}) + #(order.rcv or {}))
     for _ in pairs(order.claims or {}) do bytes = bytes + 40 end
     for _, message in ipairs(order.msgs or {}) do bytes = bytes + 50 + #message.x end
     return bytes
@@ -282,7 +282,7 @@ end
 Sync.PushBatches = pushBatches
 
 -- HELLO.odig: the digest of my orders; HELLO.xdig (2.9): the digest of their chat and history; HELLO.mdig (2.10):
--- the digest of their mail entries. A peer that lacks some gets them pushed (OPUSH, at most 10 orders per message, fewer when they carry long chats).
+-- the digest of their mail entries; HELLO.rdig (2.11): of their pickup entries. A peer that lacks some gets them pushed (OPUSH, at most 10 orders per message, fewer when they carry long chats).
 ---@param environment ProfessionShareSyncEnvironment
 ---@return SyncHelloHook
 local function ordersHelloHook(environment)
@@ -291,10 +291,11 @@ local function ordersHelloHook(environment)
             message.odig = environment.orders:Digest(100)
             message.xdig = environment.orders:ExtraDigest(100)
             message.mdig = environment.orders:MailDigest(100)
+            message.rdig = environment.orders:PickupDigest(100)
         end,
         handle = function(sync, message, sender, notes)
             if type(message.odig) ~= "table" then return end
-            local missingOrders = environment.orders:Missing(message.odig, 40, message.xdig, message.mdig)
+            local missingOrders = environment.orders:Missing(message.odig, 40, message.xdig, message.mdig, message.rdig)
             for _, batch in ipairs(pushBatches(missingOrders)) do
                 sync:_later(1 + environment.random() * 5, { t = "OPUSH", orders = batch }, "WHISPER", sender)
             end

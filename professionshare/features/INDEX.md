@@ -36,3 +36,4 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 047 | Notification scope dropdown and profession level scope | done | 1.6.0 (UI + local setting) | release commit 1.6.0 | [047-notification-scope-dropdown-and-profession-level-scope](047-notification-scope-dropdown-and-profession-level-scope/spec.md) |
 | 048 | Order detail window with chat and history | done | 1.6.0 (protocol 2.9, schema unchanged) | release commit 1.6.0 | [048-order-detail-window-with-chat-and-history](048-order-detail-window-with-chat-and-history/spec.md) |
 | 049 | Order mail status and history | done | 1.7.0 (protocol 2.10, schema unchanged) | release commit 1.7.0 | [049-order-mail-status-and-history](049-order-mail-status-and-history/spec.md) |
+| 050 | Mail tag and pickup tracking | done | 1.8.0 (protocol 2.11, schema unchanged) | release commit 1.8.0 | [050-mail-tag-and-pickup-tracking](050-mail-tag-and-pickup-tracking/spec.md) |

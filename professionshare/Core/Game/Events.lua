@@ -386,18 +386,24 @@ local mailboxOpened, mailboxClosed = onGameEvent.MAIL_SHOW, onGameEvent.MAIL_CLO
 function onGameEvent.MAIL_SHOW(...)
     mailboxOpened(...)
     if addon.MailSender then addon.MailSender.OnMailShow() end
+    if addon.MailReceiver then addon.MailReceiver.OnMailShow() end
 end
 function onGameEvent.MAIL_CLOSED(...)
     mailboxClosed(...)
     if addon.MailSender then addon.MailSender.OnMailClosed() end
+    if addon.MailReceiver then addon.MailReceiver.OnMailClosed() end
 end
+if addon.MailReceiver then addon.MailReceiver.Register() end
 if addon.MailSender then
     addon.MailSender.Register(function(gameEvent, handler) onGameEvent[gameEvent] = handler end)
 end
 function onGameEvent.PLAYERBANKSLOTS_CHANGED() scheduleItemScan(1.5) end
 function onGameEvent.PLAYERBANKBAGSLOTS_CHANGED() scheduleItemScan(1.5) end
 function onGameEvent.PLAYERREAGENTBANKSLOTS_CHANGED() scheduleItemScan(1.5) end
-function onGameEvent.MAIL_INBOX_UPDATE() scheduleItemScan(1.5) end
+function onGameEvent.MAIL_INBOX_UPDATE()
+    scheduleItemScan(1.5)
+    if addon.MailReceiver then addon.MailReceiver.Scan() end
+end
 function onGameEvent.GUILDBANKBAGSLOTS_CHANGED() scheduleItemScan(1.5) end
 function onGameEvent.AUCTION_OWNED_LIST_UPDATE() scheduleItemScan(1.5) end
 function onGameEvent.OWNED_AUCTIONS_UPDATED() scheduleItemScan(1.5) end

@@ -486,6 +486,43 @@ function DevProbe.AddFakeOrder(arguments)
     return recordCheck("order", { ok = true, orderID = order.id, recipeID = recipeID, claimers = claimers })
 end
 
+-- An open order from a fake member for a recipe I know (lowest recipe id that makes an item, or arguments[1]), not
+-- claimed, so I can claim it and go through craft, mail and "Mailed" as the crafter. arguments[2] = quantity (default
+-- 1). Prints the order's mail tags. Local only: never sent to the guild.
+---@param arguments? integer[]
+---@return table result
+function DevProbe.AddFakeRequest(arguments)
+    arguments = arguments or {}
+    local catalog = addon.Store.db and addon.Store.db.catalog or {}
+    local myRecord = addon.Store.GetCharacter(addon.Utility.Me())
+    local recipeID = arguments[1]
+    if not (recipeID and catalog[recipeID] and addon.Store.Knows(myRecord, recipeID)) then
+        recipeID = nil
+        for candidateID, catalogEntry in pairs(catalog) do
+            if catalogEntry.produces and addon.Store.Knows(myRecord, candidateID) and (not recipeID or candidateID < recipeID) then
+                recipeID = candidateID
+            end
+        end
+    end
+    if not recipeID or not addon.orders then
+        addon.Print("fake openorder: you know no recipe that makes an item yet (scan a profession first)")
+        return recordCheck("openorder", { ok = false, why = "no known recipe" })
+    end
+    local catalogEntry = catalog[recipeID]
+    local quantity = math.max(1, math.min(99, arguments[2] or 1))
+    local requester = fakeMember("Requester")
+    local order = addon.orders:Create(requester, recipeID, quantity, "fake request (dev tools)", catalogEntry.name, catalogEntry.loc)
+    if not order then
+        addon.Print("fake openorder: the order did not pass validation")
+        return recordCheck("openorder", { ok = false, why = "invalid order" })
+    end
+    devTable("devFakeOrders")[order.id] = true
+    addon.Events.Fire("DATA_CHANGED", "orders")
+    addon.Print(("fake openorder: %dx %s (recipe %d) from %s, open for you to claim. Mail tags: item [#%s], reagents [#%s]. Not sent to the guild."):format(
+        quantity, tostring(catalogEntry.name), recipeID, requester, addon.MailQueue.Tag(order.id, "item"), addon.MailQueue.Tag(order.id, "mats")))
+    return recordCheck("openorder", { ok = true, orderID = order.id, recipeID = recipeID })
+end
+
 local LINEN_CLOTH = 2589
 -- used when no catalog recipe needs Linen Cloth: Bolt of Linen Cloth (Tailoring), 2 Linen Cloth each
 local LINEN_BOLT_RECIPE, LINEN_BOLT = 2963, { name = "Bolt of Linen Cloth", produces = 2996, reagents = { { itemID = LINEN_CLOTH, count = 2 } } }
@@ -608,6 +645,33 @@ function DevProbe.AddFakeMail(arguments)
         return { ok = true, delayed = delaySeconds }
     end
     return post()
+end
+
+-- Someone else picked up a mail of mine on an order (local only, not sent to the guild): on an order I claimed the
+-- requester took the crafted item (the order closes as done), on my own order a crafter took the reagents.
+---@return table result
+function DevProbe.AddFakePickup()
+    local order = addon.orders and fakeChatOrder()
+    if not order then
+        addon.Print("fake pickup: no order yet (/psd fake order makes one)")
+        return recordCheck("pickup", { ok = false, why = "no order" })
+    end
+    local myName = addon.Utility.Me()
+    local mode, picker = "item", order.requester
+    if order.requester == myName then
+        mode, picker = "mats", addon.orders:Claimers(order)[1]
+        if picker == myName or not picker then picker = fakeMember("Crafter") end
+    end
+    local pickup = addon.orders:RecordPickup(order.id, { m = mode, b = picker, r = myName })
+    if not pickup then
+        addon.Print("fake pickup: the pickup was not taken")
+        return recordCheck("pickup", { ok = false, why = "not recorded" })
+    end
+    if mode == "item" and not order.closed then addon.orders:Close(order.id, picker, "done") end
+    addon.Events.Fire("DATA_CHANGED", "orders")
+    addon.Print(("fake pickup: %s picked up your %s mail for %s. Not sent to the guild."):format(picker, mode == "item" and "item" or "reagent",
+        addon.Utility.ChatSafe(order.name or tostring(order.recipeID))))
+    return recordCheck("pickup", { ok = true, orderID = order.id, picker = picker, mode = mode })
 end
 
 -- Deletes the fake orders and the mail jobs made from them; returns what was removed.
@@ -1302,8 +1366,10 @@ DevProbe.ENTRIES = {
     { key = "naxx", section = "Members", label = "Keyholder: Naxxramas", run = function() DevProbe.AddFakeNaxxramas() end },
     { key = "feedback", section = "Members", label = "Tester: 3 feedback messages", run = function() DevProbe.AddFakeFeedback() end },
     { key = "order", section = "Members", label = "Order from a fake member (mail queue)", run = function(arguments) DevProbe.AddFakeOrder(arguments) end },
+    { key = "openorder", section = "Members", label = "Open order from a fake member for a recipe you know (n = recipe id, quantity)", run = function(arguments) DevProbe.AddFakeRequest(arguments) end },
     { key = "linen", section = "Members", label = "Order needing Linen Cloth (mail queue)", run = function(arguments) DevProbe.AddFakeLinenOrder(arguments) end },
     { key = "chat", section = "Triggers", label = "Chat answer on an order (n = delay in s)", run = function(arguments) DevProbe.AddFakeChatMessage(arguments) end },
+    { key = "pickup", section = "Triggers", label = "Someone picked up your mail on an order", run = function() DevProbe.AddFakePickup() end },
     { key = "mailed", section = "Triggers", label = "Mail to you on an order (n = delay in s)", run = function(arguments) DevProbe.AddFakeMail(arguments) end },
     { key = "cooldowns", section = "Members", label = "Crafters: cooldowns in every state", run = function() DevProbe.AddFakeCooldowns() end },
     { key = "cdsoon", section = "Triggers", label = "A cooldown ends in 20 s", run = function() DevProbe.AddFakeCooldownEnding() end },

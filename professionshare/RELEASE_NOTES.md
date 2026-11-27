@@ -1,3 +1,16 @@
+# ProfessionShare 1.8.0
+
+Orders now also notice when a mail is picked up. Mails sent through the addon's mailbox list carry a short code at
+the end of the subject (for example [#k3f9ab]). When the requester takes the crafted item out of such a mail, the
+order is marked done by itself, so nobody has to remember to click Done. When a crafter takes out the reagents, the
+order's History tab notes it. The person who sent the mail gets a notification that it was picked up.
+
+It works however you empty the mail: taking items one by one, "Open All", or another mail addon. Returned or expired
+mails are not counted.
+
+Both sides need this version for the pickup to be noticed; guild members on older versions keep seeing and syncing
+orders as before.
+
 # ProfessionShare 1.7.0
 
 Orders now know when they were mailed. When you send a crafted item or the reagents through the addon's mailbox list,

@@ -25,6 +25,14 @@ local addonName, addon = ...
 ---@field msgs? OrderMessage[] chat, oldest first (protocol 2.9)
 ---@field ev? OrderEvent[] status changes, oldest first (protocol 2.9)
 ---@field ml? OrderMail[] mails sent for the order, oldest first (protocol 2.10)
+---@field rcv? OrderPickup[] tagged mails of the order taken out of a mailbox, oldest first (protocol 2.11)
+
+---@class OrderPickup
+---@field m "item"|"mats"
+---@field b string who took the items out
+---@field r string the mail's sender
+---@field t integer server time
+---@field i? integer[] flat item list { itemID, count, ... }
 
 ---@class OrderMail
 ---@field m "item"|"mats" the crafted item to the requester, or reagents to a crafter
@@ -105,6 +113,16 @@ local function mailVersion(order)
 end
 Orders.MailVersion = mailVersion
 
+-- The same for the pickup entries (protocol 2.11, apart for the same reason).
+---@param order Order
+---@return number
+local function pickupVersion(order)
+    local pickupVersionSum = 0
+    for _, pickup in ipairs(order.rcv or {}) do pickupVersionSum = pickupVersionSum + pickup.t end
+    return pickupVersionSum
+end
+Orders.PickupVersion = pickupVersion
+
 ---@param message OrderMessage
 ---@return string
 local function messageKey(message) return message.b .. "\0" .. message.t end
@@ -158,7 +176,7 @@ end
 -- Allow-list copy of a chat or history list. A bad entry is dropped, never the whole order (the rest of the order is
 -- still good); a list that is not a table, or one too long to read, counts as empty.
 ---@param list any
----@param kind "msgs"|"ev"|"ml"
+---@param kind "msgs"|"ev"|"ml"|"rcv"
 ---@return table[]|nil
 local function sanitizeEntries(list, kind)
     if type(list) ~= "table" or #list > MAXIMUM_INCOMING_ENTRIES then return nil end
@@ -169,11 +187,14 @@ local function sanitizeEntries(list, kind)
             if kind == "msgs" then
                 local text = Utility.CleanString(entry.x, MAXIMUM_MESSAGE_BYTES)
                 if text and text:find("%S") then clean[#clean + 1] = { b = entry.b, t = entry.t, x = text } end
-            elseif kind == "ml" then
+            elseif kind == "ml" or kind == "rcv" then
                 local items, itemsOk = sanitizeMailItems(entry.i)
-                if MAIL_KINDS[entry.m] and Utility.IsSafeName(entry.r) and itemsOk
-                    and (entry.c == nil or entry.c == true) and (entry.h == nil or entry.h == true) then
-                    clean[#clean + 1] = { m = entry.m, b = entry.b, r = entry.r, t = entry.t, c = entry.c, h = entry.h, i = items }
+                if MAIL_KINDS[entry.m] and Utility.IsSafeName(entry.r) and itemsOk then
+                    if kind == "rcv" then
+                        clean[#clean + 1] = { m = entry.m, b = entry.b, r = entry.r, t = entry.t, i = items }
+                    elseif (entry.c == nil or entry.c == true) and (entry.h == nil or entry.h == true) then
+                        clean[#clean + 1] = { m = entry.m, b = entry.b, r = entry.r, t = entry.t, c = entry.c, h = entry.h, i = items }
+                    end
                 end
             elseif EVENT_KINDS[entry.k] then
                 clean[#clean + 1] = { k = entry.k, b = entry.b, t = entry.t }
@@ -181,7 +202,7 @@ local function sanitizeEntries(list, kind)
         end
     end
     if #clean == 0 then return nil end
-    return normalizeEntries(clean, kind == "msgs" and messageKey or kind == "ml" and mailKey or eventKey)
+    return normalizeEntries(clean, kind == "msgs" and messageKey or (kind == "ml" or kind == "rcv") and mailKey or eventKey)
 end
 
 -- stored list + incoming list -> the merged list and whether it differs from the stored one
@@ -283,7 +304,8 @@ local function sanitize(order)
     return { id = order.id, requester = order.requester, recipeID = order.recipeID, qty = order.qty, note = note or "",
         createdAt = order.createdAt, closed = order.closed, closedAt = order.closed and order.closedAt or nil,
         closedBy = order.closedBy, claims = claims, name = recipeName, loc = recipeName and languageCode or nil,
-        msgs = sanitizeEntries(order.msgs, "msgs"), ev = sanitizeEntries(order.ev, "ev"), ml = sanitizeEntries(order.ml, "ml") }
+        msgs = sanitizeEntries(order.msgs, "msgs"), ev = sanitizeEntries(order.ev, "ev"), ml = sanitizeEntries(order.ml, "ml"),
+        rcv = sanitizeEntries(order.rcv, "rcv") }
 end
 Orders.Sanitize = sanitize
 
@@ -330,7 +352,9 @@ function Orders:Merge(incomingOrder)
     stored.msgs, messagesChanged = mergeEntries(stored.msgs, incoming.msgs, messageKey)
     stored.ev, eventsChanged = mergeEntries(stored.ev, incoming.ev, eventKey)
     stored.ml, mailsChanged = mergeEntries(stored.ml, incoming.ml, mailKey)
-    return changed or messagesChanged or eventsChanged or mailsChanged or orderVersion(stored) ~= versionBefore
+    local pickupsChanged
+    stored.rcv, pickupsChanged = mergeEntries(stored.rcv, incoming.rcv, mailKey)
+    return changed or messagesChanged or eventsChanged or mailsChanged or pickupsChanged or orderVersion(stored) ~= versionBefore
 end
 
 -- A copy of the order without its chat (ORDER broadcasts: the chat travels as OMSG and with OPUSH).
@@ -385,17 +409,44 @@ end
 ---@param orderID string
 ---@param entry table
 ---@return OrderMail|nil
-function Orders:RecordMail(orderID, entry)
+function Orders:RecordMail(orderID, entry) return self:_recordEntry("ml", orderID, entry) end
+
+-- Records that I took the items of a tagged mail of the order out of my mailbox (`entry`: m, b = me, r = the mail's
+-- sender, i?). Returns the stored entry, or nil.
+---@param orderID string
+---@param entry table
+---@return OrderPickup|nil
+function Orders:RecordPickup(orderID, entry) return self:_recordEntry("rcv", orderID, entry) end
+
+---@param field "ml"|"rcv"
+---@param orderID string
+---@param entry table
+---@return table|nil
+function Orders:_recordEntry(field, orderID, entry)
     local order = type(orderID) == "string" and self.db[orderID]
     if not order or type(entry) ~= "table" then return nil end
-    local mailTime = self.now()
-    for _, mail in ipairs(order.ml or {}) do
-        if mail.m == entry.m and mail.b == entry.b and mail.t >= mailTime then mailTime = mail.t + 1 end
+    local entryTime = self.now()
+    for _, existing in ipairs(order[field] or {}) do
+        if existing.m == entry.m and existing.b == entry.b and existing.t >= entryTime then entryTime = existing.t + 1 end
     end
-    local clean = sanitizeEntries({ { m = entry.m, b = entry.b, r = entry.r, t = mailTime, c = entry.c, h = entry.h, i = entry.i } }, "ml")
+    local clean = sanitizeEntries({ { m = entry.m, b = entry.b, r = entry.r, t = entryTime, c = entry.c, h = entry.h, i = entry.i } }, field)
     if not clean then return nil end
-    order.ml = mergeEntries(order.ml, clean, mailKey)
+    order[field] = mergeEntries(order[field], clean, mailKey)
     return clean[1]
+end
+
+-- The order and mail kind a mail tag (MailQueue.Tag) stands for, among the orders I hold; nil when none.
+---@param tag string
+---@return Order|nil
+---@return "item"|"mats"|nil
+function Orders:FindByTag(tag)
+    if type(tag) ~= "string" then return nil, nil end
+    for _, order in pairs(self.db) do
+        for mode in pairs(MAIL_KINDS) do
+            if addon.MailQueue.Tag(order.id, mode) == tag then return order, mode end
+        end
+    end
+    return nil, nil
 end
 
 ---@param order Order
@@ -548,13 +599,23 @@ end
 -- protocol 2.10)
 ---@param limit? integer default 100
 ---@return table<string, number>
-function Orders:MailDigest(limit)
+function Orders:MailDigest(limit) return self:_partDigest(mailVersion, limit) end
+
+-- { [orderID] = PickupVersion } likewise (the "rdig" field of HELLO, protocol 2.11)
+---@param limit? integer default 100
+---@return table<string, number>
+function Orders:PickupDigest(limit) return self:_partDigest(pickupVersion, limit) end
+
+---@param versionOf fun(order: Order): number
+---@param limit? integer
+---@return table<string, number>
+function Orders:_partDigest(versionOf, limit)
     local orders = {}
     for _, order in pairs(self.db) do orders[#orders + 1] = order end
     table.sort(orders, function(left, right) return left.createdAt > right.createdAt end)
     local digest = {}
     for index = 1, math.min(limit or 100, #orders) do
-        local version = mailVersion(orders[index])
+        local version = versionOf(orders[index])
         if version > 0 then digest[orders[index].id] = version end
     end
     return digest
@@ -573,20 +634,22 @@ end
 
 -- Orders I hold that the remote digest lacks or has an older version of (at most `limit`, newest first). With the
 -- remote's extra digest (a 2.9 peer) also the orders whose chat or history the peer has less of, and with its mail
--- digest (2.10) those whose mail entries it has less of; a peer without them would drop that part anyway, so it is
--- never sent an order for it.
+-- digest (2.10) those whose mail entries it has less of, and with its pickup digest (2.11) the same for pickups; a peer
+-- without them would drop that part anyway, so it is never sent an order for it.
 ---@param remoteDigest table<string, any>
 ---@param limit? integer default 40
 ---@param remoteExtraDigest? table<string, any>
 ---@param remoteMailDigest? table<string, any>
+---@param remotePickupDigest? table<string, any>
 ---@return Order[]
-function Orders:Missing(remoteDigest, limit, remoteExtraDigest, remoteMailDigest)
+function Orders:Missing(remoteDigest, limit, remoteExtraDigest, remoteMailDigest, remotePickupDigest)
     local missingOrders = {}
     for orderID, order in pairs(self.db) do
         local remoteVersion = remoteDigest[orderID]
         local missing = remoteVersion == nil or (type(remoteVersion) == "number" and remoteVersion < orderVersion(order))
         missing = missing or behind(remoteExtraDigest, orderID, extraVersion(order))
             or behind(remoteMailDigest, orderID, mailVersion(order))
+            or behind(remotePickupDigest, orderID, pickupVersion(order))
         if missing then missingOrders[#missingOrders + 1] = order end
     end
     table.sort(missingOrders, function(left, right) return left.createdAt > right.createdAt end)

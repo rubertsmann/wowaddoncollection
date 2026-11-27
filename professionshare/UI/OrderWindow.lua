@@ -80,6 +80,17 @@ local function mailHistoryText(mail)
     return text
 end
 
+-- "Bob picked up the item from Ann's mail: 1x Copper Bracers"
+---@param pickup OrderPickup
+---@return string
+local function pickupHistoryText(pickup)
+    local template = pickup.m == "item" and Text["{who} picked up the item from {from}'s mail"] or Text["{who} picked up the reagents from {from}'s mail"]
+    local text = Format(template, { who = shortName(pickup.b), from = shortName(pickup.r) })
+    local itemsText = addon.Model.MailItemsText(pickup.i, addon.Api.ItemName)
+    if itemsText ~= "" then text = text .. ": " .. itemsText end
+    return text
+end
+
 ---@return Order|nil
 local function currentOrder() return windowState.orderID and addon.orders and addon.orders:Get(windowState.orderID) end
 
@@ -139,14 +150,16 @@ local function refreshHistory(order)
     frame.historyList:SetData(addon.Model.OrderHistory(order))
 end
 
--- Has `order` a mail sent to me that I have not seen yet?
+-- Has `order` a mail sent to me, or a pickup of my mail, that I have not seen yet?
 ---@param order Order
 ---@return boolean
 local function hasUnseenMail(order)
     local mailSeen = addon.db and addon.db.ui and addon.db.ui.mailSeen
     local seenUntil = type(mailSeen) == "table" and tonumber(mailSeen[order.id]) or 0
-    for _, mail in ipairs(order.ml or {}) do
-        if mail.r == me() and mail.t > seenUntil then return true end
+    for _, field in ipairs({ "ml", "rcv" }) do
+        for _, entry in ipairs(order[field] or {}) do
+            if entry.r == me() and entry.b ~= me() and entry.t > seenUntil then return true end
+        end
     end
     return false
 end
@@ -265,7 +278,11 @@ end
 ---@param historyRow OrderHistoryRow
 local function fillHistoryRow(row, historyRow)
     row.dateText:SetText(dateTimeText(historyRow.t))
-    row.label:SetText(historyRow.mail and mailHistoryText(historyRow.mail) or historyText(historyRow.kind, historyRow.who))
+    local text
+    if historyRow.kind == "pickup" then text = pickupHistoryText(historyRow.mail)
+    elseif historyRow.mail then text = mailHistoryText(historyRow.mail)
+    else text = historyText(historyRow.kind, historyRow.who) end
+    row.label:SetText(text)
     row.tooltipText = historyRow.mail and row.label:GetText() or nil
 end
 

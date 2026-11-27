@@ -2,6 +2,13 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.8.0 (2026-11-27, protocol 2.11, schema 9)
+- **Mail pickup tracking** (feature 050): queued mails carry a short order tag in the subject (`[#xxxxxx]`). When the
+  recipient takes the items out (take, take all, auto loot, also through other mail addons), their client records the
+  pickup on the order: the requester picking up the crafted item closes the order as done, a crafter picking up the
+  reagents adds a history row. The sender gets order news for it. Returned or expired mails do not count. Protocol
+  2.11 (additive): order field `rcv`, HELLO `rdig`; 2.10 members keep syncing without the pickup entries.
+
 ## 1.7.0 (2026-11-27, protocol 2.10, schema 9)
 - **Order mail status** (feature 049): a mail sent through the mail queue is written into its order: the History tab
   shows every mail with the items and amounts ("partly" while something is still missing, "(marked by hand)" for

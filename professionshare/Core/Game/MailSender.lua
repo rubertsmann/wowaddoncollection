@@ -323,7 +323,8 @@ end
 ---@param job MailJob
 ---@return string
 local function subjectFor(job)
-    return addon.Locale.Format(addon.Text["ProfessionShare: {qty}x {name}"], { qty = job.qty, name = addon.Model.MailJobRecipeName(addon.Store, job) })
+    local text = addon.Locale.Format(addon.Text["ProfessionShare: {qty}x {name}"], { qty = job.qty, name = addon.Model.MailJobRecipeName(addon.Store, job) })
+    return addon.MailQueue.TaggedSubject(text, addon.MailQueue.Tag(job.orderID, job.mode))
 end
 
 ---@param job MailJob

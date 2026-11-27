@@ -105,3 +105,7 @@ Released in 1.6.0 (features 047, 048 done): the user confirmed the order window,
 (`tests/test_order_mail.lua`, `test_mail_sender.lua`, `test_sync.lua`, `test_load.lua`; suite `415 passed, 0 failed`).
 Confirmed in game by the user on one client (2026-11-27): send, Done, mark buttons, alert (`/psd fake mailed`), filter. NOT
 verified: two members (accepted at release). Checklist: `features/049-order-mail-status-and-history/verify.md`.
+**Feature 050 (mail tag and pickup tracking; protocol 2.11, schema unchanged):** built and proven OFFLINE against a
+simulated inbox (`tests/test_mail_pickup.lua`, `test_load.lua`; suite `423 passed, 0 failed`). NOT verified in game:
+the inbox API on Forever (`GetInboxHeaderInfo` return order, `GetInboxItem` item id, the take hooks), a real pickup by a
+second character (accepted at release 1.8.0). Checklist: `features/050-mail-tag-and-pickup-tracking/verify.md`.

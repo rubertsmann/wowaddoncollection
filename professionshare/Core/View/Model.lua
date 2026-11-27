@@ -523,9 +523,10 @@ function Model.OrderIsLive(status) return status == "open" or status == "claimed
 
 ---@class OrderHistoryRow
 ---@field t integer server time
----@field kind "created"|"claim"|"withdraw"|"done"|"cancel"|"mail"
+---@field kind "created"|"claim"|"withdraw"|"done"|"cancel"|"mail"|"pickup"
 ---@field who string raw canonical name (escape before display)
----@field mail? OrderMail kind "mail": the entry (mode m, recipient r, items i, complete c, by hand h)
+---@field mail? OrderMail|OrderPickup kind "mail": the entry (mode m, recipient r, items i, complete c, by hand h);
+---  kind "pickup": the pickup (mode m, the mail's sender r, items i)
 
 -- Every status change of an order, oldest first: the recorded events (protocol 2.9) plus what the order's own fields
 -- show (creation, each crafter's last claim or withdrawal, the close), so changes made by older addon versions appear too.
@@ -543,6 +544,7 @@ function Model.OrderHistory(order)
     add(order.createdAt, "created", order.requester)
     for _, event in ipairs(order.ev or {}) do add(event.t, event.k, event.b) end
     for _, mail in ipairs(order.ml or {}) do add(mail.t, "mail", mail.b, mail) end
+    for _, pickup in ipairs(order.rcv or {}) do add(pickup.t, "pickup", pickup.b, pickup) end
     for crafter, claim in pairs(order.claims or {}) do add(claim.t, claim.state == "claimed" and "claim" or "withdraw", crafter) end
     if order.closed then add(order.closedAt, order.closed == "done" and "done" or "cancel", order.closedBy or order.requester) end
     table.sort(historyRows, function(left, right)

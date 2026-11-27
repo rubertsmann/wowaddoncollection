@@ -26,7 +26,8 @@ local addonName, addon = ...
 ---@field key string the state key that was not seen
 ---@field order Order
 ---@field message? OrderMessage kind "chat": the newest unseen message
----@field mail? OrderMail kind "mail": the newest unseen mail sent to me
+---@field mail? OrderMail|OrderPickup kind "mail": the newest unseen mail sent to me, or pickup of a mail of mine
+---@field pickedUp? boolean kind "mail": `mail` is a pickup
 ---@field count? integer kind "chat": unseen messages
 
 ---@class NotifyModule
@@ -307,10 +308,11 @@ function Notify.PruneChatSeen(orderBoard, chatSeen)
 end
 
 ------------------------------------------------------------------ order mails
---   mailSeen[orderID] = time of the newest mail entry the player has seen on that order. A mail sent TO me by someone
---   else is order news until I look at the Orders tab or the order.
+--   mailSeen[orderID] = time of the newest mail or pickup entry the player has seen on that order. A mail sent TO me by
+--   someone else, and someone picking up a mail I sent, is order news until I look at the Orders tab or the order.
 
--- Unseen mails sent to me, as items of kind "mail" (key = the newest one, so a further mail counts as fresh again).
+-- Unseen mails sent to me and pickups of my mails, as items of kind "mail" (`pickedUp` set for a pickup; key = the
+-- newest one, so a further one counts as fresh again).
 ---@param orderBoard OrderBoard
 ---@param myName string|nil
 ---@param mailSeen table<string, integer>|nil
@@ -320,13 +322,18 @@ function Notify.UnseenMail(orderBoard, myName, mailSeen)
     if not myName then return unseenMails end
     for orderID, order in pairs(orderBoard.db) do
         local seenUntil = type(mailSeen) == "table" and tonumber(mailSeen[orderID]) or 0
-        local newestMail
-        for _, mail in ipairs(order.ml or {}) do
-            if mail.r == myName and mail.b ~= myName and mail.t > seenUntil then newestMail = mail end
+        local newestMail, pickedUp
+        for _, field in ipairs({ "ml", "rcv" }) do
+            for _, entry in ipairs(order[field] or {}) do
+                if entry.r == myName and entry.b ~= myName and entry.t > seenUntil and (not newestMail or entry.t >= newestMail.t) then
+                    newestMail, pickedUp = entry, field == "rcv"
+                end
+            end
         end
         if newestMail then
-            unseenMails[#unseenMails + 1] = { id = orderID, kind = "mail", key = "mail:" .. newestMail.t .. ":" .. newestMail.b,
-                order = order, mail = newestMail }
+            unseenMails[#unseenMails + 1] = { id = orderID, kind = "mail",
+                key = (pickedUp and "pickup:" or "mail:") .. newestMail.t .. ":" .. newestMail.b,
+                order = order, mail = newestMail, pickedUp = pickedUp or nil }
         end
     end
     table.sort(unseenMails, function(left, right)
@@ -347,6 +354,7 @@ function Notify.MarkMailSeen(orderBoard, mailSeen, order)
     local function mark(oneOrder)
         local newestTime = tonumber(mailSeen[oneOrder.id]) or 0
         for _, mail in ipairs(oneOrder.ml or {}) do newestTime = math.max(newestTime, mail.t) end
+        for _, pickup in ipairs(oneOrder.rcv or {}) do newestTime = math.max(newestTime, pickup.t) end
         if newestTime > 0 then mailSeen[oneOrder.id] = newestTime end
     end
     if order then mark(order) else for _, oneOrder in pairs(orderBoard.db) do mark(oneOrder) end end

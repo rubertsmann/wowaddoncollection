@@ -243,6 +243,22 @@ return {
                     local okFakeMail, mailResult = pcall(addon.DevProbe.AddFakeMail, {})
                     harness.truthy(okFakeMail and mailResult and mailResult.ok, "fake mail failed: " .. tostring(mailResult and (mailResult.why or mailResult)))
                     harness.equal(addon.orders:Status(addon.orders:Get(mailResult.orderID)), "mailed", "on my own order: the item, so Mailed")
+                    local okPickup, pickupResult = pcall(addon.DevProbe.AddFakePickup)
+                    harness.truthy(okPickup and pickupResult and pickupResult.ok, "fake pickup failed: " .. tostring(pickupResult and (pickupResult.why or pickupResult)))
+                    harness.equal(#addon.Notify.UnseenMail(addon.orders, addon.Utility.Me(), {}) > 0, true, "a pickup of my mail is news")
+                    harness.truthy(pcall(addon.OrderWindow.Open, pickupResult.orderID, "history"), "the history with a pickup failed")
+                    -- dev open order from someone else, for a recipe I know: open, not mine, nobody claims it
+                    addon.Store.PutCatalog({ [4242] = { name = "Known Thing", produces = 4243, reagents = { { itemID = 6, count = 1 } } } })
+                    local myName = addon.Utility.Me()
+                    addon.Store.db.chars[myName] = addon.Store.db.chars[myName] or { name = myName, rev = 1, professions = {} }
+                    addon.Store.db.chars[myName].professions = addon.Store.db.chars[myName].professions or {}
+                    addon.Store.db.chars[myName].professions.test = { name = "Test", rank = 1, max = 300, recipes = { [4242] = true } }
+                    local okRequest, requestResult = pcall(addon.DevProbe.AddFakeRequest, { 4242, 2 })
+                    harness.truthy(okRequest, "fake open order failed: " .. tostring(requestResult))
+                    harness.truthy(requestResult.ok, "fake open order: " .. tostring(requestResult.why))
+                    local requestedOrder = addon.orders:Get(requestResult.orderID)
+                    harness.truthy(requestedOrder.requester ~= addon.Utility.Me()); harness.equal(addon.orders:Status(requestedOrder), "open")
+                    harness.equal(requestedOrder.qty, 2); harness.equal(requestedOrder.recipeID, 4242)
                     addon.orders.db[chatOrder.id] = nil
                     local okK, errK = pcall(addon.DevProbe.AddFakeKeys)
                     harness.truthy(okK, "fake keys failed: " .. tostring(errK))

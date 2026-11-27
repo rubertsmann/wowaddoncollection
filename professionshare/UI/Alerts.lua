@@ -56,6 +56,7 @@ local function describe(unseenOrder)
     elseif unseenOrder.kind == "mail" then
         local mail = unseenOrder.mail
         local template = mail.m == "item" and Text["{who} mailed you {name}"] or Text["{who} mailed you the reagents for {name}"]
+        if unseenOrder.pickedUp then template = Text["{who} picked up your mail for {name}"] end
         return Format(template, { who = addon.Utility.ShortName(mail.b), name = plainRecipeName(order) })
     end
     return Format(Text["{who} finished your order {name}"],
