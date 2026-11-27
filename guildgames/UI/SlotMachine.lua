@@ -517,7 +517,7 @@ function SlotMachine.Build(panel)
     -- controls below the cabinet
     widgets.resultText = Widgets.CreateFontString(panel, "GameFontNormalLarge", "CENTER")
     widgets.resultText:SetPoint("TOP", panel, "TOP", 0, -236); widgets.resultText:SetWidth(290)
-    widgets.stake = addon.GamesTab.CreateStakeRow(panel, 36, -262, function() SlotMachine.Spin() end)
+    widgets.stake = addon.GamesTab.CreateStakeRow(panel, 36, -262, function() SlotMachine.Spin() end, function() return "slots" end)
     widgets.stake.Write(addon.UIHelpers.Settings().lastSlotStakeCopper or DEFAULT_STAKE)
     widgets.spinButton = Widgets.CreateButton(panel, Text["Spin"], 180, 28, function() SlotMachine.Spin() end)
     widgets.spinButton:SetPoint("TOP", panel, "TOP", 0, -292)

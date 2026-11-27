@@ -9,7 +9,7 @@ that day make room again). Play never stops: past the limit a win just pays noth
 A stake of 0 is free play in all three games.
 
 ## How to use
-- UI: the header shows "Win limit today: X left" (or "Daily win limit reached") right of the pool. A cut win reads
+- UI: hover the pool amount for the balance breakdown and the daily win limit (won today, not paid today, left, reset time, why). A "!" right of the stake boxes warns before a play (red: more than the pool; orange: limit reached or the win would be cut; grey: big wins would be cut, free play); hover it for the reason. A cut win reads
   "You won X, paid Y (daily win limit)." Empty stake boxes (0) play for free.
 - Commands: `/gg caught wallet` prints the casino net per game (old survivor runs separately), the day's paid net and the
   limit left, and the ledger with `cap` lines.
@@ -22,7 +22,7 @@ A stake of 0 is free play in all three games.
 - Modules: `Core/Data/Wallet.lua` (CasinoDay, WinRemaining, BookCasino, sanitize), `Core/Data/Games.lua` (kind
   fields, per-kind minimum win, RunRefusal, Flip/RecordPlay book through the wallet and return `paid`),
   `Core/Minigames/Slots.lua` and `Survivor.lua` (free play, percent payouts, frenzy), `Core/View/Model.lua`
-  (PercentText, WinText, WinLimitText, `run` refusal text), UI in GamesTab, SlotMachine, SurvivorArena.
+  (PercentText, WinText, PoolTooltip, StakeWarning, CutToday, `run` refusal text), UI in GamesTab, SlotMachine, SurvivorArena.
 
 ## Localization
 New strings in enUS (source) and deDE; the decimal mark of the multipliers is a locale string (`{whole}.{fraction}`,
@@ -30,8 +30,6 @@ German `{whole},{fraction}`). Only numbers are stored or sent.
 
 ## Limits and known issues
 - Leaderboards show real game results, so a player can show more won than the pool paid.
-- There is no warning before a play whose possible win is above the limit left; the header line and the result text
-  carry it.
 - The limit is local bookkeeping: an edited SavedVariables file can bypass it (same trust model as the pool).
 - The day is UTC, not the realm's reset time.
 

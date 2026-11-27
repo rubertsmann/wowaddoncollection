@@ -53,14 +53,138 @@ function Model.WinText(net, paid)
     return Format(Text["You won {gold}, paid {paid} (daily win limit)."], { gold = Model.MoneyText(net), paid = Model.MoneyText(paid) })
 end
 
--- The daily win limit for the header: what a win may still add today, or that the limit is reached.
+---@class TooltipLine
+---@field text string
+---@field color number[] r, g, b
+---@field gap? boolean an empty line before this one
+
+local WHITE, GREY, GOLD, ORANGE, RED, GREEN = { 1, 1, 1 }, { 0.7, 0.7, 0.7 }, { 1, 0.82, 0 }, { 1, 0.6, 0.2 }, { 1, 0.33, 0.33 },
+    { 0.3, 1, 0.5 }
+
+-- "3h 20m" until the next 00:00 UTC (when the daily win limit starts again).
 ---@param now integer
 ---@return string
-function Model.WinLimitText(now)
+local function untilNextDay(now)
+    local seconds = addon.Wallet.SECONDS_PER_DAY - (math.floor(now) % addon.Wallet.SECONDS_PER_DAY)
+    return addon.Locale.Format(addon.Text["{hours}h {minutes}m"],
+        { hours = math.floor(seconds / 3600), minutes = math.floor(seconds % 3600 / 60) })
+end
+
+-- Copper the daily win limit cut from wins today (the "cap" ledger entries of this UTC day).
+---@param now integer
+---@return integer
+function Model.CutToday(now)
+    local Wallet, total = addon.Wallet, 0
+    local today = Wallet.DayOf(now)
+    for _, entry in ipairs(Wallet.Ledger().entries) do
+        if entry.k == "cap" and Wallet.DayOf(entry.t) == today then total = total - entry.a end
+    end
+    return total
+end
+
+-- Why the daily win limit exists and how it works, the same lines under the pool and under a stake warning.
+---@param lines TooltipLine[]
+local function explainLimit(lines)
     local Text, Format = addon.Text, addon.Locale.Format
-    local remaining = addon.Wallet.WinRemaining(now)
-    if remaining <= 0 then return "|cffff9933" .. Text["Daily win limit reached"] .. "|r" end
-    return Format(Text["Win limit today: {gold} left"], { gold = Model.MoneyText(remaining) })
+    local cap = Model.MoneyText(addon.Wallet.DAILY_WIN_CAP)
+    lines[#lines + 1] = { text = Format(Text["The coin flip, slots and Survivor together can add at most {cap} to your pool per day. This keeps one lucky bet from outweighing everything else you earn."], { cap = cap }), color = GREY, gap = true }
+    lines[#lines + 1] = { text = Text["Losses that day make room again. Above the limit you can keep playing, but a win pays nothing more; the leaderboards still show the real result."], color = GREY }
+    lines[#lines + 1] = { text = Text["A stake of 0 is free play: nothing is won, lost or stored."], color = GREY }
+end
+
+-- The pool's hover: the balance and where it comes from, then the daily win limit in detail.
+---@param myName string|nil
+---@param now integer
+---@return string title
+---@return TooltipLine[] lines
+function Model.PoolTooltip(myName, now)
+    local Text, Format, Wallet = addon.Text, addon.Locale.Format, addon.Wallet
+    local breakdown = Wallet.Breakdown(myName)
+    local lines = {}
+    local function add(label, copper, color)
+        local sign = copper < 0 and "-" or ""
+        lines[#lines + 1] = { text = label .. ": " .. sign .. Model.MoneyText(copper), color = color or WHITE }
+    end
+    add(Text["Starting grant"], breakdown.grant)
+    add(Text["House games (coin flip, slots, Survivor)"], breakdown.casino)
+    add(Text["Earned (catches, payouts, Dash, arena)"], breakdown.earned)
+    add(Text["Spent (care, shop, wagers, daily limit)"], -breakdown.spent)
+    if breakdown.pending > 0 then add(Text["Survivor stake in play"], -breakdown.pending, ORANGE) end
+    local remaining, paid = Wallet.WinRemaining(now), Wallet.CasinoDay(now).n
+    lines[#lines + 1] = { text = Text["Daily win limit"], color = GOLD, gap = true }
+    lines[#lines + 1] = { text = Format(Text["Won today: {gold}"], { gold = (paid < 0 and "-" or "") .. Model.MoneyText(paid) }), color = WHITE }
+    local cut = Model.CutToday(now)
+    if cut > 0 then
+        lines[#lines + 1] = { text = Format(Text["Not paid today (above the limit): {gold}"], { gold = Model.MoneyText(cut) }), color = ORANGE }
+    end
+    if remaining > 0 then
+        lines[#lines + 1] = { text = Format(Text["Left today: {gold} of {cap}"], { gold = Model.MoneyText(remaining),
+            cap = Model.MoneyText(Wallet.DAILY_WIN_CAP) }), color = GREEN }
+    else
+        lines[#lines + 1] = { text = Text["Reached: wins pay nothing more today."], color = ORANGE }
+    end
+    lines[#lines + 1] = { text = Format(Text["Starts again in {time} (00:00 UTC)."], { time = untilNextDay(now) }), color = GREY }
+    explainLimit(lines)
+    return Format(Text["Money pool: {gold}"], { gold = (breakdown.balance < 0 and "-" or "") .. Model.MoneyText(breakdown.balance) }), lines
+end
+
+---@class StakeWarning
+---@field level "error"|"warning"|"note"
+---@field title string
+---@field lines TooltipLine[]
+
+-- What a stake would mean before it is played: free play, more than the pool, or a win the daily limit would cut.
+-- gameKey "coin"|"slots"|"survivor"; pct: the Survivor target's payout percent (smallest and largest the same, endless:
+-- pass the first and the top percent). nil when there is nothing to say or the stake is not a valid amount.
+---@param gameKey string
+---@param stake integer|nil copper
+---@param myName string|nil
+---@param now integer
+---@param smallestPct? integer survivor only
+---@param largestPct? integer survivor only
+---@return StakeWarning|nil
+function Model.StakeWarning(gameKey, stake, myName, now, smallestPct, largestPct)
+    local Text, Format, Wallet = addon.Text, addon.Locale.Format, addon.Wallet
+    if type(stake) ~= "number" or stake < 0 or stake > addon.Games.MAXIMUM_STAKE then return nil end
+    if stake == 0 then
+        return { level = "note", title = Text["Free play"], lines = { { text = Text["A stake of 0 is free play: nothing is won, lost or stored."], color = GREY } } }
+    end
+    local balance = Wallet.Balance(myName)
+    if stake > balance then
+        return { level = "error", title = Text["More than your pool"], lines = {
+            { text = Format(Text["Your pool holds {gold}; a stake cannot be more."], { gold = (balance < 0 and "-" or "") .. Model.MoneyText(balance) }), color = WHITE } } }
+    end
+    local smallest, largest
+    if gameKey == "slots" then
+        local lowest = math.huge
+        for _, symbol in ipairs(addon.Slots.SYMBOLS) do lowest = math.min(lowest, symbol.pays) end
+        smallest, largest = stake * (lowest - 1), stake * (addon.Slots.MAXIMUM_MULTIPLIER - 1)
+    elseif gameKey == "survivor" then
+        smallest = addon.Survivor.WinNet(stake, smallestPct or 105)
+        largest = addon.Survivor.WinNet(stake, largestPct or smallestPct or 105)
+    else
+        smallest, largest = stake, stake
+    end
+    local remaining = Wallet.WinRemaining(now)
+    local left = Model.MoneyText(remaining)
+    local warning
+    if remaining <= 0 then
+        warning = { level = "warning", title = Text["Daily win limit reached"], lines = {
+            { text = Text["A win pays nothing more today, but a loss still costs the stake."], color = ORANGE } } }
+    elseif smallest > remaining then
+        warning = { level = "warning", title = Text["This win would be cut"], lines = {
+            { text = Format(Text["Even the smallest win ({gold}) is more than the {left} left today: only {left} would be paid."],
+                { gold = Model.MoneyText(smallest), left = left }), color = ORANGE } } }
+    elseif largest > remaining then
+        warning = { level = "note", title = Text["Big wins would be cut"], lines = {
+            { text = Format(Text["Wins up to {left} are paid in full today; anything above is not paid."], { left = left }), color = WHITE } } }
+    else
+        return nil
+    end
+    warning.lines[#warning.lines + 1] = { text = Format(Text["Left today: {gold} of {cap}"],
+        { gold = left, cap = Model.MoneyText(Wallet.DAILY_WIN_CAP) }), color = WHITE }
+    explainLimit(warning.lines)
+    return warning
 end
 
 ---@class LeaderboardRow

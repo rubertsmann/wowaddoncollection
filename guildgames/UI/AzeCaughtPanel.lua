@@ -502,6 +502,9 @@ function Panel.AddCareTooltip(key)
     elseif shown == "wake" then line = Text["Wake"]
     else line = Format(Text["Sleeps {time}; refills energy."], { time = duration(AzeCaught.SLEEP_DURATION) }) end
     GameTooltip:AddLine(Text["Click:"] .. " " .. line, 0.4, 1, 0.4, true)
+    if shown == "sleep" and addon.Arena.TrainingLeft() and addon.Arena.TrainingLeft() > 0 then
+        GameTooltip:AddLine(Text["Sleeping stops the running training (no refund)."], 1, 0.6, 0.2, true)
+    end
     if state.unusable then GameTooltip:AddLine(careRefusalText(state.unusable), 1, 0.4, 0.4, true) end
 end
 
@@ -548,6 +551,7 @@ function Panel.Care(action, target)
     Panel.EmoteThenIdle(model, EMOTES[action] or EMOTES.idle, action)
     addon.Api.PlaySound(addon.Api.SoundKitFor({ "IG_MAINMENU_OPTION_CHECKBOX_ON" }))
     if target.status then target.status(result.cost > 0 and Format(Text["Paid {gold}."], { gold = money(result.cost) }) or "") end
+    if result.trainingCancelled then addon.Print(Text["The running training was cancelled."]) end
     addon.Catcher.PublishSoon(true)
     addon.Events.Fire("CAUGHT_CHANGED")
 end

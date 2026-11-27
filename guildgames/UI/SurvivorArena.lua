@@ -551,6 +551,7 @@ local function selectTarget(index)
     addon.UIHelpers.Settings().survivorTarget = index
     setControls(false)
     showHint(addon.Survivor.Target(index))
+    widgets.stake.UpdateWarning()
 end
 
 -- The bomb button: shown during a run while I own a bomb; greyed out with the reason when it cannot be used.
@@ -608,7 +609,6 @@ local function finish(run)
             widgets.bannerText:SetText(run.target.endless and addon.Model.PercentText(addon.Survivor.EndlessPercent(run.time))
                 .. "  " .. clock(run.time) or Text["Survived!"])
             Animate.FadeIn(widgets.bannerText, 0.2); Animate.Pulse(widgets.bannerText, 1.4, 0.5)
-            Animate.Glow(widgets.towerGlow, 4)
             Animate.Ring("survivorEnd", widgets.effects, widgets.towerAnchor, 40, 340, nil, 0.8)
             Animate.Burst("survivor", widgets.effects, widgets.towerAnchor, 0, 0, { count = 32, speed = 210, gravity = 230, size = 15 })
             Animate.FloatText("survivor", widgets.floatText, widgets.towerAnchor, 0, 24, "+" .. money(paid), { 0.35, 1, 0.55 })
@@ -685,7 +685,6 @@ function SurvivorArena.Start()
     widgets.resultText:SetText(""); widgets.bannerText:SetText(""); widgets.hintText:SetText("")
     addon.Animate.FinishTween("float:survivor")
     setControls(true)
-    widgets.towerGlow:SetAlpha(0)
     addon.Animate.Ring("survivorStart", widgets.effects, widgets.towerAnchor, 10, 200, { 1, 0.85, 0.3 }, 0.6)
     addon.Api.PlaySoundNamed({ "IG_MAINMENU_OPTION_CHECKBOX_ON" })
     addon.Log.Debug("games.survivor", "a survivor run started", { stake = stake, target = run.target.seconds })
@@ -853,7 +852,7 @@ function SurvivorArena.Build(panel)
     pcall(widgets.hurtFlash.SetBlendMode, widgets.hurtFlash, "ADD")
     widgets.hurtFlash:SetAlpha(0); widgets.hurtFlash:Hide()
 
-    -- the tower layer: the tower, its glow, barrier, thorns aura and health bar
+    -- the tower layer: the tower, its barrier, thorns aura and health bar
     local towerLayer = CreateFrame("Frame", nil, arena)
     towerLayer:SetAllPoints()
     widgets.towerAnchor = CreateFrame("Frame", nil, towerLayer)
@@ -866,10 +865,6 @@ function SurvivorArena.Build(panel)
     widgets.thornsAura:SetSize(TOWER_SIZE * 1.9, TOWER_SIZE * 1.9); widgets.thornsAura:SetPoint("CENTER", arena, "CENTER", 0, 0)
     widgets.thornsAura:SetTexture(addon.Animate.SPARKLE_TEXTURE); widgets.thornsAura:SetVertexColor(0.5, 0.85, 0.3)
     pcall(widgets.thornsAura.SetBlendMode, widgets.thornsAura, "ADD"); widgets.thornsAura:SetAlpha(0.55); widgets.thornsAura:Hide()
-    widgets.towerGlow = towerLayer:CreateTexture(nil, "BACKGROUND", nil, 2)
-    widgets.towerGlow:SetSize(TOWER_SIZE * 2, TOWER_SIZE * 2); widgets.towerGlow:SetPoint("CENTER", arena, "CENTER", 0, 0)
-    widgets.towerGlow:SetTexture(addon.GamesTab.GLOW_TEXTURE); widgets.towerGlow:SetVertexColor(1, 0.85, 0.3)
-    pcall(widgets.towerGlow.SetBlendMode, widgets.towerGlow, "ADD"); widgets.towerGlow:SetAlpha(0)
     widgets.tower = towerLayer:CreateTexture(nil, "ARTWORK")
     widgets.tower:SetSize(TOWER_SIZE, TOWER_SIZE); widgets.tower:SetPoint("CENTER", arena, "CENTER", 0, 0)
     addon.UIHelpers.SetTextureOr(widgets.tower, addon.Survivor.TOWER_ICON, { 1, 0.85, 0.3 })
@@ -884,12 +879,6 @@ function SurvivorArena.Build(panel)
     end })
     widgets.pet:SetPoint("CENTER", arena, "CENTER", 0, 4)
     widgets.pet:Hide()
-    -- the tower's real hit circle, pulsing above the companion (which may be drawn larger)
-    local hitLayer = CreateFrame("Frame", nil, towerLayer)
-    hitLayer:SetAllPoints(); hitLayer:SetFrameLevel(addon.UIHelpers.FrameLevel(towerLayer) + 2)
-    widgets.towerHitbox = addon.UIHelpers.CreateHitbox(hitLayer, { 1, 0.85, 0.35 }, true)
-    widgets.towerHitbox:SetSize(addon.Survivor.TOWER_RADIUS * 2, addon.Survivor.TOWER_RADIUS * 2)
-    widgets.towerHitbox:SetPoint("CENTER", arena, "CENTER", 0, 0)
     local hpBack = towerLayer:CreateTexture(nil, "ARTWORK", nil, 1)
     hpBack:SetSize(44, 4); hpBack:SetPoint("TOP", widgets.tower, "BOTTOM", 0, -3); hpBack:SetColorTexture(0, 0, 0, 0.7)
     widgets.hpFill = towerLayer:CreateTexture(nil, "ARTWORK", nil, 2)
@@ -952,25 +941,21 @@ function SurvivorArena.Build(panel)
 
     -- controls: the bet target as a dropdown, the stake, the start / give up / cash out icon, the result
     buildTargetDropdown(panel)
-    widgets.stake = addon.GamesTab.CreateStakeRow(panel, 36, -236, function() SurvivorArena.Start() end)
+    widgets.stake = addon.GamesTab.CreateStakeRow(panel, 36, -236, function() SurvivorArena.Start() end, function()
+        local target = addon.Survivor.Target(state.targetIndex)
+        if not target or target.endless then
+            return "survivor", 100 + addon.Survivor.ENDLESS_STEP_PERCENT, addon.Survivor.ENDLESS_MAXIMUM_PERCENT
+        end
+        return "survivor", target.pct, target.pct
+    end)
     widgets.stake.Write(addon.UIHelpers.Settings().lastSurvivorStakeCopper or DEFAULT_STAKE)
     widgets.startButton = Widgets.CreateIconButton(panel, "start", START_SIZE, Text["Start"], function() SurvivorArena.Start() end)
     widgets.startButton:SetPoint("TOP", panel, "TOP", 0, -262)
     widgets.resultText = Widgets.CreateFontString(panel, "GameFontNormal", "CENTER")
     widgets.resultText:SetPoint("TOP", panel, "TOP", 0, -306); widgets.resultText:SetWidth(290)
 
-    -- the run (and the idle glow) advance only while the panel is visible
-    widgets.idleTime = 0
-    widgets.shimmerTime = 0
-    panel:SetScript("OnUpdate", function(_, elapsedSeconds)
-        SurvivorArena.Update(elapsedSeconds)
-        widgets.shimmerTime = widgets.shimmerTime + elapsedSeconds
-        addon.UIHelpers.Shimmer(widgets.towerHitbox, widgets.shimmerTime)
-        if not state.run then
-            widgets.idleTime = widgets.idleTime + elapsedSeconds
-            widgets.towerGlow:SetAlpha(0.25 + 0.2 * math.sin(widgets.idleTime * 2.2))
-        end
-    end)
+    -- the run advances only while the panel is visible
+    panel:SetScript("OnUpdate", function(_, elapsedSeconds) SurvivorArena.Update(elapsedSeconds) end)
 
     panel:HookScript("OnShow", function() SurvivorArena.RefreshPet() end)
     SurvivorArena.RefreshPet()

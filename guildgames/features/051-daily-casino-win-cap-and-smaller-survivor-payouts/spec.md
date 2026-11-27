@@ -44,8 +44,11 @@ small multipliers (105% to 140%) instead of 2x to 64x.
   the result is only shown.
 - R9: **No endless build:** difficulty keeps rising so every run ends; in a seeded simulation of 200 runs with three
   card strategies no run lasts past 8:00.
-- R10: The UI shows the limit in the window header next to the pool (shared by coin, slots and Survivor): "Win limit
-  today: X left", or "Daily win limit reached" at 0. A cut win says "You won X, paid Y (daily win limit)." or, at 0 left,
+- R10: Hovering the pool amount in the window header shows the balance breakdown and the daily win limit in detail
+  (won today, not paid today, left, when it starts again, why it exists). Each stake row (coin, slots, Survivor) shows a
+  "!" right of the boxes while the typed stake deserves a warning, with the reason on hover: red = more than the pool,
+  orange = the limit is reached or even the smallest win of that game would be cut, grey = big wins would be cut or
+  free play; the boxes take the colour (red/orange). A cut win says "You won X, paid Y (daily win limit)." or, at 0 left,
   "You won X, but the daily win limit is reached: nothing paid."; free plays say "Free play: ..."; multipliers read
   "x1.05". enUS and deDE (decimal comma).
 

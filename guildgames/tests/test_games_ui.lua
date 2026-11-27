@@ -552,4 +552,44 @@ return {
             GamesTab.RevealBoard()   -- stub lists have no rows: nothing to reveal, no error
         end)
     end,
+
+    ["games ui: the pool's hover explains the daily win limit; a stake the limit would cut shows a warning"] = function(harness)
+        withSetup(harness, nil, function(addon, world)
+            local savedTooltip = _G.GameTooltip
+            local shown = {}
+            _G.GameTooltip = { SetOwner = function() end, Hide = function() end, Show = function() shown.visible = true end,
+                SetText = function(_, text) shown.title, shown.lines = text, {} end,
+                AddLine = function(_, text) shown.lines[#shown.lines + 1] = text end }
+            local ok, problem = pcall(function()
+                local GamesTab = addon.GamesTab
+                GamesTab.Build(newWidget(world, "Frame"))
+                local widgets = GamesTab.widgets
+                harness.equal(widgets.limitText, nil, "no limit line in the header any more")
+                widgets.balanceHover.scripts.OnEnter(widgets.balanceHover)
+                harness.truthy(shown.title:find("Money pool", 1, true), shown.title)
+                local text = table.concat(shown.lines, "\n")
+                harness.truthy(text:find("Daily win limit", 1, true)); harness.truthy(text:find("Left today", 1, true))
+                harness.truthy(text:find("00:00 UTC", 1, true))
+                -- a 10g stake fits: no warning; then the limit is used up and the same stake warns
+                local row = widgets.coinStake
+                row.Write(10 * 10000)
+                harness.equal(row.UpdateWarning(), nil); harness.equal(row.warningButton.shown, false)
+                addon.Wallet.Ledger().earned = 10000 * 10000
+                assert(addon.Games.Flip("Me-R", 500 * 10000, "H", addon.Utility.Now(), function() return 0.1 end))
+                GamesTab.RefreshBalance()
+                harness.equal(row.warningButton.shown, true, "the balance refresh re-checks the stake")
+                harness.equal(row.warningButton.warning.level, "warning")
+                row.warningButton.scripts.OnEnter(row.warningButton)
+                harness.equal(shown.title, "Daily win limit reached")
+                -- free play and more than the pool
+                row.Write(0)
+                harness.equal(row.UpdateWarning().level, "note")
+                row.Write(addon.Games.MAXIMUM_STAKE)
+                addon.Wallet.Ledger().spent = addon.Wallet.Ledger().earned
+                harness.equal(row.UpdateWarning().level, "error")
+            end)
+            _G.GameTooltip = savedTooltip
+            if not ok then error(problem, 0) end
+        end)
+    end,
 }

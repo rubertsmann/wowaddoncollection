@@ -1,3 +1,18 @@
+# GuildGames 0.15.0
+
+Putting your companion to sleep now stops a training that is still running, the same way switching companions does.
+The gold and energy you paid for it are not refunded, so the Sleep tooltip warns you while a training runs. A training
+whose time is already up is kept and finishes as usual.
+
+Survivor and Companion Dash look cleaner: the pulsing outlines around the tower, the runner and the monsters, and the
+gold glow behind the tower, are gone. What counts as a hit has not changed.
+
+The daily win limit is easier to follow: hover over your gold pool to see how much you won today, how much the limit
+kept back, what is left and when it resets. A "!" next to the bet amount warns you before a win would be cut, when you
+bet more than you have, or when a stake of 0 means free play.
+
+Everyone should update: fights need the same version on both sides.
+
 # GuildGames 0.14.0
 
 Arena fights work between updated players again. Your arena entry, which tells the guild which version you run, was only

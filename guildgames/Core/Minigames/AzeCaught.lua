@@ -1468,6 +1468,7 @@ AzeCaught.CARE = {
 ---@field hearts integer change
 ---@field cost integer copper spent
 ---@field balance? integer after a paid action
+---@field trainingCancelled? true sleeping stopped a running training
 
 -- Whether a care action can be done now, without doing it (the panel greys out the buttons with it).
 -- Returns true, or false and the refusal Care would give.
@@ -1527,8 +1528,15 @@ function AzeCaught.Care(action, myName, now)
     local hearts = 0
     if zone == "needy" then hearts = 1
     elseif zone == "ok" and before <= profile.ok + (AzeCaught.DUE_LEVEL - AzeCaught.OK_LEVEL) then hearts = 2 end
+    local trainingCancelled
     if action == "sleep" then
         companion.asleep = AzeCaught.SLEEP_DURATION
+        -- a sleeping companion cannot train: a running training stops (no refund); one whose time is up is left for the
+        -- tick to finish
+        local training = addon.Arena.State().training
+        if training and training.uid == companion.uid and (addon.Arena.TrainingLeft() or 0) > 0 then
+            trainingCancelled = addon.Arena.CancelTraining() and true or nil
+        end
     else
         companion[need] = 100
     end
@@ -1551,7 +1559,7 @@ function AzeCaught.Care(action, myName, now)
               and round1(AzeCaught.CARE_STREAK_GAP - (AzeCaught.State().activeSeconds - companion.streakAt)) or nil })
     changeHearts(companion, hearts, action)
     companion.zones[need] = AzeCaught.ZoneOf(companion, need)
-    return { action = action, hearts = hearts, cost = cost, balance = balance }
+    return { action = action, hearts = hearts, cost = cost, balance = balance, trainingCancelled = trainingCancelled }
 end
 
 -- A care item: fills `needs` of the companion to full, free and without hearts or streaks. Returns the needs it

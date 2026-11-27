@@ -116,7 +116,7 @@ WoW Forever (interface 16001). The games started in TalentShare 0.6.0 and moved 
 - **Money pool:** one balance for all games: 20g to start, plus your casino results, catch rewards and weekly payouts,
   minus food, water and the shop. You cannot stake more than the balance. It is shown next to the game switch.
 - **Daily win limit:** the coin flip, slots and Survivor together can raise your pool by at most 500g a day (net:
-  a loss that day makes room again; the day starts at 00:00 UTC). What is left is shown next to the pool. You can keep
+  a loss that day makes room again; the day starts at 00:00 UTC). Hover the pool amount for the details (won today, what was not paid, what is left, when it starts again and why). A "!" next to the stake warns before you play: orange when a win would be cut or the limit is reached, red when the stake is more than your pool, grey for big wins that would be cut and for free play; hover it for the reason. You can keep
   playing at the limit, but a win pays nothing more that day; the leaderboards still show the real results. A stake of
   0 is free play in all three games: nothing is won, lost or stored. The coin flip and slots wait while a Survivor run
   with a stake is open.

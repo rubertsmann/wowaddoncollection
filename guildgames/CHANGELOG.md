@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.0 (2026-11-28, protocol 1.9, schema 3, LibGuildSync MINOR 6)
+- Survivor and Companion Dash no longer draw the pulsing hitbox markers (the ring and orange fill around the Survivor tower, the pulsing gold square glow behind it, the boxes around the runner and the monsters); `UIHelpers.CreateHitbox` / `Shimmer` are gone.
+- Putting the companion to sleep stops its running training (no refund), like switching companions; the Sleep tooltip warns while a training runs (feature 053).
+- Daily win limit display (feature 051): the limit line above the games is gone; hovering the pool amount explains the limit in detail (won today, cut today, left, reset time, why), and a "!" next to each stake warns when a win would be cut, the stake is above the pool, or it is free play.
+
 ## 0.14.0 (2026-11-28, protocol 1.9, schema 3, LibGuildSync MINOR 6)
 - Daily win limit and smaller Survivor payouts (feature 051, protocol 1.9): coin flip, slots and Survivor together raise the money pool by at most 500g net per UTC day (the record keeps the real result, the part above the limit is a `cap` ledger entry; play goes on, a win just pays nothing more). Stake 0 is free play in all three. Survivor pays 105/110/120/140% (1:00/1:30/2:00/3:00), endless 105% at 1:00 plus 5% per minute up to 130%; new runs are stored in the record field `tower` (peers on 1.8 drop it and keep the record), the old `survivor` field stays as history in the pool without a leaderboard. From 4:00 monsters grow 2.5x stronger per minute, so no run lasts past 8:00. Coin and slots wait while a Survivor stake is pending. `/gg caught wallet` shows the limit.
 - Maintainer-only (i) button at the bottom left of the window (feature 052): its tooltip lists each guild member's live build (HELLO) next to the version their synced record carries, stale records in orange. Fix: at login the own arena section (which carries the version fights compare) is written again when it is missing or from an older build; before, it was only written by arena actions, so members who updated or never used the arena counted as "another version" for everybody.

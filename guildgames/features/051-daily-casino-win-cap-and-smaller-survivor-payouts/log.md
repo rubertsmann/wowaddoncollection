@@ -62,3 +62,15 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: every requirement OFFLINE; R10 layout and a real 0.13 peer (RF2-real) NOT-VERIFIED
 - Evidence: verify.md
 - Next: user runs the verify.md in-game checklist (deploy with tools/deploy.ps1), reports screenshots/results; then commit if asked, and release 0.14.0 (protocol 1.9) when the checklist passes
+
+## 2026-11-28 00:41 | DECISION | Limit as a hover on the pool, warnings on the stake (user)
+- Did: user asked to "move the gold win left into the gold amount as a hover information with detailed information how and why also show warnings on the betting amount"; R10 rewritten in spec.md
+- Result: the header limit line is gone; the pool amount has a tooltip; every stake row gets a "!" warning with a tooltip
+- Evidence: spec.md R10
+- Next: build it
+
+## 2026-11-28 00:41 | BUILD | Pool tooltip and stake warnings
+- Did: Core/View/Model.lua (PoolTooltip: balance breakdown + daily limit: won today, not paid today from the day's `cap` entries, left, reset time, why; StakeWarning per game: free play note, more than the pool error, limit reached / smallest win cut warning, big win cut note; CutToday; WinLimitText removed); UI/GamesTab.lua (balanceHover frame over the pool, ShowLinesTooltip, CreateStakeRow takes a warning source, "!" button right of the boxes, boxes tinted, re-checked on typing and on every balance refresh); SlotMachine and SurvivorArena pass their game (Survivor: target percent, endless 105..130%, re-checked on a target pick); deDE strings; tests: DC "stake warning: ...", UI "games ui: the pool's hover explains the daily win limit; ..."
+- Result: green
+- Evidence: `luajit tests/run.lua` -> `236 passed, 0 failed`
+- Next: in-game check (verify.md checklist updated), commit when the user asks

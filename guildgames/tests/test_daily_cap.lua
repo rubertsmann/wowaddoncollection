@@ -208,6 +208,34 @@ return {
         harness.equal(seen.total.wins, 1, "the coin results are still there")
     end,
 
+    ["stake warning: free play, more than the pool, a cut win per game, big slot wins, nothing when it fits"] = function(harness)
+        local addon = fresh(harness)
+        local Model = addon.Model
+        harness.equal(Model.StakeWarning("coin", 0, "Me-R", NOW).level, "note")
+        harness.equal(Model.StakeWarning("coin", nil, "Me-R", NOW), nil, "an unreadable stake: the play refuses it")
+        harness.equal(Model.StakeWarning("coin", 100 * GOLD, "Me-R", NOW), nil, "fits the limit")
+        harness.equal(Model.StakeWarning("coin", 600 * GOLD, "Me-R", NOW).level, "warning", "a coin win above 500g")
+        harness.equal(Model.StakeWarning("slots", 2 * GOLD, "Me-R", NOW).level, "note", "a jackpot (374x) would be cut")
+        harness.equal(Model.StakeWarning("slots", 300 * GOLD, "Me-R", NOW).level, "warning", "even 3x (net 600g) is cut")
+        harness.equal(Model.StakeWarning("survivor", 5000 * GOLD, "Me-R", NOW, 105, 105), nil, "105% of 5000g nets 250g")
+        harness.equal(Model.StakeWarning("survivor", 20000 * GOLD, "Me-R", NOW, 105, 130).level, "warning")
+        harness.equal(Model.StakeWarning("survivor", 5000 * GOLD, "Me-R", NOW, 105, 130).level, "note", "endless up to 130%")
+        addon.Wallet.Ledger().spent = addon.Wallet.Ledger().earned
+        harness.equal(Model.StakeWarning("coin", 21 * GOLD, "Me-R", NOW).level, "error", "more than the 20g pool")
+        assert(addon.Games.Flip("Me-R", 20 * GOLD, "H", NOW, WIN))
+        addon.Wallet.Ledger().earned = addon.Wallet.Ledger().earned + 1000 * GOLD
+        assert(addon.Games.Flip("Me-R", 500 * GOLD, "H", NOW + 1, WIN))
+        local reached = Model.StakeWarning("coin", 1, "Me-R", NOW + 2)
+        harness.equal(reached.level, "warning"); harness.equal(reached.title, "Daily win limit reached")
+        local title, lines = Model.PoolTooltip("Me-R", NOW + 2)
+        local text = table.concat((function() local out = {} for i, line in ipairs(lines) do out[i] = line.text end return out end)(), "\n")
+        harness.truthy(title:find("Money pool", 1, true))
+        harness.truthy(text:find("Not paid today", 1, true), "the cut of the second win is listed")
+        harness.truthy(text:find("Reached: wins pay nothing more today.", 1, true))
+        harness.equal(Model.CutToday(NOW + 2), 20 * GOLD)
+        harness.equal(Model.CutToday(NOW + DAY), 0, "the next day starts without cuts")
+    end,
+
     ["percent text: 105 -> x1.05, 110 -> x1.1, 200 -> x2; German uses a comma"] = function(harness)
         local addon = fresh(harness)
         harness.equal(addon.Model.PercentText(105), "x1.05")

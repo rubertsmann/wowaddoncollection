@@ -20,7 +20,6 @@ local GROUND_Y = 30                   -- the ground line above the play area's b
 local IDLE_SPEED = 60                 -- background scroll while no run is open
 local MODEL_SIZE = 64                 -- model frames are larger than the boxes: models have empty margins
 local MODEL_PAD = 1.8                 -- model frames are this much larger (camera further out): a big creature is not cut off
-local HITBOX_COLOR = { 1, 0.85, 0.35 }
 local STATS_TOP, STATS_HEIGHT = -248, 90
 local RUNNER_FACING, MONSTER_FACING = math.pi / 2, -math.pi / 2
 local OBSTACLE_MODELS = 6
@@ -135,18 +134,6 @@ local function placeModel(model, boxX, boxY, boxWidth, height)
     model:SetPoint("CENTER", widgets.area, "BOTTOMLEFT", boxX + boxWidth / 2, GROUND_Y + boxY - 6 + height / 2)
 end
 
--- Puts a hitbox marker on a hitbox (left, bottom, right, top above the ground line).
----@param hitbox table
----@param left number
----@param bottom number
----@param right number
----@param top number
-local function placeHitbox(hitbox, left, bottom, right, top)
-    hitbox:ClearAllPoints()
-    hitbox:SetPoint("BOTTOMLEFT", widgets.area, "BOTTOMLEFT", left, GROUND_Y + bottom)
-    hitbox:SetSize(math.max(1, right - left), math.max(1, top - bottom))
-end
-
 ---@param run RunnerRun|nil
 local function drawRunner(run)
     local runner = widgets.runner
@@ -155,9 +142,6 @@ local function drawRunner(run)
     runner:SetHeight(height * MODEL_PAD)
     placeModel(runner, Runner.RUNNER_X, y, Runner.RUNNER_WIDTH, height)
     widgets.runnerShadow:SetAlpha(0.35 * math.max(0.25, 1 - y / 120))
-    local inset = Runner.INSET
-    local boxHeight = ducking and Runner.DUCK_HEIGHT or Runner.RUNNER_HEIGHT
-    placeHitbox(widgets.runnerHitbox, Runner.RUNNER_X + inset, y + inset, Runner.RUNNER_X + Runner.RUNNER_WIDTH - inset, y + boxHeight - inset)
 end
 
 -- the model frame of an obstacle (one per obstacle id; the pool is reused)
@@ -191,24 +175,14 @@ local function drawObstacles(run)
             slot.shadow:ClearAllPoints()
             slot.shadow:SetPoint("CENTER", widgets.area, "BOTTOMLEFT", obstacle.x + Runner.BOX / 2, GROUND_Y - 2)
             slot.shadow:SetAlpha(obstacle.fly and 0.15 or 0.35)
-            placeHitbox(slot.hitbox, Runner.ObstacleBox(obstacle))
-            slot.model:Show(); slot.shadow:Show(); slot.hitbox:Show()
+            slot.model:Show(); slot.shadow:Show()
         end
     end
     for _, slot in ipairs(widgets.obstacles) do
         if slot.id and not alive[slot.id] then
             slot.id = nil
-            slot.model:Hide(); slot.shadow:Hide(); slot.hitbox:Hide()
+            slot.model:Hide(); slot.shadow:Hide()
         end
-    end
-end
-
--- The hitbox markers pulse, each a little out of step.
----@param seconds number
-local function shimmerHitboxes(seconds)
-    addon.UIHelpers.Shimmer(widgets.runnerHitbox, seconds)
-    for index, slot in ipairs(widgets.obstacles) do
-        if slot.hitbox:IsShown() then addon.UIHelpers.Shimmer(slot.hitbox, seconds, index * 1.3) end
     end
 end
 
@@ -248,7 +222,6 @@ function RunnerView.Refresh()
         widgets.hintText:SetShown(not locked)
         local loaded = addon.CompanionModel.Load(widgets.runner, companion)
         widgets.runner:SetShown(loaded); widgets.runnerShadow:SetShown(loaded)
-        widgets.runnerHitbox:SetShown(not locked)
         if loaded then addon.CompanionModel.Play(widgets.runner, addon.CompanionModel.ANIMATION.run) end
     end
 end
@@ -315,7 +288,7 @@ function RunnerView.Start()
     paintItems()
     state.input.jump, state.input.duck = false, false
     widgets.resultText:SetText(""); widgets.hintText:Hide()
-    for _, slot in ipairs(widgets.obstacles) do slot.id = nil; slot.model:Hide(); slot.shadow:Hide(); slot.hitbox:Hide() end
+    for _, slot in ipairs(widgets.obstacles) do slot.id = nil; slot.model:Hide(); slot.shadow:Hide() end
     if widgets.area.EnableKeyboard then pcall(widgets.area.EnableKeyboard, widgets.area, true) end
     addon.CompanionModel.Load(widgets.runner, companion)
     addon.CompanionModel.Play(widgets.runner, addon.CompanionModel.ANIMATION.run, true)
@@ -348,8 +321,6 @@ end
 function RunnerView.Update(elapsedSeconds)
     local state = RunnerView.state
     local run = state.run
-    widgets.shimmerTime = (widgets.shimmerTime or 0) + elapsedSeconds
-    shimmerHitboxes(widgets.shimmerTime)
     if run then
         Runner.Step(run, elapsedSeconds, state.input)
         local events = Runner.TakeEvents(run)
@@ -418,9 +389,6 @@ function RunnerView.Build(panel)
     -- actors: shadows on the ground, then the monster models and the runner
     local actors = CreateFrame("Frame", nil, area)
     actors:SetAllPoints(); actors:SetFrameLevel(addon.UIHelpers.FrameLevel(area) + 1)
-    -- the hitbox markers above every model (what really collides; a big creature may be drawn larger)
-    local hitLayer = CreateFrame("Frame", nil, actors)
-    hitLayer:SetAllPoints(); hitLayer:SetFrameLevel(addon.UIHelpers.FrameLevel(actors) + 4)
     widgets.obstacles = {}
     for index = 1, OBSTACLE_MODELS do
         local shadow = actors:CreateTexture(nil, "ARTWORK")
@@ -429,15 +397,12 @@ function RunnerView.Build(panel)
         local model = addon.CompanionModel.Create(actors, MODEL_SIZE, MODEL_SIZE, { facing = MONSTER_FACING, pad = MODEL_PAD,
             fallback = { icon = GROUND_ICON, size = Runner.BOX - 4, y = 8, mirror = true } })
         model:Hide()
-        local hitbox = addon.UIHelpers.CreateHitbox(hitLayer, HITBOX_COLOR, false)
-        hitbox:Hide()
-        widgets.obstacles[index] = { model = model, shadow = shadow, hitbox = hitbox }
+        widgets.obstacles[index] = { model = model, shadow = shadow }
     end
     widgets.runnerShadow = actors:CreateTexture(nil, "ARTWORK")
     addon.UIHelpers.SetTextureOr(widgets.runnerShadow, DISC_TEXTURE, { 0, 0, 0 })
     widgets.runnerShadow:SetVertexColor(0, 0, 0); widgets.runnerShadow:SetSize(Runner.RUNNER_WIDTH + 6, 8)
     widgets.runnerShadow:SetPoint("CENTER", area, "BOTTOMLEFT", Runner.RUNNER_X + Runner.RUNNER_WIDTH / 2, GROUND_Y - 2)
-    widgets.runnerHitbox = addon.UIHelpers.CreateHitbox(hitLayer, { 0.45, 0.85, 1 }, false)
     widgets.runner = addon.CompanionModel.Create(actors, MODEL_SIZE, MODEL_SIZE, { facing = RUNNER_FACING, pad = MODEL_PAD,
         fallback = { icon = RUNNER_ICON, size = Runner.RUNNER_WIDTH, y = 6 } })
     widgets.runner:SetFrameLevel(addon.UIHelpers.FrameLevel(actors) + 2)

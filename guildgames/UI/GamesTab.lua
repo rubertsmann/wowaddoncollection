@@ -377,19 +377,75 @@ local function moneyBox(parent, anchor, x, width, maximumLetters, icon, row, onE
     return box
 end
 
--- "Stake [gold] g [silver] s [copper] c" at TOPLEFT (x, y) of parent. Enter in any box calls onEnter.
+-- Shows a title and lines (Model.PoolTooltip, Model.StakeWarning) in the game tooltip.
+---@param owner table
+---@param title string
+---@param titleColor number[]
+---@param lines TooltipLine[]
+function GamesTab.ShowLinesTooltip(owner, title, titleColor, lines)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:SetText(title, titleColor[1], titleColor[2], titleColor[3])
+    for _, line in ipairs(lines) do
+        if line.gap then GameTooltip:AddLine(" ") end
+        GameTooltip:AddLine(line.text, line.color[1], line.color[2], line.color[3], true)
+    end
+    GameTooltip:Show()
+end
+
+---@type StakeRow[] every stake row, so a balance change re-checks their warnings
+local stakeRows = {}
+
+local WARNING_COLOR = { error = { 1, 0.33, 0.33 }, warning = { 1, 0.6, 0.2 }, note = { 0.75, 0.75, 0.75 } }
+
+-- "Stake [gold] g [silver] s [copper] c" at TOPLEFT (x, y) of parent. Enter in any box calls onEnter. `warningSource`
+-- names the game (and Survivor's payout percents) so a "!" right of the boxes warns about the typed stake (free play,
+-- more than the pool, a win the daily win limit would cut); hover it for the details.
 ---@param parent table
 ---@param x number
 ---@param y number
 ---@param onEnter fun()
+---@param warningSource? fun(): string, integer|nil, integer|nil gameKey, smallest and largest survivor percent
 ---@return StakeRow
-function GamesTab.CreateStakeRow(parent, x, y, onEnter)
+function GamesTab.CreateStakeRow(parent, x, y, onEnter, warningSource)
     local row = {}
     local label = addon.UI.Widgets.CreateFontString(parent, "GameFontNormalSmall")
     label:SetPoint("TOPLEFT", x, y - 2); label:SetText(Text["Stake"])
     row.goldBox = moneyBox(parent, label, 10, 62, 6, COIN_ICON.gold, row, onEnter)
     row.silverBox = moneyBox(parent, row.goldBox.icon, 10, 28, 2, COIN_ICON.silver, row, onEnter)
     row.copperBox = moneyBox(parent, row.silverBox.icon, 10, 28, 2, COIN_ICON.copper, row, onEnter)
+    local warningButton = CreateFrame("Button", nil, parent)
+    warningButton:SetSize(16, 18); warningButton:SetPoint("LEFT", row.copperBox.icon, "RIGHT", 4, 0)
+    local mark = addon.UI.Widgets.CreateFontString(warningButton, "GameFontNormalLarge", "CENTER")
+    mark:SetPoint("CENTER", 0, 0); mark:SetText("!")
+    warningButton:SetScript("OnEnter", function(self)
+        if self.warning then
+            GamesTab.ShowLinesTooltip(self, self.warning.title, WARNING_COLOR[self.warning.level], self.warning.lines)
+        end
+    end)
+    warningButton:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    warningButton:Hide()
+    row.warningButton, row.warningMark = warningButton, mark
+    -- re-checks the typed stake; the boxes' text turns the warning's colour
+    function row.UpdateWarning()
+        local warning
+        if warningSource then
+            local gameKey, smallestPct, largestPct = warningSource()
+            warning = addon.Model.StakeWarning(gameKey, row.Read(), addon.Utility.Me(), addon.Utility.Now(), smallestPct, largestPct)
+        end
+        warningButton.warning = warning
+        warningButton:SetShown(warning ~= nil)
+        local color = warning and warning.level ~= "note" and WARNING_COLOR[warning.level] or { 1, 1, 1 }
+        if warning then mark:SetTextColor(WARNING_COLOR[warning.level][1], WARNING_COLOR[warning.level][2], WARNING_COLOR[warning.level][3]) end
+        for _, box in ipairs({ row.goldBox, row.silverBox, row.copperBox }) do
+            if box.SetTextColor then box:SetTextColor(color[1], color[2], color[3]) end
+        end
+        return warning
+    end
+    for _, box in ipairs({ row.goldBox, row.silverBox, row.copperBox }) do
+        box:SetScript("OnTextChanged", function() row.UpdateWarning() end)
+    end
+    stakeRows[#stakeRows + 1] = row
     function row.Read() return addon.Games.Money(boxNumber(row.goldBox), boxNumber(row.silverBox), boxNumber(row.copperBox)) end
     function row.Write(copper)
         local gold, silver, rest = addon.Games.SplitMoney(copper)
@@ -482,7 +538,7 @@ function GamesTab.RefreshBalance()
     if not widgets.balanceText then return end
     local balance = addon.Wallet.Balance(addon.Utility.Me())
     widgets.balanceText:SetText((balance < 0 and "|cffff5555-|r" or "") .. money(balance))
-    if widgets.limitText then widgets.limitText:SetText(addon.Model.WinLimitText(addon.Utility.Now())) end
+    for _, row in ipairs(stakeRows) do row.UpdateWarning() end
 end
 
 -- Redraws the selected game's leaderboard, feed and last week's winner (deferred while a game animates).
@@ -694,7 +750,7 @@ local function buildCoinPanel(panel)
     widgets.tailsButton = Widgets.CreateButton(panel, Text["Tails"], 80, 20, function() selectPick("T") end)
     widgets.tailsButton:SetPoint("TOPLEFT", panel, "TOP", 4, -206)
 
-    widgets.coinStake = GamesTab.CreateStakeRow(panel, 36, -238, function() GamesTab.Flip() end)
+    widgets.coinStake = GamesTab.CreateStakeRow(panel, 36, -238, function() GamesTab.Flip() end, function() return "coin" end)
     widgets.goldBox, widgets.silverBox, widgets.copperBox = widgets.coinStake.goldBox, widgets.coinStake.silverBox, widgets.coinStake.copperBox
     GamesTab.WriteStake(settings().lastStakeCopper or DEFAULT_STAKE)
 
@@ -755,10 +811,16 @@ function GamesTab.Build(stage, sidebar, header)
     widgets.balanceText = Widgets.CreateFontString(header, "GameFontHighlightSmall", "LEFT")
     widgets.balanceText:SetPoint("LEFT", previousButton, "RIGHT", 8, 0)
     widgets.balanceText:SetWidth(110)
-    -- the daily win limit of the house games, right of the pool
-    widgets.limitText = Widgets.CreateFontString(header, "GameFontHighlightSmall", "LEFT")
-    widgets.limitText:SetPoint("LEFT", widgets.balanceText, "RIGHT", 4, 0)
-    widgets.limitText:SetWidth(200)
+    -- hover the pool: where the balance comes from and the daily win limit in detail
+    widgets.balanceHover = CreateFrame("Frame", nil, header)
+    widgets.balanceHover:SetPoint("TOPLEFT", widgets.balanceText, "TOPLEFT", -2, 4)
+    widgets.balanceHover:SetPoint("BOTTOMRIGHT", widgets.balanceText, "BOTTOMRIGHT", 2, -4)
+    widgets.balanceHover:EnableMouse(true)
+    widgets.balanceHover:SetScript("OnEnter", function(self)
+        local title, lines = addon.Model.PoolTooltip(addon.Utility.Me(), addon.Utility.Now())
+        GamesTab.ShowLinesTooltip(self, title, { 1, 0.82, 0 }, lines)
+    end)
+    widgets.balanceHover:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
 
     -- sidebar: last week's winner, scope, the selected game's leaderboard and feed
     widgets.winnerText = Widgets.CreateFontString(sidebar, "GameFontNormalSmall")

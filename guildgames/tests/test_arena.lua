@@ -53,6 +53,31 @@ local function fighter(overrides)
 end
 
 return {
+    ["arena: sleeping stops a running training (no refund); a finished one is kept for the tick"] = function(harness)
+        local addon = player(harness, "A-R", 100)
+        local Arena, AzeCaught = addon.Arena, addon.AzeCaught
+        assert(Arena.Train("A-R", "atk", NOW))
+        local money = balance(addon, "A-R")
+        AzeCaught.Active().energy = 10
+        local result = assert(AzeCaught.Care("sleep", "A-R", NOW))
+        harness.equal(result.trainingCancelled, true)
+        harness.equal(Arena.State().training, nil, "the training is gone")
+        harness.equal(balance(addon, "A-R"), money, "nothing refunded, nothing charged")
+        harness.equal(AzeCaught.Active().asleep ~= nil, true)
+        assert(AzeCaught.Care("wake", "A-R", NOW))
+        -- no training running: sleeping cancels nothing
+        AzeCaught.Active().energy = 10
+        harness.equal(assert(AzeCaught.Care("sleep", "A-R", NOW)).trainingCancelled, nil)
+        assert(AzeCaught.Care("wake", "A-R", NOW))
+        -- a training whose time is already up is not cancelled: the next tick finishes it
+        AzeCaught.Active().energy = 100
+        assert(Arena.Train("A-R", "def", NOW))
+        AzeCaught.State().activeSeconds = AzeCaught.State().activeSeconds + Arena.TRAIN_SECONDS
+        AzeCaught.Active().energy = 10
+        harness.equal(assert(AzeCaught.Care("sleep", "A-R", NOW)).trainingCancelled, nil)
+        harness.equal(assert(Arena.FinishTraining()).stat, "def")
+    end,
+
     ["arena: levels need n x 50 XP; training costs grow, take energy and active time, and raise one stat"] = function(harness)
         local addon = player(harness, "A-R", 100)
         local Arena, AzeCaught = addon.Arena, addon.AzeCaught
