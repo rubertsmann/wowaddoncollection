@@ -128,6 +128,21 @@ return {
                 harness.truthy(pcall(addon.OrderWindow.Open, buyOrderA.id, "chat"))
                 harness.equal(addon.Notify.ChatUnread(addon.orders:Get(buyOrderA.id), addon.Utility.Me(), addon.db.ui.chatSeen), 0,
                     "showing the chat marks it read")
+                -- mails on the order: the history shows them, a mail to me is news until the order window shows it,
+                -- marking the item as mailed by hand makes the order "Mailed"
+                addon.orders:RecordMail(buyOrderA.id, { m = "mats", b = "B-R", r = addon.Utility.Me(), i = { 6, 3 } })
+                harness.equal(#addon.Notify.UnseenMail(addon.orders, addon.Utility.Me(), addon.db.ui.mailSeen), 1, "a mail to me is news")
+                local okHistory, errHistory = pcall(addon.OrderWindow.Open, buyOrderA.id, "history")
+                harness.truthy(okHistory, "the history with a mail failed: " .. tostring(errHistory))
+                harness.equal(#addon.Notify.UnseenMail(addon.orders, addon.Utility.Me(), addon.db.ui.mailSeen), 0, "the order window marks it seen")
+                harness.truthy(pcall(addon.OrderWindow.Open, buyOrderA.id, "overview"))
+                local okMark, errMark = pcall(addon.OrderWindow.MarkMailed, "item")
+                harness.truthy(okMark, "marking the item as mailed failed: " .. tostring(errMark))
+                harness.equal(addon.orders:Status(addon.orders:Get(buyOrderA.id)), "mailed")
+                harness.truthy(pcall(addon.UI.Refresh), "the orders tab with a mailed order failed")
+                local mailedRows = addon.Model.BuildOrderRows(addon.Store, addon.orders, "mailed", false, addon.Utility.Me(), addon.db.ui.chatSeen)
+                harness.equal(#mailedRows, 1, "the Mailed filter shows it")
+                harness.truthy(mailedRows[1].canDone, "a mailed order can still be finished")
                 -- the row's mail action queues a mail for the requester
                 local okMailOrder, errMailOrder = pcall(addon.UI.MailOrder, buyOrderA.id, "item", nil)
                 harness.truthy(okMailOrder, "the mail action failed: " .. tostring(errMailOrder))
@@ -225,6 +240,9 @@ return {
                     harness.truthy(okChat and chatResult and chatResult.ok, "fake chat failed: " .. tostring(chatResult and (chatResult.why or chatResult)))
                     harness.truthy(#(addon.orders:Get(chatResult.orderID).msgs or {}) >= 1)
                     harness.truthy(chatResult.author ~= addon.Utility.Me(), "the fake answer is not from me")
+                    local okFakeMail, mailResult = pcall(addon.DevProbe.AddFakeMail, {})
+                    harness.truthy(okFakeMail and mailResult and mailResult.ok, "fake mail failed: " .. tostring(mailResult and (mailResult.why or mailResult)))
+                    harness.equal(addon.orders:Status(addon.orders:Get(mailResult.orderID)), "mailed", "on my own order: the item, so Mailed")
                     addon.orders.db[chatOrder.id] = nil
                     local okK, errK = pcall(addon.DevProbe.AddFakeKeys)
                     harness.truthy(okK, "fake keys failed: " .. tostring(errK))

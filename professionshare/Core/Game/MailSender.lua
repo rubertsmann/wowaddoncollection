@@ -404,6 +404,24 @@ function MailSender.ClearForm()
     clearCursor()
 end
 
+-- Writes the mail into the job's order (history, "Mailed" status) and tells the guild. An order that is gone
+-- (pruned) is left alone: the job outlives its order.
+---@param job MailJob
+---@param delivered table<integer, integer>
+---@param complete boolean
+---@param byHand boolean
+local function recordMail(job, delivered, complete, byHand)
+    local orderBoard, myName = addon.orders, addon.Utility.Me()
+    if not (orderBoard and myName) then return end
+    local mail = orderBoard:RecordMail(job.orderID, addon.MailQueue.MailEntry(job, myName, delivered, complete, byHand))
+    if not mail then return end
+    addon.Log.Information("mail.order", "the mail was recorded on its order", { orderID = job.orderID, mode = job.mode, complete = complete, byHand = byHand })
+    local order = orderBoard:Get(job.orderID)
+    if order and addon.Communication and addon.Communication.BroadcastOrder then addon.Communication.BroadcastOrder(order) end
+    if addon.Events then addon.Events.Fire("DATA_CHANGED", "orders") end
+end
+MailSender.RecordMail = recordMail
+
 -- "This mail went out": the items attached for this job are taken off it (what is still missing stays as the reduced
 -- need). Nothing of this job attached: the job is removed. Returns true when the job remains.
 ---@param jobID string
@@ -414,9 +432,7 @@ function MailSender.Done(jobID)
     if not job then return false end
     local delivered = {}
     if MailSender.current and MailSender.current.jobID == jobID then
-        for itemID, count in pairs(MailSender.AttachedCounts()) do
-            if job.items[itemID] then delivered[itemID] = math.min(count, job.items[itemID]) end
-        end
+        delivered = addon.MailQueue.Delivered(job, MailSender.AttachedCounts())
         fillToken = fillToken + 1
         MailSender.current, MailSender.state = nil, MailSender.MailboxOpen() and "idle" or "closed"
     end
@@ -424,6 +440,7 @@ function MailSender.Done(jobID)
     if next(delivered) then remains = mailQueue:ApplySent(jobID, delivered)
     else mailQueue:Remove(jobID) remains = false end
     addon.Log.Information("mail.done", "a queued mail was marked done", { job = jobID, remains = remains })
+    recordMail(job, delivered, not remains, true)
     changed()
     return remains
 end
@@ -471,8 +488,10 @@ function MailSender.OnSendSuccess()
     MailSender.current, MailSender.state = nil, "idle"
     -- only a mail to the job's recipient counts for the job (the player may have changed the form)
     if job and nameKey(snapshot.recipient) == nameKey(job.recipient) then
+        local delivered = addon.MailQueue.Delivered(job, snapshot.counts)
         local remains = mailQueue:ApplySent(job.id, snapshot.counts)
         addon.Log.Information("mail.sent", "a queued mail was sent", { job = job.id, remains = remains })
+        recordMail(job, delivered, not remains, false)
     end
     changed()   -- the next mail waits for the player's click
 end

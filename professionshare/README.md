@@ -16,7 +16,11 @@ shared crafting-order board.
 * **Order window** – the speech-bubble icon on an order opens it: **Overview** (status, who and when, note, reagents for
   the whole quantity with what you hold, tools, who knows the recipe), **Chat** (the whole guild reads and writes; new
   messages on your own or claimed orders notify you and show as a number on the icon) and **History** (every status
-  change with date and time).
+  change and every mail sent for the order, with date and time). The Overview can mark the item or the reagents as
+  mailed / handed over by hand (for a mail sent outside the queue or a trade).
+* **Mailed status** – a mail sent through the mail queue is written into its order by itself: the crafted item, once
+  nothing of it is left to send, makes the order **Mailed** (mail icon on the row, own filter); the requester still
+  marks it done after picking it up. The recipient of a mail gets order news.
 * **Row actions** – icons on each order: mail the reagents to the crafter, mail the crafted item to the requester and,
   with Auctionator installed, add the reagents to a collected buy list that Auctionator searches the next time you open
   the auction house (**Subtract what I have** buys only what bags and bank are missing).

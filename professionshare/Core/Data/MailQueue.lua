@@ -136,6 +136,41 @@ function MailQueue:MoveUp(jobID)
     if index and index > 1 then self.jobs[index], self.jobs[index - 1] = self.jobs[index - 1], self.jobs[index] end
 end
 
+-- What of `sentCounts` (attached items by id) counts for the job: only its items, at most what it still needs.
+---@param job MailJob
+---@param sentCounts table<integer, integer>
+---@return table<integer, integer>
+function MailQueue.Delivered(job, sentCounts)
+    local delivered = {}
+    for itemID, count in pairs(sentCounts or {}) do
+        local remaining = job.items[itemID]
+        if remaining and type(count) == "number" and count > 0 then delivered[itemID] = math.min(count, remaining) end
+    end
+    return delivered
+end
+
+-- The order's mail entry (Orders:RecordMail) for a mail of `job` sent by `sender`: what it carried (flat
+-- { itemID, count, ... } sorted by item id, at most Orders.MAXIMUM_MAIL_ITEMS pairs), whether the job is complete with
+-- it, and whether the player marked it by hand.
+---@param job MailJob
+---@param sender string
+---@param delivered table<integer, integer>
+---@param complete boolean
+---@param byHand boolean
+---@return table
+function MailQueue.MailEntry(job, sender, delivered, complete, byHand)
+    local itemIDs = {}
+    for itemID in pairs(delivered or {}) do itemIDs[#itemIDs + 1] = itemID end
+    table.sort(itemIDs)
+    local items = {}
+    for index = 1, math.min(#itemIDs, addon.Orders.MAXIMUM_MAIL_ITEMS) do
+        items[#items + 1] = itemIDs[index]
+        items[#items + 1] = delivered[itemIDs[index]]
+    end
+    return { m = job.mode, b = sender, r = job.recipient, c = complete or nil, h = byHand or nil,
+        i = #items > 0 and items or nil }
+end
+
 -- What a sent mail carried (by item) is taken off the job; returns false when the job is done (and removed).
 ---@param jobID string
 ---@param sentCounts table<integer, integer>

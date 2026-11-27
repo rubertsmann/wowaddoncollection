@@ -53,6 +53,10 @@ local function describe(unseenOrder)
         local message = unseenOrder.message
         return Format(Text["{who} about {name}: {text}"], { who = addon.Utility.ShortName(message.b), name = plainRecipeName(order),
             text = addon.Utility.ChatSafe(message.x) })
+    elseif unseenOrder.kind == "mail" then
+        local mail = unseenOrder.mail
+        local template = mail.m == "item" and Text["{who} mailed you {name}"] or Text["{who} mailed you the reagents for {name}"]
+        return Format(template, { who = addon.Utility.ShortName(mail.b), name = plainRecipeName(order) })
     end
     return Format(Text["{who} finished your order {name}"],
         { who = addon.Utility.ShortName(order.closedBy or "?"), name = plainRecipeName(order) })
@@ -139,9 +143,12 @@ function Alerts.Update()
     if settings.notifySeen == nil then settings.notifySeen = Notify.MarkSeen(addon.orders, nil) end   -- first run: the existing board is not news
     if ordersTabVisible() then settings.notifySeen = Notify.MarkSeen(addon.orders, settings.notifySeen) end
     if settings.chatSeen == nil then settings.chatSeen = Notify.MarkAllChatSeen(addon.orders, nil) end   -- older chat is not news
+    if settings.mailSeen == nil then settings.mailSeen = Notify.MarkMailSeen(addon.orders, nil) end   -- older mails are not news
+    if ordersTabVisible() then settings.mailSeen = Notify.MarkMailSeen(addon.orders, settings.mailSeen) end
     local unseenOrders = Notify.Unseen(addon.Store, addon.orders, me(), settings.notifySeen,
         { scope = setting("scope"), mine = setting("mine") })
     for _, unseenChat in ipairs(Notify.UnseenChat(addon.orders, me(), settings.chatSeen)) do unseenOrders[#unseenOrders + 1] = unseenChat end
+    for _, unseenMail in ipairs(Notify.UnseenMail(addon.orders, me(), settings.mailSeen)) do unseenOrders[#unseenOrders + 1] = unseenMail end
     local freshOrders, currentKeys = Notify.Fresh(alertState.previousKeys, unseenOrders)
     local primed = alertState.previousKeys ~= nil
     alertState.previousKeys = currentKeys
@@ -157,6 +164,7 @@ function Alerts.Seen()
     local settings = interfaceSettings()
     if not settings or not addon.orders then return end
     settings.notifySeen = Notify.MarkSeen(addon.orders, settings.notifySeen)
+    settings.mailSeen = Notify.MarkMailSeen(addon.orders, settings.mailSeen)
     if alertState.started then
         -- only unread chat is left; it is read in the order window (Alerts.ChatSeen)
         local unseenChats = Notify.UnseenChat(addon.orders, me(), settings.chatSeen)
@@ -173,6 +181,15 @@ function Alerts.ChatSeen(order)
     local settings = interfaceSettings()
     if not settings or not order then return end
     settings.chatSeen = Notify.MarkChatSeen(Notify.PruneChatSeen(addon.orders, settings.chatSeen), order)
+    Alerts.Update()
+end
+
+-- The player looked at `order` in the order window: its mails are seen.
+---@param order Order
+function Alerts.MailSeen(order)
+    local settings = interfaceSettings()
+    if not settings or not order or not addon.orders then return end
+    settings.mailSeen = Notify.MarkMailSeen(addon.orders, settings.mailSeen, order)
     Alerts.Update()
 end
 

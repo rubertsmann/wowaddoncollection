@@ -282,3 +282,24 @@ Additive minor change: a 2.8 peer drops `OMSG` as an unknown message type, ignor
 - Trust: relayed chat (OPUSH) is trusted like claims (guild members are trusted); live messages only in the sender's
   name. Display: chat text and names are escaped (`Utility.Escape`); chat lines in the chat frame use `Utility.ChatSafe`.
 - Local data: `ui.chatSeen[orderID] = time of the newest message read`, pruned with the orders.
+
+## 19. Order mails (protocol 2.10, schema unchanged; feature 049)
+Additive minor change: a 2.9 peer ignores `mdig` and its `Orders.Sanitize` (allow-list) drops `ml`, so orders keep
+syncing between both versions.
+- **Order field `ml` (optional):** `{ {m, b, r, t, c?, h?, i?} }`, oldest first: `m` = `item` (crafted item to the
+  requester) or `mats` (reagents to a crafter), `b` sender, `r` recipient, `t` server time, `c = true` when nothing of
+  the sender's mail job was left to send, `h = true` when marked by hand (mailbox panel **Done**, or the order window's
+  mark button), `i` = flat `{itemID, count, ...}` (<= 12 pairs, ids 1..2^31-1, counts 1..100000). Merge = union, one
+  entry per `m`+`b`+`t`, the newest 30 kept. Validation: names safe, times in `[0, now + 1 day]`; a bad entry is
+  dropped (never the whole order), a list longer than 120 is not read.
+- **Status:** an order that is not closed and has an entry with `m = item` and `c` is `mailed` (between `claimed` and
+  `done`); it stays live (claim, withdraw, done, cancel work as before). Derived, never sent.
+- **`Orders.Version` and `ExtraVersion` unchanged.** The mail entries have their own number `MailVersion` = sum of the
+  entry times.
+- **`HELLO` field `mdig`:** `{ [orderID] = MailVersion }` for those of the newest 100 orders that have mail entries
+  (always sent, `{}` when none). A receiver pushes (OPUSH) an order whose mail entries the peer lacks only when the
+  peer sent `mdig`; a 2.9 peer is never sent orders for them.
+- **`ORDER`** broadcasts carry `ml` (sent by the mail sender's client after each recorded mail).
+- Trust: guild members are trusted (like claims); an entry is written only by the sending client for its own mails.
+  Display: names escaped, item names from the viewer's client, escaped.
+- Local data: `ui.mailSeen[orderID] = time of the newest mail entry seen`, pruned with the orders.

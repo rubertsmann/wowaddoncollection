@@ -101,6 +101,7 @@ local function setup(harness, options)
         [200] = { name = "Other Thing", produces = 6000, reagents = { { itemID = 2589, count = 1 } } },
     })
     local board = addon.Orders.New(function() return harness.clock end, addon.db.orders)
+    addon.orders = board
     assert(loadfile("Core/Game/MailSender.lua"))("ProfessionShare", addon)
     local events = {}
     addon.MailSender.Register(function(name, handler) events[name] = handler end)
@@ -238,6 +239,55 @@ return {
             harness.equal(addon.MailSender.Queue():Get(other.id), nil, "nothing attached for it: removed")
             addon.MailSender.Remove(job.id)
             harness.equal(#addon.MailSender.Queue():List(), 0)
+        end)
+    end,
+
+    ["mail sender: a send writes the mail into the order: items, complete or partly, item mail -> mailed"] = function(harness)
+        run(harness, { bags = { [1] = { itemID = 2840, count = 2 }, [2] = { itemID = 5000, count = 1 } } }, function(state, addon, board)
+            local job = queueJob(addon, board, 100, 1, "mats", "Crafter-R")   -- 2 bars (there), 1 cloth (missing)
+            local order = board:Get(job.orderID)
+            addon.MailSender.OnMailShow()
+            addon.MailSender.FillJob(job.id)
+            state.send(nil, addon.MailSender)
+            harness.equal(#order.ml, 1)
+            local mail = order.ml[1]
+            harness.equal(mail.m, "mats"); harness.equal(mail.b, "Me-R"); harness.equal(mail.r, "Crafter-R")
+            harness.equal(mail.c, nil, "the cloth is still missing: partly"); harness.equal(mail.h, nil)
+            harness.equal(table.concat(mail.i, ","), "2840,2")
+            harness.equal(board:Status(order), "open")
+            harness.clock = harness.clock + 1
+            local itemJob = queueJob(addon, board, 100, 1, "item", "Req2-R")
+            local itemOrder = board:Get(itemJob.orderID)
+            addon.MailSender.FillJob(itemJob.id)
+            state.send(nil, addon.MailSender)
+            harness.equal(itemOrder.ml[1].c, true)
+            harness.equal(board:Status(itemOrder), "mailed")
+        end)
+    end,
+
+    ["mail sender: a mail to someone else writes nothing into the order (RF2)"] = function(harness)
+        run(harness, nil, function(state, addon, board)
+            local job = queueJob(addon, board, 100, 1, "mats", "Crafter-R")
+            addon.MailSender.OnMailShow()
+            addon.MailSender.FillJob(job.id)
+            state.send("Somebody", addon.MailSender)
+            harness.equal(board:Get(job.orderID).ml, nil)
+        end)
+    end,
+
+    ["mail sender: Done writes a mail marked by hand; a gone order is left alone (RF4)"] = function(harness)
+        run(harness, nil, function(state, addon, board)
+            local job = queueJob(addon, board, 100, 1, "item", "Req-R")
+            addon.MailSender.OnMailShow()
+            harness.equal(addon.MailSender.Done(job.id), false)
+            local mail = board:Get(job.orderID).ml[1]
+            harness.equal(mail.h, true); harness.equal(mail.c, true); harness.equal(mail.i, nil)
+            harness.equal(board:Status(board:Get(job.orderID)), "mailed")
+            harness.clock = harness.clock + 1
+            local orphan = queueJob(addon, board, 200, 1, "mats", "Other-R")
+            board.db[orphan.orderID] = nil
+            harness.equal(addon.MailSender.Done(orphan.id), false, "the job still goes")
+            harness.equal(addon.MailSender.Queue():Get(orphan.id), nil)
         end)
     end,
 

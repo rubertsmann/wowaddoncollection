@@ -61,14 +61,16 @@ local windowState = {
 ---@return { [1]: OrderFilterKey, [2]: string }[]
 local function orderFilters()
     return { { "all", Text["All"] }, { "open", Text["Open"] }, { "mine", Text["My requests"] }, { "crafting", Text["I'm crafting"] },
-        { "can", Text["I can craft"] } }
+        { "can", Text["I can craft"] }, { "mailed", Text["Mailed"] } }
 end
 ---@type table<OrderStatus, string>
-local STATUS_COLOR = { open = "ffd100", claimed = "33ff99", done = "888888", cancelled = "ff5555" }
+local STATUS_COLOR = { open = "ffd100", claimed = "33ff99", mailed = "66ccff", done = "888888", cancelled = "ff5555" }
+local MAILED_ICON = "|TInterface\\Icons\\INV_Letter_15:12|t "
 ---@param status OrderStatus
 ---@return string
 local function statusLabel(status)
-    local labels = { open = Text["Open"], claimed = Text["Claimed"], done = Text["Done"], cancelled = Text["Cancelled"] }
+    local labels = { open = Text["Open"], claimed = Text["Claimed"], mailed = Text["Mailed"], done = Text["Done"],
+        cancelled = Text["Cancelled"] }
     return labels[status] or status
 end
 
@@ -1823,7 +1825,8 @@ local function buildOrdersTab(ordersTab)
         local noteText = orderRow.note ~= "" and ("  |cff999999\"" .. orderRow.note .. "\"|r") or ""
         row.label:SetText(("%dx %s  |cffaaaaaa%s|r%s%s"):format(orderRow.qty, orderRow.recipeName,
             Format(Text["for {name}"], { name = shortName(orderRow.requester) }), claimersText, noteText))
-        row.rightText:SetText("|cff" .. (STATUS_COLOR[orderRow.status] or "ffffff") .. statusLabel(orderRow.status) .. "|r  " .. timeAgo(orderRow.createdAt))
+        row.rightText:SetText((orderRow.status == "mailed" and MAILED_ICON or "") .. "|cff" .. (STATUS_COLOR[orderRow.status] or "ffffff")
+            .. statusLabel(orderRow.status) .. "|r  " .. timeAgo(orderRow.createdAt))
         row.selectionHighlight:SetShown(orderRow.id == windowState.selectedOrder)
         row:SetScript("OnClick", function(self, mouseButton)
             windowState.selectedOrder = orderRow.id

@@ -1,3 +1,18 @@
+# ProfessionShare 1.7.0
+
+Orders now know when they were mailed. When you send a crafted item or the reagents through the addon's mailbox list,
+the order notes it by itself: its History tab shows every mail with the items and amounts, and once the crafted item is
+on its way the order shows the new status "Mailed" with a small letter icon. The requester still marks the order done
+after picking up the mail. The person who receives the mail gets an order notification, like for other news on their
+orders.
+
+Pressing "Done" on a queued mail in the mailbox list counts too and is shown as "marked by hand". Mailed something
+outside the addon, or handed it over in a trade? Open the order and use "Mark item as mailed / handed over" (crafter)
+or "Mark reagents as mailed / handed over" (requester). The Orders tab filter has a new "Mailed" entry.
+
+Guild members on older versions keep seeing and syncing orders as before; they just don't see the mail entries or the
+"Mailed" status until they update.
+
 # ProfessionShare 1.6.0
 
 Every order now has its own window. Click the speech-bubble icon on an order: the Overview shows everything about it

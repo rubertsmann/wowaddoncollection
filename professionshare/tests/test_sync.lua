@@ -164,6 +164,23 @@ return {
         harness.equal(#b.orders:Get(ord.id).msgs, 1, "a 2.9 HELLO does get it")
     end,
 
+    ["sync: order mails travel with ORDER and after login only to peers that send mdig"] = function(harness)
+        local bus = newBus()
+        local a, b = peer(harness, bus, "A-R", 1), peer(harness, bus, "B-R", 2)
+        local ord = a.orders:Create("A-R", 7, 1, "")
+        a.sync:BroadcastOrder(ord); pump(harness, bus)
+        a.orders:RecordMail(ord.id, { m = "item", b = "C-R", r = "A-R", c = true, i = { 5000, 1 } })
+        a.sync:OnMessage({ v = a.addon.PROTOCOL, t = "HELLO", rev = 0, odig = b.orders:Digest(100), xdig = b.orders:ExtraDigest(100) }, "B-R")
+        advance(harness, bus, 8)
+        harness.equal(b.orders:Get(ord.id).ml, nil, "a 2.9 HELLO (no mdig) gets no OPUSH for mails")
+        b.sync:Hello(false); pump(harness, bus); advance(harness, bus, 8)
+        harness.equal(#b.orders:Get(ord.id).ml, 1, "a 2.10 HELLO does")
+        harness.equal(b.orders:Status(b.orders:Get(ord.id)), "mailed")
+        a.orders:RecordMail(ord.id, { m = "mats", b = "A-R", r = "C-R", c = true })
+        a.sync:BroadcastOrder(a.orders:Get(ord.id)); pump(harness, bus)
+        harness.equal(#b.orders:Get(ord.id).ml, 2, "live with the ORDER broadcast")
+    end,
+
     ["sync: OPUSH batches with full chats stay under the message size limit (RF4)"] = function(harness)
         local addon = harness.addon()
         local orders = addon.Orders.New(function() return harness.clock end, {})

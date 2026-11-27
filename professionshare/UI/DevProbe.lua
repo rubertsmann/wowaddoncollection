@@ -568,6 +568,48 @@ function DevProbe.AddFakeChatMessage(arguments)
     return post()
 end
 
+-- A mail from someone else to me on an order (local only, not sent to the guild): on my own order the crafted item
+-- (the order becomes "Mailed"), on an order I claimed the reagents. The same order the fake chat picks.
+---@param arguments? number[] [1] = delay in seconds (0..300)
+---@return table result
+function DevProbe.AddFakeMail(arguments)
+    local delaySeconds = math.max(0, math.min(300, (arguments and arguments[1]) or 0))
+    local function post()
+        local order = addon.orders and fakeChatOrder()
+        if not order then
+            addon.Print("fake mail: no order yet (/psd fake order makes one)")
+            return recordCheck("mailed", { ok = false, why = "no order" })
+        end
+        local myName = addon.Utility.Me()
+        local mode, sender = "mats", order.requester
+        if order.requester == myName then
+            mode, sender = "item", addon.orders:Claimers(order)[1]
+            if sender == myName or not sender then sender = fakeMember("Crafter") end
+        end
+        local catalogEntry = addon.Store.GetRecipe(order.recipeID)
+        local items
+        if mode == "item" and catalogEntry and catalogEntry.produces then items = { catalogEntry.produces, order.qty }
+        elseif mode == "mats" and catalogEntry and catalogEntry.reagents and catalogEntry.reagents[1] then
+            items = { catalogEntry.reagents[1].itemID, catalogEntry.reagents[1].count * order.qty }
+        end
+        local mail = addon.orders:RecordMail(order.id, { m = mode, b = sender, r = myName, c = true, i = items })
+        if not mail then
+            addon.Print("fake mail: the mail was not taken")
+            return recordCheck("mailed", { ok = false, why = "not recorded" })
+        end
+        addon.Events.Fire("DATA_CHANGED", "orders")
+        addon.Print(("fake mail: %s mailed you %s for %s. Not sent to the guild."):format(sender, mode == "item" and "the item" or "the reagents",
+            addon.Utility.ChatSafe(order.name or tostring(order.recipeID))))
+        return recordCheck("mailed", { ok = true, orderID = order.id, sender = sender, mode = mode })
+    end
+    if delaySeconds > 0 and C_Timer then
+        addon.Print(("fake mail: a mail arrives in %d s"):format(delaySeconds))
+        C_Timer.After(delaySeconds, post)
+        return { ok = true, delayed = delaySeconds }
+    end
+    return post()
+end
+
 -- Deletes the fake orders and the mail jobs made from them; returns what was removed.
 ---@param fakeNames table<string, boolean>
 ---@return string[]
@@ -1262,6 +1304,7 @@ DevProbe.ENTRIES = {
     { key = "order", section = "Members", label = "Order from a fake member (mail queue)", run = function(arguments) DevProbe.AddFakeOrder(arguments) end },
     { key = "linen", section = "Members", label = "Order needing Linen Cloth (mail queue)", run = function(arguments) DevProbe.AddFakeLinenOrder(arguments) end },
     { key = "chat", section = "Triggers", label = "Chat answer on an order (n = delay in s)", run = function(arguments) DevProbe.AddFakeChatMessage(arguments) end },
+    { key = "mailed", section = "Triggers", label = "Mail to you on an order (n = delay in s)", run = function(arguments) DevProbe.AddFakeMail(arguments) end },
     { key = "cooldowns", section = "Members", label = "Crafters: cooldowns in every state", run = function() DevProbe.AddFakeCooldowns() end },
     { key = "cdsoon", section = "Triggers", label = "A cooldown ends in 20 s", run = function() DevProbe.AddFakeCooldownEnding() end },
     { key = "cdprobe", section = "Probes", label = "Craft cooldowns (/ps cd)", run = function() addon.SlashCommands.cd("") end },

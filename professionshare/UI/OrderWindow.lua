@@ -3,7 +3,7 @@ local addonName, addon = ...
 -- One window for one order, opened from the chat icon of an order row: Overview (the whole order: recipe, quantity,
 -- status, people, note, reagents for the ordered quantity with what I hold, tools, who knows the recipe), Chat (the
 -- order's messages, an input line at the bottom; every guild member reads and writes) and History (every status change
--- with date and time). The data views come from Core/View/Model.lua; peer text arrives escaped from there.
+-- with date and time, and every mail sent for the order). The data views come from Core/View/Model.lua; peer text arrives escaped from there.
 ---@class OrderWindowModule
 local OrderWindow = {}
 addon.OrderWindow = OrderWindow
@@ -16,7 +16,7 @@ local WINDOW_WIDTH, WINDOW_HEIGHT = 560, 450
 local LIST_WIDTH, LIST_HEIGHT = WINDOW_WIDTH - 28, 300
 local QUESTION_MARK_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 ---@type table<OrderStatus, string>
-local STATUS_COLOR = { open = "ffd100", claimed = "33ff99", done = "888888", cancelled = "ff5555" }
+local STATUS_COLOR = { open = "ffd100", claimed = "33ff99", mailed = "66ccff", done = "888888", cancelled = "ff5555" }
 ---@type string[]
 local TABS = { "overview", "chat", "history" }
 
@@ -52,7 +52,8 @@ end
 ---@param status OrderStatus
 ---@return string
 local function statusText(status)
-    local labels = { open = Text["Open"], claimed = Text["Claimed"], done = Text["Done"], cancelled = Text["Cancelled"] }
+    local labels = { open = Text["Open"], claimed = Text["Claimed"], mailed = Text["Mailed"], done = Text["Done"],
+        cancelled = Text["Cancelled"] }
     return "|cff" .. (STATUS_COLOR[status] or "ffffff") .. (labels[status] or status) .. "|r"
 end
 
@@ -63,6 +64,20 @@ local function historyText(kind, who)
     local templates = { created = Text["{who} placed the order"], claim = Text["{who} will craft it"],
         withdraw = Text["{who} withdrew"], done = Text["{who} marked it done"], cancel = Text["{who} cancelled the order"] }
     return Format(templates[kind] or kind, { who = shortName(who) })
+end
+
+-- "Ann mailed the item to Bob: 2x Copper Bar (marked by hand)"
+---@param mail OrderMail
+---@return string
+local function mailHistoryText(mail)
+    local templates = mail.m == "item"
+        and { [true] = Text["{who} mailed the item to {to}"], [false] = Text["{who} mailed part of the item to {to}"] }
+        or { [true] = Text["{who} mailed the reagents to {to}"], [false] = Text["{who} mailed part of the reagents to {to}"] }
+    local text = Format(templates[mail.c == true], { who = shortName(mail.b), to = shortName(mail.r) })
+    local itemsText = addon.Model.MailItemsText(mail.i, addon.Api.ItemName)
+    if itemsText ~= "" then text = text .. ": " .. itemsText end
+    if mail.h then text = text .. " |cff999999" .. Text["(marked by hand)"] .. "|r" end
+    return text
 end
 
 ---@return Order|nil
@@ -105,6 +120,9 @@ local function refreshOverview(order)
     end
     frame.overviewText:SetText(table.concat(lines, "\n"))
     frame.overviewChild:SetHeight(math.max(10, (tonumber(frame.overviewText:GetStringHeight()) or 0) + 10))
+    local itemRecipient, matsRecipient = addon.Model.MarkMailTargets(addon.orders, order, me())
+    frame.markItemButton:SetShown(itemRecipient ~= nil)
+    frame.markMatsButton:SetShown(matsRecipient ~= nil)
 end
 
 ---@param order Order
@@ -121,10 +139,23 @@ local function refreshHistory(order)
     frame.historyList:SetData(addon.Model.OrderHistory(order))
 end
 
+-- Has `order` a mail sent to me that I have not seen yet?
+---@param order Order
+---@return boolean
+local function hasUnseenMail(order)
+    local mailSeen = addon.db and addon.db.ui and addon.db.ui.mailSeen
+    local seenUntil = type(mailSeen) == "table" and tonumber(mailSeen[order.id]) or 0
+    for _, mail in ipairs(order.ml or {}) do
+        if mail.r == me() and mail.t > seenUntil then return true end
+    end
+    return false
+end
+
 function OrderWindow.Refresh()
     if not frame or not frame:IsShown() then return end
     local order = currentOrder()
     if not order then frame:Hide() return end
+    if hasUnseenMail(order) and addon.Alerts and addon.Alerts.MailSeen then addon.Alerts.MailSeen(order) end
     frame.icon:SetTexture((addon.Store.GetRecipe(order.recipeID) or {}).icon or QUESTION_MARK_ICON)
     frame.titleText:SetText(("%dx %s"):format(order.qty, addon.Model.OrderRecipeName(addon.Store, order)))
     local unreadCount = addon.Notify.ChatUnread(order, me(), addon.db and addon.db.ui and addon.db.ui.chatSeen)
@@ -151,6 +182,22 @@ local function showTab(tabKey)
     OrderWindow.Refresh()
     if tabKey == "chat" then frame.chatInput:SetFocus() end
 end
+
+-- I mark the item (`mode` "item") or the reagents ("mats") as mailed or handed over by hand
+---@param mode "item"|"mats"
+local function markMailed(mode)
+    local order, myName = currentOrder(), me()
+    if not order or not myName then return end
+    local itemRecipient, matsRecipient = addon.Model.MarkMailTargets(addon.orders, order, myName)
+    local recipient = mode == "item" and itemRecipient or matsRecipient
+    if not recipient then return end
+    local mail = addon.orders:RecordMail(order.id, { m = mode, b = myName, r = recipient, c = true, h = true })
+    if not mail then return end
+    addon.Communication.BroadcastOrder(order)
+    addon.Log.Information("orderWindow.mail", "a mail was marked by hand", { orderID = order.id, mode = mode })
+    addon.Events.Fire("DATA_CHANGED", "orders")
+end
+OrderWindow.MarkMailed = markMailed
 
 local function sendChatMessage()
     local order = currentOrder()
@@ -201,6 +248,16 @@ local function createHistoryRow(list)
     row.dateText:SetJustifyH("LEFT")
     row.label = createFontString(row, "GameFontHighlightSmall"); row.label:SetPoint("LEFT", row.dateText, "RIGHT", 6, 0)
     row.label:SetPoint("RIGHT", -2, 0); row.label:SetJustifyH("LEFT")
+    if row.label.SetWordWrap then row.label:SetWordWrap(false) end
+    -- a long mail line in full in the tooltip
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", function(self)
+        if not self.tooltipText then return end
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText(self.tooltipText, 1, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
     return row
 end
 
@@ -208,7 +265,8 @@ end
 ---@param historyRow OrderHistoryRow
 local function fillHistoryRow(row, historyRow)
     row.dateText:SetText(dateTimeText(historyRow.t))
-    row.label:SetText(historyText(historyRow.kind, historyRow.who))
+    row.label:SetText(historyRow.mail and mailHistoryText(historyRow.mail) or historyText(historyRow.kind, historyRow.who))
+    row.tooltipText = historyRow.mail and row.label:GetText() or nil
 end
 
 local function buildFrame()
@@ -240,13 +298,18 @@ local function buildFrame()
 
     -- Overview: one text in a scroll frame
     local overviewScroll = CreateFrame("ScrollFrame", nil, frame.panels.overview, "UIPanelScrollFrameTemplate")
-    overviewScroll:SetPoint("TOPLEFT", 0, 0); overviewScroll:SetPoint("BOTTOMRIGHT", -22, 0)
+    overviewScroll:SetPoint("TOPLEFT", 0, 0); overviewScroll:SetPoint("BOTTOMRIGHT", -22, 30)
     local overviewChild = CreateFrame("Frame", nil, overviewScroll); overviewChild:SetSize(LIST_WIDTH - 30, 10)
     overviewScroll:SetScrollChild(overviewChild)
     frame.overviewText = createFontString(overviewChild, "GameFontHighlight"); frame.overviewText:SetPoint("TOPLEFT", 0, 0)
     frame.overviewText:SetWidth(LIST_WIDTH - 34); frame.overviewText:SetJustifyH("LEFT"); frame.overviewText:SetJustifyV("TOP")
     if frame.overviewText.SetWordWrap then frame.overviewText:SetWordWrap(true) end
     frame.overviewChild = overviewChild
+    -- marking a mail by hand (sent outside the mail queue, or handed over by trade)
+    frame.markItemButton = createButton(frame.panels.overview, Text["Mark item as mailed / handed over"], 240, 22, function() markMailed("item") end)
+    frame.markItemButton:SetPoint("BOTTOMLEFT", 0, 2)
+    frame.markMatsButton = createButton(frame.panels.overview, Text["Mark reagents as mailed / handed over"], 240, 22, function() markMailed("mats") end)
+    frame.markMatsButton:SetPoint("BOTTOMRIGHT", -22, 2)
 
     -- Chat: the messages, the input line at the bottom
     frame.chatList = Widgets.CreateScrollList(frame.panels.chat, LIST_WIDTH, LIST_HEIGHT, createChatRow, fillChatRow)

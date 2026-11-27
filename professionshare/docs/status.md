@@ -101,3 +101,7 @@ game: the dropdown and hint. Checklist: `features/047-notification-scope-dropdow
 window look, typing and Enter, `GetTradeSkillTools` on Forever, chat between two members. Checklist:
 `features/048-order-detail-window-with-chat-and-history/verify.md`.
 Released in 1.6.0 (features 047, 048 done): the user confirmed the order window, chat and alert in game on one client (2026-11-27); two members chatting and the tools API remain unchecked (accepted).
+**Feature 049 (order mail status and history; protocol 2.10, schema unchanged):** built and proven OFFLINE
+(`tests/test_order_mail.lua`, `test_mail_sender.lua`, `test_sync.lua`, `test_load.lua`; suite `415 passed, 0 failed`).
+Confirmed in game by the user on one client (2026-11-27): send, Done, mark buttons, alert (`/psd fake mailed`), filter. NOT
+verified: two members (accepted at release). Checklist: `features/049-order-mail-status-and-history/verify.md`.

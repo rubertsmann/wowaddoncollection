@@ -2,6 +2,15 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.7.0 (2026-11-27, protocol 2.10, schema 9)
+- **Order mail status** (feature 049): a mail sent through the mail queue is written into its order: the History tab
+  shows every mail with the items and amounts ("partly" while something is still missing, "(marked by hand)" for
+  **Done** in the mailbox panel), and a complete mail of the crafted item gives the order the new status **Mailed**
+  (between claimed and done; the requester still closes it). The order window can mark the item or the reagents as
+  mailed / handed over by hand. The recipient gets order news for it. Orders tab: "Mailed" status with a mail icon and
+  a **Mailed** filter. Protocol 2.10 (additive): order field `ml`, HELLO `mdig`; 2.9 members keep syncing orders
+  without the mail entries.
+
 ## 1.6.0 (2026-11-27, protocol 2.9, schema 9)
 - **Order window** (feature 048): the speech-bubble icon on an order row opens the order with three tabs: **Overview**
   (status, people, dates, note, reagents for the whole quantity with what you hold, tools, who knows the recipe),

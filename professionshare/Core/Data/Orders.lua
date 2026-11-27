@@ -24,6 +24,16 @@ local addonName, addon = ...
 ---@field claims table<string, OrderClaim> by crafter
 ---@field msgs? OrderMessage[] chat, oldest first (protocol 2.9)
 ---@field ev? OrderEvent[] status changes, oldest first (protocol 2.9)
+---@field ml? OrderMail[] mails sent for the order, oldest first (protocol 2.10)
+
+---@class OrderMail
+---@field m "item"|"mats" the crafted item to the requester, or reagents to a crafter
+---@field b string sender
+---@field r string recipient
+---@field t integer server time
+---@field c? boolean complete: nothing of the mail job was left to send
+---@field h? boolean marked by hand (not seen going out)
+---@field i? integer[] flat item list { itemID, count, itemID, count, ... }
 
 ---@class OrderMessage
 ---@field b string author
@@ -35,7 +45,7 @@ local addonName, addon = ...
 ---@field b string who
 ---@field t integer server time
 
----@alias OrderStatus "open"|"claimed"|"done"|"cancelled"
+---@alias OrderStatus "open"|"claimed"|"mailed"|"done"|"cancelled"
 
 ---@class OrderBoard
 ---@field db table<string, Order> backing table (persisted in SavedVariables)
@@ -50,6 +60,10 @@ local MAXIMUM_ENTRIES, MAXIMUM_INCOMING_ENTRIES, MAXIMUM_MESSAGE_BYTES = 30, 120
 Orders.MAXIMUM_ENTRIES, Orders.MAXIMUM_MESSAGE_BYTES = MAXIMUM_ENTRIES, MAXIMUM_MESSAGE_BYTES
 ---@type table<string, boolean>
 local EVENT_KINDS = { claim = true, withdraw = true, done = true, cancel = true }
+---@type table<string, boolean>
+local MAIL_KINDS = { item = true, mats = true }
+local MAXIMUM_MAIL_ITEMS, MAXIMUM_MAIL_COUNT = 12, 100000
+Orders.MAXIMUM_MAIL_ITEMS = MAXIMUM_MAIL_ITEMS
 local SECONDS_PER_DAY = 86400
 
 ---@param now fun(): integer server time
@@ -80,12 +94,45 @@ local function extraVersion(order)
 end
 Orders.ExtraVersion = extraVersion
 
+-- The same for the mail entries (protocol 2.10; kept apart so peers before 2.10, which drop them, are never pushed
+-- orders for them).
+---@param order Order
+---@return number
+local function mailVersion(order)
+    local mailVersionSum = 0
+    for _, mail in ipairs(order.ml or {}) do mailVersionSum = mailVersionSum + mail.t end
+    return mailVersionSum
+end
+Orders.MailVersion = mailVersion
+
 ---@param message OrderMessage
 ---@return string
 local function messageKey(message) return message.b .. "\0" .. message.t end
 ---@param event OrderEvent
 ---@return string
 local function eventKey(event) return event.k .. "\0" .. event.b .. "\0" .. event.t end
+---@param mail OrderMail
+---@return string
+local function mailKey(mail) return mail.m .. "\0" .. mail.b .. "\0" .. mail.t end
+
+-- Allow-list copy of a mail entry's item list: pairs of positive integers, at most MAXIMUM_MAIL_ITEMS pairs.
+---@param list any
+---@return integer[]|nil items nil when absent or empty
+---@return boolean ok false when the list is malformed
+local function sanitizeMailItems(list)
+    if list == nil then return nil, true end
+    if type(list) ~= "table" or #list % 2 ~= 0 or #list > MAXIMUM_MAIL_ITEMS * 2 then return nil, false end
+    local Utility, clean = addon.Utility, {}
+    for index = 1, #list, 2 do
+        if not Utility.SafeInteger(list[index], 1, 2147483647) or not Utility.SafeInteger(list[index + 1], 1, MAXIMUM_MAIL_COUNT) then
+            return nil, false
+        end
+        clean[#clean + 1] = list[index]
+        clean[#clean + 1] = list[index + 1]
+    end
+    if #clean == 0 then return nil, true end
+    return clean, true
+end
 
 -- the newest MAXIMUM_ENTRIES of `entries`, oldest first, one entry per key. Ties are broken by key and text, so every
 -- client keeps the same entries in the same order whatever order they arrived in.
@@ -111,7 +158,7 @@ end
 -- Allow-list copy of a chat or history list. A bad entry is dropped, never the whole order (the rest of the order is
 -- still good); a list that is not a table, or one too long to read, counts as empty.
 ---@param list any
----@param kind "msgs"|"ev"
+---@param kind "msgs"|"ev"|"ml"
 ---@return table[]|nil
 local function sanitizeEntries(list, kind)
     if type(list) ~= "table" or #list > MAXIMUM_INCOMING_ENTRIES then return nil end
@@ -122,13 +169,19 @@ local function sanitizeEntries(list, kind)
             if kind == "msgs" then
                 local text = Utility.CleanString(entry.x, MAXIMUM_MESSAGE_BYTES)
                 if text and text:find("%S") then clean[#clean + 1] = { b = entry.b, t = entry.t, x = text } end
+            elseif kind == "ml" then
+                local items, itemsOk = sanitizeMailItems(entry.i)
+                if MAIL_KINDS[entry.m] and Utility.IsSafeName(entry.r) and itemsOk
+                    and (entry.c == nil or entry.c == true) and (entry.h == nil or entry.h == true) then
+                    clean[#clean + 1] = { m = entry.m, b = entry.b, r = entry.r, t = entry.t, c = entry.c, h = entry.h, i = items }
+                end
             elseif EVENT_KINDS[entry.k] then
                 clean[#clean + 1] = { k = entry.k, b = entry.b, t = entry.t }
             end
         end
     end
     if #clean == 0 then return nil end
-    return normalizeEntries(clean, kind == "msgs" and messageKey or eventKey)
+    return normalizeEntries(clean, kind == "msgs" and messageKey or kind == "ml" and mailKey or eventKey)
 end
 
 -- stored list + incoming list -> the merged list and whether it differs from the stored one
@@ -161,6 +214,9 @@ function Orders:Get(orderID) return self.db[orderID] end
 function Orders:Status(order)
     if order.closed == "cancelled" then return "cancelled" end
     if order.closed == "done" then return "done" end
+    for _, mail in ipairs(order.ml or {}) do
+        if mail.m == "item" and mail.c then return "mailed" end
+    end
     for _, claim in pairs(order.claims) do
         if claim.state == "claimed" then return "claimed" end
     end
@@ -227,7 +283,7 @@ local function sanitize(order)
     return { id = order.id, requester = order.requester, recipeID = order.recipeID, qty = order.qty, note = note or "",
         createdAt = order.createdAt, closed = order.closed, closedAt = order.closed and order.closedAt or nil,
         closedBy = order.closedBy, claims = claims, name = recipeName, loc = recipeName and languageCode or nil,
-        msgs = sanitizeEntries(order.msgs, "msgs"), ev = sanitizeEntries(order.ev, "ev") }
+        msgs = sanitizeEntries(order.msgs, "msgs"), ev = sanitizeEntries(order.ev, "ev"), ml = sanitizeEntries(order.ml, "ml") }
 end
 Orders.Sanitize = sanitize
 
@@ -270,10 +326,11 @@ function Orders:Merge(incomingOrder)
             changed = true
         end
     end
-    local messagesChanged, eventsChanged
+    local messagesChanged, eventsChanged, mailsChanged
     stored.msgs, messagesChanged = mergeEntries(stored.msgs, incoming.msgs, messageKey)
     stored.ev, eventsChanged = mergeEntries(stored.ev, incoming.ev, eventKey)
-    return changed or messagesChanged or eventsChanged or orderVersion(stored) ~= versionBefore
+    stored.ml, mailsChanged = mergeEntries(stored.ml, incoming.ml, mailKey)
+    return changed or messagesChanged or eventsChanged or mailsChanged or orderVersion(stored) ~= versionBefore
 end
 
 -- A copy of the order without its chat (ORDER broadcasts: the chat travels as OMSG and with OPUSH).
@@ -320,6 +377,25 @@ function Orders:MergeMessage(orderID, message)
     local changed
     order.msgs, changed = mergeEntries(order.msgs, clean, messageKey)
     return changed
+end
+
+-- Records a mail sent for the order (`entry` as built by MailQueue.MailEntry: m, b, r, c?, h?, i?). Its time is after the
+-- sender's previous mail of the same kind on this order, so the key is unique. Returns the stored entry, or nil
+-- (unknown order, invalid entry).
+---@param orderID string
+---@param entry table
+---@return OrderMail|nil
+function Orders:RecordMail(orderID, entry)
+    local order = type(orderID) == "string" and self.db[orderID]
+    if not order or type(entry) ~= "table" then return nil end
+    local mailTime = self.now()
+    for _, mail in ipairs(order.ml or {}) do
+        if mail.m == entry.m and mail.b == entry.b and mail.t >= mailTime then mailTime = mail.t + 1 end
+    end
+    local clean = sanitizeEntries({ { m = entry.m, b = entry.b, r = entry.r, t = mailTime, c = entry.c, h = entry.h, i = entry.i } }, "ml")
+    if not clean then return nil end
+    order.ml = mergeEntries(order.ml, clean, mailKey)
+    return clean[1]
 end
 
 ---@param order Order
@@ -411,9 +487,9 @@ end
 ---@field showClosed? boolean
 
 ---@type table<OrderStatus, integer>
-local STATUS_RANK = { open = 1, claimed = 2, done = 3, cancelled = 4 }
+local STATUS_RANK = { open = 1, claimed = 2, mailed = 3, done = 4, cancelled = 5 }
 
--- open first, then claimed, done, cancelled; newest first within each
+-- open first, then claimed, mailed, done, cancelled; newest first within each
 ---@param filter? OrderFilter
 ---@return Order[]
 function Orders:List(filter)
@@ -468,23 +544,49 @@ function Orders:ExtraDigest(limit)
     return digest
 end
 
+-- { [orderID] = MailVersion } for those of the newest `limit` orders that have mail entries (the "mdig" field of HELLO,
+-- protocol 2.10)
+---@param limit? integer default 100
+---@return table<string, number>
+function Orders:MailDigest(limit)
+    local orders = {}
+    for _, order in pairs(self.db) do orders[#orders + 1] = order end
+    table.sort(orders, function(left, right) return left.createdAt > right.createdAt end)
+    local digest = {}
+    for index = 1, math.min(limit or 100, #orders) do
+        local version = mailVersion(orders[index])
+        if version > 0 then digest[orders[index].id] = version end
+    end
+    return digest
+end
+
+-- Is my part (`mine` > 0) missing from or older in the remote digest entry?
+---@param remoteDigest table<string, any>|nil
+---@param orderID string
+---@param mine number
+---@return boolean
+local function behind(remoteDigest, orderID, mine)
+    if type(remoteDigest) ~= "table" or mine <= 0 then return false end
+    local remote = remoteDigest[orderID]
+    return remote == nil or (type(remote) == "number" and remote < mine)
+end
+
 -- Orders I hold that the remote digest lacks or has an older version of (at most `limit`, newest first). With the
--- remote's extra digest (a 2.9 peer) also the orders whose chat or history the peer has less of; a peer without it
--- (2.8 or older) is never sent an order for its chat, it would drop the chat anyway.
+-- remote's extra digest (a 2.9 peer) also the orders whose chat or history the peer has less of, and with its mail
+-- digest (2.10) those whose mail entries it has less of; a peer without them would drop that part anyway, so it is
+-- never sent an order for it.
 ---@param remoteDigest table<string, any>
 ---@param limit? integer default 40
 ---@param remoteExtraDigest? table<string, any>
+---@param remoteMailDigest? table<string, any>
 ---@return Order[]
-function Orders:Missing(remoteDigest, limit, remoteExtraDigest)
+function Orders:Missing(remoteDigest, limit, remoteExtraDigest, remoteMailDigest)
     local missingOrders = {}
     for orderID, order in pairs(self.db) do
         local remoteVersion = remoteDigest[orderID]
         local missing = remoteVersion == nil or (type(remoteVersion) == "number" and remoteVersion < orderVersion(order))
-        if not missing and type(remoteExtraDigest) == "table" then
-            local remoteExtra = remoteExtraDigest[orderID]
-            local myExtra = extraVersion(order)
-            missing = myExtra > 0 and (remoteExtra == nil or (type(remoteExtra) == "number" and remoteExtra < myExtra))
-        end
+        missing = missing or behind(remoteExtraDigest, orderID, extraVersion(order))
+            or behind(remoteMailDigest, orderID, mailVersion(order))
         if missing then missingOrders[#missingOrders + 1] = order end
     end
     table.sort(missingOrders, function(left, right) return left.createdAt > right.createdAt end)

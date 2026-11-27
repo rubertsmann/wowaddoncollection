@@ -448,7 +448,7 @@ function Model.RecipeDetail(store, recipeID, heldCountFunction, itemNameFunction
     return recipeDetail
 end
 
----@alias OrderFilterKey "all"|"open"|"mine"|"crafting"|"can"
+---@alias OrderFilterKey "all"|"open"|"mine"|"crafting"|"can"|"mailed"
 
 ---@class OrderRow
 ---@field id string
@@ -488,9 +488,10 @@ function Model.BuildOrderRows(store, orderBoard, filterKey, showClosed, myName, 
         if filterKey == "open" then keep = status == "open"
         elseif filterKey == "mine" then keep = order.requester == myName
         elseif filterKey == "crafting" then keep = iClaimed and true or false
-        elseif filterKey == "can" then keep = iKnow(order.recipeID) end
+        elseif filterKey == "can" then keep = iKnow(order.recipeID)
+        elseif filterKey == "mailed" then keep = status == "mailed" end
         if keep then
-            local isLive = (status == "open" or status == "claimed")
+            local isLive = Model.OrderIsLive(status)
             local catalogEntry = store.GetRecipe(order.recipeID)
             local otherClaimer = false
             for _, crafter in ipairs(claimers) do if crafter ~= myName then otherClaimer = true end end
@@ -515,10 +516,16 @@ end
 
 ------------------------------------------------------------------ order window
 
+-- open, claimed or mailed: the order can still be claimed, withdrawn, finished or cancelled
+---@param status OrderStatus
+---@return boolean
+function Model.OrderIsLive(status) return status == "open" or status == "claimed" or status == "mailed" end
+
 ---@class OrderHistoryRow
 ---@field t integer server time
----@field kind "created"|"claim"|"withdraw"|"done"|"cancel"
+---@field kind "created"|"claim"|"withdraw"|"done"|"cancel"|"mail"
 ---@field who string raw canonical name (escape before display)
+---@field mail? OrderMail kind "mail": the entry (mode m, recipient r, items i, complete c, by hand h)
 
 -- Every status change of an order, oldest first: the recorded events (protocol 2.9) plus what the order's own fields
 -- show (creation, each crafter's last claim or withdrawal, the close), so changes made by older addon versions appear too.
@@ -526,22 +533,24 @@ end
 ---@return OrderHistoryRow[]
 function Model.OrderHistory(order)
     local historyRows, seenKeys = {}, {}
-    local function add(eventTime, kind, who)
+    local function add(eventTime, kind, who, mail)
         if type(eventTime) ~= "number" or type(who) ~= "string" then return end
-        local key = kind .. "\0" .. who .. "\0" .. eventTime
+        local key = kind .. "\0" .. who .. "\0" .. eventTime .. "\0" .. (mail and mail.m or "")
         if seenKeys[key] then return end
         seenKeys[key] = true
-        historyRows[#historyRows + 1] = { t = eventTime, kind = kind, who = who }
+        historyRows[#historyRows + 1] = { t = eventTime, kind = kind, who = who, mail = mail }
     end
     add(order.createdAt, "created", order.requester)
     for _, event in ipairs(order.ev or {}) do add(event.t, event.k, event.b) end
+    for _, mail in ipairs(order.ml or {}) do add(mail.t, "mail", mail.b, mail) end
     for crafter, claim in pairs(order.claims or {}) do add(claim.t, claim.state == "claimed" and "claim" or "withdraw", crafter) end
     if order.closed then add(order.closedAt, order.closed == "done" and "done" or "cancel", order.closedBy or order.requester) end
     table.sort(historyRows, function(left, right)
         if left.t ~= right.t then return left.t < right.t end
         if left.kind == "created" or right.kind == "created" then return left.kind == "created" and right.kind ~= "created" end
         if left.kind ~= right.kind then return left.kind < right.kind end
-        return left.who < right.who
+        if left.who ~= right.who then return left.who < right.who end
+        return (left.mail and left.mail.m or "") < (right.mail and right.mail.m or "")
     end)
     return historyRows
 end
@@ -596,6 +605,40 @@ function Model.OrderOverview(store, orderBoard, order, heldCountFunction, itemNa
         createdAt = order.createdAt, closedAt = order.closedAt, closedBy = order.closedBy, note = escape(order.note or ""),
         reagents = recipeDetail.reagents, tools = escapeAll(catalogEntry and catalogEntry.tools or {}),
         crafters = recipeDetail.crafters }
+end
+
+-- "6x Copper Bar, 3x Linen Cloth" (escaped) for a mail entry's flat item list; "" when it lists none
+---@param items integer[]|nil
+---@param itemName fun(itemID: integer): string|nil
+---@return string
+function Model.MailItemsText(items, itemName)
+    if type(items) ~= "table" or #items == 0 then return "" end
+    local itemMap = {}
+    for index = 1, #items - 1, 2 do itemMap[items[index]] = (itemMap[items[index]] or 0) + items[index + 1] end
+    return Model.ItemListText(itemMap, itemName)
+end
+
+-- Can I mark the order's mail by hand in the order window? The item: an active claimer (not the requester) while the
+-- order is live and not yet mailed. Reagents: the requester while someone else claims it. Returns the recipient for
+-- each (nil = not possible).
+---@param orderBoard OrderBoard
+---@param order Order
+---@param myName string|nil
+---@return string|nil itemRecipient
+---@return string|nil matsRecipient
+function Model.MarkMailTargets(orderBoard, order, myName)
+    local status = orderBoard:Status(order)
+    if not myName or not Model.OrderIsLive(status) then return nil, nil end
+    local myClaim = order.claims[myName]
+    local itemRecipient = (status ~= "mailed" and myClaim and myClaim.state == "claimed" and order.requester ~= myName)
+        and order.requester or nil
+    local matsRecipient
+    if order.requester == myName then
+        for _, crafter in ipairs(orderBoard:Claimers(order)) do
+            if crafter ~= myName then matsRecipient = crafter; break end
+        end
+    end
+    return itemRecipient, matsRecipient
 end
 
 ------------------------------------------------------------------ mail queue

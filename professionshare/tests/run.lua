@@ -36,7 +36,7 @@ local Harness = {}
 ---@param options? { now: integer }
 ---@return table addon
 function Harness.addon(options)
-    local addon = { PROTOCOL_MAJOR = 2, PROTOCOL_MINOR = 9, PROTOCOL = 2, PREFIX = "PShare", SlashCommands = {},
+    local addon = { PROTOCOL_MAJOR = 2, PROTOCOL_MINOR = 10, PROTOCOL = 2, PREFIX = "PShare", SlashCommands = {},
         Print = function() end }   -- same values as Core/Base/Init.lua (tests/test_hardening.lua pins them)
     Harness.clock = (options and options.now) or 1000
     GetServerTime = function() return Harness.clock end
