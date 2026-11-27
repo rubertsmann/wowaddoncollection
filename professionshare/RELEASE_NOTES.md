@@ -1,3 +1,20 @@
+# ProfessionShare 1.5.0
+
+The Orders tab is easier to use. One filter menu at the top replaces the "Show" and "Show finished" buttons, and you
+can right-click any order to claim it, withdraw, mark it done, cancel it or whisper. Each order also has small icons
+for the same actions. The Craft button now sits at the top and works on the order you selected.
+
+New: send orders by mail. On an order, click the bag icon to mail the reagents to the crafter who took it, or the
+letter icon to mail the finished item to the person who ordered it. The mails wait in the new Mail tab. When you open a
+mailbox, a list appears next to it: click Fill and the mail is prepared for you (recipient, subject and the exact
+amounts from your bags). You only press Send. Items you do not have yet stay in the list for later.
+
+If you use Auctionator: the coin icon on an order puts its reagents on a shopping list. Collect as many orders as you
+like; the next time you open the auction house, Auctionator searches for all of them at once. You can choose to buy
+only what is missing from your bags and bank. Auctionator is optional; without it nothing changes.
+
+No need for everyone to update at the same time: members on 1.4.x and 1.5.0 work together.
+
 # ProfessionShare 1.4.3
 
 **English:** The profession buttons at the top right now open the right window with one click. The Skinning button

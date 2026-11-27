@@ -357,6 +357,16 @@ local function buildOptionsPanel()
     refreshers[#refreshers + 1] = function() bagScanButton:SetEnabled(RecipeDrops.Get(interfaceSettings(), "share")) end
     nextTop = nextTop - 34
 
+    ------------------------------------------------ Auctionator (only when it is loaded)
+    if addon.AuctionatorBridge and addon.AuctionatorBridge.IsAvailable() then
+        addSection(Text["Auctionator"], Text["The Orders tab can put the reagents of ticked orders on an Auctionator shopping list."])
+        addCheck(Text["Search the buy list when I open the auction house"],
+            function() local settings = interfaceSettings(); return not (settings and settings.buyListSearchOnOpen == false) end,
+            function(value) local settings = interfaceSettings(); if settings then settings.buyListSearchOnOpen = (not value) and false or nil end end,
+            Text["Off: the list only waits in Auctionator's Shopping tab. At the auction house the search always starts at once."])
+        nextTop = nextTop - 6
+    end
+
     ------------------------------------------------ Recipe list
     addSection(Text["Recipe list"], Text["Columns shown in the Recipes table. Click a column title in the window to sort by it."])
     local RecipeTable = addon.RecipeTable

@@ -1,4 +1,7 @@
 {
     "projectId": 1809735,
-    "gameVersions": ["1.60.1"]
+    "gameVersions": ["1.60.1"],
+    "relations": [
+        { "slug": "auctionator", "type": "optionalDependency" }
+    ]
 }

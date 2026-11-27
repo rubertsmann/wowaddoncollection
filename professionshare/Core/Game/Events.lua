@@ -357,6 +357,43 @@ onGameEvent.BANKFRAME_OPENED, onGameEvent.BANKFRAME_CLOSED = windowOpenedOrClose
 onGameEvent.MAIL_SHOW, onGameEvent.MAIL_CLOSED = windowOpenedOrClosed("mail", true), windowOpenedOrClosed("mail", false)
 onGameEvent.GUILDBANKFRAME_OPENED, onGameEvent.GUILDBANKFRAME_CLOSED = windowOpenedOrClosed("gbank", true), windowOpenedOrClosed("gbank", false)
 onGameEvent.AUCTION_HOUSE_SHOW, onGameEvent.AUCTION_HOUSE_CLOSED = windowOpenedOrClosed("auction", true), windowOpenedOrClosed("auction", false)
+-- an Auctionator buy list exported away from the auction house is searched as soon as the auction house opens
+local auctionWindowOpened = onGameEvent.AUCTION_HOUSE_SHOW
+function onGameEvent.AUCTION_HOUSE_SHOW(...)
+    auctionWindowOpened(...)
+    local Bridge = addon.AuctionatorBridge
+    if not Bridge or not Bridge.HasPendingSearch() or not (C_Timer and C_Timer.After) then return end
+    Bridge.RunPendingSearch(C_Timer.After, function(ok, errorText, itemCount)
+        local Text, Format = addon.Text, addon.Locale.Format
+        if ok then
+            addon.Print(Format(Text["Searching {n} items of your buy list in Auctionator's Shopping tab."], { n = itemCount }))
+        else
+            addon.Print(Format(Text["The Auctionator search did not start: {error}"], { error = addon.Utility.Escape(tostring(errorText)) }))
+        end
+        addon.Log.Information("events.buylist", "the waiting Auctionator search ran", { ok = ok, failure = errorText, items = itemCount })
+    end)
+end
+-- the collected Auctionator buy list starts fresh once the auction house closes after its search ran
+local auctionWindowClosed = onGameEvent.AUCTION_HOUSE_CLOSED
+function onGameEvent.AUCTION_HOUSE_CLOSED(...)
+    auctionWindowClosed(...)
+    local Bridge = addon.AuctionatorBridge
+    if Bridge and Bridge.TakeSearchedThisVisit() and addon.UI and addon.UI.ClearBuyCollection then addon.UI.ClearBuyCollection() end
+end
+
+-- the mail queue (Core/Game/MailSender.lua) fills the Send Mail form while a mailbox is open
+local mailboxOpened, mailboxClosed = onGameEvent.MAIL_SHOW, onGameEvent.MAIL_CLOSED
+function onGameEvent.MAIL_SHOW(...)
+    mailboxOpened(...)
+    if addon.MailSender then addon.MailSender.OnMailShow() end
+end
+function onGameEvent.MAIL_CLOSED(...)
+    mailboxClosed(...)
+    if addon.MailSender then addon.MailSender.OnMailClosed() end
+end
+if addon.MailSender then
+    addon.MailSender.Register(function(gameEvent, handler) onGameEvent[gameEvent] = handler end)
+end
 function onGameEvent.PLAYERBANKSLOTS_CHANGED() scheduleItemScan(1.5) end
 function onGameEvent.PLAYERBANKBAGSLOTS_CHANGED() scheduleItemScan(1.5) end
 function onGameEvent.PLAYERREAGENTBANKSLOTS_CHANGED() scheduleItemScan(1.5) end

@@ -46,6 +46,7 @@ local windowState = {
     orderFilterIndex = 1,
     showClosed = false,
     selectedOrder = nil,
+    selectedMailJob = nil,         -- job id selected on the Mail tab
     offerText = "",
     offerMyProfessionsOnly = false,
     selectedOffer = nil,
@@ -477,16 +478,13 @@ refreshOrders = function()
     if not mainFrame or windowState.tab ~= "orders" then return end
     addon.Alerts.Seen()   -- looking at the board clears the badge
     local orderFilter = orderFilters()[windowState.orderFilterIndex]
-    mainFrame.orderFilterButton:SetLabel(Format(Text["Show: {filter}"], { filter = orderFilter[2] }))
-    mainFrame.showClosedButton:SetLabel(windowState.showClosed and Text["Hide finished"] or Text["Show finished"])
+    local filterLabel = Format(Text["Show: {filter}"], { filter = orderFilter[2] })
+    if windowState.showClosed then filterLabel = filterLabel .. " " .. Text["+ finished"] end
+    setDropdownText(mainFrame.orderFilterButton, filterLabel)
     local orderRows = addon.Model.BuildOrderRows(addon.Store, addon.orders, orderFilter[1], windowState.showClosed, me())
     orderList:SetData(orderRows)
     local selectedOrderRow
     for _, orderRow in ipairs(orderRows) do if orderRow.id == windowState.selectedOrder then selectedOrderRow = orderRow end end
-    mainFrame.claimButton:SetEnabled(selectedOrderRow and selectedOrderRow.canClaim or false)
-    mainFrame.withdrawButton:SetEnabled(selectedOrderRow and selectedOrderRow.canWithdraw or false)
-    mainFrame.doneButton:SetEnabled(selectedOrderRow and selectedOrderRow.canDone or false)
-    mainFrame.cancelButton:SetEnabled(selectedOrderRow and selectedOrderRow.canCancel or false)
     refreshCraftButton(selectedOrderRow)
     mainFrame.ordersEmptyText:SetShown(#orderRows == 0)
 end
@@ -720,10 +718,46 @@ end
 -- The window's tabs, in button order. A function, so the labels are read in the language active when the window is
 -- built.
 ---@return TabDefinition[]
+---@type table|nil the Mail tab's list
+local mailList
+
+-- the status line of the Mail tab and the mailbox panel
+---@return string
+function UI.MailStatusText()
+    local MailSender = addon.MailSender
+    local mailQueue = MailSender.Queue()
+    local jobCount = mailQueue and #mailQueue:List() or 0
+    if jobCount == 0 then return Text["The mail queue is empty. Tick orders on the Orders tab and add them."] end
+    if MailSender.state == "closed" then return Text["Mailbox closed: at a mailbox, click a queued mail to fill it."] end
+    if MailSender.state == "filling" then return Text["Filling the mail..."] end
+    if MailSender.state == "ready" then return Text["Ready: check the mail and press Send."] end
+    if MailSender.waitingForItems then return Text["Nothing in your bags for the queued mails."] end
+    return Text["Mailbox open: click a queued mail to fill it."]
+end
+
+local function refreshMail()
+    if not mainFrame or windowState.tab ~= "mail" or not mailList then return end
+    local MailSender = addon.MailSender
+    local mailQueue = MailSender.Queue()
+    local jobs = mailQueue and mailQueue:List() or {}
+    local rows = addon.Model.BuildMailRows(jobs, MailSender.MailableCounts(), addon.Api.ItemName,
+        MailSender.current and MailSender.current.jobID, addon.Store)
+    local selectedRow
+    for position, row in ipairs(rows) do
+        row.position = position   -- the row's "move up" icon is off for the first mail
+        if row.id == windowState.selectedMailJob then selectedRow = row end
+    end
+    if not selectedRow then windowState.selectedMailJob = nil end
+    mailList:SetData(rows)
+    mainFrame.mailStatusText:SetText(UI.MailStatusText())
+    mainFrame.mailEmptyText:SetShown(#rows == 0)
+end
+
 local function tabDefinitions()
     return {
         { key = "recipes", label = Text["Recipes"], width = 90 },
         { key = "orders", label = Text["Orders"], width = 90 },
+        { key = "mail", label = Text["Mail"], width = 70 },
         { key = "available", label = Text["Misc Items"], width = 100 },
         { key = "feedback", label = Text["Feedback"], width = 90 },
         { key = "debug", label = Text["Debug"], width = 70 },
@@ -775,7 +809,7 @@ function UI.Refresh()
     if not mainFrame or not mainFrame:IsShown() then return end
     layoutTabButtons()
     if not tabAvailable(windowState.tab) then selectTab("recipes") return end   -- selectTab refreshes again
-    refreshRecipes(); refreshDetail(); refreshOrders(); refreshOffers(); refreshFeedback(); refreshDebug(); refreshProfessionBar()
+    refreshRecipes(); refreshDetail(); refreshOrders(); refreshMail(); refreshOffers(); refreshFeedback(); refreshDebug(); refreshProfessionBar()
 end
 
 ---@param tabName TabName
@@ -1046,8 +1080,11 @@ end
 
 ---@type table|nil
 local exportFrame
+-- A read-only copy box; title and hint default to the diagnostic report texts.
 ---@param reportText string
-function UI.ShowExport(reportText)
+---@param title? string
+---@param hint? string
+function UI.ShowCopyDialog(reportText, title, hint)
     if not exportFrame then
         local frameName = addon.FRAME_PREFIX .. "ExportFrame"
         local dialogFrame = createDialogFrame(frameName)
@@ -1056,11 +1093,14 @@ function UI.ShowExport(reportText)
         dialogFrame:SetMovable(true); dialogFrame:EnableMouse(true); dialogFrame:RegisterForDrag("LeftButton")
         dialogFrame:SetScript("OnDragStart", dialogFrame.StartMoving); dialogFrame:SetScript("OnDragStop", dialogFrame.StopMovingOrSizing)
         table.insert(UISpecialFrames, frameName)
-        local titleText = createFontString(dialogFrame, "GameFontNormalLarge"); titleText:SetPoint("TOP", 0, -6); titleText:SetText(Text["Diagnostic report"])
+        dialogFrame.titleText = createFontString(dialogFrame, "GameFontNormalLarge"); dialogFrame.titleText:SetPoint("TOP", 0, -6)
+        -- the hint may be several lines (an error message plus how to import); the copy box starts below it
         local hintText = createFontString(dialogFrame, "GameFontHighlightSmall"); hintText:SetPoint("TOPLEFT", 14, -32); hintText:SetPoint("RIGHT", -14, 0)
-        hintText:SetText(Text["Press Ctrl+A, then Ctrl+C to copy. Paste it into Discord, a whisper or a text file for the addon author."])
+        hintText:SetJustifyH("LEFT"); hintText:SetJustifyV("TOP"); hintText:SetHeight(48)
+        if hintText.SetWordWrap then hintText:SetWordWrap(true) end
+        dialogFrame.hintText = hintText
         local scrollFrame = CreateFrame("ScrollFrame", nil, dialogFrame, "UIPanelScrollFrameTemplate")
-        scrollFrame:SetPoint("TOPLEFT", 12, -52); scrollFrame:SetPoint("BOTTOMRIGHT", -32, 12)
+        scrollFrame:SetPoint("TOPLEFT", 12, -84); scrollFrame:SetPoint("BOTTOMRIGHT", -32, 12)
         local reportBox = CreateFrame("EditBox", nil, scrollFrame)
         reportBox:SetMultiLine(true); reportBox:SetAutoFocus(false); reportBox:SetMaxLetters(0)
         reportBox:SetFontObject(ChatFontNormal or GameFontHighlightSmall)
@@ -1074,12 +1114,17 @@ function UI.ShowExport(reportText)
         dialogFrame.reportBox = reportBox
         exportFrame = dialogFrame
     end
+    exportFrame.titleText:SetText(title or Text["Diagnostic report"])
+    exportFrame.hintText:SetText(hint or Text["Press Ctrl+A, then Ctrl+C to copy. Paste it into Discord, a whisper or a text file for the addon author."])
     exportFrame.reportText = addon.Utility.Escape(reportText)
     exportFrame.reportBox:SetText(exportFrame.reportText)
     exportFrame:Show()
     exportFrame.reportBox:SetFocus()
     exportFrame.reportBox:HighlightText()
 end
+
+---@param reportText string
+function UI.ShowExport(reportText) UI.ShowCopyDialog(reportText) end
 
 local function buildDebugTab()
     local debugTab = CreateFrame("Frame", nil, mainFrame); debugTab:SetPoint("TOPLEFT", 12, -58); debugTab:SetPoint("BOTTOMRIGHT", -12, 12)
@@ -1397,20 +1442,371 @@ local function buildRecipesTab(recipesTab)
     detailPanel.requestButton:SetPoint("LEFT", detailPanel.noteBox, "RIGHT", 8, 0)
 end
 
+------------------------------------------------------------------ Auctionator buy list (collected orders)
+
+-- the orders collected for the next auction house visit (saved per character)
+---@return string[]|nil
+local function buyCollection()
+    local settings, myName = interfaceSettings(), me()
+    if not settings or not myName then return nil end
+    if type(settings.buyListOrders) ~= "table" then settings.buyListOrders = {} end
+    if type(settings.buyListOrders[myName]) ~= "table" then settings.buyListOrders[myName] = {} end
+    return settings.buyListOrders[myName]
+end
+
+-- the collection starts fresh (Core/Game/Events.lua, when the auction house closes after its search ran)
+function UI.ClearBuyCollection()
+    local collection = buyCollection()
+    if collection then addon.Utility.Wipe(collection) end
+    addon.Log.Information("window.buylist", "the collected buy list was cleared after the auction house visit", {})
+end
+
+-- Adds an order to the collected buy list and rebuilds the Auctionator list from every collected order: searched at
+-- once at the auction house, else the next time it opens. On failure a copy box with the import text.
+---@param orderID string
+local function addToBuyCollection(orderID)
+    local collection = buyCollection()
+    if not collection then return end
+    addon.BuyList.CollectionAdd(collection, orderID)
+    addon.BuyList.CollectionPrune(collection, addon.orders)
+    local settings = interfaceSettings()
+    local subtract = settings and settings.buyListSubtract or false
+    local buyList = addon.BuyList.Build(addon.Store, addon.orders, collection,
+        { subtract = subtract, owned = addon.Api.ItemCount, itemName = addon.Api.ItemName })
+    local listName, Bridge = Text["ProfessionShare buy list"], addon.AuctionatorBridge
+    local created, failure, searchState = false, nil, "none"
+    if #buyList.items == 0 then
+        if #buyList.missingRecipes < buyList.orderCount and #buyList.unnamed == 0 then
+            addon.Print(subtract and Text["Nothing to buy: you already have every reagent of the collected orders."]
+                or Text["Nothing to buy for the collected orders."])
+        end
+    else
+        local ok, errorText, importText = Bridge.Export(listName, buyList.items)
+        created, failure = ok, errorText
+        if ok and Bridge.IsAuctionHouseOpen() then
+            local searched, searchError = Bridge.Search(buyList.items)
+            searchState = searched and "now" or "failed"
+            if searched then
+                addon.Print(Format(Text["Auctionator shopping list {name} created; searching {n} items in the Shopping tab."],
+                    { name = listName, n = #buyList.items }))
+            else
+                addon.Print(Format(Text["Auctionator shopping list {name} created with {n} items. The search did not start: {error}"],
+                    { name = listName, n = #buyList.items, error = addon.Utility.Escape(tostring(searchError)) }))
+            end
+        elseif ok and not (settings and settings.buyListSearchOnOpen == false) then
+            Bridge.SetPendingSearch(buyList.items)
+            searchState = "pending"
+            addon.Print(Format(Text["Buy list: {orders} orders, {n} items. The search starts when you open the auction house."],
+                { orders = #collection, n = #buyList.items }))
+        elseif ok then
+            addon.Print(Format(Text["Auctionator shopping list {name} created with {n} items. Open the auction house, Shopping tab."],
+                { name = listName, n = #buyList.items }))
+        else
+            UI.ShowCopyDialog(importText, Text["Auctionator buy list failed"],
+                Format(Text["Auctionator could not create the list: {error}"], { error = addon.Utility.Escape(tostring(errorText)) })
+                    .. "\n" .. Text["Copy the text below (Ctrl+A, Ctrl+C) and paste it in Auctionator: Shopping, Import."])
+        end
+    end
+    if #buyList.missingRecipes > 0 then
+        addon.Print(Format(Text["No reagent data for {n} collected orders: nobody who knows the recipe has shared it yet."],
+            { n = #buyList.missingRecipes }))
+    end
+    if #buyList.unnamed > 0 then
+        addon.Print(Format(Text["{n} reagents were left out: their item names are not loaded yet. Try again in a moment."],
+            { n = #buyList.unnamed }))
+    end
+    addon.Log.Information("window.buylist", "an order was added to the Auctionator buy list", { orders = #collection,
+        items = #buyList.items, subtract = subtract, created = created, failure = failure, search = searchState })
+end
+
+UI.AddToBuyList = addToBuyCollection
+
+---@type table|nil
+local buyDialog
+
+-- The dialog of the row's Auctionator action: the order, its reagents, "Subtract what I have", when the list is searched.
+---@param orderID string
+local function showBuyDialog(orderID)
+    local order = addon.orders:Get(orderID)
+    if not order then return end
+    if not buyDialog then
+        local frameName = addon.FRAME_PREFIX .. "BuyListDialog"
+        buyDialog = createDialogFrame(frameName)
+        buyDialog:SetSize(380, 210); buyDialog:SetPoint("CENTER"); buyDialog:SetFrameStrata("DIALOG")
+        buyDialog:SetMovable(true); buyDialog:EnableMouse(true); buyDialog:RegisterForDrag("LeftButton")
+        buyDialog:SetScript("OnDragStart", buyDialog.StartMoving); buyDialog:SetScript("OnDragStop", buyDialog.StopMovingOrSizing)
+        table.insert(UISpecialFrames, frameName)
+        local title = createFontString(buyDialog, "GameFontNormalLarge"); title:SetPoint("TOP", 0, -6)
+        title:SetText(Text["Add to the Auctionator buy list"])
+        buyDialog.orderText = createFontString(buyDialog, "GameFontHighlight")
+        buyDialog.orderText:SetPoint("TOPLEFT", 14, -34); buyDialog.orderText:SetPoint("RIGHT", -14, 0); buyDialog.orderText:SetJustifyH("LEFT")
+        buyDialog.reagentsText = createFontString(buyDialog, "GameFontHighlightSmall")
+        buyDialog.reagentsText:SetPoint("TOPLEFT", buyDialog.orderText, "BOTTOMLEFT", 0, -6); buyDialog.reagentsText:SetPoint("RIGHT", -14, 0)
+        buyDialog.reagentsText:SetJustifyH("LEFT")
+        local subtractCheck = CreateFrame("CheckButton", nil, buyDialog, "UICheckButtonTemplate")
+        subtractCheck:SetSize(24, 24); subtractCheck:SetPoint("TOPLEFT", buyDialog.reagentsText, "BOTTOMLEFT", -4, -8)
+        local subtractLabel = createFontString(subtractCheck, "GameFontHighlightSmall")
+        subtractLabel:SetPoint("LEFT", subtractCheck, "RIGHT", 2, 0); subtractLabel:SetText(Text["Subtract what I have"])
+        subtractCheck:SetScript("OnClick", function(self)
+            local settings = interfaceSettings()
+            if settings then settings.buyListSubtract = self:GetChecked() and true or nil end
+        end)
+        buyDialog.subtractCheck = subtractCheck
+        buyDialog.hintText = createFontString(buyDialog, "GameFontDisableSmall")
+        buyDialog.hintText:SetPoint("TOPLEFT", subtractCheck, "BOTTOMLEFT", 4, -6); buyDialog.hintText:SetPoint("RIGHT", -14, 0)
+        buyDialog.hintText:SetJustifyH("LEFT"); if buyDialog.hintText.SetWordWrap then buyDialog.hintText:SetWordWrap(true) end
+        buyDialog.addButton = createButton(buyDialog, Text["Add"], 90, 22, function()
+            buyDialog:Hide()
+            if buyDialog.orderID then addToBuyCollection(buyDialog.orderID) end
+        end)
+        buyDialog.addButton:SetPoint("BOTTOMRIGHT", -12, 10)
+        local cancelButton = createButton(buyDialog, Text["Cancel"], 90, 22, function() buyDialog:Hide() end)
+        cancelButton:SetPoint("RIGHT", buyDialog.addButton, "LEFT", -6, 0)
+    end
+    buyDialog.orderID = orderID
+    local catalogEntry = addon.Store.GetRecipe(order.recipeID)
+    local reagents = {}
+    for _, reagent in ipairs(catalogEntry and catalogEntry.reagents or {}) do
+        reagents[reagent.itemID] = (reagents[reagent.itemID] or 0) + reagent.count * order.qty
+    end
+    buyDialog.orderText:SetText(("%dx %s"):format(order.qty, addon.Model.OrderRecipeName(addon.Store, order)))
+    buyDialog.reagentsText:SetText(next(reagents) and addon.Model.ItemListText(reagents, addon.Api.ItemName)
+        or Text["No reagent data for this recipe yet."])
+    local settings = interfaceSettings()
+    buyDialog.subtractCheck:SetChecked(settings and settings.buyListSubtract or false)
+    local collection = buyCollection() or {}
+    local hint
+    if addon.AuctionatorBridge.IsAuctionHouseOpen() then hint = Text["The auction house is open: the search starts at once."]
+    elseif settings and settings.buyListSearchOnOpen == false then hint = Text["The list waits in Auctionator's Shopping tab."]
+    else hint = Text["The buy list is searched the next time you open the auction house."] end
+    buyDialog.hintText:SetText(hint .. " " .. Format(Text["Orders collected so far: {n}."], { n = #collection }))
+    buyDialog.addButton:SetEnabled(next(reagents) ~= nil)
+    buyDialog:Show()
+end
+
+------------------------------------------------------------------ mail queue from an order
+
+-- why an order was not queued, as chat text
+---@param reason string
+---@param mode MailMode
+---@return string
+local function mailSkipText(reason, mode)
+    if reason == "duplicate" then return Text["already in the mail queue"] end
+    if reason == "noRecipient" then return mode == "mats" and Text["nobody has claimed it yet"] or Text["no requester"] end
+    if reason == "self" then return Text["that would be a mail to yourself"] end
+    if reason == "full" then return Text["the mail queue is full"] end
+    return mode == "mats" and Text["no reagent data for the recipe"] or Text["the recipe's item is not known"]
+end
+
+---@param order Order
+---@param mode MailMode
+---@param recipient string|nil
+local function queueMail(order, mode, recipient)
+    local mailQueue = addon.MailSender.Queue()
+    if not mailQueue then return end
+    local job, reason = addon.MailQueue.JobForOrder(addon.Store, order, mode, recipient, me())
+    local added = false
+    if job then added, reason = mailQueue:Add(job) end
+    if added then
+        addon.Print(Format(Text["Mail to {name} added to the mail queue (Mail tab): {items}."],
+            { name = shortName(job.recipient), items = addon.Model.ItemListText(job.items, addon.Api.ItemName) }))
+    else
+        addon.Print(Format(Text["Not added to the mail queue: {reason}"], { reason = mailSkipText(reason, mode) }))
+    end
+    addon.Log.Information("window.mailqueue", "an order was added to the mail queue", { mode = mode, added = added, reason = reason })
+    addon.Events.Fire("DATA_CHANGED", "mail")
+end
+
+-- the row's mail actions: the mats go to a claimer (a menu asks when several claimed it), the item to the requester
+---@param orderID string
+---@param mode MailMode
+---@param owner table where a menu opens
+local function mailOrder(orderID, mode, owner)
+    local order = addon.orders:Get(orderID)
+    if not order then return end
+    if mode == "item" then return queueMail(order, "item", order.requester) end
+    local claimers = {}
+    for _, crafter in ipairs(addon.orders:Claimers(order)) do if crafter ~= me() then claimers[#claimers + 1] = crafter end end
+    if #claimers <= 1 or not (MenuUtil and MenuUtil.CreateContextMenu) then return queueMail(order, "mats", claimers[1]) end
+    MenuUtil.CreateContextMenu(owner, function(_, rootDescription)
+        rootDescription:CreateTitle(Format(Text["Who gets the mats for {qty}x {name}?"],
+            { qty = order.qty, name = addon.Model.OrderRecipeName(addon.Store, order) }))
+        for _, crafter in ipairs(claimers) do
+            rootDescription:CreateButton(shortName(crafter), function() queueMail(order, "mats", crafter) end)
+        end
+    end)
+end
+
+UI.MailOrder = mailOrder
+
+------------------------------------------------------------------ order actions (right-click menu)
+
+---@param actionName string
+---@param orderID string
+local function runOrderAction(actionName, orderID)
+    local changedOrder
+    if actionName == "claim" then changedOrder = addon.orders:Claim(orderID, me())
+    elseif actionName == "withdraw" then changedOrder = addon.orders:Withdraw(orderID, me())
+    elseif actionName == "done" then changedOrder = addon.orders:Close(orderID, me(), "done")
+    elseif actionName == "cancel" then changedOrder = addon.orders:Close(orderID, me(), "cancelled") end
+    addon.Log.Information("window.order", "an order action was used", { action = actionName, orderID = orderID, changed = changedOrder ~= nil })
+    afterOrderChange(changedOrder)
+end
+
+-- the right-click menu of an order row: every order action, the impossible ones greyed out
+---@param owner table
+---@param orderRow OrderRow
+local function showOrderMenu(owner, orderRow)
+    if not (MenuUtil and MenuUtil.CreateContextMenu) then return end
+    local contactName = addon.Model.OrderContact(orderRow, me())
+    MenuUtil.CreateContextMenu(owner, function(_, rootDescription)
+        rootDescription:CreateTitle(("%dx %s"):format(orderRow.qty, orderRow.recipeName))
+        local function entry(label, enabled, action)
+            local button = rootDescription:CreateButton(label, action)
+            if not enabled and button and button.SetEnabled then button:SetEnabled(false) end
+        end
+        entry(Text["I'll craft it"], orderRow.canClaim, function() runOrderAction("claim", orderRow.id) end)
+        entry(Text["Withdraw"], orderRow.canWithdraw, function() runOrderAction("withdraw", orderRow.id) end)
+        entry(Text["Mark done"], orderRow.canDone, function() runOrderAction("done", orderRow.id) end)
+        entry(Text["Cancel order"], orderRow.canCancel, function() runOrderAction("cancel", orderRow.id) end)
+        entry(contactName and Format(Text["Whisper {name}"], { name = shortName(contactName) }) or Text["Whisper"], contactName ~= nil,
+            function() whisper(contactName, function() return recipeChatText(orderRow.recipeID, orderRow.qty) end) end)
+        if rootDescription.CreateDivider then rootDescription:CreateDivider() end
+        entry(Text["Mail the reagents to the crafter"], orderRow.canMailMats, function() mailOrder(orderRow.id, "mats", owner) end)
+        entry(Text["Mail the crafted item to the requester"], orderRow.canMailItem, function() mailOrder(orderRow.id, "item", owner) end)
+        if addon.AuctionatorBridge.IsAvailable() then
+            entry(Text["Add to the Auctionator buy list"], orderRow.hasReagents, function() showBuyDialog(orderRow.id) end)
+        end
+    end)
+end
+
+------------------------------------------------------------------ Orders tab
+
+local ACTION_ICON_SIZE = ROW_HEIGHT - 4
+local ACTION_STEP = ACTION_ICON_SIZE + 3   -- icon plus gap
+local ACTION_SLOTS = 7
+
+---@class RowAction
+---@field key string
+---@field icon string texture path
+---@field tooltip string
+
+-- `count` icon buttons for a list row's action column (placed by layoutRowActions)
+---@param row table
+---@param count integer
+local function addRowActionButtons(row, count)
+    row.actionButtons = {}
+    for slot = 1, count do
+        local actionButton = CreateFrame("Button", nil, row)
+        actionButton:SetSize(ACTION_ICON_SIZE, ACTION_ICON_SIZE)
+        actionButton.icon = actionButton:CreateTexture(nil, "ARTWORK"); actionButton.icon:SetAllPoints()
+        actionButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+        actionButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        row.actionButtons[slot] = actionButton
+    end
+end
+
+-- Shows `actions` in the row's action column, packed against the right text (rightWidth px from the row's edge):
+-- tooltip per icon, greyed out and unclickable when enabledByKey[key] is not true; a click calls onAction(key, button).
+-- The row label ends left of the icons.
+---@param row table
+---@param actions RowAction[]
+---@param enabledByKey table<string, any>
+---@param onAction fun(key: string, button: table)
+---@param rightWidth number
+local function layoutRowActions(row, actions, enabledByKey, onAction, rightWidth)
+    row.label:SetPoint("RIGHT", -(rightWidth + 4) - #actions * ACTION_STEP, 0)
+    for slot, actionButton in ipairs(row.actionButtons) do
+        local action = actions[slot]
+        actionButton:SetShown(action ~= nil)
+        if action then
+            local enabled = enabledByKey[action.key] and true or false
+            actionButton:ClearAllPoints()
+            actionButton:SetPoint("RIGHT", row, "RIGHT", -rightWidth - (#actions - slot) * ACTION_STEP, 0)
+            actionButton.icon:SetTexture(action.icon)
+            if actionButton.icon.SetDesaturated then actionButton.icon:SetDesaturated(not enabled) end
+            actionButton.icon:SetAlpha(enabled and 1 or 0.4)
+            actionButton:SetEnabled(enabled)
+            actionButton:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                GameTooltip:SetText(action.tooltip, 1, 1, 1)
+                GameTooltip:Show()
+            end)
+            actionButton:SetScript("OnClick", function(self) onAction(action.key, self) end)
+        end
+    end
+end
+
+-- the action column of a Mail tab row
+---@return RowAction[]
+local function mailRowActions()
+    return {
+        { key = "up", icon = "Interface\\Buttons\\UI-ScrollBar-ScrollUpButton-Up", tooltip = Text["Move up"] },
+        { key = "fill", icon = "Interface\\Icons\\INV_Letter_15", tooltip = Text["Fill this mail (mailbox open)"] },
+        { key = "done", icon = "Interface\\RaidFrame\\ReadyCheck-Ready", tooltip = Text["Done: take what is attached off this mail"] },
+        { key = "delete", icon = "Interface\\RaidFrame\\ReadyCheck-NotReady", tooltip = Text["Delete"] },
+    }
+end
+
+-- The action column of an order row, left to right: the order actions, then mail and buy list (the Auctionator action
+-- only with Auctionator). Craft is not here: it casts, which needs the secure button in the top bar.
+---@return { key: string, icon: string, tooltip: string }[]
+local function rowActions()
+    local actions = {
+        { key = "claim", icon = "Interface\\Icons\\Trade_BlackSmithing", tooltip = Text["I'll craft it"] },
+        { key = "withdraw", icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up", tooltip = Text["Withdraw"] },
+        { key = "done", icon = "Interface\\RaidFrame\\ReadyCheck-Ready", tooltip = Text["Mark done"] },
+        { key = "cancel", icon = "Interface\\RaidFrame\\ReadyCheck-NotReady", tooltip = Text["Cancel order"] },
+        { key = "mats", icon = "Interface\\Icons\\INV_Misc_Bag_10", tooltip = Text["Mail the reagents to the crafter"] },
+        { key = "item", icon = "Interface\\Icons\\INV_Letter_15", tooltip = Text["Mail the crafted item to the requester"] },
+    }
+    if addon.AuctionatorBridge.IsAvailable() then
+        actions[#actions + 1] = { key = "buy", icon = "Interface\\Icons\\INV_Misc_Coin_01", tooltip = Text["Add to the Auctionator buy list"] }
+    end
+    return actions
+end
+
 ---@param ordersTab table
 local function buildOrdersTab(ordersTab)
-    mainFrame.orderFilterButton = createButton(ordersTab, Format(Text["Show: {filter}"], { filter = Text["All"] }), 160, 22, function()
-        windowState.orderFilterIndex = windowState.orderFilterIndex % #orderFilters() + 1
-        refreshOrders()
-    end)
-    mainFrame.orderFilterButton:SetPoint("TOPLEFT", 0, 0)
-    mainFrame.showClosedButton = createButton(ordersTab, Text["Show finished"], 120, 22, function()
-        windowState.showClosed = not windowState.showClosed; refreshOrders()
-    end)
-    mainFrame.showClosedButton:SetPoint("LEFT", mainFrame.orderFilterButton, "RIGHT", 8, 0)
-    local helpText = createFontString(ordersTab, "GameFontDisableSmall"); helpText:SetPoint("TOPRIGHT", 0, -6)
-    helpText:SetText(Text["Request recipes on the Recipes tab. Everyone in the guild sees this board."])
-    orderList = createScrollList(ordersTab, createSelectableRow, function(row, orderRow)
+    -- one filter dropdown: which orders (radio) and whether finished ones are shown (checkbox)
+    local function chooseFilter(filterIndex) windowState.orderFilterIndex = filterIndex; refreshOrders() end
+    local filterDropdown = createMenuDropdown(ordersTab, "WowStyle1FilterDropdownTemplate", 170)
+    if filterDropdown then
+        filterDropdown:SetupMenu(function(_, rootMenu)
+            rootMenu:CreateTitle(Text["Show"])
+            local function isSelectedFilter(filterIndex) return windowState.orderFilterIndex == filterIndex end
+            for filterIndex, orderFilter in ipairs(orderFilters()) do rootMenu:CreateRadio(orderFilter[2], isSelectedFilter, chooseFilter, filterIndex) end
+            rootMenu:CreateTitle(Text["Status"])
+            rootMenu:CreateCheckbox(Text["Show finished"], function() return windowState.showClosed end, function()
+                windowState.showClosed = not windowState.showClosed
+                refreshOrders()
+            end)
+        end)
+    else   -- no menus: left click cycles the filter, right click shows or hides finished orders
+        filterDropdown = createButton(ordersTab, Format(Text["Show: {filter}"], { filter = Text["All"] }), 170, 22, function() end)
+        filterDropdown:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        filterDropdown:SetScript("OnClick", function(_, mouseButton)
+            if mouseButton == "RightButton" then windowState.showClosed = not windowState.showClosed
+            else windowState.orderFilterIndex = windowState.orderFilterIndex % #orderFilters() + 1 end
+            refreshOrders()
+        end)
+    end
+    mainFrame.orderFilterButton = filterDropdown
+    filterDropdown:SetPoint("TOPLEFT", 0, 0)
+    local helpText = createFontString(ordersTab, "GameFontDisableSmall", "RIGHT"); helpText:SetPoint("TOPRIGHT", 0, -6)
+    helpText:SetPoint("LEFT", filterDropdown, "RIGHT", 140, 0)
+    if helpText.SetWordWrap then helpText:SetWordWrap(false) end
+    helpText:SetText(Text["Right-click an order for its actions. Request recipes on the Recipes tab."])
+    mainFrame.ordersHelpText = helpText
+
+    -- an order row: selectable, right-click menu, and an action column of icon buttons before the status text
+    local function createOrderRow(list)
+        local row = createSelectableRow(list)
+        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        addRowActionButtons(row, ACTION_SLOTS)
+        return row
+    end
+    orderList = createScrollList(ordersTab, createOrderRow, function(row, orderRow)
         row.icon:SetTexture((addon.Store.GetRecipe(orderRow.recipeID) or {}).icon or QUESTION_MARK_ICON)
         local claimerNames = {}
         for index, crafter in ipairs(orderRow.claimers) do claimerNames[index] = shortName(crafter) end
@@ -1419,9 +1815,20 @@ local function buildOrdersTab(ordersTab)
         row.label:SetText(("%dx %s  |cffaaaaaa%s|r%s%s"):format(orderRow.qty, orderRow.recipeName,
             Format(Text["for {name}"], { name = shortName(orderRow.requester) }), claimersText, noteText))
         row.rightText:SetText("|cff" .. (STATUS_COLOR[orderRow.status] or "ffffff") .. statusLabel(orderRow.status) .. "|r  " .. timeAgo(orderRow.createdAt))
-        row.label:SetPoint("RIGHT", -130, 0)
         row.selectionHighlight:SetShown(orderRow.id == windowState.selectedOrder)
-        row:SetScript("OnClick", function() windowState.selectedOrder = orderRow.id; refreshOrders() end)
+        row:SetScript("OnClick", function(self, mouseButton)
+            windowState.selectedOrder = orderRow.id
+            refreshOrders()
+            if mouseButton == "RightButton" then showOrderMenu(self, orderRow) end
+        end)
+        -- the action column, packed against the status text
+        layoutRowActions(row, rowActions(), { claim = orderRow.canClaim, withdraw = orderRow.canWithdraw, done = orderRow.canDone,
+            cancel = orderRow.canCancel, mats = orderRow.canMailMats, item = orderRow.canMailItem, buy = orderRow.hasReagents },
+            function(key, button)
+                if key == "buy" then showBuyDialog(orderRow.id)
+                elseif key == "mats" or key == "item" then mailOrder(orderRow.id, key, button)
+                else runOrderAction(key, orderRow.id) end
+            end, 126)
         local contactName = addon.Model.OrderContact(orderRow, me())
         row.onIconEnter = function(iconButton)
             showRecipeTooltip(iconButton, orderRow.recipeID,
@@ -1431,52 +1838,27 @@ local function buildOrdersTab(ordersTab)
             whisper(contactName, function() return recipeChatText(orderRow.recipeID, orderRow.qty) end)
         end
     end)
-    orderList:SetPoint("TOPLEFT", 0, -30); orderList:SetPoint("BOTTOMRIGHT", 0, 32)
+    orderList:SetPoint("TOPLEFT", 0, -30); orderList:SetPoint("BOTTOMRIGHT", 0, 0)
     mainFrame.ordersEmptyText = createFontString(ordersTab, "GameFontDisable")
     mainFrame.ordersEmptyText:SetPoint("CENTER", 0, 0); mainFrame.ordersEmptyText:SetText(Text["No orders yet."])
-    -- a click handler that applies `orderAction` to the selected order and broadcasts the result
-    ---@param actionName string for the log
-    ---@param orderAction fun(orderID: string): Order|nil
-    local function onSelectedOrder(actionName, orderAction)
-        return function()
-            local orderID = windowState.selectedOrder
-            if not orderID then return end
-            local changedOrder = orderAction(orderID)
-            addon.Log.Information("window.order", "an order button was used",
-                { action = actionName, orderID = orderID, changed = changedOrder ~= nil })
-            afterOrderChange(changedOrder)
-        end
-    end
-    mainFrame.claimButton = createButton(ordersTab, Text["I'll craft it"], 110, 24,
-        onSelectedOrder("claim", function(orderID) return addon.orders:Claim(orderID, me()) end))
-    mainFrame.withdrawButton = createButton(ordersTab, Text["Withdraw"], 90, 24,
-        onSelectedOrder("withdraw", function(orderID) return addon.orders:Withdraw(orderID, me()) end))
-    mainFrame.doneButton = createButton(ordersTab, Text["Mark done"], 90, 24,
-        onSelectedOrder("done", function(orderID) return addon.orders:Close(orderID, me(), "done") end))
-    mainFrame.cancelButton = createButton(ordersTab, Text["Cancel order"], 100, 24,
-        onSelectedOrder("cancel", function(orderID) return addon.orders:Close(orderID, me(), "cancelled") end))
-    mainFrame.claimButton:SetPoint("BOTTOMLEFT", 0, 0)
-    mainFrame.withdrawButton:SetPoint("LEFT", mainFrame.claimButton, "RIGHT", 6, 0)
-    mainFrame.doneButton:SetPoint("LEFT", mainFrame.withdrawButton, "RIGHT", 6, 0)
-    mainFrame.cancelButton:SetPoint("LEFT", mainFrame.doneButton, "RIGHT", 6, 0)
-    -- secure Craft button (see "Craft button" above); without the template (should not happen) there is no button
+    -- secure Craft button (see "Craft button" above), in the top bar: a menu entry cannot cast, so it stays a button
     local craftTemplateOk, craftButton = pcall(CreateFrame, "Button", nil, addon.SecureDock.Holder(),
         "SecureActionButtonTemplate,UIPanelButtonTemplate")
     if craftTemplateOk and craftButton then
-        craftButton:SetSize(110, 24)
-        craftButton.minimumWidth, craftButton.SetLabel = 110, setButtonLabel
+        craftButton:SetSize(120, 22)
+        craftButton.minimumWidth, craftButton.SetLabel = 120, setButtonLabel
         craftButton:RegisterForClicks("AnyDown")   -- one cast per click, see the profession buttons
         craftButton:HookScript("PostClick", onCraftButtonPostClick)
         craftButton:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
             GameTooltip:SetText(Text["Craft"], 1, 1, 1)
-            GameTooltip:AddLine(Text["First click opens the profession and selects the ordered recipe, the next click crafts the ordered quantity. Only for recipes you know."], 0.8, 0.8, 0.8, true)
+            GameTooltip:AddLine(Text["For the selected order. First click opens the profession and selects the ordered recipe, the next click crafts the ordered quantity. Only for recipes you know."], 0.8, 0.8, 0.8, true)
             GameTooltip:Show()
         end)
         craftButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
         craftButton:SetLabel(Text["Craft"]); craftButton:Disable()
         addon.SecureDock.Register(craftButton, ordersTab, function(button)
-            button:SetPoint("LEFT", mainFrame.cancelButton, "RIGHT", 18, 0)
+            button:SetPoint("LEFT", mainFrame.orderFilterButton, "RIGHT", 10, 0)
         end)
         mainFrame.craftButton = craftButton
     else
@@ -1944,6 +2326,55 @@ local function sendFeedback()
 end
 UI.SendFeedback = sendFeedback
 
+-- The Mail tab: the mail queue of this character (Core/Data/MailQueue.lua), filled at the mailbox by MailSender.
+---@param mailTab table
+local function buildMailTab(mailTab)
+    mainFrame.mailStatusText = createFontString(mailTab, "GameFontHighlight")
+    mainFrame.mailStatusText:SetPoint("TOPLEFT", 0, -4); mainFrame.mailStatusText:SetPoint("RIGHT", 0, 0)
+    mainFrame.mailStatusText:SetJustifyH("LEFT")
+    local function createMailRow(list)
+        local row = createSelectableRow(list)
+        addRowActionButtons(row, #mailRowActions())
+        return row
+    end
+    mailList = createScrollList(mailTab, createMailRow, function(row, mailRow)
+        local MailSender = addon.MailSender
+        local job = MailSender.Queue() and MailSender.Queue():Get(mailRow.id)
+        row.icon:SetTexture((job and (addon.Store.GetRecipe(job.recipeID) or {}).icon) or QUESTION_MARK_ICON)
+        local modeText = mailRow.mode == "mats" and Text["Mats"] or Text["Item"]
+        local missingText = mailRow.missingText ~= ""
+            and ("  |cffff7777" .. Format(Text["missing: {items}"], { items = mailRow.missingText }) .. "|r") or ""
+        row.label:SetText(("|cffffd100%s|r %s: %dx %s  |cffaaaaaa%s|r%s"):format(modeText,
+            Format(Text["to {name}"], { name = shortName(mailRow.recipient) }), mailRow.qty, mailRow.label, mailRow.itemsText, missingText))
+        row.rightText:SetText(mailRow.isCurrent and ("|cff33ff99" .. Text["in the mail"] .. "|r") or "")
+        row.selectionHighlight:SetShown(mailRow.id == windowState.selectedMailJob)
+        row:SetScript("OnClick", function() windowState.selectedMailJob = mailRow.id; refreshMail() end)
+        row.onIconEnter = job and function(iconButton) showRecipeTooltip(iconButton, job.recipeID) end or nil
+        row.onIconClick = nil
+        -- the action column: move up, fill (only at an open mailbox), done, delete
+        layoutRowActions(row, mailRowActions(), { up = (mailRow.position or 1) > 1,
+            fill = MailSender.MailboxOpen() and MailSender.state ~= "filling", done = true, delete = true },
+            function(key)
+                local mailQueue = MailSender.Queue()
+                if not mailQueue then return end
+                if key == "up" then mailQueue:MoveUp(mailRow.id) addon.Events.Fire("DATA_CHANGED", "mail")
+                elseif key == "fill" then MailSender.FillJob(mailRow.id)
+                elseif key == "done" then MailSender.Done(mailRow.id)
+                elseif key == "delete" then
+                    MailSender.Remove(mailRow.id)
+                    if windowState.selectedMailJob == mailRow.id then windowState.selectedMailJob = nil end
+                end
+            end, 76)
+    end)
+    mailList:SetPoint("TOPLEFT", 0, -24); mailList:SetPoint("BOTTOMRIGHT", 0, 20)
+    mainFrame.mailEmptyText = createFontString(mailTab, "GameFontDisable")
+    mainFrame.mailEmptyText:SetPoint("CENTER", 0, 0); mainFrame.mailEmptyText:SetText(Text["No mails queued."])
+    local helpText = createFontString(mailTab, "GameFontDisableSmall", "LEFT")
+    helpText:SetPoint("BOTTOMLEFT", 0, 4); helpText:SetPoint("RIGHT", 0, 0)
+    if helpText.SetWordWrap then helpText:SetWordWrap(false) end
+    helpText:SetText(Text["At a mailbox the queue is listed next to the inbox: click a mail to fill it, then press Send."])
+end
+
 ---@param feedbackTab table
 local function buildFeedbackTab(feedbackTab)
     local Feedback = addon.Feedback
@@ -2261,6 +2692,8 @@ local function buildMainFrame()
     buildRecipesTab(mainFrame.tabs.recipes)
     mainFrame.tabs.orders = createTabFrame()
     buildOrdersTab(mainFrame.tabs.orders)
+    mainFrame.tabs.mail = createTabFrame()
+    buildMailTab(mainFrame.tabs.mail)
     mainFrame.tabs.available = createTabFrame()
     buildAvailableTab(mainFrame.tabs.available)
     mainFrame.tabs.feedback = createTabFrame()

@@ -418,6 +418,8 @@ function DevProbe.RemoveFakeData()
         if fakeNames[alerts[index].from] then table.remove(alerts, index); removed[#removed + 1] = "alert" end
     end
     if addon.UI and addon.UI.SetDropNotice then addon.UI.SetDropNotice(#alerts) end
+    for _, removedOrder in ipairs(DevProbe.RemoveFakeOrders(fakeNames)) do removed[#removed + 1] = removedOrder end
+    addon.Events.Fire("DATA_CHANGED", "orders")
     for fakeName in pairs(fakeNames) do addon.Store.keptNames[fakeName] = nil end
     addon.Utility.Wipe(devTable("devFake"))
     table.sort(removed)
@@ -425,6 +427,113 @@ function DevProbe.RemoveFakeData()
     for _, tableKey in ipairs(MEMBER_TABLES) do addon.Events.Fire("DATA_CHANGED", tableKey) end
     addon.Print(("fake data removed: %d records%s"):format(#removed, #removed > 0 and (": " .. table.concat(removed, ", ")) or ""))
     return recordCheck("remove", { ok = true, removed = removed })
+end
+
+------------------------------------------------------------------ fake orders (Members section)
+
+-- The catalog recipe whose reagents the bags cover best (ties: the lower recipe id); nil when no recipe has reagents.
+---@return integer|nil recipeID
+---@return integer coveredReagents
+local function recipeForBags()
+    local held = addon.MailSender and addon.MailSender.MailableCounts() or {}
+    local bestRecipe, bestScore = nil, -1
+    for recipeID, catalogEntry in pairs(addon.Store.db and addon.Store.db.catalog or {}) do
+        local reagents = catalogEntry.reagents or {}
+        if #reagents > 0 then
+            local score = 0
+            for _, reagent in ipairs(reagents) do if (held[reagent.itemID] or 0) > 0 then score = score + 1 end end
+            if score > bestScore or (score == bestScore and recipeID < bestRecipe) then bestRecipe, bestScore = recipeID, score end
+        end
+    end
+    return bestRecipe, math.max(bestScore, 0)
+end
+
+-- An order from a fake member, claimed by a fake crafter and, when one is remembered (/psd mailfill <name>), by that
+-- character too: the mail queue can be tried in both modes, including the menu for several claimers. The recipe is the
+-- one whose reagents the bags cover best (or arguments[1]). Local only: the order is not broadcast; "Remove all fake
+-- data" deletes it and its mail jobs.
+---@param arguments? integer[] { recipeID, quantity }
+---@return table result
+function DevProbe.AddFakeOrder(arguments)
+    arguments = arguments or {}
+    local catalog = addon.Store.db and addon.Store.db.catalog or {}
+    local recipeID, covered = arguments[1], nil
+    if not (recipeID and catalog[recipeID]) then recipeID, covered = recipeForBags() end
+    if not recipeID or not addon.orders then
+        addon.Print("fake order: no recipe with reagents in the catalog yet (scan a profession first)")
+        return recordCheck("order", { ok = false, why = "no recipe with reagents" })
+    end
+    local catalogEntry = catalog[recipeID]
+    local quantity = math.max(1, math.min(99, arguments[2] or 2))
+    local requester, crafter = fakeMember("Requester"), fakeMember("Crafter")
+    local order = addon.orders:Create(requester, recipeID, quantity, "fake order (dev tools)", catalogEntry.name, catalogEntry.loc)
+    if not order then
+        addon.Print("fake order: the order did not pass validation")
+        return recordCheck("order", { ok = false, why = "invalid order" })
+    end
+    addon.orders:Claim(order.id, crafter)
+    local claimers = { crafter }
+    local remembered = addon.db and addon.db.devChecks and addon.db.devChecks.mailRecipient
+    local realClaimer = type(remembered) == "string" and remembered ~= "" and (addon.Utility.CanonicalName(remembered) or remembered) or nil
+    if realClaimer and addon.Utility.IsSafeName(realClaimer) then
+        addon.orders:Claim(order.id, realClaimer)
+        claimers[#claimers + 1] = realClaimer
+    end
+    devTable("devFakeOrders")[order.id] = true
+    addon.Events.Fire("DATA_CHANGED", "orders")
+    addon.Print(("fake order: %dx %s (recipe %d, %s of its reagents in your bags) from %s, claimed by %s. Not sent to the guild."):format(
+        quantity, tostring(catalogEntry.name), recipeID, covered and tostring(covered) or "?", requester, table.concat(claimers, ", ")))
+    return recordCheck("order", { ok = true, orderID = order.id, recipeID = recipeID, claimers = claimers })
+end
+
+local LINEN_CLOTH = 2589
+-- used when no catalog recipe needs Linen Cloth: Bolt of Linen Cloth (Tailoring), 2 Linen Cloth each
+local LINEN_BOLT_RECIPE, LINEN_BOLT = 2963, { name = "Bolt of Linen Cloth", produces = 2996, reagents = { { itemID = LINEN_CLOTH, count = 2 } } }
+
+-- A fake order for a recipe that needs Linen Cloth: the catalog's recipe with Linen Cloth as its only reagent if there
+-- is one, else Bolt of Linen Cloth (added to the catalog). arguments[1] = quantity (default 3).
+---@param arguments? integer[]
+---@return table result
+function DevProbe.AddFakeLinenOrder(arguments)
+    local catalog = addon.Store.db and addon.Store.db.catalog or {}
+    local recipeID
+    for candidateID, catalogEntry in pairs(catalog) do
+        local reagents = catalogEntry.reagents or {}
+        if #reagents == 1 and reagents[1].itemID == LINEN_CLOTH and (not recipeID or candidateID < recipeID) then recipeID = candidateID end
+    end
+    if not recipeID then
+        addon.Store.PutCatalog({ [LINEN_BOLT_RECIPE] = LINEN_BOLT })
+        recipeID = LINEN_BOLT_RECIPE
+    end
+    return DevProbe.AddFakeOrder({ recipeID, (arguments and arguments[1]) or 3 })
+end
+
+-- Deletes the fake orders and the mail jobs made from them; returns what was removed.
+---@param fakeNames table<string, boolean>
+---@return string[]
+function DevProbe.RemoveFakeOrders(fakeNames)
+    local removed = {}
+    local fakeOrders = devTable("devFakeOrders")
+    local orderTable = addon.Store.db and addon.Store.db.orders or {}
+    for orderID, order in pairs(orderTable) do
+        if fakeOrders[orderID] or fakeNames[order.requester] then
+            orderTable[orderID] = nil
+            fakeOrders[orderID] = true
+            removed[#removed + 1] = "order " .. orderID
+        end
+    end
+    local mailQueue = addon.MailSender and addon.MailSender.Queue()
+    if mailQueue then
+        for index = #mailQueue:List(), 1, -1 do
+            local job = mailQueue:List()[index]
+            if fakeOrders[job.orderID] or fakeNames[job.recipient] then
+                mailQueue:Remove(job.id)
+                removed[#removed + 1] = "mail job " .. job.id
+            end
+        end
+    end
+    addon.Utility.Wipe(fakeOrders)
+    return removed
 end
 
 ------------------------------------------------------------------ fake members (Members section)
@@ -1090,6 +1199,8 @@ DevProbe.ENTRIES = {
     { key = "keys", section = "Members", label = "Keyholder: dungeon keys", run = function() DevProbe.AddFakeKeys() end },
     { key = "naxx", section = "Members", label = "Keyholder: Naxxramas", run = function() DevProbe.AddFakeNaxxramas() end },
     { key = "feedback", section = "Members", label = "Tester: 3 feedback messages", run = function() DevProbe.AddFakeFeedback() end },
+    { key = "order", section = "Members", label = "Order from a fake member (mail queue)", run = function(arguments) DevProbe.AddFakeOrder(arguments) end },
+    { key = "linen", section = "Members", label = "Order needing Linen Cloth (mail queue)", run = function(arguments) DevProbe.AddFakeLinenOrder(arguments) end },
     { key = "cooldowns", section = "Members", label = "Crafters: cooldowns in every state", run = function() DevProbe.AddFakeCooldowns() end },
     { key = "cdsoon", section = "Triggers", label = "A cooldown ends in 20 s", run = function() DevProbe.AddFakeCooldownEnding() end },
     { key = "cdprobe", section = "Probes", label = "Craft cooldowns (/ps cd)", run = function() addon.SlashCommands.cd("") end },
@@ -1102,6 +1213,7 @@ DevProbe.ENTRIES = {
     { key = "keyprobe", section = "Probes", label = "Keys and attunements", run = function(arguments) DevProbe.KeyProbe(arguments) end },
     { key = "keyscan", section = "Probes", label = "All keys in the item data", run = function(arguments) DevProbe.KeyScan(arguments[1]) end },
     { key = "items", section = "Probes", label = "Item probe (catalog)", run = function(arguments) DevProbe.Run(arguments) end },
+    { key = "mail", section = "Probes", label = "Mail API check (more: /psd mailprobe)", run = function() addon.MailProbe.CheckApi() end },
     { key = "remove", section = "Cleanup", label = "Remove all fake data", run = function() DevProbe.RemoveFakeData() end },
 }
 

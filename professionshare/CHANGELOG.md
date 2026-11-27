@@ -2,6 +2,25 @@
 
 Until 0.7.3 the addon was called **TalentShare**; the entries below that version keep the old name.
 
+## 1.5.0 (2026-11-27, protocol 2.8, schema 9)
+- **Orders tab reworked:** one filter dropdown (which orders, plus "Show finished"); right-click an order for its
+  actions (I'll craft it, Withdraw, Mark done, Cancel, Whisper, the mail and buy-list actions); the bottom button row is
+  gone and **Craft** sits in the top bar (for the selected order). Each row has action icons: I'll craft it, Withdraw,
+  Mark done, Cancel order, mail the reagents to the
+  crafter, mail the crafted item to the requester and, with Auctionator, add to the buy list.
+- **Mail queue:** the row's mail icons queue a mail (several claimers: a menu asks who gets the mats). At a mailbox a
+  panel next to the inbox lists every queued mail with what your bags hold and lack; **Fill** fills that mail
+  (recipient, subject, exact amounts; stacks are split into a free bag slot), you press Send. **Done** takes what is
+  attached off the mail (the rest stays as the reduced need), **Delete** removes it. New **Mail** tab next to Orders
+  with the same actions as row icons (Move up, Fill, Done, Delete).
+  Local data only (`mailQueue`, per character).
+- **Auctionator buy list** (only with Auctionator): the row's coin icon opens a dialog (reagents, **Subtract what I
+  have**, when the search runs). Each added order joins one collected list; Auctionator's list "ProfessionShare buy list"
+  is rebuilt from all of them and searched the next time you open the auction house (at the auction house: at once).
+  The collection starts fresh after that visit. If Auctionator refuses the list, a window shows the error and the
+  import text to copy. Setting **Search the buy list when I open the auction house** (section Auctionator).
+- No protocol or schema change.
+
 ## 1.4.3 (2026-11-26, protocol 2.8, schema 9)
 - Profession buttons (and the Craft button's "Open profession"): the Skinning button opened no window. On WoW Forever a
   profession's recipe window is opened by a hidden spell (not in the spellbook); the old macro cast the profession name

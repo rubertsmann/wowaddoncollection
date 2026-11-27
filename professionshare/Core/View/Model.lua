@@ -489,7 +489,14 @@ function Model.BuildOrderRows(store, orderBoard, filterKey, showClosed, myName)
         elseif filterKey == "can" then keep = iKnow(order.recipeID) end
         if keep then
             local isLive = (status == "open" or status == "claimed")
+            local catalogEntry = store.GetRecipe(order.recipeID)
+            local otherClaimer = false
+            for _, crafter in ipairs(claimers) do if crafter ~= myName then otherClaimer = true end end
             orderRows[#orderRows + 1] = { id = order.id, recipeID = order.recipeID, recipeName = Model.OrderRecipeName(store, order),
+                -- row actions: reagents to a claimer (not me), the crafted item to the requester (not me)
+                canMailMats = isLive and otherClaimer and catalogEntry ~= nil and #(catalogEntry.reagents or {}) > 0,
+                canMailItem = status ~= "cancelled" and order.requester ~= myName and catalogEntry ~= nil and catalogEntry.produces ~= nil,
+                hasReagents = catalogEntry ~= nil and #(catalogEntry.reagents or {}) > 0,
                 qty = order.qty, note = escape(order.note), requester = escape(order.requester), status = status,
                 claimers = escapeAll(claimers), createdAt = order.createdAt,
                 canClaim = isLive and not iClaimed and iKnow(order.recipeID),
@@ -501,6 +508,71 @@ function Model.BuildOrderRows(store, orderBoard, filterKey, showClosed, myName)
         end
     end
     return orderRows
+end
+
+------------------------------------------------------------------ mail queue
+
+---@class MailViewRow
+---@field id string job id
+---@field mode MailMode
+---@field recipient string raw canonical name
+---@field label string escaped recipe name
+---@field qty integer
+---@field itemsText string escaped "6x Copper Bar, 3x Linen Cloth"
+---@field missingText string escaped, "" when the bags hold everything
+---@field isCurrent boolean the job the open Send Mail form was filled for
+
+-- "6x Copper Bar, 3x Linen Cloth" for an item map (sorted by name; unknown names as "item <id>")
+---@param items table<integer, integer>
+---@param itemName fun(itemID: integer): string|nil
+---@return string
+local function itemListText(items, itemName)
+    local entries = {}
+    for itemID, amount in pairs(items) do
+        entries[#entries + 1] = { name = itemName(itemID) or ("item " .. itemID), amount = amount }
+    end
+    table.sort(entries, function(left, right) return left.name < right.name end)
+    local parts = {}
+    for index, entry in ipairs(entries) do parts[index] = entry.amount .. "x " .. entry.name end
+    return escape(table.concat(parts, ", "))
+end
+Model.ItemListText = itemListText
+
+-- A mail job's recipe name, raw (not escaped): looked up by recipe id in the catalog (in this client's language when
+-- known), the job's own snapshot only when the catalog has no entry.
+---@param store table|nil
+---@param job MailJob
+---@return string
+function Model.MailJobRecipeName(store, job)
+    local catalogEntry = store and store.GetRecipe(job.recipeID)
+    if catalogEntry then return addon.Names.Recipe(job.recipeID, catalogEntry) end
+    return job.label
+end
+
+-- Rows of the Mail tab: every queued job with what it carries and what the bags lack for it (the bags are counted once
+-- for the whole queue, in queue order, so two jobs needing the same item do not both look complete).
+---@param jobs MailJob[]
+---@param mailableCounts table<integer, integer> what the bags hold, bound items excluded
+---@param itemName fun(itemID: integer): string|nil
+---@param currentJobID string|nil
+---@param store? table the recipe names are looked up by id there (else the jobs' snapshots)
+---@return MailViewRow[]
+function Model.BuildMailRows(jobs, mailableCounts, itemName, currentJobID, store)
+    local left = {}
+    for itemID, count in pairs(mailableCounts) do left[itemID] = count end
+    local rows = {}
+    for _, job in ipairs(jobs) do
+        local missing = {}
+        for itemID, amount in pairs(job.items) do
+            local have = left[itemID] or 0
+            if have < amount then missing[itemID] = amount - have end
+            left[itemID] = math.max(0, have - amount)
+        end
+        rows[#rows + 1] = { id = job.id, mode = job.mode, recipient = job.recipient, label = escape(Model.MailJobRecipeName(store, job)), qty = job.qty,
+            itemsText = itemListText(job.items, itemName), missingText = next(missing) and itemListText(missing, itemName) or "",
+            isCurrent = job.id == currentJobID }
+    end
+    return rows
 end
 
 ------------------------------------------------------------------ recipe items board

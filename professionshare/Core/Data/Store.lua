@@ -93,7 +93,7 @@ end
 local function withAllTables(savedVariables)
     savedVariables = savedVariables or {}
     savedVariables.schema = Store.SCHEMA
-    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "access", "rep", "cds", "feedback", "feedbackState", "feedbackDelivered", "debug", "ui" }) do
+    for _, key in ipairs({ "chars", "catalog", "orders", "offers", "hidden", "access", "rep", "cds", "feedback", "feedbackState", "feedbackDelivered", "debug", "ui", "mailQueue" }) do
         if type(savedVariables[key]) ~= "table" then savedVariables[key] = {} end
     end
     -- network trace ring (Core/Debug/Trace.lua)
@@ -227,6 +227,8 @@ function Store.SanitizePersisted(savedVariables)
     droppedCount = droppedCount + addon.Reputation.SanitizePersisted(savedVariables)
     droppedCount = droppedCount + addon.CraftCooldowns.SanitizePersisted(savedVariables)
     droppedCount = droppedCount + addon.Feedback.SanitizePersisted(savedVariables)
+    -- the local mail queue (Core/Data/MailQueue.lua); loaded after Store, so it may be missing in partial loads
+    if addon.MailQueue then droppedCount = droppedCount + addon.MailQueue.SanitizePersisted(savedVariables) end
     local professionNamesByLanguage = {}
     if type(savedVariables.profNames) == "table" then
         for languageCode, namesBySkillLine in pairs(savedVariables.profNames) do

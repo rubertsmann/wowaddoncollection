@@ -73,3 +73,22 @@ Legend: DONE = written; UNVERIFIED = needs the check in the last column.
 2. `powershell tools/deploy.ps1 -WithProbe`; log in; open a profession; `/psp`; `/reload`; check `/ps scan`, `/ps dump`.
 3. Watch for Lua errors (`/console scriptErrors 1`).
 
+
+**Feature 044 (Orders tab: Auctionator buy list from ticked orders; UI + local setting, protocol and schema unchanged):**
+built and proven OFFLINE (`tests/test_buy_list.lua`, `test_load.lua`; suite `350 passed`). NOT verified in game: the
+tick boxes and controls, the real Auctionator 354 call on Forever, whether the quantity shows in the Shopping tab, the
+error window, the search at the auction house and the waiting search on `AUCTION_HOUSE_SHOW` (suite now `354 passed`).
+Checklist: `features/044-auctionator-buy-list-from-orders/verify.md`.
+
+**Feature 045 (Mail queue: mails for orders filled at the mailbox, Mail tab; local data `mailQueue`, protocol and schema
+unchanged):** built and proven OFFLINE against a simulated mailbox (`tests/test_mail_queue.lua`, `test_mail_sender.lua`,
+`test_load.lua`; suite `382 passed`). Known on Forever from the dev probe: attaching works, soulbound items are refused,
+a split clicked straight into the mail attaches the whole stack. NOT verified in game: filling recipient/subject, the
+split into a free bag slot, `MAIL_SEND_SUCCESS` and the next mail, the Mail tab and mailbox panel. Checklist:
+`features/045-mail-order-items/verify.md`.
+
+**Feature 046 (Orders tab rework: filter dropdown, right-click actions, row icons for mail and Auctionator, Craft in the
+top bar; mailbox panel lists the mail queue, Fill/Done/Delete per mail; UI + local settings):** built and proven OFFLINE
+(suite `384 passed`). Supersedes the tick boxes and controls of 044/045. NOT verified in game: the dropdown, the
+right-click menu, the icons, the buy-list dialog, the mailbox panel. Checklist:
+`features/046-order-row-actions-and-mailbox-queue-list/verify.md`.

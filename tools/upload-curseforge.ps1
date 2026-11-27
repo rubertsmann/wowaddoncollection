@@ -1,7 +1,9 @@
 # Uploads an addon's release zip (built by <addon>/tools/package.ps1) to CurseForge. Last step of a release:
 # tests, commit, tag, push, package, upload.
 #
-# Settings (public, committed): <addon>/tools/curseforge.json  { "projectId": 123, "gameVersions": ["1.60.1"] }
+# Settings (public, committed): <addon>/tools/curseforge.json  { "projectId": 123, "gameVersions": ["1.60.1"],
+#   "relations": [{ "slug": "auctionator", "type": "optionalDependency" }] }   (relations optional; types: embeddedLibrary,
+#   incompatible, optionalDependency, requiredDependency, tool)
 # Token (secret, gitignored): $env:CF_API_TOKEN, or the first line of .curseforge-token in the repo root or in your
 #   user folder (misspellings such as .cursforge-token are accepted too). Create it at
 #   https://legacy.curseforge.com/account/api-tokens
@@ -90,11 +92,19 @@ $settings = Get-Content $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
 if (-not $settings.projectId) { throw "set projectId in $settingsPath (the number on the project's CurseForge page)" }
 $versionNames = @($settings.gameVersions | Where-Object { $_ })
 if ($versionNames.Count -eq 0) { throw "set gameVersions in $settingsPath (see -ListGameVersions)" }
+# other CurseForge projects this file relates to (shown on the project's Relations tab), by project slug
+$relationTypes = @("embeddedLibrary", "incompatible", "optionalDependency", "requiredDependency", "tool")
+$relations = @(foreach ($relation in @($settings.relations | Where-Object { $_ })) {
+    if (-not $relation.slug -or $relation.slug -notmatch '^[a-z0-9-]+$') { throw "relation without a valid slug in $settingsPath" }
+    if ($relationTypes -notcontains $relation.type) { throw "relation '$($relation.slug)': type must be one of $($relationTypes -join ', ')" }
+    @{ slug = [string]$relation.slug; type = [string]$relation.type }
+})
 
 Write-Host "project:   $($settings.projectId) ($name)"
 Write-Host "file:      $zip ($([math]::Round((Get-Item $zip).Length / 1KB)) KB)"
 Write-Host "type:      $ReleaseType"
 Write-Host "game:      $($versionNames -join ', ')"
+Write-Host "relations: $(if ($relations.Count) { ($relations | ForEach-Object { "$($_.slug) ($($_.type))" }) -join ', ' } else { 'none' })"
 Write-Host "changelog:"
 Write-Host $changelog
 if ($DryRun) { Write-Host "`ndry run: nothing uploaded"; return }
@@ -109,13 +119,15 @@ $gameVersionIds = foreach ($versionName in $versionNames) {
     [int]$match[0].id
 }
 
-$metadata = @{
+$metadataFields = @{
     changelog     = $changelog
     changelogType = "markdown"
     displayName   = "$name $version"
     gameVersions  = @($gameVersionIds)
     releaseType   = $ReleaseType
-} | ConvertTo-Json -Compress
+}
+if ($relations.Count -gt 0) { $metadataFields.relations = @{ projects = @($relations) } }
+$metadata = $metadataFields | ConvertTo-Json -Compress -Depth 5
 
 $client = New-Object System.Net.Http.HttpClient
 $client.DefaultRequestHeaders.Add("X-Api-Token", $token)

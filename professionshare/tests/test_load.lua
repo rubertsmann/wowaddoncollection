@@ -93,6 +93,38 @@ return {
                 local okT, errT = pcall(addon.UI.Toggle); harness.truthy(okT, "building the window failed: " .. tostring(errT))
                 harness.truthy(pcall(addon.UI.Refresh), "refreshing the window failed")
                 local okO, errO = pcall(addon.UI.SelectTab, "orders"); harness.truthy(okO, "switching to the orders tab failed: " .. tostring(errO))
+                -- with Auctionator loaded the order rows get the buy-list action; adding orders collects them and rebuilds
+                -- the Auctionator list from all of them; the collection starts fresh after the auction house visit
+                local createdLists = {}
+                Auctionator = { API = { v1 = { CreateShoppingList = function(_, name, strings) createdLists[#createdLists + 1] = strings end } } }
+                harness.truthy(addon.AuctionatorBridge.IsAvailable())
+                local okA, errA = pcall(addon.UI.Refresh); harness.truthy(okA, "refreshing the orders tab with Auctionator failed: " .. tostring(errA))
+                addon.Store.PutCatalog({ [2] = { name = "Test Thing", reagents = { { itemID = 6, count = 3, name = "Test Reagent" } } } })
+                local buyOrderA = addon.orders:Create("B-R", 2, 1, "")
+                local buyOrderB = addon.orders:Create("C-R", 2, 2, "")
+                local okBuy, errBuy = pcall(addon.UI.AddToBuyList, buyOrderA.id)
+                harness.truthy(okBuy, "adding to the buy list failed: " .. tostring(errBuy))
+                addon.UI.AddToBuyList(buyOrderB.id)
+                addon.UI.AddToBuyList(buyOrderB.id)
+                harness.equal(#addon.db.ui.buyListOrders[addon.Utility.Me()], 2, "each order collected once")
+                harness.truthy(createdLists[#createdLists] and createdLists[#createdLists][1]:find(";9$"),
+                    "the list holds both orders: 3 x (1 + 2) reagents")
+                addon.UI.ClearBuyCollection()
+                harness.equal(#addon.db.ui.buyListOrders[addon.Utility.Me()], 0)
+                Auctionator = nil
+                addon.AuctionatorBridge.SetPendingSearch(nil)
+                -- the row's mail action queues a mail for the requester
+                local okMailOrder, errMailOrder = pcall(addon.UI.MailOrder, buyOrderA.id, "item", nil)
+                harness.truthy(okMailOrder, "the mail action failed: " .. tostring(errMailOrder))
+                -- the Mail tab and the mailbox panel with one queued job (MailFrame is a stub that reports "shown")
+                local mailOrder = addon.orders:Create("A-R", 1, 2, "")
+                local mailJob = addon.MailQueue.JobForOrder(addon.Store, mailOrder, "mats", "B-R", "A-R")
+                harness.truthy(mailJob and addon.MailSender.Queue():Add(mailJob), "a mail job could not be queued")
+                local okMail, errMail = pcall(addon.UI.SelectTab, "mail"); harness.truthy(okMail, "the mail tab failed: " .. tostring(errMail))
+                MailFrame = stub()
+                local okPanel, errPanel = pcall(addon.MailPanel.Refresh); harness.truthy(okPanel, "the mailbox panel failed: " .. tostring(errPanel))
+                MailFrame = nil
+                harness.truthy(pcall(addon.UI.SelectTab, "orders"))
                 addon.Offers.Put({ name = "B-R", rev = 5, items = { [6661] = { bag = 1 } }, dibs = {} })
                 harness.truthy(pcall(addon.UI.SelectTab, "available"), "switching to the available tab failed")
                 harness.truthy(pcall(addon.UI.Refresh), "refreshing the available tab failed")
@@ -199,6 +231,26 @@ return {
                     local okS, errS = pcall(addon.DevProbe.AddFakeCooldownEnding, "mooncloth")
                     harness.truthy(okS, "fake ending cooldown failed: " .. tostring(errS))
                     harness.truthy(addon.CraftCooldowns.Get("Fake Timer").c.mooncloth > 0)
+                    -- dev fake order: from a fake member, claimed by a fake crafter and the remembered mail recipient;
+                    -- "remove all fake data" takes it and its mail job away again
+                    addon.db.devChecks = addon.db.devChecks or {}
+                    addon.db.devChecks.mailRecipient = "Some Alt"
+                    local okO2, fakeOrderResult = pcall(addon.DevProbe.AddFakeOrder, {})
+                    harness.truthy(okO2 and fakeOrderResult.ok, "fake order failed: " .. tostring(fakeOrderResult and fakeOrderResult.why or fakeOrderResult))
+                    local fakeOrder = addon.orders:Get(fakeOrderResult.orderID)
+                    harness.equal(fakeOrder.requester, "Fake Requester")
+                    harness.equal(#addon.orders:Claimers(fakeOrder), 2)
+                    local fakeJob = addon.MailQueue.JobForOrder(addon.Store, fakeOrder, "mats", "Some Alt", "First Surname")
+                    harness.truthy(fakeJob and addon.MailSender.Queue():Add(fakeJob), "a mail job for the fake order")
+                    local okL, linenResult = pcall(addon.DevProbe.AddFakeLinenOrder, {})
+                    harness.truthy(okL and linenResult.ok, "fake linen order failed: " .. tostring(linenResult and linenResult.why or linenResult))
+                    local linenJob = addon.MailQueue.JobForOrder(addon.Store, addon.orders:Get(linenResult.orderID), "mats", "Some Alt", "First Surname")
+                    harness.equal(linenJob.items[2589], 6, "3 bolts need 6 Linen Cloth")
+                    addon.DevProbe.RemoveFakeOrders({})
+                    harness.equal(addon.orders:Get(linenResult.orderID), nil, "the fake linen order was removed")
+                    harness.equal(addon.orders:Get(fakeOrderResult.orderID), nil, "the fake order was removed")
+                    harness.equal(addon.MailSender.Queue():Get(fakeJob.id), nil, "and its mail job")
+                    addon.db.devChecks.mailRecipient = nil
                     addon.MiscTables.SetMode(addon.db.ui, "cooldowns")
                     local okG, errG = pcall(addon.UI.Refresh)
                     harness.truthy(okG, "the grid with fake cooldowns failed: " .. tostring(errG))
@@ -375,7 +427,10 @@ return {
                 end
                 -- the grouped settings page builds with every section and opens without an error
                 do
+                    -- with Auctionator loaded, so its section is built too
+                    Auctionator = { API = { v1 = { CreateShoppingList = function() end } } }
                     local okP, errP = pcall(addon.Alerts.OpenOptions)
+                    Auctionator = nil
                     harness.truthy(okP, "the settings page failed: " .. tostring(errP))
                     harness.truthy(pcall(addon.SlashCommands.options), "/ps options failed")
                     addon.UI.SetMinimapButtonShown(false)

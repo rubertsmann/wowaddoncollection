@@ -30,3 +30,6 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 027 | Recipe drop alerts | done | 1.4.0 unreleased (protocol 2.7, schema 8) | feat commit (recipe drops) | [027-recipe-drop-alerts](027-recipe-drop-alerts/spec.md) |
 | 028 | Craft cooldowns grid | verifying | 1.4.0 unreleased (protocol 2.8, schema 9) | - | [028-craft-cooldowns-grid](028-craft-cooldowns-grid/spec.md) |
 | 029 | Grouped settings page | done | 1.4.0 unreleased (UI + local settings) | feat commit (recipe drops) | [029-grouped-settings-page](029-grouped-settings-page/spec.md) |
+| 044 | Auctionator buy list from orders | done | 1.5.0 (UI + local setting; protocol and schema unchanged) | release commit 1.5.0 | [044-auctionator-buy-list-from-orders](044-auctionator-buy-list-from-orders/spec.md) |
+| 045 | Mail order items | done | 1.5.0 (UI + local data `mailQueue`; protocol and schema unchanged) | release commit 1.5.0 | [045-mail-order-items](045-mail-order-items/spec.md) |
+| 046 | Order row actions and mailbox queue list | done | 1.5.0 (UI + local settings; protocol and schema unchanged) | release commit 1.5.0 | [046-order-row-actions-and-mailbox-queue-list](046-order-row-actions-and-mailbox-queue-list/spec.md) |

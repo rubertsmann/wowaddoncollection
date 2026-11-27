@@ -10,8 +10,14 @@ shared crafting-order board.
   (highest first) until you click another column title. Enchantments (no item) show their effect in the tooltip and
   the detail panel and are found by it in the search.
 * **Resizable window** – drag the grip at the bottom right; all lists grow with it and the size is remembered.
-* **Orders tab** – guild-wide board: requests, "I'll craft it" claims, done/cancel; everyone sees who claimed what.
-  **Craft** opens the order's profession with the recipe selected, a second click crafts the ordered quantity.
+* **Orders tab** – guild-wide board: requests, "I'll craft it" claims, done/cancel; everyone sees who claimed what. One
+  filter dropdown; right-click an order for its actions. **Craft** (top bar) opens the selected order's profession with
+  the recipe selected, a second click crafts the ordered quantity.
+* **Row actions** – icons on each order: mail the reagents to the crafter, mail the crafted item to the requester and,
+  with Auctionator installed, add the reagents to a collected buy list that Auctionator searches the next time you open
+  the auction house (**Subtract what I have** buys only what bags and bank are missing).
+* **Mail queue** – queued mails wait for a mailbox; a panel next to the inbox lists them. **Fill** fills one (recipient,
+  subject, exact amounts), you press Send; **Done** and **Delete** per mail. The **Mail** tab lists the queue too.
 * Hover a recipe icon in any list to see the recipe; click it to whisper the crafter/requester with the link typed in.
 * **Notifications** – new orders for your professions (and claims/completions of your own orders) show as a number on the
   minimap button, plus a sound and a chat line; screen message and taskbar flash optional. `/ps options` to configure.
@@ -93,11 +99,11 @@ The UI is available in English and German; profession and recipe names always fo
   |---|---|---|
   | `Core/Base/` | identity, shared helpers, logging, localization | Init, Utility, Log, Locale (+ `Locales/`) |
   | `Core/Debug/` | network trace, diagnostic report | Trace, Diagnostics |
-  | `Core/Data/` | SavedVariables schema and records | Store, Orders, Offers, Access, Reputation, FactionHints (static hint data), CraftCooldowns (timegated crafts + cooldown records), RecipeCheck, RecipeDrops, Feedback, Scanner |
+  | `Core/Data/` | SavedVariables schema and records | Store, Orders, BuyList (reagents of ticked orders), MailQueue (mails for orders), Offers, Access, Reputation, FactionHints (static hint data), CraftCooldowns (timegated crafts + cooldown records), RecipeCheck, RecipeDrops, Feedback, Scanner |
   | `Core/Net/` | addon-channel communication on LibGuildSync | Codec, Guard, Sync, Communication |
-  | `Core/Game/` | the WoW API boundary | Api, Events, Drops |
+  | `Core/Game/` | the WoW API boundary | Api, Events, Drops, Auctionator (optional bridge, the only file touching Auctionator), MailSender (fills the Send Mail form) |
   | `Core/View/` | view-models for the UI (pure) | Model, Names, ItemText, Notify |
-  | `UI/` | frames | Window, CooldownGrid, Alerts, DevProbe (dev build only) |
+  | `UI/` | frames | Window, MailPanel, CooldownGrid, Alerts, DevProbe and MailProbe (dev build only) |
   | `Libs/LibGuildSync/` | shared with GuildGames: transport, record-pull engine, names, log, trace, widgets | junction to `../libguildsync` in a working copy (`tools/deploy.ps1`), real files in the zip |
 
   Everything in `Core/` except `Core/Game/` is pure Lua and runs in the offline tests.

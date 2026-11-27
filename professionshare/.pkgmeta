@@ -1,5 +1,9 @@
 package-as: ProfessionShare
 
+# CurseForge relations (the same as tools/curseforge.json for tools/upload-curseforge.ps1)
+optional-dependencies:
+  - auctionator
+
 # the player-facing notes are the release text on GitHub (and CurseForge once the upload is automated)
 manual-changelog:
   filename: RELEASE_NOTES.md

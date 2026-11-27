@@ -2,8 +2,9 @@
 ## Title: ProfessionShare
 ## Notes: Shares guild members' professions, recipes and reagents, plus a crafting order board.
 ## Author: rubertsmann
-## Version: 1.4.3
+## Version: 1.5.0
 ## SavedVariables: ProfessionShareDB
+## OptionalDeps: Auctionator
 ## IconTexture: Interface\Icons\INV_Misc_Note_01
 ## X-Category: Professions
 ## X-Website: https://legacy.curseforge.com/wow/addons/guild-talentshare
@@ -29,6 +30,8 @@ Core\Data\Scanner.lua
 Core\Net\Codec.lua
 Core\Net\Guard.lua
 Core\Data\Orders.lua
+Core\Data\BuyList.lua
+Core\Data\MailQueue.lua
 Core\Data\Offers.lua
 Core\Data\Access.lua
 Core\Data\FactionHints.lua
@@ -47,12 +50,16 @@ Core\View\ItemText.lua
 Core\View\Notify.lua
 Core\Net\Communication.lua
 Core\Debug\Diagnostics.lua
+Core\Game\MailSender.lua
 Core\Game\Events.lua
 Core\Game\Drops.lua
+Core\Game\Auctionator.lua
 
 UI\SecureDock.lua
 UI\Table.lua
 UI\CooldownGrid.lua
 UI\Window.lua
+UI\MailPanel.lua
 UI\Alerts.lua
 UI\DevProbe.lua
+UI\MailProbe.lua
