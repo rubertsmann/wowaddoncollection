@@ -17,6 +17,7 @@ them.
 Guild members on an older version keep seeing and syncing orders as before; they just do not see the chat. Update to
 chat with them.
 
+# ProfessionShare 1.5.0
 
 The Orders tab is easier to use. One filter menu at the top replaces the "Show" and "Show finished" buttons, and you
 can right-click any order to claim it, withdraw, mark it done, cancel it or whisper. Each order also has small icons
