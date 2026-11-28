@@ -45,7 +45,8 @@ Ask the user only the questions whose answer changes where you look; log the res
 Use `superpowers:systematic-debugging`: no fix before the root cause is shown. Where to look, cheapest first:
 1. The code path end to end: find every caller (Grep), read the success path and every early return; note the order of
    side effects (state changed / item consumed **before** the feedback line is printed is a classic silent bug).
-2. The addon's own journal and dumps (GuildGames `/gg caught log <n> <filter>`, dev `/ggd ...`; ProfessionShare
+2. The addon's own journal and dumps (GuildGames `/gg caught log <n> <filter>`, e.g. `model` for every load and pose of a
+   3D model view (`UI/ModelView.lua`, journal area `caught.model.<area>`), dev `/ggd ...`; ProfessionShare
    `/ps debug`, `/ps export`), and the SavedVariables the user can send. Copy only the relevant lines into `evidence/`,
    names replaced.
 3. An offline reproduction: a failing test in the addon's suite (`luajit tests/run.lua`) with stubs that force the

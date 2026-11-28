@@ -86,7 +86,7 @@ local function setup(harness, options)
         TimeAgo = function() return "1m" end,
     } }
     addon.AzeCaughtPanel = { Build = function() end, Refresh = function() end }   -- not loaded here (tests/test_load.lua builds it)
-    for _, path in ipairs({ "UI/Helpers.lua", "UI/Animate.lua", "UI/GamesTab.lua", "UI/SlotMachine.lua", "UI/CompanionModel.lua", "UI/SurvivorArena.lua", "UI/RunnerView.lua" }) do assert(loadfile(path))("GuildGames", addon) end
+    for _, path in ipairs({ "UI/Helpers.lua", "UI/Animate.lua", "UI/GamesTab.lua", "UI/SlotMachine.lua", "UI/ModelView.lua", "UI/SurvivorArena.lua", "UI/RunnerView.lua" }) do assert(loadfile(path))("GuildGames", addon) end
     world.restore = function() for key, value in pairs(saved) do _G[key] = value end end
     return addon, world
 end
@@ -109,66 +109,74 @@ end
 return {
     ["games ui: models are framed by their size and framed again after the window scaled"] = function(harness)
         withSetup(harness, nil, function(addon, world)
-            local CompanionModel, Arena = addon.CompanionModel, addon.SurvivorArena
+            local ModelView, Arena = addon.ModelView, addon.SurvivorArena
             -- a drawn model whose client camera fits it at `distance`
             local distance, calls = 12, { refresh = 0, default = 0 }
-            local model = CompanionModel.Create(newWidget(world, "Frame"), 64, 64)
+            local view = ModelView.New(newWidget(world, "Frame"), { width = 64, height = 64 })
+            local model = view.frame
             model.SetDisplayInfo = function() end
             model.GetModelFileID = function() return 99 end
             model.GetCameraDistance = function() return distance end
             model.GetCameraTarget = function() return 0, 0, 0.5 end
             model.SetCamera = function() calls.default = calls.default + 1 end
             model.RefreshCamera = function() calls.refresh = calls.refresh + 1 end
-            harness.truthy(CompanionModel.Load(model, { npc = 1, disp = 5 }))
-            local height, _, _, tz, fitted = Arena.TopCamera(model)
+            harness.truthy(view.Show({ npc = 1, disp = 5 }))
+            local height, _, _, tz, fitted = Arena.TopCamera(view)
             harness.truthy(fitted); harness.equal(tz, 0.5)
             -- fitted distance x1.15, x1.25 further back, x2 for the padded frame
             local scale = 1.15 * 1.25 * 2
             harness.truthy(math.abs(height - 12 * scale) < 1e-9, "the top camera follows the fitted distance: " .. height)
             distance = 3
-            harness.truthy(math.abs(Arena.TopCamera(model) - 12 * scale) < 1e-9, "measured once per creature")
-            CompanionModel.Load(model, { npc = 2, disp = 6 })
-            harness.truthy(math.abs(Arena.TopCamera(model) - 3 * scale) < 1e-9, "a new creature is measured again")
+            harness.truthy(math.abs(Arena.TopCamera(view) - 12 * scale) < 1e-9, "measured once per creature")
+            view.Show({ npc = 2, disp = 6 })
+            harness.truthy(math.abs(Arena.TopCamera(view) - 3 * scale) < 1e-9, "a new creature is measured again")
             distance = 500
-            CompanionModel.Load(model, { npc = 3, disp = 7 })
-            harness.equal(Arena.TopCamera(model), 80 * 1.25 * 2, "clamped")
+            view.Show({ npc = 3, disp = 7 })
+            harness.equal(Arena.TopCamera(view), 80 * 1.25 * 2, "clamped")
             -- nothing usable from the client: the fixed height
             distance = 0 / 0
             model.GetCameraPosition = function() return "secret" end
-            CompanionModel.Load(model, { npc = 4, disp = 8 })
-            local fallbackHeight, _, _, _, fallbackFitted = Arena.TopCamera(model)
+            view.Show({ npc = 4, disp = 8 })
+            local fallbackHeight, _, _, _, fallbackFitted = Arena.TopCamera(view)
             harness.equal(fallbackHeight, 8, "the old fixed height, padded"); harness.equal(fallbackFitted, false)
             -- a padded frame: larger by the padding, the camera further out by it, the creature drawn at the same size
-            local padded = CompanionModel.Create(newWidget(world, "Frame"), 64, 64, { pad = 2, camera = 1.5 })
-            harness.equal(CompanionModel.StateOf(padded).camera, 3)
-            -- the window scaled: shown loaded models are framed again, hidden ones wait for their OnShow
-            CompanionModel.RefreshAll()
+            local padded = ModelView.New(newWidget(world, "Frame"), { width = 64, height = 64, pad = 2, camera = 1.5 })
+            local cameraScale
+            padded.frame.SetDisplayInfo = function() end
+            padded.frame.SetCamDistanceScale = function(_, value) cameraScale = value end
+            padded.Show({ npc = 1, disp = 5 })
+            harness.equal(cameraScale, 3)
+            -- the window scaled: shown loaded views are framed again, hidden ones wait for their OnShow
+            ModelView.RefreshAll()
             harness.equal(calls.refresh, 1)
             model.shown = false
-            CompanionModel.RefreshAll()
+            ModelView.RefreshAll()
             harness.equal(calls.refresh, 1, "a hidden model is left alone")
         end)
     end,
 
     ["games ui: a model's stand-in icon shows until the model is drawn (OnModelLoaded or a model file)"] = function(harness)
-        withSetup(harness, nil, function(addon)
-            local CompanionModel = addon.CompanionModel
+        withSetup(harness, nil, function(addon, world)
+            local ModelView = addon.ModelView
             local fileID = 0
-            local model = { SetDisplayInfo = function() end, GetModelFileID = function() return fileID end }
-            local state = CompanionModel.StateOf(model)
+            local view = ModelView.New(newWidget(world, "Frame"), { width = 64, height = 64, fallback = { icon = "x", size = 10 } })
+            view.frame.SetDisplayInfo = function() end
+            view.frame.GetModelFileID = function() return fileID end
             local shown
-            state.fallback = { SetShown = function(_, value) shown = value end }
-            harness.truthy(CompanionModel.Load(model, { npc = 1, disp = 5 }), "the client took the display id")
-            harness.equal(CompanionModel.IsRendered(model), false); harness.equal(shown, true, "the icon stands in")
+            view.fallback.SetShown = function(_, value) shown = value end
+            harness.truthy(view.Show({ npc = 1, disp = 5 }), "the client took the display id")
+            harness.equal(view.IsRendered(), false); harness.equal(shown, true, "the icon stands in")
             fileID = 123
-            harness.equal(CompanionModel.IsRendered(model), true, "a model file means it is drawn")
-            CompanionModel.Load(model, { npc = 2, disp = 6 })
-            harness.equal(state.rendered, true, "the same file id still counts for the new creature")
-            fileID = 0; state.rendered = false
-            CompanionModel.Load(model, { npc = 3, disp = 7 })
+            harness.equal(view.IsRendered(), true, "a model file means it is drawn")
+            view.Show({ npc = 2, disp = 6 })
+            harness.equal(view.rendered, true, "the same file id still counts for the new creature")
+            fileID = 0; view.rendered = false
+            view.Show({ npc = 3, disp = 7 })
             harness.equal(shown, true, "a new creature shows the icon until it is drawn")
-            CompanionModel.Load(model, nil)
-            harness.equal(state.loaded, false)
+            view.frame.scripts.OnModelLoaded(view.frame)
+            harness.equal(shown, false, "OnModelLoaded: drawn")
+            view.Show(nil)
+            harness.equal(view.loaded, false)
         end)
     end,
 

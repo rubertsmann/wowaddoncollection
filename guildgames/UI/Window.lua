@@ -289,7 +289,7 @@ local function placeWindow(left, top, scale)
     mainFrame:ClearAllPoints()
     mainFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left / scale, top / scale)
     -- the game models were fitted to their old drawn size
-    if changed and addon.CompanionModel then addon.CompanionModel.RefreshAll() end
+    if changed then addon.ModelView.RefreshAll() end
 end
 
 local function savePlacement()

@@ -15,7 +15,7 @@ spelling, build flag); the rest is checked in review.
 | `Core/Minigames/` | CoinFlip, Slots, Survivor, AzeCaught: the rules of each game, pure Lua | no |
 | `Core/View/` | Model: rows and texts for the UI, peer names escaped here | no |
 | `Core/Game/` | Api (every client read), Catcher (AZEcaught's client side), Events (event bus + game events) | yes |
-| `UI/` | Helpers (first), Animate, Window, the game panels | yes |
+| `UI/` | Helpers (first), Animate, ModelView (every 3D model), Window, the game panels | yes |
 
 Pure modules (everything but `Core/Game/`, `Core/Base/Init.lua` and `UI/`) are loaded by `tests/run.lua` and must not
 call the client. Clocks and random numbers are parameters, so a bug report can be replayed offline.
@@ -63,8 +63,37 @@ Before writing a small helper, look here first:
 | an icon that may be missing on this client | `addon.UIHelpers.SetTextureOr(texture, path, fallbackPathOrColor)` |
 | window settings (`db.ui`, safe before load) | `addon.UIHelpers.Settings()` |
 | a frame's level as a number | `addon.UIHelpers.FrameLevel(frame)` |
+| a 3D creature on screen | `addon.ModelView.New(parent, options)` (see "3D models" below) |
 
 A short local alias (`local money = addon.Model.MoneyText`) is fine; a second copy of the body is not.
+
+## 3D models (`UI/ModelView.lua`)
+
+Every creature model the player sees is a view made by `ModelView.New(parent, options)`, shaped like LibGuildSync's
+`Channel.New`: one documented options class (`ModelViewOptions`), an object whose functions are bound to it and called
+with a dot, state in plain fields.
+
+```lua
+local view = addon.ModelView.New(panel, { preset = "portrait", width = 104, height = 150, area = "preview" })
+view.frame:SetPoint("TOPRIGHT", -2, -46)          -- the model frame: anchoring and Animate effects
+view.Show({ npc = npcID, disp = displayID })      -- loads once per creature; nil clears
+view.Play("attack", { restart = true, back = 0.45 })   -- an ANIMATION key, back to the idle pose after 0.45 s
+view.Emote("pet", "care")                         -- an emote, then idle; no ambient emote meanwhile
+view.Die(); view.Revive()                         -- the death once, then lying, until revived
+```
+
+- Poses and actions are keys of `ModelView.ANIMATION` (one catalogue, one pick rule `ModelView.Pick`: the first id the
+  model has; the first when the client cannot tell; the last when it has none of them).
+- `preset = "portrait"`: the look-at views (AZEcaught, arena, team dialog): DressUpModel, full body, turn and zoom.
+  Game actors (Companion Dash, Survivor) use the default PlayerModel with `pad`, `fallback`, `afterLoad`.
+- `companion = true`: the creature is a companion record: asleep pose while it sleeps, ambient emotes from
+  `view.Tick()`, `view.Reload(reason)` when the panel shows. The max view and the mini view share this.
+- `area` journals loads and poses as `caught.model.<area>` (`/gg caught log 20 model`); `quietPoses` keeps a busy view
+  (the arena replay) to its loads.
+- No other file calls model frame methods for a shown model; `tests/test_model_view.lua` lints it. The only
+  exceptions are the functions with the hidden models that read a unit's look (`Catcher.CaptureDisplay` and its
+  helpers, `Api.IdentityProbe`, `Api.GenderProbe`) and the dev probes in `UI/DevProbe.lua`. A view lives for the session:
+  make it once per place (at Build time), not per call.
 
 ## Module guards (`if addon.X then`)
 

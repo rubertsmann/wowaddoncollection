@@ -168,24 +168,18 @@ return {
                 harness.truthy(pcall(addon.UI.ToggleSidebar)); harness.equal(addon.db.ui.sidebarOpen, false)
                 -- AZEcaught: the panel builds, every view, care, the commands and the ticker run without an error
                 harness.truthy(addon.AzeCaughtPanel.widgets.model, "the AZEcaught panel was not built (see Log: caught.ui)")
-                -- the camera (the model was sometimes cut off): full body, zoomed out, wheel per NPC
+                -- every model of the panel, the pet view, the arena and the team dialog is a ModelView view
                 do
-                    local Panel, calls = addon.AzeCaughtPanel, {}
-                    local fake = { npc = 4711,
-                        SetPortraitZoom = function(_, value) calls.portrait = value end,
-                        SetPosition = function(_, x, y, z) calls.position = x + y + z end,
-                        SetCamDistanceScale = function(_, value) calls.distance = value end }
-                    local applied = Panel.FitCamera(fake)
-                    harness.equal(calls.portrait, 0, "full body"); harness.equal(calls.position, 0)
-                    harness.truthy(calls.distance > 1, "farther than the client's own fit: " .. tostring(calls.distance))
-                    harness.truthy(applied.camera and applied.portrait)
-                    local fitted = calls.distance
-                    Panel.ZoomModel(fake, -1); harness.truthy(calls.distance > fitted, "wheel down zooms out")
-                    for _ = 1, 50 do Panel.ZoomModel(fake, -1) end; harness.equal(calls.distance, 4, "limit")
-                    Panel.FitCamera(fake); harness.equal(calls.distance, 4, "remembered for this NPC")
-                    fake.npc = 1; Panel.FitCamera(fake); harness.equal(calls.distance, fitted, "other NPCs keep the default")
-                    harness.truthy(Panel.FitCamera({}).camera == false, "a client without the calls is fine")
-                    Panel.zoomByNpc = {}
+                    local Panel = addon.AzeCaughtPanel
+                    for _, key in ipairs({ "modelView", "previewView", "guildView" }) do
+                        local view = Panel.widgets[key]
+                        harness.truthy(view and view.frame and view.Show, key .. " is a model view")
+                        harness.equal(view.options.preset, "portrait", key .. " uses the portrait preset")
+                    end
+                    harness.equal(Panel.widgets.modelView.frame, Panel.widgets.model, "the frame is the view's")
+                    harness.truthy(Panel.widgets.modelView.options.companion, "the companion view follows the companion")
+                    harness.truthy(addon.PetView.widgets.modelView.options.companion, "so does the pet view")
+                    harness.equal(addon.PetView.widgets.modelView.options.turn, false, "the pet view keeps its clicks")
                 end
                 addon.GamesTab.SelectGame("caught")
                 harness.equal(addon.GamesTab.state.game, "caught")
@@ -281,31 +275,26 @@ return {
                 -- the model returns to idle after an action and whenever the panel shows
                 do
                     local Panel = addon.AzeCaughtPanel
-                    local played, scripts = {}, {}
-                    local fake = setmetatable({ HasAnimation = function() return true end,
-                        SetAnimation = function(_, animationID) played[#played + 1] = animationID end,
-                        SetScript = function(_, name, handler) scripts[name] = handler end,
-                        GetScript = function(_, name) return scripts[name] end }, { __index = Panel.widgets.model })
-                    local realModel, realAfter = Panel.widgets.model, C_Timer.After
+                    local view = Panel.widgets.modelView
+                    local played = {}
+                    local frame = view.frame
+                    rawset(frame, "HasAnimation", function() return true end)
+                    rawset(frame, "SetAnimation", function(_, animationID) played[#played + 1] = animationID end)
+                    local realAfter = C_Timer.After
                     local timers = {}
                     C_Timer.After = function(_, callback) timers[#timers + 1] = callback end
-                    Panel.widgets.model = fake
-                    Panel.PrepareModel(fake, Panel.IdleOfCompanion)
                     local companion = addon.AzeCaught.Active()
                     companion.asleep = nil; companion.affection = 80
+                    view.Show(companion)
                     Panel.Care("pet")
                     harness.truthy(played[#played] ~= 0, "the action plays its emote")
                     for _, callback in ipairs(timers) do callback() end
                     harness.equal(played[#played], 0, "back to idle after the emote")
                     played = {}
-                    harness.truthy(scripts.OnModelLoaded, "the model goes idle once it has loaded")
-                    scripts.OnModelLoaded(fake)
-                    harness.equal(played[#played], 0, "idle after loading")
-                    played = {}
-                    Panel.ShowIdle("shown")
+                    view.Reload("shown")
                     harness.equal(played[#played], 0, "idle when the menu shows")
                     companion.asleep = 100; played = {}
-                    Panel.ShowIdle("shown")
+                    view.Idle("shown")
                     harness.truthy(played[#played] ~= 0, "a sleeping companion shows its sleep animation, not the stand")
                     companion.asleep = nil
                     -- an older timer does not override a newer action
@@ -316,7 +305,8 @@ return {
                     played = {}
                     stale()
                     harness.equal(#played, 0, "a stale timer is ignored")
-                    Panel.widgets.model, C_Timer.After = realModel, realAfter
+                    rawset(frame, "HasAnimation", nil); rawset(frame, "SetAnimation", nil)
+                    C_Timer.After = realAfter
                 end
                 addon.Catcher.Start(); addon.Catcher.OnTick(); addon.Catcher.PollThrows(); addon.Catcher.CheckDeath("target"); addon.Catcher.RefreshIcons()
                 -- a catch logs the dump taken at the throw
@@ -615,18 +605,21 @@ return {
                         harness.truthy(okWatch and events and events > 0, "replay: " .. tostring(events))
                         -- the models act on every step: attack / hurt, the death once
                         local played = {}
-                        local savedPlay = addon.ArenaView.PlayAnimation
-                        addon.ArenaView.PlayAnimation = function(model, key, back) played[#played + 1] = key return savedPlay(model, key, back) end
+                        local savedPlay = addon.ModelView.Play
+                        addon.ModelView.Play = function(view, key, options) played[#played + 1] = tostring(key) return savedPlay(view, key, options) end
                         for _ = 1, 5 do harness.truthy(pcall(addon.ArenaView.Step)) end
-                        addon.ArenaView.PlayAnimation = savedPlay
+                        addon.ModelView.Play = savedPlay
                         local acted = false
                         for _, key in ipairs(played) do if key == "attack" or key == "cast" or key == "hurt" or key == "critical" then acted = true end end
                         harness.truthy(acted, "the models act: " .. table.concat(played, ","))
-                        local model = addon.ArenaView.widgets.replayLeft.model
-                        addon.ArenaView.ResetModel(model)
-                        harness.truthy(addon.ArenaView.PlayDeath(model), "dies")
-                        harness.truthy(not addon.ArenaView.PlayDeath(model), "dies once")
-                        harness.equal(addon.ArenaView.PlayAnimation(model, "hurt", 0.4), nil, "a dead model stays dead")
+                        local view = addon.ArenaView.widgets.replayLeft.view
+                        view.Revive()
+                        harness.truthy(view.Die(), "dies")
+                        harness.truthy(not view.Die(), "dies once")
+                        harness.equal(view.Play("hurt", { back = 0.4 }), nil, "a dead model stays dead")
+                        -- the same fight watched again: the fighter stands again
+                        harness.truthy(pcall(addon.ArenaView.Watch, "Foe-R#" .. start))
+                        harness.equal(view.dead, false, "a re-watched fighter is alive")
                         harness.truthy(pcall(addon.ArenaView.FinishReplay)); harness.truthy(pcall(addon.ArenaView.StopReplay))
                         local okTick, tickError = pcall(addon.Catcher.ArenaTick, true)
                         harness.truthy(okTick, "arena tick: " .. tostring(tickError))

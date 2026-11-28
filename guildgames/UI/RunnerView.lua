@@ -157,9 +157,9 @@ local function slotFor(obstacle, run)
     if not free then return nil end
     free.id = obstacle.id
     local monster = run.pool[obstacle.pick]
-    addon.CompanionModel.SetFallbackIcon(free.model, obstacle.fly and FLYER_ICON or GROUND_ICON, true)
-    addon.CompanionModel.Load(free.model, monster)
-    addon.CompanionModel.Play(free.model, addon.CompanionModel.ANIMATION.run, true)
+    free.view.SetFallbackIcon(obstacle.fly and FLYER_ICON or GROUND_ICON, true)
+    free.view.Show(monster)
+    free.view.Play("run", { restart = true })
     free.name = monster and monster.n or "?"
     return free
 end
@@ -220,9 +220,9 @@ function RunnerView.Refresh()
     paintItems()
     if not RunnerView.state.run then
         widgets.hintText:SetShown(not locked)
-        local loaded = addon.CompanionModel.Load(widgets.runner, companion)
+        local loaded = widgets.runnerView.Show(companion)
         widgets.runner:SetShown(loaded); widgets.runnerShadow:SetShown(loaded)
-        if loaded then addon.CompanionModel.Play(widgets.runner, addon.CompanionModel.ANIMATION.run) end
+        if loaded then widgets.runnerView.Play("run") end
     end
 end
 
@@ -267,7 +267,7 @@ local function finish(run)
     local result = Runner.Finish(run, addon.Utility.Me(), addon.Utility.Now())
     result.item = run.item
     state.lastResult = result
-    addon.CompanionModel.Play(widgets.runner, addon.CompanionModel.ANIMATION.hurt, true)
+    widgets.runnerView.Play("hurt", { restart = true })
     addon.Animate.Flash("runnerCrash", widgets.crashFlash, 0.35, 0.35)
     addon.Api.PlaySoundNamed(result.gold > 0 and { "LOOT_WINDOW_COIN_SOUND" } or { "IG_MAINMENU_OPTION_CHECKBOX_OFF" })
     showResult(result, crashed and crashed.n)
@@ -302,8 +302,8 @@ function RunnerView.Start()
     widgets.resultText:SetText(""); widgets.hintText:Hide()
     for _, slot in ipairs(widgets.obstacles) do slot.id = nil; slot.model:Hide(); slot.shadow:Hide() end
     setKeyboard(true)
-    addon.CompanionModel.Load(widgets.runner, companion)
-    addon.CompanionModel.Play(widgets.runner, addon.CompanionModel.ANIMATION.run, true)
+    widgets.runnerView.Show(companion)
+    widgets.runnerView.Play("run", { restart = true })
     addon.GamesTab.SetBusy(true)
     addon.Api.PlaySoundNamed({ "IG_MAINMENU_OPTION_CHECKBOX_ON" })
     addon.Log.Debug("games.runner", "a run started", { pool = #pool })
@@ -312,11 +312,10 @@ end
 
 ---@param event table
 local function handleEvent(event)
-    local CompanionModel = addon.CompanionModel
     if event.kind == "jump" then
-        CompanionModel.Play(widgets.runner, CompanionModel.ANIMATION.jump, true)
+        widgets.runnerView.Play("jump", { restart = true })
     elseif event.kind == "land" then
-        CompanionModel.Play(widgets.runner, CompanionModel.ANIMATION.run, true)
+        widgets.runnerView.Play("run", { restart = true })
     elseif event.kind == "shield" then
         addon.Animate.FloatText("runner", widgets.floatText, widgets.runner, 0, 20, Text["Shield!"], { 0.45, 0.75, 1 })
         addon.Animate.Flash("runnerCrash", widgets.crashFlash, 0.2, 0.2)
@@ -406,17 +405,18 @@ function RunnerView.Build(panel)
         local shadow = actors:CreateTexture(nil, "ARTWORK")
         addon.UIHelpers.SetTextureOr(shadow, DISC_TEXTURE, { 0, 0, 0 })
         shadow:SetVertexColor(0, 0, 0); shadow:SetSize(Runner.BOX, 8); shadow:Hide()
-        local model = addon.CompanionModel.Create(actors, MODEL_SIZE, MODEL_SIZE, { facing = MONSTER_FACING, pad = MODEL_PAD,
-            fallback = { icon = GROUND_ICON, size = Runner.BOX - 4, y = 8, mirror = true } })
-        model:Hide()
-        widgets.obstacles[index] = { model = model, shadow = shadow }
+        local view = addon.ModelView.New(actors, { width = MODEL_SIZE, height = MODEL_SIZE, facing = MONSTER_FACING, pad = MODEL_PAD,
+            idle = "run", fallback = { icon = GROUND_ICON, size = Runner.BOX - 4, y = 8, mirror = true } })
+        view.frame:Hide()
+        widgets.obstacles[index] = { view = view, model = view.frame, shadow = shadow }
     end
     widgets.runnerShadow = actors:CreateTexture(nil, "ARTWORK")
     addon.UIHelpers.SetTextureOr(widgets.runnerShadow, DISC_TEXTURE, { 0, 0, 0 })
     widgets.runnerShadow:SetVertexColor(0, 0, 0); widgets.runnerShadow:SetSize(Runner.RUNNER_WIDTH + 6, 8)
     widgets.runnerShadow:SetPoint("CENTER", area, "BOTTOMLEFT", Runner.RUNNER_X + Runner.RUNNER_WIDTH / 2, GROUND_Y - 2)
-    widgets.runner = addon.CompanionModel.Create(actors, MODEL_SIZE, MODEL_SIZE, { facing = RUNNER_FACING, pad = MODEL_PAD,
-        fallback = { icon = RUNNER_ICON, size = Runner.RUNNER_WIDTH, y = 6 } })
+    widgets.runnerView = addon.ModelView.New(actors, { width = MODEL_SIZE, height = MODEL_SIZE, facing = RUNNER_FACING, pad = MODEL_PAD,
+        idle = "run", fallback = { icon = RUNNER_ICON, size = Runner.RUNNER_WIDTH, y = 6 } })
+    widgets.runner = widgets.runnerView.frame
     widgets.runner:SetFrameLevel(addon.UIHelpers.FrameLevel(actors) + 2)
 
     -- overlay: distance, hint, lock, crash flash, floating text

@@ -5,7 +5,7 @@ description: Plan, document and verify a new feature for any addon in the wowadd
 
 # Feature workflow (plan -> build -> verify -> document)
 
-**Monorepo:** git root is `wowaddons/`; every addon folder has its own `features/` (paths below are relative to the addon folder). Feature ids are unique across all addons (the scaffold script scans every `<addon>/features`). Run the script from the root with `-Root <addon>`. The project quick reference at the bottom is ProfessionShare's; for GuildGames read `guildgames/README.md` (tests `luajit tests/run.lua`, `/gg`, `/ggd`) and `guildgames/docs/protocol.md`.
+**Monorepo:** git root is `wowaddons/`; every addon folder has its own `features/` (paths below are relative to the addon folder). Feature ids are unique across all addons (the scaffold script scans every `<addon>/features`). Run the script from the root with `-Root <addon>`. The project quick reference at the bottom is ProfessionShare's; for GuildGames read `guildgames/README.md` (tests `luajit tests/run.lua`, `/gg`, `/ggd`), `guildgames/docs/protocol.md` and `guildgames/docs/coding-conventions.md` (one helper per job; a feature that shows a 3D creature uses `UI/ModelView.lua` views, never its own model frame: `tests/test_model_view.lua` fails otherwise).
 
 Bugs (the code does something other than its spec/doc says, errors, or stays silent) are tracked with the sister
 skill `bug-workflow` in `<addon>/bugs/`, not here. A bug found while verifying a feature: open it there and write

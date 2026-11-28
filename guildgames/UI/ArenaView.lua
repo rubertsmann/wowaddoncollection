@@ -775,86 +775,13 @@ end
 
 local function sideWidgets(side) return side == "a" and widgets.replayLeft or widgets.replayRight end
 
--- Model animations in the replay: attack / getting hurt on each damage, the death once at 0 health.
--- AnimationData ids, first one the model has wins (no HasAnimation on the client: the first is tried).
-local ANIMATION = {
-    attack = { 16, 17, 18, 19 },          -- AttackUnarmed, Attack1H, Attack2H, Attack2HL
-    cast = { 52, 51, 16, 17 },            -- SpellCastOmni, SpellCastDirected, else an attack (the ability)
-    hurt = { 9, 8 },                      -- CombatWound, StandWound
-    critical = { 10, 9, 8 },              -- CombatCritical
-    dodge = { 20, 11 },                   -- ParryUnarmed, ShuffleLeft
-    stun = { 14, 9 },                     -- Stun
-    ready = { 26, 0 },                    -- ReadyUnarmed, Stand
-    death = { 1 },                        -- Death
-    dead = { 6 },                         -- Dead (lying)
-}
-ArenaView.ANIMATION = ANIMATION
-local ACTION_SECONDS, DEATH_SECONDS = 0.45, 1.1
--- per model: { dead = bool, token = n } (a side table: nothing is added to the frame)
-local modelState = setmetatable({}, { __mode = "k" })
-local function stateOf(model) modelState[model] = modelState[model] or { token = 0 } return modelState[model] end
----@param model table
-function ArenaView.ResetModel(model) if model then modelState[model] = { token = 0 } end end
-
----@param model table
----@param list integer[]
----@return integer|nil
-local function pickAnimation(model, list)
-    if not model.HasAnimation then return list[1] end
-    for _, animationID in ipairs(list) do
-        local ok, has = pcall(model.HasAnimation, model, animationID)
-        if ok and has then return animationID end
-    end
-    return nil
-end
-
--- Plays `key` on a replay model, then back to the ready stance after `back` seconds (a newer call wins). A dead
--- model stays dead. Returns the animation id played (tests).
----@param model table
----@param key string
----@param back? number
----@return integer|nil
-function ArenaView.PlayAnimation(model, key, back)
-    if not model or not model.SetAnimation or stateOf(model).dead then return nil end
-    local animationID = pickAnimation(model, ANIMATION[key])
-    if not animationID then return nil end
-    pcall(model.SetAnimation, model, animationID)
-    local state = stateOf(model)
-    state.token = state.token + 1
-    local token = state.token
-    if back and C_Timer and C_Timer.After then
-        C_Timer.After(back, function()
-            if state.token ~= token or state.dead then return end
-            local ready = pickAnimation(model, ANIMATION.ready)
-            if ready then pcall(model.SetAnimation, model, ready) end
-        end)
-    end
-    return animationID
-end
-
--- The death, once: Death, then it stays lying (Dead). Returns true the first time.
----@param model table
----@return boolean
-function ArenaView.PlayDeath(model)
-    if not model or stateOf(model).dead then return false end
-    ArenaView.PlayAnimation(model, "death")
-    local state = stateOf(model)
-    state.dead = true
-    local token = state.token
-    if C_Timer and C_Timer.After then
-        C_Timer.After(DEATH_SECONDS, function()
-            if not state.dead or state.token ~= token then return end
-            local lying = pickAnimation(model, ANIMATION.dead)
-            if lying then pcall(model.SetAnimation, model, lying) end
-        end)
-    end
-    return true
-end
+-- the replay's actions return to the ready stance after this long
+local ACTION_SECONDS = 0.45
 
 -- The target side reacts: dies at 0 health (once), else hurt (critical: the bigger flinch).
 local function react(side, health, critical)
-    local model = sideWidgets(side).model
-    if health <= 0 then ArenaView.PlayDeath(model) else ArenaView.PlayAnimation(model, critical and "critical" or "hurt", ACTION_SECONDS) end
+    local view = sideWidgets(side).view
+    if health <= 0 then view.Die() else view.Play(critical and "critical" or "hurt", { restart = true, back = ACTION_SECONDS }) end
 end
 
 ---@param parent table
@@ -867,7 +794,9 @@ local function buildReplay(parent)
     floor:SetColorTexture(1, 0.82, 0.2, 0.5)
     for _, side in ipairs({ "a", "b" }) do
         local part = {}
-        part.model = addon.AzeCaughtPanel.CreateModel(replay, 132, 170)
+        part.view = addon.ModelView.New(replay, { preset = "portrait", width = 132, height = 170, idle = "ready", area = "replay",
+            quietPoses = true })
+        part.model = part.view.frame
         part.model:SetPoint(side == "a" and "TOPLEFT" or "TOPRIGHT", side == "a" and 6 or -6, -60)
         part.name = Widgets.CreateFontString(replay, "GameFontNormal", side == "a" and "LEFT" or "RIGHT")
         part.name:SetPoint(side == "a" and "TOPLEFT" or "TOPRIGHT", side == "a" and 8 or -8, -10); part.name:SetWidth(140)
@@ -945,10 +874,9 @@ local function showFighter(fight, side, slot)
     part.slot = slot
     addon.UI.Widgets.FitText(part.name, addon.Utility.Escape(addon.AzeCaught.ShownName(fighter)), 0.7)
     part.nameHover.fighter = fighter
-    addon.AzeCaughtPanel.ShowModel(part.model, { npc = fighter.npc, disp = fighter.disp }, "replay")
-    if part.model.SetFacing then pcall(part.model.SetFacing, part.model, side == "a" and 0.9 or -0.9) end
-    ArenaView.ResetModel(part.model)
-    ArenaView.PlayAnimation(part.model, "ready")
+    part.view.Show({ npc = fighter.npc, disp = fighter.disp })
+    part.view.Face(side == "a" and 0.9 or -0.9)
+    part.view.Revive()   -- a fighter watched again stands up
     for index, dot in ipairs(part.dots) do
         dot:SetShown(index <= #team)
         if index < slot then dot:SetColorTexture(0.25, 0.22, 0.25, 1)
@@ -1009,17 +937,17 @@ function ArenaView.Step()
     -- the models act: the attacker strikes (its ability: a cast), the target flinches or dies
     local targetHealth = targetSide == "a" and event.ha or event.hb
     if event.k == "hit" or event.k == "crit" then
-        ArenaView.PlayAnimation(actor.model, event.ab and "cast" or "attack", ACTION_SECONDS)
+        actor.view.Play(event.ab and "cast" or "attack", { restart = true, back = ACTION_SECONDS })
         react(targetSide, targetHealth, event.k == "crit")
     elseif event.k == "dot" then
         react(targetSide, targetHealth, false)
     elseif event.k == "dodge" then
-        ArenaView.PlayAnimation(actor.model, "attack", ACTION_SECONDS)
-        ArenaView.PlayAnimation(target.model, "dodge", ACTION_SECONDS)
+        actor.view.Play("attack", { restart = true, back = ACTION_SECONDS })
+        target.view.Play("dodge", { restart = true, back = ACTION_SECONDS })
     elseif event.k == "stun" then
-        ArenaView.PlayAnimation(actor.model, "stun", ACTION_SECONDS * 2)
+        actor.view.Play("stun", { restart = true, back = ACTION_SECONDS * 2 })
     elseif event.k == "shield" then
-        ArenaView.PlayAnimation(actor.model, "cast", ACTION_SECONDS)
+        actor.view.Play("cast", { restart = true, back = ACTION_SECONDS })
     end
 end
 
@@ -1042,7 +970,7 @@ function ArenaView.FinishReplay()
     local winner = { n = short(winnerSide == "a" and replay.fight.a or replay.fight.b) }
     if last and replay.result.reason ~= "time" then   -- skipped to the end: the knocked-out side dies too (once)
         local loserSide = winnerSide == "a" and "b" or "a"
-        if (loserSide == "a" and last.ha or last.hb) <= 0 then ArenaView.PlayDeath(sideWidgets(loserSide).model) end
+        if (loserSide == "a" and last.ha or last.hb) <= 0 then sideWidgets(loserSide).view.Die() end
     end
     widgets.replayLine:SetText("|cffffd100" .. Format(Text["{name}'s team wins!"], { name = addon.Utility.ShortText(winner.n, 24) }) .. "|r"
         .. (replay.result.reason == "time" and (" |cff999999" .. Text["(on points)"] .. "|r") or ""))

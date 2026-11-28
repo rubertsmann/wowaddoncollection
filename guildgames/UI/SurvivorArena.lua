@@ -44,8 +44,8 @@ local FACING_OFFSET_TOP, FACING_OFFSET_SIDE = -math.pi / 2, math.pi / 2
 local ATTACK_EVENTS = { shot = true, zap = true, cleave = true, nova = true, blast = true }
 local ATTACK_SECONDS, ATTACK_GAP = 0.45, 0.3
 local GRASS_DISC = "Interface\\AddOns\\" .. addonName .. "\\UI\\Textures\\Disc"
----@type { topView: boolean, attackReadyAt: number, attackUntil: number|nil, cameraHeight: number|nil, fitted: boolean|nil, rawDistance: number|nil }
-local petState = { topView = false, attackReadyAt = 0, attackUntil = nil }
+---@type { topView: boolean, attackReadyAt: number, cameraHeight: number|nil, fitted: boolean|nil, rawDistance: number|nil }
+local petState = { topView = false, attackReadyAt = 0 }
 
 ---@class SurvivorArenaState
 ---@field run SurvivorRun|nil the open run
@@ -348,12 +348,12 @@ end
 -- The camera height above the companion: the distance the client chose to fit it from the side (it grows with the
 -- creature), so a big creature fits the tower spot like a small one. The fixed height while that is unknown. Both are
 -- scaled by the frame's padding, so the drawn size stays and a big creature has room instead of being cut off.
----@param model table
+---@param view ModelViewObject
 ---@return number height
 ---@return number tx, number ty, number tz
 ---@return boolean fitted
-function SurvivorArena.TopCamera(model)
-    local distance, tx, ty, tz = addon.CompanionModel.FitDistance(model)
+function SurvivorArena.TopCamera(view)
+    local distance, tx, ty, tz = view.FitDistance()
     petState.rawDistance = distance
     if not distance then return TOP_CAMERA_HEIGHT * PET_PAD, 0, 0, 0, false end
     local height = math.max(TOP_CAMERA_MINIMUM, math.min(TOP_CAMERA_MAXIMUM, distance * TOP_CAMERA_FIT))
@@ -361,34 +361,32 @@ function SurvivorArena.TopCamera(model)
 end
 
 -- Tries to look at the model from straight above (a custom camera). Returns true when the client allowed it.
----@param model table
+---@param view ModelViewObject
 ---@return boolean
-local function lookFromAbove(model)
-    if not (model.MakeCurrentCameraCustom and model.SetCameraPosition and model.SetCameraTarget) then return false end
-    local height, tx, ty, tz, fitted = SurvivorArena.TopCamera(model)
+local function lookFromAbove(view)
+    local height, tx, ty, tz, fitted = SurvivorArena.TopCamera(view)
     petState.cameraHeight, petState.fitted = height, fitted
-    return pcall(model.MakeCurrentCameraCustom, model) and pcall(model.SetCameraTarget, model, tx, ty, tz)
-        and pcall(model.SetCameraPosition, model, tx + 0.01, ty, tz + height) or false
+    return view.LookFrom({ tx + 0.01, ty, tz + height }, { tx, ty, tz })
 end
 
 -- Shows my companion instead of the tower icon (the icon stays without a companion or when no model loads).
 function SurvivorArena.RefreshPet()
-    local model = widgets.pet
-    if not model then return end
-    local loaded = addon.CompanionModel.Load(model, addon.AzeCaught.Active())
-    model:SetShown(loaded)
+    local view = widgets.petView
+    if not view then return end
+    local loaded = view.Show(addon.AzeCaught.Active())
+    view.frame:SetShown(loaded)
     widgets.tower:SetShown(not loaded)
-    if loaded then addon.CompanionModel.Play(model, addon.CompanionModel.ANIMATION.ready) end
+    if loaded then view.Play("ready") end
 end
 
 -- Turns the companion to the nearest alive monster and plays an attack (at most one every ATTACK_GAP seconds).
 ---@param run SurvivorRun
 local function petAttack(run)
-    local model = widgets.pet
-    if not model or not model:IsShown() then return end
+    local view = widgets.petView
+    if not view or not view.frame:IsShown() then return end
     local clock = addon.Api.Clock()
     if clock < petState.attackReadyAt then return end
-    petState.attackReadyAt, petState.attackUntil = clock + ATTACK_GAP, clock + ATTACK_SECONDS
+    petState.attackReadyAt = clock + ATTACK_GAP
     local nearest, nearestDistance = nil, math.huge
     for _, enemy in ipairs(run.enemies) do
         local distance = enemy.x * enemy.x + enemy.y * enemy.y
@@ -396,18 +394,9 @@ local function petAttack(run)
     end
     if nearest then
         local angle = math.atan2(nearest.y, nearest.x)
-        addon.CompanionModel.Face(model, petState.topView and (angle + FACING_OFFSET_TOP) or (FACING_OFFSET_SIDE - angle))
+        view.Face(petState.topView and (angle + FACING_OFFSET_TOP) or (FACING_OFFSET_SIDE - angle))
     end
-    addon.CompanionModel.Play(model, addon.CompanionModel.ANIMATION.attack, true)
-end
-
--- back to the ready stance once an attack has played
-local function petSettle()
-    local model = widgets.pet
-    if model and petState.attackUntil and addon.Api.Clock() >= petState.attackUntil then
-        petState.attackUntil = nil
-        addon.CompanionModel.Play(model, addon.CompanionModel.ANIMATION.ready)
-    end
+    view.Play("attack", { restart = true, back = ATTACK_SECONDS })   -- then the ready stance (the view's idle pose)
 end
 
 -- The start button's look: start, give up (a run is open) or cash out (an endless run reached a minute).
@@ -639,7 +628,6 @@ function SurvivorArena.Update(elapsedSeconds)
         addon.Survivor.Advance(run, elapsedSeconds * addon.Animate.speed)
         for _, event in ipairs(addon.Survivor.TakeEvents(run)) do handleEvent(event) end
         drawEnemies(run); drawProjectiles(run); drawHud(run)
-        petSettle()
         if run.finished then
             finish(run)
         elseif run.choices and not hadChoices then
@@ -870,13 +858,14 @@ function SurvivorArena.Build(panel)
     addon.UIHelpers.SetTextureOr(widgets.tower, addon.Survivor.TOWER_ICON, { 1, 0.85, 0.3 })
     widgets.tower:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     addon.GamesTab.MaskCircle(towerLayer, widgets.tower)
-    widgets.pet = addon.CompanionModel.Create(towerLayer, PET_MODEL_SIZE, PET_MODEL_SIZE, { pad = PET_PAD,
+    widgets.petView = addon.ModelView.New(towerLayer, { width = PET_MODEL_SIZE, height = PET_MODEL_SIZE, pad = PET_PAD, idle = "ready",
         fallback = { icon = PET_FALLBACK_ICON, size = TOWER_SIZE, y = (PET_MODEL_SIZE - TOWER_SIZE) / 2 },
-        afterLoad = function(model)
-        petState.topView = lookFromAbove(model)
+        afterLoad = function(view)
+        petState.topView = lookFromAbove(view)
         addon.AzeCaught.Journal("DEBUG", "model.survivor", "the survivor companion was framed",
             { topView = petState.topView, height = petState.cameraHeight, fitted = petState.fitted, distance = petState.rawDistance })
     end })
+    widgets.pet = widgets.petView.frame
     widgets.pet:SetPoint("CENTER", arena, "CENTER", 0, 4)
     widgets.pet:Hide()
     local hpBack = towerLayer:CreateTexture(nil, "ARTWORK", nil, 1)

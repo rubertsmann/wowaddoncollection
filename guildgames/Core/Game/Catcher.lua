@@ -1261,34 +1261,37 @@ end
 
 -- /gg caught model: what the game models can do here (the runner's animations, the camera for the Survivor top view).
 -- Shows the companion from above in the middle of the screen for 15 s (screenshot it); results go to chat and journal.
+local probeView   -- the model view of /gg caught model (made once, shown again on every call)
+local probeShownCount = 0   -- only the latest call's timer hides it
 function commands.model()
     local companion = AzeCaught.Active()
     if not companion then printLine("model: no companion") return end
-    local frame = CreateFrame("Frame", nil, UIParent)
-    frame:SetSize(160, 160); frame:SetPoint("CENTER", UIParent, "CENTER", 0, 80); frame:SetFrameStrata("DIALOG")
-    local plate = frame:CreateTexture(nil, "BACKGROUND"); plate:SetAllPoints(); plate:SetColorTexture(0, 0, 0, 0.6)
-    local model = addon.CompanionModel.Create(frame, 160, 160)
-    model:SetAllPoints()
-    local loaded = addon.CompanionModel.Load(model, companion)
-    local methods = {}
-    for _, name in ipairs({ "HasAnimation", "SetAnimation", "MakeCurrentCameraCustom", "SetCameraPosition", "SetCameraTarget",
-        "SetCameraFacing", "SetPitch", "SetModelScale", "SetCamDistanceScale" }) do
-        methods[#methods + 1] = name .. "=" .. tostring(model[name] ~= nil)
+    if not probeView then
+        local frame = CreateFrame("Frame", nil, UIParent)
+        frame:SetSize(160, 160); frame:SetPoint("CENTER", UIParent, "CENTER", 0, 80); frame:SetFrameStrata("DIALOG")
+        local plate = frame:CreateTexture(nil, "BACKGROUND"); plate:SetAllPoints(); plate:SetColorTexture(0, 0, 0, 0.6)
+        probeView = addon.ModelView.New(frame, { width = 160, height = 160 })
+        probeView.frame:SetAllPoints()
     end
-    local camera = model.MakeCurrentCameraCustom ~= nil and pcall(model.MakeCurrentCameraCustom, model)
-        and pcall(model.SetCameraTarget, model, 0, 0, 0) and pcall(model.SetCameraPosition, model, 0.01, 0, 4)
+    local view, frame = probeView, probeView.frame:GetParent()
+    frame:Show()
+    view.Forget()
+    local loaded = view.Show(companion)
+    local methods = view.Capabilities()
+    local camera = view.LookFrom({ 0.01, 0, 4 }, { 0, 0, 0 })
     local animations = {}
-    if model.HasAnimation then
-        for _, animationID in ipairs({ 0, 1, 4, 5, 9, 16, 17, 26, 37, 38, 39, 40 }) do
-            local ok, has = pcall(model.HasAnimation, model, animationID)
-            animations[#animations + 1] = animationID .. "=" .. (ok and tostring(has) or "error")
-        end
+    for _, animationID in ipairs({ 0, 1, 4, 5, 9, 16, 17, 26, 37, 38, 39, 40 }) do
+        local has = view.Has(animationID)
+        if has == nil then break end   -- the client cannot tell
+        animations[#animations + 1] = animationID .. "=" .. tostring(has)
     end
     local line = ("model: loaded %s, top camera %s | %s | animations %s"):format(tostring(loaded), tostring(camera),
         table.concat(methods, " "), #animations > 0 and table.concat(animations, " ") or "unknown")
     printLine(line)
     AzeCaught.Journal("INFORMATION", "probe.model", "model capabilities", { line = line })
-    if C_Timer then C_Timer.After(15, function() frame:Hide() end) end
+    probeShownCount = probeShownCount + 1
+    local shownCount = probeShownCount
+    if C_Timer then C_Timer.After(15, function() if probeShownCount == shownCount then frame:Hide() end end) end
 end
 
 -- What this client can do: S1 display capture, S2 model animations, S3 nameplate icons (results also go to the journal).
@@ -1296,15 +1299,14 @@ function commands.probe()
     local targetSnapshot = Api.UnitSnapshot("target")
     local display = targetSnapshot and targetSnapshot.npc and Catcher.CaptureDisplay("target")
     local result1 = targetSnapshot and targetSnapshot.npc and ("display " .. tostring(display)) or "target an NPC first"
-    local panelModel = addon.AzeCaughtPanel.widgets.model
+    local companionView = addon.AzeCaughtPanel.widgets.modelView
     local animations = {}
-    if panelModel and panelModel.HasAnimation then
+    if companionView then
         for _, animationID in ipairs({ 0, 4, 5, 26, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 100, 101, 102, 103, 113, 114 }) do
-            local ok, has = pcall(panelModel.HasAnimation, panelModel, animationID)
-            if ok and has then animations[#animations + 1] = animationID end
+            if companionView.Has(animationID) == true then animations[#animations + 1] = animationID end
         end
     end
-    local result2 = panelModel and ("animations " .. (#animations > 0 and table.concat(animations, ",") or "none or HasAnimation missing"))
+    local result2 = companionView and ("animations " .. (#animations > 0 and table.concat(animations, ",") or "none or HasAnimation missing"))
         or "open the AZEcaught companion view first"
     local plates = 0
     for _ in pairs(Catcher.unitByGuid) do plates = plates + 1 end
@@ -1372,7 +1374,7 @@ function developmentCommands.hearts(arguments)
 end
 -- /ggd caught emote: the shown companion models play an idle emote within a second (no 90-240 s wait)
 function developmentCommands.emote()
-    addon.AzeCaughtPanel.idleEmoteForcedUntil = Api.Clock() + 1
+    addon.ModelView.ForceAmbient(Api.Clock())
     printLine("an idle emote plays within a second on every shown companion model (the pet view, the companion panel)")
 end
 function developmentCommands.week()
