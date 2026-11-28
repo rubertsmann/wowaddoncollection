@@ -62,23 +62,90 @@ local money = addon.Model.MoneyText
 
 ------------------------------------------------------------------ display capture
 
+-- How often the NPC id is loaded to find the look whose model matches the unit's (the client picks one of the NPC's
+-- looks per load, e.g. male or female).
+Catcher.DISPLAY_TRIES = 6
+
 local captureModel
--- The CreatureDisplayInfo id of a unit, read through a hidden model (PlayerModel:SetUnit + GetDisplayInfo), or nil.
+---@return table|nil model a hidden PlayerModel
+local function hiddenModel()
+    if not captureModel then
+        local ok, model = pcall(CreateFrame, "PlayerModel", nil, UIParent)
+        if not ok or not model then return nil end
+        pcall(model.SetSize, model, 1, 1); pcall(model.SetPoint, model, "TOPLEFT", UIParent, "BOTTOMRIGHT", 10, -10)
+        captureModel = model
+    end
+    return captureModel
+end
+
+---@param model table
+---@param method string
+---@param low integer
+---@return integer|nil
+local function readInteger(model, method, low)
+    if not model[method] then return nil end
+    local ok, value = pcall(model[method], model)
+    return ok and addon.Utility.SafeInteger(value, low, AzeCaught.MAXIMUM_ID) or nil
+end
+
+-- A look of NPC `npcID`: the client is asked to load the NPC up to DISPLAY_TRIES times, and the first look whose model
+-- file is `wantFile` wins (without `wantFile`: the first look). Returns the display id (or nil), whether it matched
+-- `wantFile`, and the loads it took.
+---@param npcID integer
+---@param wantFile? integer
+---@return integer|nil display
+---@return boolean matched
+---@return integer tries
+function Catcher.CreatureDisplay(npcID, wantFile)
+    local model = hiddenModel()
+    if not model or not model.SetCreature or not addon.Utility.SafeInteger(npcID, 1, AzeCaught.MAXIMUM_ID) then return nil, false, 0 end
+    return AzeCaught.PickDisplay(function()
+        if model.ClearModel then pcall(model.ClearModel, model) end
+        pcall(model.SetCreature, model, npcID)
+        return readInteger(model, "GetDisplayInfo", 1), readInteger(model, "GetModelFileID", 1)
+    end, wantFile, Catcher.DISPLAY_TRIES)
+end
+
+-- The CreatureDisplayInfo id of a unit (its own look: male or female, colour), or nil. Read through a hidden model:
+-- SetUnit + GetDisplayInfo; where the client answers 0 there, the NPC id is loaded until the model file is the unit's.
 ---@param unit string
 ---@return integer|nil
 function Catcher.CaptureDisplay(unit)
-    local ok, displayID = pcall(function()
-        if not captureModel then
-            captureModel = CreateFrame("PlayerModel", nil, UIParent)
-            captureModel:SetSize(1, 1); captureModel:SetPoint("TOPLEFT", UIParent, "BOTTOMRIGHT", 10, -10)
+    local model = hiddenModel()
+    if not model then return nil end
+    pcall(model.SetUnit, model, unit)
+    local own = readInteger(model, "GetDisplayInfo", 1)
+    local unitFile = readInteger(model, "GetModelFileID", 1)
+    local display, matched, tries = own, own ~= nil, 0
+    local guid = not own and Api.UnitGuid(unit)
+    local npcID = guid and AzeCaught.NpcIDFromGuid(guid)
+    if npcID then display, matched, tries = Catcher.CreatureDisplay(npcID, unitFile) end
+    AzeCaught.Journal("DEBUG", "found.display", display and "a display id was read" or "no display id could be read",
+        { unit = unit, npc = npcID, display = display, own = own ~= nil, file = unitFile, matched = matched, tries = tries })
+    return display
+end
+
+-- Gives every companion without a look one (the first the client loads for its NPC), so it no longer changes between
+-- loads. A companion that got none is tried once per session. Returns how many got one.
+---@return integer
+function Catcher.FillDisplays()
+    if addon.Store.db.readonly then return 0 end
+    Catcher.displayTried = Catcher.displayTried or {}
+    local filled = 0
+    for _, companion in ipairs(AzeCaught.WithoutDisplay()) do
+        if not Catcher.displayTried[companion.uid] then
+            Catcher.displayTried[companion.uid] = true
+            local display, _, tries = Catcher.CreatureDisplay(companion.npc)
+            AzeCaught.Journal("DEBUG", "companion.display.fill", display and "a companion without a look got one" or "no look could be loaded",
+                { uid = companion.uid, npc = companion.npc, display = display, tries = tries })
+            if display and AzeCaught.SetDisplay(companion.uid, display) then filled = filled + 1 end
         end
-        captureModel:SetUnit(unit)
-        return captureModel.GetDisplayInfo and captureModel:GetDisplayInfo() or nil
-    end)
-    local valid = ok and addon.Utility.SafeInteger(displayID, 1, AzeCaught.MAXIMUM_ID) or nil
-    AzeCaught.Journal("DEBUG", "found.display", valid and "a display id was read" or "no display id could be read",
-        { unit = unit, display = tostring(displayID), ok = ok, api = captureModel and captureModel.GetDisplayInfo ~= nil })
-    return valid
+    end
+    if filled > 0 then
+        addon.Events.Fire("CAUGHT_CHANGED")
+        Catcher.PublishSoon(true)
+    end
+    return filled
 end
 
 ------------------------------------------------------------------ found NPCs
@@ -104,7 +171,8 @@ function Catcher.NoteUnit(unit)
         Catcher.noted[snapshot.guid] = true
     end
     local entry = AzeCaught.State().collection[snapshot.npc]
-    local display = (not entry or entry.disp == 0) and Catcher.CaptureDisplay(unit) or nil
+    -- the look is read for a new NPC, and while a companion of it has a look whose gender is not known yet
+    local display = (not entry or entry.disp == 0 or AzeCaught.WantsLook(snapshot.npc)) and Catcher.CaptureDisplay(unit) or nil
     AzeCaught.NoteFound({ npc = snapshot.npc, name = snapshot.name, level = snapshot.level, guid = snapshot.guid,
         classification = snapshot.classification, display = display, stats = Api.UnitStats(unit) }, now())
     return snapshot
@@ -227,8 +295,8 @@ function Catcher.Throw(unit)
         AzeCaught.Journal("DEBUG", "throw.refused", "a throw was refused", { reason = "friendly", unit = unit, guid = snapshot.guid })
         return false
     end
-    local entry = snapshot.npc and AzeCaught.State().collection[snapshot.npc]
-    local display = snapshot.npc and (not entry or entry.disp == 0) and Catcher.CaptureDisplay(unit) or nil
+    -- the look of this very creature: the companion keeps it (an NPC id can be male or female)
+    local display = snapshot.npc and Catcher.CaptureDisplay(unit) or nil
     if snapshot.npc then
         AzeCaught.NoteFound({ npc = snapshot.npc, name = snapshot.name, level = snapshot.level,
             classification = snapshot.classification, display = display, stats = Api.UnitStats(unit) }, now())
@@ -285,8 +353,7 @@ function Catcher.UseTrap(unit, itemID)
     local snapshot = Api.UnitSnapshot(unit)
     if not snapshot then return refuse("nounit") end
     if snapshot.hostile == false then return refuse("friendly") end
-    local entry = snapshot.npc and AzeCaught.State().collection[snapshot.npc]
-    local display = snapshot.npc and (not entry or entry.disp == 0) and Catcher.CaptureDisplay(unit) or nil
+    local display = snapshot.npc and Catcher.CaptureDisplay(unit) or nil
     if snapshot.npc then
         AzeCaught.NoteFound({ npc = snapshot.npc, name = snapshot.name, level = snapshot.level,
             classification = snapshot.classification, display = display, stats = Api.UnitStats(unit) }, now())
@@ -988,6 +1055,10 @@ function Catcher.OnTick()
     end
     if result.changed or result.died then addon.Events.Fire("CAUGHT_CHANGED") end
     addon.Log.Protected("caught.arena", "the arena check failed", Catcher.ArenaTick)
+    if clock - (Catcher.lastFill or -math.huge) >= 10 then
+        Catcher.lastFill = clock
+        addon.Log.Protected("caught.display", "giving companions a look failed", Catcher.FillDisplays)
+    end
     local periodKey = addon.Games.PeriodKey(serverNow)
     if Catcher.week and periodKey ~= Catcher.week then Catcher.RunPayout() end
     Catcher.week = periodKey
@@ -1325,6 +1396,56 @@ function developmentCommands.effect(arguments)
     end
     printLine("effect " .. kind .. ": " .. keyValues(details or {}))
 end
+-- /ggd caught gender [unit]: what the client tells about the gender and model of the target (default) or `unit`: UnitSex
+-- (2 male, 3 female) and the model file / display id of the unit's own model next to the one the npc id loads. Read
+-- again after a second, when the models have loaded. Run it on a male and a female of the same NPC: if their unit.file
+-- differs, the caught creature's look can be stored per companion.
+function developmentCommands.gender(arguments)
+    local unit = ((arguments or ""):match("^%s*(%S*)") or ""):lower()
+    unit = unit ~= "" and unit or "target"
+    local sexNames = { ["1"] = "neutral", ["2"] = "male", ["3"] = "female" }
+    local function report(probe, when)
+        local sex = sexNames[probe.UnitSex] and (probe.UnitSex .. " " .. sexNames[probe.UnitSex]) or probe.UnitSex
+        printLine(("gender %s (%s): sex %s, race %s, npc %s | unit model file %s display %s | npc model file %s display %s")
+            :format(unit, when, tostring(sex), tostring(probe.UnitRace), tostring(probe.npc), tostring(probe["unit.file"]),
+                tostring(probe["unit.display"]), tostring(probe["npc.file"]), tostring(probe["npc.display"])))
+        AzeCaught.Journal("DEBUG", "dev.gender", "the gender of a unit was probed (" .. when .. ")", probe)
+    end
+    local probe = Api.GenderProbe(unit)
+    report(probe, "now")
+    if C_Timer then
+        C_Timer.After(1, function()
+            addon.Log.Protected("dev.gender", "the gender probe failed", function() report(Api.GenderProbeReread(probe), "after 1 s") end)
+        end)
+    end
+end
+-- /ggd caught look [<display id>]: the selected (else the active) companion gets the next look its NPC has (male /
+-- female, colours), or the given display id. To fix a companion whose look is the wrong one.
+function developmentCommands.look(arguments)
+    local uid = addon.AzeCaughtPanel.state.selectedUid or (AzeCaught.Active() and AzeCaught.Active().uid)
+    local companion = AzeCaught.Companion(uid)
+    if not companion then printLine("look: no companion selected or active") return end
+    local wanted = tonumber((arguments or ""):match("(%d+)"))
+    if not wanted then
+        -- the NPC's looks the client loads, the first that is not the current one
+        local seen = {}
+        for _ = 1, Catcher.DISPLAY_TRIES * 2 do
+            local display = Catcher.CreatureDisplay(companion.npc)
+            if display and display ~= companion.disp then wanted = display break end
+            if display then seen[display] = true end
+        end
+        if not wanted then
+            printLine(("look: %s (npc %d) shows the only look the client loaded: %s"):format(uid, companion.npc,
+                table.concat(addon.Utility.SortedKeys(seen), ", ")))
+            return
+        end
+    end
+    local before = companion.disp
+    if not AzeCaught.SetDisplay(uid, wanted) then printLine("look: refused (bad id or read-only data)") return end
+    printLine(("look: %s (npc %d) %s -> %d"):format(uid, companion.npc, tostring(before), wanted))
+    addon.Events.Fire("CAUGHT_CHANGED")
+    Catcher.PublishSoon(true)
+end
 -- /ggd caught hint: shows (or hides again) the first-throw arrow on every rope icon
 function developmentCommands.hint()
     Catcher.forceHint = not Catcher.forceHint
@@ -1463,9 +1584,18 @@ function developmentCommands.add()
         or { npc = 299, name = "Young Wolf", level = 2, classification = "normal" }
     local entry = AzeCaught.NoteFound(npcInformation, now())
     if entry then
+        local before = {}
+        for uid in pairs(AzeCaught.State().roster) do before[uid] = true end
         entry.caught = entry.caught + 1
         AzeCaught.Reconcile()
-        AzeCaught.Journal("INFORMATION", "dev.add", "an NPC was added as caught by hand", { npc = npcInformation.npc, name = entry.n })
+        -- the new companion keeps the target's own look, as a real catch does
+        local added
+        for uid, companion in pairs(AzeCaught.State().roster) do
+            if not before[uid] and companion.npc == npcInformation.npc then added = uid end
+        end
+        if added and npcInformation.display then AzeCaught.SetDisplay(added, npcInformation.display) end
+        AzeCaught.Journal("INFORMATION", "dev.add", "an NPC was added as caught by hand",
+            { npc = npcInformation.npc, name = entry.n, uid = added, display = npcInformation.display, npcDisplay = entry.disp })
         if snapshot and snapshot.npc then
             AzeCaught.Journal("INFORMATION", "catch.dump", "everything the client told about the caught NPC (dev add)", Api.UnitDump("target"))
         end

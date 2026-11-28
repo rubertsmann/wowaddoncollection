@@ -442,6 +442,60 @@ function AzeCaught.NoteKill(guid, npcID, now)
     return entry
 end
 
+AzeCaught.MAXIMUM_LOOKS = 8   -- genders remembered per NPC (one per look it was seen with)
+
+-- Remembers that NPC `entry`'s look `display` is male (2) or female (3), as UnitSex told for a creature seen with it.
+-- Returns true when that was new.
+---@param entry CollectionEntry
+---@param display any
+---@param stats any NpcStats
+---@return boolean
+local function noteLook(entry, display, stats)
+    display = addon.Utility.SafeInteger(display, 1, AzeCaught.MAXIMUM_ID)
+    local sex = type(stats) == "table" and (stats.sex == 2 or stats.sex == 3) and stats.sex or nil
+    if not display or not sex then return false end
+    if type(entry.sx) ~= "table" then entry.sx = {} end
+    if entry.sx[display] == sex then return false end
+    if entry.sx[display] == nil and addon.Utility.Count(entry.sx) >= AzeCaught.MAXIMUM_LOOKS then return false end
+    entry.sx[display] = sex
+    return true
+end
+
+-- The saved genders per look (untrusted): valid pairs only, at most MAXIMUM_LOOKS, nil when none is left.
+---@param raw any
+---@return table<integer, integer>|nil
+function AzeCaught.CleanLooks(raw)
+    if type(raw) ~= "table" then return nil end
+    local displays = {}
+    for display, sex in pairs(raw) do
+        if addon.Utility.SafeInteger(display, 1, AzeCaught.MAXIMUM_ID) and (sex == 2 or sex == 3) then displays[#displays + 1] = display end
+    end
+    table.sort(displays)
+    local clean = {}
+    for index = 1, math.min(#displays, AzeCaught.MAXIMUM_LOOKS) do clean[displays[index]] = raw[displays[index]] end
+    return #displays > 0 and clean or nil
+end
+
+-- The gender of a companion: 2 male, 3 female, or nil when no creature with its look was seen.
+---@param companion table|nil
+---@return integer|nil
+function AzeCaught.CompanionSex(companion)
+    if type(companion) ~= "table" then return nil end
+    local entry = AzeCaught.State().collection[companion.npc]
+    local display = addon.Utility.SafeInteger(companion.disp, 1, AzeCaught.MAXIMUM_ID)
+    return display and entry and type(entry.sx) == "table" and entry.sx[display] or nil
+end
+
+-- True when one of my companions of NPC `npcID` has a look whose gender is not known yet (a sighting should read it).
+---@param npcID integer
+---@return boolean
+function AzeCaught.WantsLook(npcID)
+    for _, companion in pairs(AzeCaught.State().roster) do
+        if companion.npc == npcID and (tonumber(companion.disp) or 0) > 0 and not AzeCaught.CompanionSex(companion) then return true end
+    end
+    return false
+end
+
 -- Adds or updates a found NPC. Fast and silent when nothing new is learned (the combat log calls it on every hit).
 -- With `npcInformation.guid`, each enemy counts once as an encounter and moves "last seen".
 ---@param npcInformation NpcInformation
@@ -465,6 +519,7 @@ function AzeCaught.NoteFound(npcInformation, now)
         if changed then AzeCaught.ForgetProfile(npcID) end
         if level and level > entry.lvl then entry.lvl, changed = level, true end
         if display and entry.disp == 0 then entry.disp, changed = display, true end
+        if noteLook(entry, display, npcInformation.stats) then changed = true end
         if npcInformation.classification and AzeCaught.RARITY_MALUS[npcInformation.classification] and entry.cls == "normal"
             and npcInformation.classification ~= "normal" then
             entry.cls, changed = npcInformation.classification, true
@@ -487,6 +542,7 @@ function AzeCaught.NoteFound(npcInformation, now)
         cnt = 1, last = now }
     firstTime("counted", npcInformation.guid)
     mergeStats(entry, npcInformation.stats)
+    noteLook(entry, display, npcInformation.stats)
     collection[npcID] = entry
     AzeCaught.Journal("INFORMATION", "found.new", "a new NPC was found",
         { npc = npcID, name = entry.n, level = entry.lvl, class = entry.cls, display = entry.disp, stats = AzeCaught.StatsText(entry.st) })
@@ -547,7 +603,8 @@ function AzeCaught.Throw(target, playerLevel, clockSeconds, now)
     AzeCaught.throws[target.guid] = { at = clockSeconds, npc = npcID, health = health, playerLevel = playerLevel,
         level = target.level, classification = AzeCaught.Classification(target.classification), name = target.name,
         boosted = addon.Items.CatchBoosted(now) or nil, second = AzeCaught.again[target.guid] and true or nil,
-        map = addon.Utility.SafeInteger(target.map, 1, AzeCaught.MAXIMUM_ID) }
+        map = addon.Utility.SafeInteger(target.map, 1, AzeCaught.MAXIMUM_ID),
+        display = addon.Utility.SafeInteger(target.display, 1, AzeCaught.MAXIMUM_ID) }
     AzeCaught.again[target.guid] = nil
     if not addon.Store.db.readonly then AzeCaught.State().throwHintDone = true end
     AzeCaught.Journal("INFORMATION", "throw.armed", "a rope was thrown",
@@ -634,13 +691,16 @@ end
 ---@field uid? string the roster id of the caught companion
 
 -- The bookkeeping of a successful catch: counts, the reward for `chance`, and the companion when none is active.
+-- `display` is the look of the creature caught (an NPC id can have several, e.g. male and female); without it the
+-- companion takes the NPC's look from the collection.
 ---@param npcID integer
 ---@param chance number the chance the reward is paid for
 ---@param myName string|nil
 ---@param now integer
 ---@param result RollResult filled in: reward, companion, uid
 ---@param map? integer uiMapID where it was caught
-local function recordCatch(npcID, chance, myName, now, result, map)
+---@param display? integer CreatureDisplayInfo id of the caught creature
+local function recordCatch(npcID, chance, myName, now, result, map, display)
     local caughtState = AzeCaught.State()
     caughtState.firstCatchDone = true
     local entry = caughtState.collection[npcID]
@@ -656,12 +716,15 @@ local function recordCatch(npcID, chance, myName, now, result, map)
     for uid, companion in pairs(caughtState.roster) do
         if not before[uid] and companion.npc == npcID then
             companion.info = AzeCaught.CleanInfo({ at = now, map = map })
+            display = addon.Utility.SafeInteger(display, 1, AzeCaught.MAXIMUM_ID)
+            if display then companion.disp = display end
             result.uid = uid
         end
     end
     result.reward = math.min(AzeCaught.MAXIMUM_REWARD, math.floor(AzeCaught.Reward(chance) * AzeCaught.CharmRewardFactor(entry.cls) + 0.5))
     AzeCaught.Journal("INFORMATION", "catch", "an NPC was caught",
-        { npc = npcID, name = entry.n, timesCaught = entry.caught, reward = result.reward, trap = result.trap })
+        { npc = npcID, name = entry.n, timesCaught = entry.caught, reward = result.reward, trap = result.trap,
+          uid = result.uid, display = display, npcDisplay = entry.disp })
     if result.reward > 0 then addon.Wallet.Earn(myName, result.reward, "catch", now, entry.n) end
     -- without an active companion the catch becomes it at once (also after one died or ran away), so the guild sees it without a trip to the collection
     if not caughtState.active and AzeCaught.Select(npcID, now) then
@@ -710,7 +773,7 @@ function AzeCaught.OnDeath(guid, myName, clockSeconds, now, randomFunction)
           healthChance = ("%.4f"):format(breakdown.healthChance), class = breakdown.classification, malus = breakdown.malus,
           forced = forced or nil, first = first or nil, boosted = boosted, second = throw.second })
     if not caught then return result end
-    recordCatch(throw.npc, breakdown.chance, myName, now, result, throw.map)
+    recordCatch(throw.npc, breakdown.chance, myName, now, result, throw.map, throw.display)
     return result
 end
 
@@ -746,7 +809,7 @@ function AzeCaught.TrapCatch(target, item, myName, clockSeconds, now)
     local chance = AzeCaught.Chance(AzeCaught.BEST_HEALTH, classification).chance
     local result = { caught = true, npc = npcID, chance = chance, roll = 0, reward = 0, forced = false, first = false,
         trap = item.id }
-    recordCatch(npcID, chance, myName, now, result, addon.Utility.SafeInteger(target.map, 1, AzeCaught.MAXIMUM_ID))
+    recordCatch(npcID, chance, myName, now, result, addon.Utility.SafeInteger(target.map, 1, AzeCaught.MAXIMUM_ID), target.display)
     return result
 end
 
@@ -1225,6 +1288,56 @@ end
 function AzeCaught.Companion(uid)
     if type(uid) ~= "string" then return nil end
     return AzeCaught.State().roster[uid]
+end
+
+-- Gives companion `uid` the look `display` (a CreatureDisplayInfo id). Returns true when stored.
+---@param uid string
+---@param display integer
+---@return boolean
+function AzeCaught.SetDisplay(uid, display)
+    local companion = AzeCaught.Companion(uid)
+    local valid = addon.Utility.SafeInteger(display, 1, AzeCaught.MAXIMUM_ID)
+    if not companion or not valid or addon.Store.db.readonly then return false end
+    if companion.disp ~= valid then
+        AzeCaught.Journal("INFORMATION", "companion.display", "a companion got its look",
+            { uid = uid, npc = companion.npc, before = companion.disp, display = valid })
+    end
+    companion.disp = valid
+    return true
+end
+
+-- Picks a look from up to `tries` loads of an NPC (`load` returns the display id and model file the client loaded, or
+-- nil): the first whose model file is `wantFile`, else (or without `wantFile`) the first loaded. Returns the display id
+-- or nil, whether it matched `wantFile`, and the loads it took.
+---@param load fun(): integer|nil, integer|nil
+---@param wantFile integer|nil
+---@param tries integer
+---@return integer|nil display
+---@return boolean matched
+---@return integer tries
+function AzeCaught.PickDisplay(load, wantFile, tries)
+    local first
+    for try = 1, tries do
+        local display, file = load()
+        if display then
+            first = first or display
+            if not wantFile then return display, false, try end
+            if file == wantFile then return display, true, try end
+        end
+    end
+    return first, false, tries
+end
+
+-- My companions without a stored look: an NPC id can have several (male and female), and without one the client picks
+-- one by itself each time the model is loaded.
+---@return CompanionState[]
+function AzeCaught.WithoutDisplay()
+    local list = {}
+    for _, companion in pairs(AzeCaught.State().roster) do
+        if (tonumber(companion.disp) or 0) <= 0 then list[#list + 1] = companion end
+    end
+    table.sort(list, function(left, right) return uidNumber(left.uid) < uidNumber(right.uid) end)
+    return list
 end
 
 ---@alias SelectRefusal "unknown"|"notcaught"|"same"|"readonly"
@@ -1729,7 +1842,9 @@ local function sanitizeCompanion(companion, collection)
     local npcID = SafeInteger(companion.npc, 1, AzeCaught.MAXIMUM_ID)
     local entry = npcID and collection[npcID]
     if not entry then return nil end
-    local clean = { npc = npcID, n = entry.n, lvl = entry.lvl, cls = entry.cls, disp = entry.disp,
+    -- its own look (the creature caught), else the NPC's
+    local clean = { npc = npcID, n = entry.n, lvl = entry.lvl, cls = entry.cls,
+        disp = SafeInteger(companion.disp, 1, AzeCaught.MAXIMUM_ID) or entry.disp,
         hearts = SafeInteger(companion.hearts, -AzeCaught.MAXIMUM_HEARTS, AzeCaught.MAXIMUM_HEARTS),
         fedStreak = SafeInteger(companion.fedStreak, 0, AzeCaught.MAXIMUM_HEARTS),
         careStreak = SafeInteger(companion.careStreak, 0, AzeCaught.MAXIMUM_HEARTS), zones = {} }
@@ -1776,7 +1891,7 @@ function AzeCaught.SanitizePersisted(savedVariables)
                 -- the history, optional: a bad value is dropped alone, the entry stays
                 cnt = SafeInteger(entry.cnt, 1, AzeCaught.MAXIMUM_ID), last = SafeInteger(entry.last, 0),
                 kills = SafeInteger(entry.kills, 0, AzeCaught.MAXIMUM_ID), thr = SafeInteger(entry.thr, 0, AzeCaught.MAXIMUM_ID),
-                got = SafeInteger(entry.got, 0, AzeCaught.MAXIMUM_ID) }
+                got = SafeInteger(entry.got, 0, AzeCaught.MAXIMUM_ID), sx = AzeCaught.CleanLooks(entry.sx) }
         else
             dropped = dropped + 1
         end

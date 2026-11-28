@@ -325,6 +325,52 @@ function Api.IdentityProbe(unit)
     return probe
 end
 
+local genderModels -- hidden PlayerModels of the gender probe: [1] SetUnit(unit), [2] SetCreature(npc)
+
+-- What this client tells about the gender and model of `unit` (`/ggd caught gender`): UnitSex, and the model file and
+-- display id of the unit's own model (SetUnit) next to the model the npc id loads (SetCreature, which picks a display
+-- by itself). Models load asynchronously, so `Api.GenderProbeReread` reads the two models again later. Each value as
+-- dumpValue text. Read-only; nothing here is stored.
+---@param unit string
+---@return table<string, string>
+function Api.GenderProbe(unit)
+    local G = _G
+    local probe = { unit = unit }
+    probe.UnitSex = dumpValue(G.UnitSex, unit)
+    probe.UnitRace = dumpValue(G.UnitRace, unit)
+    local guid = Api.UnitGuid(unit)
+    local npcID = guid and addon.AzeCaught.NpcIDFromGuid(guid)
+    probe.npc = tostring(npcID or "nil")
+    if not genderModels then
+        genderModels = {}
+        for index = 1, 2 do
+            local ok, model = pcall(G.CreateFrame, "PlayerModel", nil, G.UIParent)
+            if not ok or not model then probe.model = "error" return probe end
+            pcall(model.SetSize, model, 1, 1)
+            pcall(model.SetPoint, model, "TOPLEFT", G.UIParent, "BOTTOMRIGHT", 10, -10)
+            genderModels[index] = model
+        end
+    end
+    local unitModel, creatureModel = genderModels[1], genderModels[2]
+    pcall(unitModel.ClearModel, unitModel); pcall(creatureModel.ClearModel, creatureModel)
+    probe["SetUnit"] = dumpValue(unitModel.SetUnit, unitModel, unit)
+    probe["SetCreature"] = npcID and dumpValue(creatureModel.SetCreature, creatureModel, npcID) or "no npc id"
+    return Api.GenderProbeReread(probe)
+end
+
+-- Reads the probe's two models again into `probe` (they finish loading a moment after SetUnit / SetCreature).
+---@param probe table<string, string>
+---@return table<string, string>
+function Api.GenderProbeReread(probe)
+    if not genderModels then return probe end
+    local unitModel, creatureModel = genderModels[1], genderModels[2]
+    probe["unit.file"] = dumpValue(unitModel.GetModelFileID, unitModel)
+    probe["unit.display"] = dumpValue(unitModel.GetDisplayInfo, unitModel)
+    probe["npc.file"] = dumpValue(creatureModel.GetModelFileID, creatureModel)
+    probe["npc.display"] = dumpValue(creatureModel.GetDisplayInfo, creatureModel)
+    return probe
+end
+
 -- Everything an addon can read about `unit`, as text, for the journal (`/gg caught dump`, and logged on every catch).
 -- Player-only functions (UnitStat, UnitArmor) are tried too, so the log shows what this client gives for an NPC.
 ---@param unit string

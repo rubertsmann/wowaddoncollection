@@ -384,7 +384,8 @@ function Model.BuildRosterRows(roster, collection, active)
             local caughtAt, caughtMap = addon.AzeCaught.CatchOrigin(companion)
             rows[#rows + 1] = { uid = companion.uid, npc = companion.npc, name = escape(shown), nameKey = shown:lower(),
                 species = escape(entry.n), nicknamed = addon.AzeCaught.HasNickname(companion), caughtAt = caughtAt, caughtMap = caughtMap,
-                lvl = entry.lvl, cls = entry.cls, disp = entry.disp, caught = 1, active = companion == active, seen = entry.seen,
+                lvl = entry.lvl, cls = entry.cls, caught = 1, active = companion == active, seen = entry.seen,
+                disp = addon.Utility.SafeInteger(companion.disp, 1, addon.AzeCaught.MAXIMUM_ID) or entry.disp,
                 hearts = companion.hearts or 0, arenaLevel = addon.Arena.Level(progress.xp or 0), history = addon.AzeCaught.History(entry) }
         end
     end
@@ -560,6 +561,13 @@ end
 local RARITY_COLOR = { normal = "ffffff", elite = "ffd100", rare = "c0c0c0", rareelite = "a335ee", worldboss = "ff8000" }
 local NEED_BASE = { hunger = "FOOD_INTERVAL", thirst = "WATER_INTERVAL", affection = "PET_INTERVAL", energy = "AWAKE_INTERVAL" }
 
+-- "male" / "female" for UnitSex 2 / 3, else nil.
+---@param sex any
+---@return string|nil
+function Model.GenderText(sex)
+    return sex == 2 and addon.Text["male"] or sex == 3 and addon.Text["female"] or nil
+end
+
 -- Everything known about a found NPC, grouped for the hover panel. Unknown values
 -- are not listed one by one, only counted. Peer/client text is escaped.
 ---@param npcID integer
@@ -584,7 +592,7 @@ function Model.BuildNpcInfo(npcID, entry)
     end
     fact(Text["Health"], stats.hp and tostring(stats.hp) or nil)
     fact(Text["Power"], stats.power ~= nil and (powerName(stats.power) .. (stats.powerMax and (" " .. stats.powerMax) or "")) or nil)
-    fact(Text["Gender"], stats.sex == 2 and Text["male"] or stats.sex == 3 and Text["female"] or nil)
+    fact(Text["Gender"], Model.GenderText(stats.sex))
     local profile = AzeCaught.Profile(entry)
     local labels = { thirst = Text["Water"], hunger = Text["Food"], affection = Text["Petting"], energy = Text["Sleep"] }
     for _, need in ipairs({ "thirst", "hunger", "affection", "energy" }) do

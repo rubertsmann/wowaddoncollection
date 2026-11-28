@@ -2,7 +2,7 @@
 ## Title: GuildGames
 ## Notes: Coin flip, slot machine and survivor with guild leaderboards. For fun only: no gold changes hands.
 ## Author: rubertsmann
-## Version: 0.15.1
+## Version: 0.16.0
 ## SavedVariables: GuildGamesDB
 ## IconTexture: Interface\Icons\INV_Misc_Coin_01
 ## X-Category: Minigames

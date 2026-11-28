@@ -803,7 +803,7 @@ return {
                     addon.Api.PlaySoundNamed = savedPlay
                 end
                 if development then
-                    for _, command in ipairs({ "add", "time 30", "give 5", "force", "need hunger 10", "week", "effect", "effect escape", "effect snap target", "hint", "hint", "setup items", "setup boost", "setup" }) do
+                    for _, command in ipairs({ "add", "time 30", "give 5", "force", "need hunger 10", "week", "effect", "effect escape", "effect snap target", "hint", "hint", "gender", "gender mouseover", "look", "look 4461", "setup items", "setup boost", "setup" }) do
                         local okCommand, commandError = pcall(addon.SlashCommands.caught, command)
                         harness.truthy(okCommand, "/ggd caught " .. command .. ": " .. tostring(commandError))
                     end

@@ -1,3 +1,13 @@
+# GuildGames 0.16.0
+
+Fix: your companion no longer switches between its male and female version (or another look of the same creature)
+from one window to the next. A new catch keeps the look of exactly the creature you caught. Companions you caught
+before get one look the first time they are shown and keep it from then on. The collection's Caught list and its
+preview show each companion with its own look.
+
+New: hovering a companion in the collection shows its gender (male or female), once a creature with that look has been
+seen. Updating is recommended; players on older versions can still play with you and also see your companion's look.
+
 # GuildGames 0.15.1
 
 Fix: getting attacked while Companion Dash is open no longer fills your log with "blocked" errors, and your

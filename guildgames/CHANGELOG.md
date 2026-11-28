@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.16.0 (2026-11-28, protocol 1.9, schema 3, LibGuildSync MINOR 6)
+- Fixed: a companion no longer switches between its male and female look (or other looks of the same NPC) from one view to the next. A new catch keeps the look of the very creature you caught, and companions caught before get one look the first time they are loaded and keep it. The look is saved and sent to the guild in the existing display field (no protocol change). The Caught list and its preview show each companion's own look.
+- The companion tooltip in the collection shows its gender (male / female), as the game told it for a creature seen with that look; the info panel over the preview shows the companion's gender too, not the NPC's. A collection entry remembers the gender of each look it was seen with (new optional field `sx`, schema unchanged).
+
 ## 0.15.1 (2026-11-28, protocol 1.9, schema 3, LibGuildSync MINOR 6)
 - Fix: Companion Dash no longer makes the client block a protected function when you are attacked while it is open ("blocked ... blamed this addon" in the log). Its keyboard calls are skipped in combat, and a fight start hands every key back to the game, so a run can no longer swallow keys in a fight.
 

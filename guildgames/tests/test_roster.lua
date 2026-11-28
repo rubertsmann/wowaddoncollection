@@ -251,4 +251,113 @@ return {
         AzeCaught.ROSTER_LIMIT = saved
         harness.equal(ok, nil); harness.equal(reason, "rosterfull")
     end,
+
+    ["roster: each catch keeps the look of the creature it was made of, not the NPC's first-seen look"] = function(harness)
+        local addon = fresh(harness)
+        local AzeCaught = addon.AzeCaught
+        -- the found list already shows the female look of NPC 1564
+        AzeCaught.NoteFound({ npc = 1564, name = "Guard", level = 10, display = 4462 }, NOW)
+        local guid = "Creature-0-1-2-3-1564-00000001"
+        assert(AzeCaught.Throw({ guid = guid, health = 0.1, name = "Guard", level = 10, display = 4461 }, 10, 10, NOW))
+        AzeCaught.forceNextCatch = true
+        local male = assert(AzeCaught.OnDeath(guid, ME, 11, NOW, function() return 0.99 end))
+        harness.equal(AzeCaught.Companion(male.uid).disp, 4461, "the caught male keeps the male look")
+        harness.equal(AzeCaught.State().collection[1564].disp, 4462, "the found list keeps its own look")
+        local trapped = assert(AzeCaught.TrapCatch({ guid = "Creature-0-1-2-3-1564-00000002", health = 0.9, name = "Guard",
+            level = 10, display = 4462 }, addon.Items.Get("trap"), ME, 20, NOW))
+        harness.equal(AzeCaught.Companion(trapped.uid).disp, 4462, "a trapped female keeps the female look")
+        -- no look read at the catch: the NPC's look, as before
+        local unknown = catch(addon, 1564, 3)
+        harness.equal(AzeCaught.Companion(unknown.uid).disp, 4462)
+        -- the arena fighter and the collection's caught rows show the companion's own look
+        harness.equal(addon.Arena.Fighter(AzeCaught.Companion(male.uid)).disp, 4461)
+        local looks = {}
+        for _, row in ipairs(addon.Model.BuildRosterRows(AzeCaught.Roster(), AzeCaught.State().collection, AzeCaught.Active())) do
+            looks[row.uid] = row.disp
+        end
+        harness.equal(looks[male.uid], 4461, "the caught row shows the male"); harness.equal(looks[trapped.uid], 4462)
+    end,
+
+    ["roster: a companion's gender is the one its look was seen with"] = function(harness)
+        local addon = fresh(harness)
+        local AzeCaught = addon.AzeCaught
+        AzeCaught.NoteFound({ npc = 1564, name = "Warlock", level = 10, display = 4462, stats = { sex = 3 } }, NOW)
+        local male = catch(addon, 1564, 1)
+        harness.truthy(AzeCaught.SetDisplay(male.uid, 4461))
+        local companion = AzeCaught.Companion(male.uid)
+        harness.equal(AzeCaught.CompanionSex(companion), nil, "the male look was never seen: unknown, not the NPC's female")
+        harness.equal(AzeCaught.WantsLook(1564), true, "a sighting of NPC 1564 should read its look")
+        -- a male of NPC 1564 is seen (a nameplate, a throw)
+        AzeCaught.NoteFound({ npc = 1564, display = 4461, stats = { sex = 2 } }, NOW)
+        harness.equal(AzeCaught.CompanionSex(companion), 2)
+        harness.equal(AzeCaught.WantsLook(1564), false)
+        harness.equal(AzeCaught.State().collection[1564].disp, 4462, "the found list keeps its look")
+        AzeCaught.NoteFound({ npc = 1564, display = 4461, stats = { sex = 1 } }, NOW)
+        harness.equal(AzeCaught.CompanionSex(companion), 2, "neutral or unknown never overwrites")
+        -- kept over a reload, garbage dropped
+        local entry = AzeCaught.State().collection[1564]
+        entry.sx[777] = 9; entry.sx.x = 2
+        AzeCaught.SanitizePersisted(addon.Store.db)
+        entry = AzeCaught.State().collection[1564]
+        harness.equal(entry.sx[4461], 2); harness.equal(entry.sx[4462], 3)
+        harness.equal(entry.sx[777], nil); harness.equal(entry.sx.x, nil)
+        -- bounded
+        for display = 1, 20 do AzeCaught.NoteFound({ npc = 1564, display = 5000 + display, stats = { sex = 2 } }, NOW) end
+        harness.equal(addon.Utility.Count(AzeCaught.State().collection[1564].sx), AzeCaught.MAXIMUM_LOOKS)
+    end,
+
+    ["roster: the look whose model matches the caught creature is picked from the NPC's loads"] = function(harness)
+        local AzeCaught = fresh(harness).AzeCaught
+        -- the client loads NPC 1564 as female (4462, file 1000764) or male (4461, file 1011653)
+        local function loads(sequence)
+            local index = 0
+            return function()
+                index = index + 1
+                local look = sequence[(index - 1) % #sequence + 1]
+                if look == false then return nil end
+                return look[1], look[2]
+            end
+        end
+        local female, male = { 4462, 1000764 }, { 4461, 1011653 }
+        local display, matched, tries = AzeCaught.PickDisplay(loads({ female, female, male }), 1011653, 6)
+        harness.equal(display, 4461); harness.equal(matched, true); harness.equal(tries, 3)
+        display, matched = AzeCaught.PickDisplay(loads({ female }), 1011653, 6)
+        harness.equal(display, 4462, "never the male: the first look, so it stays the same"); harness.equal(matched, false)
+        display, matched, tries = AzeCaught.PickDisplay(loads({ male, female }), nil, 6)
+        harness.equal(display, 4461); harness.equal(matched, false); harness.equal(tries, 1, "no model file to match: the first")
+        display, matched, tries = AzeCaught.PickDisplay(loads({ false, false, female }), 1000764, 6)
+        harness.equal(display, 4462); harness.equal(matched, true, "loads without a display are skipped"); harness.equal(tries, 3)
+        harness.equal(AzeCaught.PickDisplay(loads({ false }), 1000764, 6), nil, "nothing loaded")
+    end,
+
+    ["roster: a companion without a look gets one once and keeps it; bad values are refused"] = function(harness)
+        local addon = fresh(harness)
+        local AzeCaught = addon.AzeCaught
+        local result = catch(addon, 4711, 1)
+        local uid = result.uid
+        harness.equal(AzeCaught.Companion(uid).disp, 0, "nothing known yet")
+        harness.equal(#AzeCaught.WithoutDisplay(), 1)
+        harness.truthy(AzeCaught.SetDisplay(uid, 7197))
+        harness.equal(AzeCaught.Companion(uid).disp, 7197)
+        harness.equal(#AzeCaught.WithoutDisplay(), 0, "filled ones are left alone")
+        harness.truthy(AzeCaught.SetDisplay(uid, 7198), "a new look can be set (the dev command)")
+        harness.equal(AzeCaught.Companion(uid).disp, 7198)
+        for _, bad in ipairs({ 0, -1, 1.5, "x", 1e12 }) do
+            harness.equal(AzeCaught.SetDisplay(uid, bad), false, "refused: " .. tostring(bad))
+        end
+        harness.equal(AzeCaught.SetDisplay("u999", 7197), false, "no such companion")
+        harness.equal(AzeCaught.Companion(uid).disp, 7198)
+        -- the stored look survives a reload (the load sanitizer); one without a look still takes the NPC's
+        local other = catch(addon, 555, 2).uid
+        AzeCaught.State().collection[555].disp = 300
+        harness.equal(AzeCaught.SanitizePersisted(addon.Store.db), 0, "clean data needs no repair")
+        harness.equal(AzeCaught.Companion(uid).disp, 7198, "kept over a reload")
+        harness.equal(AzeCaught.Companion(other).disp, 300)
+        AzeCaught.Companion(uid).disp = "garbage"
+        AzeCaught.SanitizePersisted(addon.Store.db)
+        harness.equal(AzeCaught.Companion(uid).disp, 0, "a broken look falls back to the NPC's (unknown here)")
+        addon.Store.db.readonly = true
+        harness.equal(AzeCaught.SetDisplay(uid, 7197), false, "read-only data stays untouched")
+        addon.Store.db.readonly = false
+    end,
 }

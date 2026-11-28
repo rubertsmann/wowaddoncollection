@@ -209,7 +209,8 @@ function Arena.Fighter(companion)
     local npc = Arena.Progress(companion)
     local level = Arena.Level(npc.xp)
     local morale = 1 + addon.Utility.Clamp(companion.hearts or 0, -10, 10) / 100
-    local fighter = { npc = companion.npc, n = entry.n, cls = entry.cls, disp = entry.disp or 0,
+    local ownDisplay = addon.Utility.SafeInteger(companion.disp, 1, AzeCaught.MAXIMUM_ID)
+    local fighter = { npc = companion.npc, n = entry.n, cls = entry.cls, disp = ownDisplay or entry.disp or 0,
         ty = type(entry.st) == "table" and entry.st.type or 0, al = level,
         nk = type(companion.info) == "table" and companion.info.nick or nil,
         tl = AzeCaught.CompanionLevel(companion) }   -- the TLevel when the team was sent (display only)

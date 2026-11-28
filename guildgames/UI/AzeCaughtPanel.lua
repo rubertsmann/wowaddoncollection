@@ -680,6 +680,8 @@ function Panel.ShowCompanionTooltip(tooltip, companion, hint)
     if AzeCaught.HasNickname(companion) then tooltip:AddLine(Escape(AzeCaught.SpeciesName(companion)), 0.85, 0.85, 0.85) end
     local at, map = AzeCaught.CatchOrigin(companion)
     tooltip:AddLine(addon.Model.CatchOriginText(at, addon.Api.MapName(map), rawget(_G, "date")), 0.55, 0.8, 1)
+    local gender = addon.Model.GenderText(AzeCaught.CompanionSex(companion))
+    if gender then tooltip:AddLine(Text["Gender"] .. ": " .. gender, 0.85, 0.85, 0.85) end
     if hint then tooltip:AddLine(hint, 0.6, 0.6, 0.6) end
     tooltip:Show()
 end
@@ -697,18 +699,35 @@ local function attachInfoPanel(model, getNpc)
     model:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
 end
 
+-- The collection entry of `companion`'s NPC for the info panel, with the companion's own gender (an NPC can be both).
+---@param companion table
+---@return CollectionEntry|nil
+local function entryOf(companion)
+    local entry = AzeCaught.State().collection[companion.npc]
+    local sex = AzeCaught.CompanionSex(companion)
+    if not entry or not sex then return entry end
+    local copy = {}
+    for key, value in pairs(entry) do copy[key] = value end
+    copy.st = {}
+    for key, value in pairs(type(entry.st) == "table" and entry.st or {}) do copy.st[key] = value end
+    copy.st.sex = sex
+    return copy
+end
+
 ---@return integer|nil npcID
 ---@return CollectionEntry|nil
 local function companionNpc()
     local companion = AzeCaught.Active()
     if not companion then return nil, nil end
-    return companion.npc, AzeCaught.State().collection[companion.npc]
+    return companion.npc, entryOf(companion)
 end
 
 ---@return integer|nil npcID
 ---@return CollectionEntry|nil
 local function previewNpc()
     local npcID = Panel.state.previewNpc
+    local companion = AzeCaught.Companion(Panel.state.previewUid)
+    if npcID and companion and companion.npc == npcID then return npcID, entryOf(companion) end
     return npcID, npcID and AzeCaught.State().collection[npcID] or nil
 end
 Panel.CompanionNpc, Panel.PreviewNpc = companionNpc, previewNpc
@@ -798,7 +817,7 @@ local function createCollectionRow(list)
     row.info = Widgets.CreateFontString(row, "GameFontHighlightSmall", "RIGHT"); row.info:SetPoint("RIGHT", -2, 0); row.info:SetWidth(60)
     row:SetScript("OnEnter", function(self)
         self.hover:Show()
-        if self.entry then Panel.state.previewNpc = self.entry.npc; Panel.RefreshPreview() end
+        if self.entry then Panel.state.previewNpc, Panel.state.previewUid = self.entry.npc, self.entry.uid; Panel.RefreshPreview() end
         local companion = self.entry and AzeCaught.Companion(self.entry.uid)
         if companion and GameTooltip then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -904,7 +923,7 @@ end
 ---@param npcID integer
 ---@param uid? string the roster companion (caught section)
 function Panel.SelectRow(npcID, uid)
-    Panel.state.selectedNpc, Panel.state.selectedUid, Panel.state.previewNpc = npcID, uid, npcID
+    Panel.state.selectedNpc, Panel.state.selectedUid, Panel.state.previewNpc, Panel.state.previewUid = npcID, uid, npcID, uid
     local entry = AzeCaught.State().collection[npcID]
     widgets.collectionStatus:SetText(not uid and entry and (entry.caught or 0) < 1 and Text["Only caught NPCs can be your companion."] or "")
     if widgets.collectionList then widgets.collectionList:Refresh() end
@@ -1532,7 +1551,10 @@ function Panel.RefreshPreview()
         Panel.ShowHistoryBadges(nil, nil)
         return
     end
-    showModel(widgets.previewModel, { npc = Panel.state.previewNpc, disp = entry.disp }, "preview")
+    -- a caught companion shows its own look (an NPC can be male or female), a found NPC the look it was seen with
+    local companion = AzeCaught.Companion(Panel.state.previewUid)
+    local display = companion and companion.npc == Panel.state.previewNpc and (tonumber(companion.disp) or 0) > 0 and companion.disp or entry.disp
+    showModel(widgets.previewModel, { npc = Panel.state.previewNpc, disp = display }, "preview")
     widgets.previewText:SetText(("%s\n%s %d · %s"):format(addon.Utility.Escape(addon.Utility.ShortText(entry.n, 20)), Text["Level"], entry.lvl, rarityText(entry.cls)))
     Panel.ShowHistoryBadges(Panel.state.previewNpc, entry)
 end
@@ -1594,7 +1616,7 @@ function Panel.RefreshView()
         widgets.sectionButtons.seen:SetLabel(Format(Text["Seen {n}"], { n = #sections.seen }))
         local rows = sections[Panel.state.section] or sections.caught
         widgets.collectionList:SetData(rows)
-        if not Panel.state.previewNpc and rows[1] then Panel.state.previewNpc = rows[1].npc end
+        if not Panel.state.previewNpc and rows[1] then Panel.state.previewNpc, Panel.state.previewUid = rows[1].npc, rows[1].uid end
         Panel.RefreshPreview()
         refreshSwitchButton()
     end
