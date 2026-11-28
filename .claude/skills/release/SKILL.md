@@ -13,6 +13,8 @@ else (unrelated working-tree changes) goes into it unless the user says so.
 ## Pick the version
 - Read `<addon>/CHANGELOG.md` "## Unreleased" and `git log <addon>/v<last>..HEAD -- <addon> libguildsync` (a library
   change ships in every addon that embeds it: mention it for each).
+- Read `<addon>/bugs/INDEX.md` (if present): every bug in `verifying` whose fix is in this release gets `Fixed in`
+  set to X.Y.Z (bug.md and the INDEX row); it becomes `fixed` only after its in-game confirmation (bug-workflow).
 - Semver from what changed: fix only -> patch, new feature or protocol minor -> minor. Protocol/schema changes need the
   decisions written in the feature's spec (see `docs/protocol.md` of the addon).
 - Nothing unreleased -> say so and stop.
@@ -37,7 +39,7 @@ else (unrelated working-tree changes) goes into it unless the user says so.
    `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Stage paths explicitly (never `git add -A`).
 6. **Tag** (lightweight, prefixed): `git tag <addon>/vX.Y.Z`, then `git push origin master <addon>/vX.Y.Z`.
 7. **Zip:** `powershell -File <addon>/tools/package.ps1` on the release commit -> `<addon>/dist/<Name>-X.Y.Z.zip`.
-   Check: one top-level `<Name>/` folder, TOC says `X.Y.Z`, no `tests/`, `features/`, `-Dev.toc` entries, LibGuildSync
+   Check: one top-level `<Name>/` folder, TOC says `X.Y.Z`, no `tests/`, `features/`, `bugs/`, `-Dev.toc` entries, LibGuildSync
    files present (the link is followed). NEVER run package.ps1 on unreleased work: it overwrites the zip of the
    current TOC version.
 8. **CurseForge:** from the repo root

@@ -7,6 +7,10 @@ description: Plan, document and verify a new feature for any addon in the wowadd
 
 **Monorepo:** git root is `wowaddons/`; every addon folder has its own `features/` (paths below are relative to the addon folder). Feature ids are unique across all addons (the scaffold script scans every `<addon>/features`). Run the script from the root with `-Root <addon>`. The project quick reference at the bottom is ProfessionShare's; for GuildGames read `guildgames/README.md` (tests `luajit tests/run.lua`, `/gg`, `/ggd`) and `guildgames/docs/protocol.md`.
 
+Bugs (the code does something other than its spec/doc says, errors, or stays silent) are tracked with the sister
+skill `bug-workflow` in `<addon>/bugs/`, not here. A bug found while verifying a feature: open it there and write
+"moved to bug B<NNN>" in the feature's verify.md row.
+
 Every feature lives in **one folder** with **fixed files**, so anyone (you after a context reset, the user, a reviewer) can read the state in under a minute. Never keep state only in chat.
 
 ```

@@ -20,6 +20,7 @@ ignore:
   - icon.png
   - review
   - features
+  - bugs
   - ProfessionShare-Dev.toc
   - .claude
   - .github
