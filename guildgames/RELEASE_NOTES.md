@@ -1,3 +1,10 @@
+# GuildGames 0.15.1
+
+Fix: getting attacked while Companion Dash is open no longer fills your log with "blocked" errors, and your
+keys always reach the game during a fight. You can keep playing a run in combat; your jump and duck keys still work
+there, but they also do their normal action in the game. Updating is recommended, but players on 0.15.0 can still play
+with you.
+
 # GuildGames 0.15.0
 
 Putting your companion to sleep now stops a training that is still running, the same way switching companions does.

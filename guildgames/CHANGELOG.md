@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.15.1 (2026-11-28, protocol 1.9, schema 3, LibGuildSync MINOR 6)
 - Fix: Companion Dash no longer makes the client block a protected function when you are attacked while it is open ("blocked ... blamed this addon" in the log). Its keyboard calls are skipped in combat, and a fight start hands every key back to the game, so a run can no longer swallow keys in a fight.
 
 ## 0.15.0 (2026-11-28, protocol 1.9, schema 3, LibGuildSync MINOR 6)
