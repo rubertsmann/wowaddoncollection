@@ -228,9 +228,21 @@ end
 
 ------------------------------------------------------------------ a run
 
+-- EnableKeyboard and SetPropagateKeyboardInput are protected in combat: the client blocks them and blames the addon.
+-- Combat start hands every key to the game (see the events below); in combat the area only listens.
+---@return boolean
+local function inCombat() return (InCombatLockdown and InCombatLockdown()) and true or false end
+
+---@param enabled boolean
+local function setKeyboard(enabled)
+    if inCombat() or not widgets.area.EnableKeyboard then return end
+    pcall(widgets.area.EnableKeyboard, widgets.area, enabled)
+end
+
 ---@param handled boolean
 local function propagate(handled)
-    if widgets.area.SetPropagateKeyboardInput then pcall(widgets.area.SetPropagateKeyboardInput, widgets.area, not handled) end
+    if inCombat() or not widgets.area.SetPropagateKeyboardInput then return end
+    pcall(widgets.area.SetPropagateKeyboardInput, widgets.area, not handled)
 end
 
 ---@param result RunnerResult
@@ -250,7 +262,7 @@ local function finish(run)
     local state = RunnerView.state
     state.run, state.scroll = nil, run.distance
     state.input.jump, state.input.duck = false, false
-    if widgets.area.EnableKeyboard then pcall(widgets.area.EnableKeyboard, widgets.area, false) end
+    setKeyboard(false)
     local crashed = run.crashedInto and run.pool[run.crashedInto.pick]
     local result = Runner.Finish(run, addon.Utility.Me(), addon.Utility.Now())
     result.item = run.item
@@ -289,7 +301,7 @@ function RunnerView.Start()
     state.input.jump, state.input.duck = false, false
     widgets.resultText:SetText(""); widgets.hintText:Hide()
     for _, slot in ipairs(widgets.obstacles) do slot.id = nil; slot.model:Hide(); slot.shadow:Hide() end
-    if widgets.area.EnableKeyboard then pcall(widgets.area.EnableKeyboard, widgets.area, true) end
+    setKeyboard(true)
     addon.CompanionModel.Load(widgets.runner, companion)
     addon.CompanionModel.Play(widgets.runner, addon.CompanionModel.ANIMATION.run, true)
     addon.GamesTab.SetBusy(true)
@@ -465,3 +477,23 @@ end
 
 addon.Events.On("CAUGHT_CHANGED", function() if not RunnerView.state.run then RunnerView.Refresh() end end)
 addon.Events.On("ITEMS_CHANGED", function() if widgets.area then paintItems() end end)
+
+------------------------------------------------------------------ combat
+
+-- PLAYER_REGEN_DISABLED runs just before the lockdown, so protected calls still work: keys go to the game for the whole
+-- fight (a run still sees them). After the fight the area stops listening if no run is open.
+local combatFrame = CreateFrame("Frame")
+for _, gameEvent in ipairs({ "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }) do
+    pcall(combatFrame.RegisterEvent, combatFrame, gameEvent)
+end
+combatFrame:SetScript("OnEvent", function(_, gameEvent)
+    addon.Log.Protected("games.runner.combat", "a runner combat event failed (" .. tostring(gameEvent) .. ")", function()
+        local area = widgets.area
+        if not area then return end
+        if gameEvent == "PLAYER_REGEN_DISABLED" then
+            if area.SetPropagateKeyboardInput then pcall(area.SetPropagateKeyboardInput, area, true) end
+        elseif not RunnerView.state.run then
+            setKeyboard(false)
+        end
+    end)
+end)

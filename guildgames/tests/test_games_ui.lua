@@ -50,7 +50,12 @@ end
 local function setup(harness, options)
     local world = { refusedTypes = (options and options.refusedTypes) or {}, played = {}, fired = {}, sounds = 0 }
     local saved = { CreateFrame = _G.CreateFrame, BreakUpLargeNumbers = _G.BreakUpLargeNumbers }
-    _G.CreateFrame = function(kind) return newWidget(world, kind) end
+    world.frames = {}
+    _G.CreateFrame = function(kind)
+        local frame = newWidget(world, kind)
+        world.frames[#world.frames + 1] = frame
+        return frame
+    end
     _G.BreakUpLargeNumbers = nil
     local addon = harness.addon({ now = NOW })
     addon.Store.db.me = "Me-R"
@@ -589,6 +594,53 @@ return {
                 harness.equal(row.UpdateWarning().level, "error")
             end)
             _G.GameTooltip = savedTooltip
+            if not ok then error(problem, 0) end
+        end)
+    end,
+    ["games ui: the runner makes no protected keyboard call in combat and hands the keys to the game when a fight starts"] = function(harness)
+        withSetup(harness, nil, function(addon, world)
+            local RunnerView = addon.RunnerView
+            local combatFrame
+            for _, frame in ipairs(world.frames) do
+                if frame.scripts.OnEvent then combatFrame = frame end
+            end
+            harness.truthy(combatFrame, "the runner listens to combat events")
+            RunnerView.Build(newWidget(world, "Frame"))
+            local area = RunnerView.widgets.area
+            harness.truthy(area, "the play area was built")
+            local calls, locked = {}, false
+            area.EnableKeyboard = function(_, enabled)
+                if locked then error("blocked: EnableKeyboard in combat") end
+                calls[#calls + 1] = "keyboard " .. tostring(enabled)
+            end
+            area.SetPropagateKeyboardInput = function(_, passOn)
+                if locked then error("blocked: SetPropagateKeyboardInput in combat") end
+                calls[#calls + 1] = "propagate " .. tostring(passOn)
+            end
+            local savedLockdown = _G.InCombatLockdown
+            _G.InCombatLockdown = function() return locked end
+            local ok, problem = pcall(function()
+                RunnerView.state.run = {}
+                area.scripts.OnKeyDown(area, "SPACE")
+                harness.equal(calls[#calls], "propagate false", "out of combat a jump key is kept from the game")
+                -- the fight starts: the handler runs before the lockdown and passes every key on
+                combatFrame.scripts.OnEvent(combatFrame, "PLAYER_REGEN_DISABLED")
+                harness.equal(calls[#calls], "propagate true", "a fight hands the keys back to the game")
+                locked = true
+                local before = #calls
+                area.scripts.OnKeyDown(area, "SPACE")
+                harness.truthy(RunnerView.state.input.jump, "the run still sees the jump key in combat")
+                area.scripts.OnKeyDown(area, "B")
+                RunnerView.state.run = nil
+                area.scripts.OnKeyDown(area, "SPACE")
+                harness.equal(#calls, before, "no protected call in combat")
+                -- the fight ends without an open run: the area stops listening
+                locked = false
+                combatFrame.scripts.OnEvent(combatFrame, "PLAYER_REGEN_ENABLED")
+                harness.equal(calls[#calls], "keyboard false")
+            end)
+            _G.InCombatLockdown = savedLockdown
+            RunnerView.state.run = nil
             if not ok then error(problem, 0) end
         end)
     end,
