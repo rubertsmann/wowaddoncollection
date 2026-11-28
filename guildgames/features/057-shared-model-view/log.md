@@ -51,3 +51,11 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: "SPLIT CLEAN: yes", "REUSE GUARANTEED: yes"; all offline rows pass, R9 (no visible change) needs the game
 - Evidence: `luajit tests/run.lua` -> 255 passed, 0 failed; planted `frame["SetAnimation"](frame, 1)` reported
 - Next: user: restart the game on branch feature/model-display and run the in-game checklist in verify.md; then done + merge to master
+
+## 2026-11-28 14:06 | VERIFY | Final sweep by a second, simple subagent
+- Did: grep of Core/ and UI/ for every model frame word (frame types, load, animation, camera, model file calls) outside UI/ModelView.lua
+- Result: "LEFTOVER MODEL CODE: none"; the only hits are the allowed hidden look capture (Catcher.CreatureDisplay /
+  CaptureDisplay and helpers, Api.IdentityProbe / GenderProbe), DevProbe, a "HasAnimation missing" text in /gg caught probe
+  and a comment in Core/View/Model.lua; every creature display gets its view from addon.ModelView.New
+- Evidence: the subagent's report (this entry)
+- Next: user: in-game checklist in verify.md on branch feature/model-display; then done + merge to master
