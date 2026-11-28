@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.16.1 (2026-11-28, protocol 1.9, schema 3, LibGuildSync MINOR 6)
 - Every 3D creature model (the companion view and the pet view, the collection and guild previews, the arena replay, the team dialog, Companion Dash, the Survivor tower) is now drawn by one shared model view (`UI/ModelView.lua`, feature 057). They keep their sizes, cameras, poses, emotes, turning and zooming. Small differences: a model that finishes loading late keeps its current pose and facing (an arena fighter no longer drops its ready stance or stands up while dead), an arena move a creature has no animation for plays its closest fallback, and the window scale refresh now also re-frames the AZEcaught views. `UI/CompanionModel.lua` and the AZEcaught panel's own model code are gone.
 
 ## 0.16.0 (2026-11-28, protocol 1.9, schema 3, LibGuildSync MINOR 6)

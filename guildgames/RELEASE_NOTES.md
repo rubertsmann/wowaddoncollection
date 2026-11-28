@@ -1,3 +1,13 @@
+# GuildGames 0.16.1
+
+Under the hood: every 3D creature in GuildGames (your companion in the AZEcaught window and in the small pet view, the
+collection and guild previews, the arena replay, the team picker, Companion Dash and Survivor) is now drawn by the
+same code, so they all behave the same way. Nothing should look different. Small improvements: an arena fighter keeps
+its fighting stance (and stays down once defeated) even when its model finishes loading late, and resizing the window
+now re-frames the companion views too.
+
+No need for the whole guild to update at the same time: this version talks to older ones as before.
+
 # GuildGames 0.16.0
 
 Fix: your companion no longer switches between its male and female version (or another look of the same creature)
