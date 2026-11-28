@@ -122,7 +122,8 @@ function TeamDialog.BuildCard(parent, side, options)
     portrait:SetSize(size, size); portrait:SetPoint("TOP", 0, -2)
     addon.PetView.Shape(portrait, DISC_TEXTURE, size, { 0.04, 0.04, 0.06, 0.9 }, "BACKGROUND")
     card.ring = addon.PetView.Shape(portrait, RING_TEXTURE, size + 4, { 0.95, 0.78, 0.3, 0.95 }, "BORDER")
-    card.model = addon.AzeCaughtPanel.CreateModel(portrait, size - 6, size - 6)
+    card.view = addon.ModelView.New(portrait, { preset = "portrait", width = size - 6, height = size - 6, area = "team" })
+    card.model = card.view.frame
     card.model:SetPoint("CENTER", 0, -2)
     card.previous = Widgets.CreateButton(card, "<", 12, 16, function() step(-1) end)
     card.previous:SetPoint("RIGHT", portrait, "LEFT", -6, 0)
@@ -224,7 +225,7 @@ function TeamDialog.FillCard(card, team, shown, note, player)
         card.index:SetText(""); card.fighterName:SetText(""); card.fighterInfo:SetText("|cff999999" .. note .. "|r")
         if card.shownFighter ~= false then
             card.shownFighter = false
-            addon.AzeCaughtPanel.ShowModel(card.model, nil, "team")
+            card.view.Show(nil)
         end
         return nil
     end
@@ -238,9 +239,8 @@ function TeamDialog.FillCard(card, team, shown, note, player)
         .. (buffs ~= "" and (" " .. buffs) or ""))
     if card.shownFighter ~= fighter then
         card.shownFighter = fighter
-        addon.AzeCaughtPanel.ShowModel(card.model, { npc = fighter.npc, disp = fighter.disp }, "team")
-        -- the two face each other
-        if card.model.SetFacing then pcall(card.model.SetFacing, card.model, card.side == "left" and 0.6 or -0.6) end
+        card.view.Show({ npc = fighter.npc, disp = fighter.disp })
+        card.view.Face(card.side == "left" and 0.6 or -0.6)   -- the two face each other
     end
     return shown
 end

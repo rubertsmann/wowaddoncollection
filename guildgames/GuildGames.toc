@@ -42,10 +42,10 @@ Core\Game\Events.lua
 
 UI\Helpers.lua
 UI\Animate.lua
+UI\ModelView.lua
 UI\Window.lua
 UI\GamesTab.lua
 UI\SlotMachine.lua
-UI\CompanionModel.lua
 UI\SurvivorArena.lua
 UI\RunnerView.lua
 UI\ShopView.lua

@@ -213,7 +213,7 @@ end
 
 ---@return CareTarget
 function PetView.CareTarget()
-    return { parent = widgets.frame, model = widgets.model }
+    return { parent = widgets.frame, view = widgets.modelView }
 end
 
 ---@return number left, number top the view's top-left corner in UIParent units
@@ -277,10 +277,11 @@ local function build()
     widgets.backdrop = disc(pet, PET_SIZE, { 0.04, 0.04, 0.06, 0.85 }, "BACKGROUND")
     widgets.outline = PetView.Shape(pet, THIN_RING_TEXTURE, PET_SIZE + 4, { OUTLINE_COLOR[1], OUTLINE_COLOR[2], OUTLINE_COLOR[3], 0.95 }, "BORDER")
     widgets.pet = pet
-    local model = CreateFrame("DressUpModel", nil, pet)
-    model:SetSize(PET_SIZE - 6, PET_SIZE - 6); model:SetPoint("CENTER", 0, -2)
-    if model.SetKeepModelOnHide then model:SetKeepModelOnHide(true) end
-    addon.AzeCaughtPanel.PrepareModel(model, addon.AzeCaughtPanel.IdleOfCompanion)
+    -- the pet frame takes the clicks and the drag: no turning or zooming here
+    widgets.modelView = addon.ModelView.New(pet, { preset = "portrait", width = PET_SIZE - 6, height = PET_SIZE - 6, companion = true,
+        turn = false, zoom = false, area = "petView" })
+    local model = widgets.modelView.frame
+    model:SetPoint("CENTER", 0, -2)
     widgets.model = model
     -- no companion: a dimmed placeholder; a click opens the full window at AZEcaught
     local placeholder = CreateFrame("Button", nil, pet)
@@ -357,16 +358,12 @@ local function build()
         if sinceRefresh < REFRESH_SECONDS then return end
         sinceRefresh = 0
         addon.Log.Protected("petView.refresh", "refreshing the pet view failed", PetView.Refresh)
-        addon.Log.Protected("petView.emote", "an idle emote failed", addon.AzeCaughtPanel.MaybeIdleEmote, widgets.model)
+        addon.Log.Protected("petView.emote", "an idle emote failed", widgets.modelView.Tick)
     end)
     frame:SetScript("OnHide", function() hideTooltip(); PetView.CloseTraining() end)
     frame:SetScript("OnShow", function()
-        model.shownKey = nil   -- the model resets on show: load it again
         PetView.Refresh()
-        addon.AzeCaughtPanel.IdleOfCompanion(model, "petViewShown")
-        if C_Timer then C_Timer.After(0.3, function()
-            if frame:IsVisible() then addon.AzeCaughtPanel.FitCamera(model); addon.AzeCaughtPanel.IdleOfCompanion(model, "petViewShownLate") end
-        end) end
+        widgets.modelView.Reload("petViewShown")   -- the model resets on show
     end)
     addon.Events.On("CAUGHT_CHANGED", function() if frame:IsShown() then PetView.Refresh() end end)
     addon.Events.On("CARE_COOLDOWN", function() if frame:IsShown() then PetView.Refresh() end end)
@@ -478,10 +475,7 @@ function PetView.Refresh()
     widgets.placeholder:SetShown(companion == nil)
     widgets.model:SetShown(companion ~= nil)
     widgets.heart:SetShown(companion ~= nil)
-    addon.AzeCaughtPanel.ShowModel(widgets.model, companion, "petView")
-    if companion and widgets.model.asleepShown ~= (companion.asleep ~= nil) then
-        addon.AzeCaughtPanel.IdleOfCompanion(widgets.model, companion.asleep and "fellAsleep" or "wokeUp")
-    end
+    widgets.modelView.Show(companion)
     for key, gauge in pairs(widgets.gauges) do fillGauge(gauge, key, companion) end
     PetView.RefreshTraining()
     if companion then

@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Every 3D creature model (the companion view and the pet view, the collection and guild previews, the arena replay, the team dialog, Companion Dash, the Survivor tower) is now drawn by one shared model view (`UI/ModelView.lua`, feature 057). They keep their sizes, cameras, poses, emotes, turning and zooming. Small differences: a model that finishes loading late keeps its current pose and facing (an arena fighter no longer drops its ready stance or stands up while dead), an arena move a creature has no animation for plays its closest fallback, and the window scale refresh now also re-frames the AZEcaught views. `UI/CompanionModel.lua` and the AZEcaught panel's own model code are gone.
+
 ## 0.16.0 (2026-11-28, protocol 1.9, schema 3, LibGuildSync MINOR 6)
 - Fixed: a companion no longer switches between its male and female look (or other looks of the same NPC) from one view to the next. A new catch keeps the look of the very creature you caught, and companions caught before get one look the first time they are loaded and keep it. The look is saved and sent to the guild in the existing display field (no protocol change). The Caught list and its preview show each companion's own look.
 - The companion tooltip in the collection shows its gender (male / female), as the game told it for a creature seen with that look; the info panel over the preview shows the companion's gender too, not the NPC's. A collection entry remembers the gender of each look it was seen with (new optional field `sx`, schema unchanged).

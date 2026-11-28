@@ -18,9 +18,6 @@ local Text, Format = addon.Text, addon.Locale.Format
 local HEART_ICON = "Interface\\Icons\\INV_ValentinesCandy"
 local ZONE_COLOR = { ok = { 0.3, 0.85, 0.35 }, needy = { 1, 0.75, 0.15 }, critical = { 1, 0.25, 0.2 }, empty = { 0.6, 0.1, 0.1 } }
 local ACTION_COLOR = { feed = { 1, 0.6, 0.2 }, water = { 0.3, 0.65, 1 }, pet = { 1, 0.45, 0.75 }, sleep = { 0.65, 0.5, 1 }, wake = { 1, 1, 0.6 } }
--- emote animation candidates per action; the first the model has is played (/gg caught probe lists what it has)
-local EMOTES = { feed = { 61, 74, 0 }, water = { 61, 0 }, pet = { 68, 67, 70, 74, 0 }, sleep = { 71, 100, 0 }, wake = { 4, 74, 0 },
-    idle = { 0 }, asleep = { 71, 100, 0 } }
 local RARITY_COLOR = { normal = "ffffff", elite = "ffd100", rare = "c0c0c0", rareelite = "a335ee", worldboss = "ff8000" }
 local NEED_ORDER = AzeCaught.NEEDS
 local CARE_COOLDOWN = 1.5    -- seconds the care buttons stay locked after a click
@@ -44,21 +41,6 @@ local function inlineIcon(key, size)
     return ("|T%s:%d:%d:0:0:64:64:5:59:5:59|t"):format(HISTORY_ICONS[key], size, size)
 end
 Panel.InlineIcon = inlineIcon
-local EMOTE_SECONDS = 2.5   -- an action's emote plays this long, then the model goes back to idle
--- the camera: full body (portrait zoom 0), then the camera this much farther away than the client's own fit; the mouse wheel
--- changes it per NPC for the session
-local MODEL_CAMERA_DISTANCE = 1.35
-local MODEL_ZOOM_LIMITS = { 0.6, 4 }
-local MODEL_ZOOM_STEP = 1.15
-Panel.zoomByNpc = {}       -- camera distance chosen with the mouse wheel, by NPC id (session only)
--- per model: a counter that voids older "back to idle" timers (kept off the frame itself)
-local emoteTokens = setmetatable({}, { __mode = "k" })
----@param model table
----@return integer the new token
-local function nextEmoteToken(model)
-    emoteTokens[model] = (emoteTokens[model] or 0) + 1
-    return emoteTokens[model]
-end
 local BAR_WIDTH = 210   -- the label is an icon, so the bar takes the room
 
 ---@class AzeCaughtPanelState
@@ -143,182 +125,6 @@ end
 
 local duration = addon.Model.Duration
 
------------------------------------------------------------------- 3D model (fpvcigarette's method)
-
----@param model table DressUpModel
----@param companion { npc: integer, disp: integer }|nil
----@param area string journal area
-local function showModel(model, companion, area)
-    if not model then return end
-    if not companion then pcall(model.ClearModel, model) model.shownKey = nil return end
-    local key = tostring(companion.npc) .. ":" .. tostring(companion.disp)
-    if model.shownKey == key then return end
-    model.shownKey = key
-    pcall(model.ClearModel, model)
-    local ok, problem, method = false, nil, nil
-    if (companion.disp or 0) > 0 then
-        ok, problem = pcall(model.SetDisplayInfo, model, companion.disp)
-        method = "display"
-    end
-    if not ok and model.SetCreature then
-        ok, problem = pcall(model.SetCreature, model, companion.npc)
-        method = "creature"
-    end
-    pcall(model.SetFacing, model, 0.4)
-    model.npc = companion.npc
-    local camera = ok and Panel.FitCamera(model) or {}
-    if ok and model.idleFunction then model.idleFunction(model, "set") end
-    AzeCaught.Journal(ok and "DEBUG" or "WARNING", "model." .. area, ok and "a model was loaded" or "a model could not be loaded",
-        { npc = companion.npc, display = companion.disp, method = method or "none", error = problem and tostring(problem) or nil,
-          camera = camera.camera, portrait = camera.portrait, distance = camera.distance })
-end
-
--- Frames the whole model: no portrait zoom, the camera at MODEL_CAMERA_DISTANCE (or the wheel's choice for this NPC),
--- the model centred. Runs after every load (a load resets the camera). Each call is guarded: clients differ.
----@param model table
----@return table applied which calls worked (journal, tests)
-function Panel.FitCamera(model)
-    local distance = (model.npc and Panel.zoomByNpc[model.npc]) or MODEL_CAMERA_DISTANCE
-    local applied = { distance = distance }
-    applied.portrait = model.SetPortraitZoom ~= nil and pcall(model.SetPortraitZoom, model, 0)
-    applied.position = model.SetPosition ~= nil and pcall(model.SetPosition, model, 0, 0, 0)
-    applied.camera = model.SetCamDistanceScale ~= nil and pcall(model.SetCamDistanceScale, model, distance)
-    return applied
-end
-
--- The mouse wheel zooms (up = closer), limited to MODEL_ZOOM_LIMITS, remembered per NPC for the session.
----@param model table
----@param delta number
-function Panel.ZoomModel(model, delta)
-    local current = (model.npc and Panel.zoomByNpc[model.npc]) or MODEL_CAMERA_DISTANCE
-    local distance = addon.Utility.Clamp(delta > 0 and current / MODEL_ZOOM_STEP or current * MODEL_ZOOM_STEP,
-        MODEL_ZOOM_LIMITS[1], MODEL_ZOOM_LIMITS[2])
-    if model.npc then Panel.zoomByNpc[model.npc] = distance end
-    if model.SetCamDistanceScale then pcall(model.SetCamDistanceScale, model, distance) end
-end
-
--- Plays the first animation of `candidates` the model has (HasAnimation when the client offers it).
----@param model table
----@param candidates integer[]
----@param reason string
-local function playEmote(model, candidates, reason)
-    if not model or not model.SetAnimation then return end
-    local chosen = candidates[#candidates]
-    if model.HasAnimation then
-        for _, animationID in ipairs(candidates) do
-            local ok, has = pcall(model.HasAnimation, model, animationID)
-            if ok and has then chosen = animationID break end
-        end
-    else
-        chosen = candidates[1]
-    end
-    local ok, problem = pcall(model.SetAnimation, model, chosen)
-    AzeCaught.Journal(ok and "DEBUG" or "WARNING", "model.emote", ok and "an animation was played" or "an animation failed",
-        { reason = reason, animation = chosen, hasCheck = model.HasAnimation ~= nil, error = problem and tostring(problem) or nil })
-end
-
--- The idle pose of the companion model: the sleep animation while it sleeps, else the stand (0).
----@param model table
----@param reason string
-function Panel.IdleOfCompanion(model, reason)
-    local companion = AzeCaught.Active()
-    local asleep = companion ~= nil and companion.asleep ~= nil
-    model.asleepShown = asleep
-    playEmote(model, asleep and EMOTES.asleep or EMOTES.idle, "idle:" .. reason)
-end
-
----@param model table
----@param reason string
-local function previewIdle(model, reason) playEmote(model, EMOTES.idle, "idle:" .. reason) end
-
--- `idleFunction(model, reason)` runs whenever the model has (re)loaded: a model resets its animation on load, and an
--- animation set before an asynchronous load finishes is lost.
----@param model table
----@param idleFunction fun(model: table, reason: string)
-function Panel.PrepareModel(model, idleFunction)
-    model.idleFunction = idleFunction
-    pcall(model.SetScript, model, "OnModelLoaded", function(self)
-        Panel.FitCamera(self)
-        if self.idleFunction then self.idleFunction(self, "loaded") end
-    end)
-end
-
--- Plays an emote, then the idle pose after EMOTE_SECONDS; a newer emote (or the menu showing) voids the timer.
----@param model table
----@param candidates integer[]
----@param reason string
-function Panel.EmoteThenIdle(model, candidates, reason)
-    playEmote(model, candidates, reason)
-    model.busyUntil = addon.Api.Clock() + EMOTE_SECONDS
-    local token = nextEmoteToken(model)
-    if C_Timer then
-        C_Timer.After(EMOTE_SECONDS, function()
-            if emoteTokens[model] == token then Panel.IdleOfCompanion(model, "after:" .. reason) end
-        end)
-    end
-end
-
--- Now and then an awake companion does something on its own: a random animation it has (Model.IDLE_EMOTES), then
--- back to idle. Called from the views' refresh; the first one comes a while after the model was shown.
----@param model table
-function Panel.MaybeIdleEmote(model)
-    local companion = AzeCaught.Active()
-    if not model or not companion or companion.asleep or not model:IsVisible() then model.nextIdleEmoteAt = nil return end
-    local clock = addon.Api.Clock()
-    if not model.nextIdleEmoteAt then model.nextIdleEmoteAt = clock + addon.Model.IdleEmoteDelay(math.random) return end
-    local forced = clock < (Panel.idleEmoteForcedUntil or 0) and model.forcedAt ~= Panel.idleEmoteForcedUntil
-    if (clock < model.nextIdleEmoteAt and not forced) or clock < (model.busyUntil or 0) then return end
-    if forced then model.forcedAt = Panel.idleEmoteForcedUntil end
-    model.nextIdleEmoteAt = clock + addon.Model.IdleEmoteDelay(math.random)
-    local candidates = {}
-    for _, animationID in ipairs(addon.Model.ShuffledIdleEmotes(math.random)) do
-        local has = true
-        if model.HasAnimation then
-            local ok, result = pcall(model.HasAnimation, model, animationID)
-            has = ok and result and true or false
-        end
-        if has then candidates[#candidates + 1] = animationID end
-    end
-    if #candidates == 0 then return end
-    candidates[#candidates + 1] = 0
-    Panel.EmoteThenIdle(model, candidates, "idleEmote")
-end
-
--- The companion model back to idle now (the menu shows, a view switches back).
----@param reason string
-function Panel.ShowIdle(reason)
-    if widgets.model then
-        nextEmoteToken(widgets.model)   -- a pending "after action" timer is void
-        Panel.IdleOfCompanion(widgets.model, reason)
-    end
-end
-
----@param parent table
----@param width number
----@param height number
----@param idleFunction fun(model: table, reason: string)
----@return table model
-local function createModel(parent, width, height, idleFunction)
-    local model = CreateFrame("DressUpModel", nil, parent)
-    model:SetSize(width, height)
-    if model.SetKeepModelOnHide then model:SetKeepModelOnHide(true) end
-    model:EnableMouse(true)
-    model:SetScript("OnMouseDown", function(self, button)
-        if button == "RightButton" then self.turnFrom = GetCursorPosition() end
-    end)
-    model:SetScript("OnMouseUp", function(self) self.turnFrom = nil end)
-    if model.EnableMouseWheel then model:EnableMouseWheel(true) end
-    model:SetScript("OnMouseWheel", function(self, delta) Panel.ZoomModel(self, delta) end)
-    Panel.PrepareModel(model, idleFunction or previewIdle)
-    model:SetScript("OnUpdate", function(self)
-        if not self.turnFrom then return end
-        local cursorX = GetCursorPosition()
-        pcall(self.SetFacing, self, (self:GetFacing() or 0) + (cursorX - self.turnFrom) * 0.02)
-        self.turnFrom = cursorX
-    end)
-    return model
-end
-Panel.CreateModel, Panel.ShowModel = createModel, showModel   -- the arena view uses the same models
 
 ------------------------------------------------------------------ need bars
 
@@ -471,7 +277,7 @@ function Panel.CareCooldownLeft()
     return math.max(0, (Panel.state.careReadyAt or 0) - addon.Api.Clock())
 end
 Panel.CARE_COOLDOWN, Panel.CARE_ICONS, Panel.ACTION_COLOR = CARE_COOLDOWN, CARE_ICONS, ACTION_COLOR
-Panel.CareRefusalText, Panel.PlayEmote, Panel.EMOTES, Panel.NeedLabel = careRefusalText, playEmote, EMOTES, needLabel
+Panel.CareRefusalText, Panel.NeedLabel = careRefusalText, needLabel
 Panel.HEART_ICON = HEART_ICON
 
 -- Icons and greyed-out state of the clickable need bars (AzeCaught.CareAvailability; the cooldown greys them too).
@@ -516,14 +322,14 @@ end
 
 ---@class CareTarget where a care action's effects show
 ---@field parent table the frame the burst is drawn on
----@field model table the model that plays the emote
+---@field view ModelViewObject the companion view that plays the emote
 ---@field heartIcon table|nil pulses on a heart gain
 ---@field floatText table|nil the "+n hearts" text (nil: no floating text)
 ---@field status fun(text: string)|nil shows the refusal or the price paid (nil: the refusal goes to the error line)
 
 ---@return CareTarget
 local function panelTarget()
-    return { parent = widgets.companionView, model = widgets.model, heartIcon = widgets.heartIcon, floatText = widgets.floatText,
+    return { parent = widgets.companionView, view = widgets.modelView, heartIcon = widgets.heartIcon, floatText = widgets.floatText,
         status = function(text) widgets.statusText:SetText(text) end }
 end
 
@@ -540,7 +346,7 @@ function Panel.Care(action, target)
         return
     end
     local color = ACTION_COLOR[action] or { 1, 1, 1 }
-    local model = target.model
+    local model = target.view.frame
     addon.Animate.Burst("care", target.parent, model, 0, -20, { count = 18, color = color, speed = 120, duration = 1 })
     if result.hearts > 0 then
         if target.floatText then
@@ -548,7 +354,7 @@ function Panel.Care(action, target)
         end
         if target.heartIcon then addon.Animate.Pulse(target.heartIcon, 1.5, 0.4) end
     end
-    Panel.EmoteThenIdle(model, EMOTES[action] or EMOTES.idle, action)
+    target.view.Emote(addon.ModelView.ANIMATION[action] and action or "stand", action)
     addon.Api.PlaySound(addon.Api.SoundKitFor({ "IG_MAINMENU_OPTION_CHECKBOX_ON" }))
     if target.status then target.status(result.cost > 0 and Format(Text["Paid {gold}."], { gold = money(result.cost) }) or "") end
     if result.trainingCancelled then addon.Print(Text["The running training was cancelled."]) end
@@ -769,7 +575,8 @@ end
 local function buildCompanionView(panel)
     local Widgets = addon.UI.Widgets
     widgets.companionView = panel
-    local model = createModel(panel, 300, 150, Panel.IdleOfCompanion)
+    widgets.modelView = addon.ModelView.New(panel, { preset = "portrait", width = 300, height = 150, companion = true, area = "companion" })
+    local model = widgets.modelView.frame
     model:SetPoint("TOP", 0, -24)
     widgets.model = model
     attachInfoPanel(model, companionNpc)
@@ -1011,7 +818,8 @@ local function buildCollectionView(panel)
     end
     widgets.collectionList = Widgets.CreateScrollList(panel, 190, Widgets.ROW_HEIGHT * 11, createCollectionRow, fillCollectionRow)
     widgets.collectionList:SetPoint("TOPLEFT", 4, -46)
-    local preview = createModel(panel, 104, 150)
+    widgets.previewView = addon.ModelView.New(panel, { preset = "portrait", width = 104, height = 150, area = "preview" })
+    local preview = widgets.previewView.frame
     preview:SetPoint("TOPRIGHT", -2, -46)
     widgets.previewModel = preview
     attachInfoPanel(preview, previewNpc)
@@ -1096,7 +904,8 @@ local function buildGuildView(panel)
     widgets.guildEmpty = Widgets.CreateFontString(panel, "GameFontDisable", "CENTER")
     widgets.guildEmpty:SetPoint("TOP", widgets.guildList, "TOP", -10, -60); widgets.guildEmpty:SetWidth(170)
     widgets.guildEmpty:SetText(Text["No guild member has a companion yet."])
-    local preview = createModel(panel, 104, 116)
+    widgets.guildView = addon.ModelView.New(panel, { preset = "portrait", width = 104, height = 116, area = "guild" })
+    local preview = widgets.guildView.frame
     preview:SetPoint("TOPRIGHT", -2, -78)
     widgets.guildModel = preview
     -- hovering the model shows the same info panel as the collection's preview
@@ -1327,20 +1136,15 @@ function Panel.Build(panel)
         elapsedTotal = 0
         if Panel.state.view == "companion" then
             addon.Log.Protected("caught.ui", "refreshing the companion failed", Panel.RefreshCompanion)
-            addon.Log.Protected("caught.ui", "an idle emote failed", Panel.MaybeIdleEmote, widgets.model)
+            addon.Log.Protected("caught.ui", "an idle emote failed", widgets.modelView.Tick)
         end
         if Panel.state.view == "arena" and addon.ArenaView.state.page ~= "guild" then
             addon.Log.Protected("caught.ui", "refreshing the arena failed", addon.ArenaView.Refresh)
         end
     end)
     panel:HookScript("OnShow", function()
-        widgets.model.shownKey = nil   -- the model resets on show: load it again
         Panel.Refresh()
-        Panel.ShowIdle("shown")
-        -- clients without OnModelLoaded: once more after the load had time to finish
-        if C_Timer then C_Timer.After(0.3, function()
-            if widgets.panel:IsVisible() then Panel.FitCamera(widgets.model); Panel.ShowIdle("shownLate") end
-        end) end
+        widgets.modelView.Reload("shown")   -- the model resets on show
     end)
     Panel.state.section = settings().caughtSection == "seen" and "seen" or "caught"
     local view = settings().caughtView
@@ -1415,11 +1219,8 @@ function Panel.RefreshCompanion()
     for _, bar in pairs(widgets.bars) do bar:SetShown(hasCompanion) end
     Panel.RefreshCareButtons()
     addon.ArenaView.RefreshFighter()
-    if not companion then showModel(widgets.model, nil, "companion") return end
-    showModel(widgets.model, companion, "companion")
-    if widgets.model.asleepShown ~= (companion.asleep ~= nil) then
-        Panel.IdleOfCompanion(widgets.model, companion.asleep and "fellAsleep" or "wokeUp")
-    end
+    widgets.modelView.Show(companion)
+    if not companion then return end
     addon.UI.Widgets.FitText(widgets.nameText, ("|cff%s%s|r  |cffaaaaaa%s %d · %s|r"):format(RARITY_COLOR[companion.cls] or "ffffff",
         addon.Utility.Escape(addon.Utility.ShortText(AzeCaught.ShownName(companion), 28)), Text["Level"], companion.lvl, rarityText(companion.cls)))
     widgets.heartText:SetText((companion.hearts < 0 and "|cff993333" or "|cffff4060") .. companion.hearts .. "|r")
@@ -1547,14 +1348,14 @@ end
 function Panel.RefreshPreview()
     local entry = Panel.state.previewNpc and AzeCaught.State().collection[Panel.state.previewNpc]
     if not entry then
-        showModel(widgets.previewModel, nil, "preview") widgets.previewText:SetText("")
+        widgets.previewView.Show(nil) widgets.previewText:SetText("")
         Panel.ShowHistoryBadges(nil, nil)
         return
     end
     -- a caught companion shows its own look (an NPC can be male or female), a found NPC the look it was seen with
     local companion = AzeCaught.Companion(Panel.state.previewUid)
     local display = companion and companion.npc == Panel.state.previewNpc and (tonumber(companion.disp) or 0) > 0 and companion.disp or entry.disp
-    showModel(widgets.previewModel, { npc = Panel.state.previewNpc, disp = display }, "preview")
+    widgets.previewView.Show({ npc = Panel.state.previewNpc, disp = display })
     widgets.previewText:SetText(("%s\n%s %d · %s"):format(addon.Utility.Escape(addon.Utility.ShortText(entry.n, 20)), Text["Level"], entry.lvl, rarityText(entry.cls)))
     Panel.ShowHistoryBadges(Panel.state.previewNpc, entry)
 end
@@ -1562,12 +1363,12 @@ end
 function Panel.RefreshGuildPreview()
     local row = Panel.state.guildRow
     if not row then
-        showModel(widgets.guildModel, nil, "guild") widgets.guildPreviewName:SetText("")
+        widgets.guildView.Show(nil) widgets.guildPreviewName:SetText("")
         for _, badge in ipairs(widgets.guildBadges) do badge:Hide() end
         Panel.state.guildBadgeOwner = nil
         return
     end
-    showModel(widgets.guildModel, { npc = row.npc, disp = row.disp }, "guild")
+    widgets.guildView.Show({ npc = row.npc, disp = row.disp })
     -- the name on top (rarity colour), the stats as badges (arena wins/losses: mine local, others from their record)
     addon.UI.Widgets.FitText(widgets.guildPreviewName, ("|cff%s%s|r"):format(RARITY_COLOR[row.cls] or "ffffff", row.companion), 0.7)
     local isNew = Panel.state.guildBadgeOwner ~= row.nameRaw
