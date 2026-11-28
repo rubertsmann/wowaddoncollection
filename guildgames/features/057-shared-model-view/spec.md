@@ -1,6 +1,6 @@
 # 057 Shared model view: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-28
 - Target version: next minor (no player-visible change intended)
 - Owner: claude

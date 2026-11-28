@@ -59,3 +59,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
   and a comment in Core/View/Model.lua; every creature display gets its view from addon.ModelView.New
 - Evidence: the subagent's report (this entry)
 - Next: user: in-game checklist in verify.md on branch feature/model-display; then done + merge to master
+
+## 2026-11-28 14:12 | DONE | In-game look confirmed, merge and release
+- Did: verify.md R9 IN-GAME from the user's check; status done
+- Result: every row OFFLINE or IN-GAME
+- Evidence: user: "ive started it ingame everything looks fine"; user: "merge it back into the application - commit publish and release"
+- Next: none (released with GuildGames 0.16.1)

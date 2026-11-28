@@ -16,7 +16,7 @@ Result after work:    `luajit tests/run.lua` -> 255 passed, 0 failed
 | R6 | death once, revive | "a dead view stays dead ...", test_load arena re-watch | OFFLINE | 255 passed | pass | 2026-11-28 |
 | R7 | companion views (max + mini) share sleep/ambient/reload | "a companion view sleeps ...", "ambient emote ...", "hidden view only forgets ...", test_load | OFFLINE | 255 passed; review: "REUSE GUARANTEED: yes" | pass | 2026-11-28 |
 | R8 | turn, zoom memory, pad, fallback, afterLoad, RefreshAll | "the wheel zooms ...", "stand-in icon ...", "framed by their size ...", "window scaling ..." | OFFLINE | 255 passed | pass | 2026-11-28 |
-| R9 | no visible change | subagent comparison vs HEAD (differences listed in CHANGELOG); needs the game | NOT-VERIFIED | in-game checklist below | open | |
+| R9 | no visible change | the user started the dev build on the branch and looked at the views | IN-GAME | user: "ive started it ingame everything looks fine" | pass | 2026-11-28 |
 | RF1 | async load resets the animation | "a load (also a late one) plays the loop again" | OFFLINE | 255 passed | pass | 2026-11-28 |
 | RF2 | stale timer / fell asleep meanwhile | "back to idle ...", "an emote's timer after the companion fell asleep ..." | OFFLINE | 255 passed | pass | 2026-11-28 |
 | RF3 | client without optional calls | "a client without the optional calls is fine", "SetScript or HookScript fails" | OFFLINE | 255 passed | pass | 2026-11-28 |
@@ -34,4 +34,4 @@ Result after work:    `luajit tests/run.lua` -> 255 passed, 0 failed
 - [ ] Any Lua error: `/gg caught log 20 model` and `/gg debug`
 
 ## Accepted gaps
-- <row id>: accepted by <user> on <date>, reason:
+- Checklist items not named one by one (arena re-watch, `/ggd caught emote`): covered OFFLINE (test_load re-watch, test_model_view forced emote); the user asked to merge and release after the in-game look (2026-11-28).

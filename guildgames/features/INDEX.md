@@ -26,4 +26,4 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 051 | Daily casino win cap and smaller Survivor payouts | done | GuildGames 0.14.0 (protocol 1.9, schema 3) | - | [051-daily-casino-win-cap-and-smaller-survivor-payouts](051-daily-casino-win-cap-and-smaller-survivor-payouts/spec.md) |
 | 052 | Member builds button (live build and record version, one viewer) | done | GuildGames 0.14.0 (protocol 1.9, schema 3) | - | [052-member-builds-button-live-build-and-record-version-one-viewer](052-member-builds-button-live-build-and-record-version-one-viewer/spec.md) |
 | 053 | Sleeping interrupts a running training | done | GuildGames 0.15.0 (protocol 1.9, schema 3) | - | [053-sleeping-interrupts-a-running-training](053-sleeping-interrupts-a-running-training/spec.md) |
-| 057 | Shared model view | verifying | - | - | [057-shared-model-view](057-shared-model-view/spec.md) |
+| 057 | Shared model view | done | GuildGames 0.16.1 (protocol 1.9, schema 3) | fb087df | [057-shared-model-view](057-shared-model-view/spec.md) |
