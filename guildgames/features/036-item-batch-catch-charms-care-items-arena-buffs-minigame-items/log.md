@@ -54,3 +54,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: released before the in-game checklist in verify.md was run; status stays verifying.
 - Evidence: release commit and tag guildgames/v0.10.0
 - Next: user runs the in-game checklist in verify.md (incl. Second Chance: the rope icon comes back once after it slipped); then set done.
+
+## 2026-11-28 11:55 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "shows and helps and works" (2026-11-28)
+- Next: none

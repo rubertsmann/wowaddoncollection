@@ -20,6 +20,7 @@ Test file abbreviations: DC = tests/test_daily_cap.lua, SV = tests/test_survivor
 | R8 | free play (stake 0) stores nothing in all three games | DC "free play: stake 0 draws a result and stores nothing in every game" | OFFLINE | same run | pass | 2026-11-28 |
 | R9 | no run past 8:00 (200 seeded runs x 3 strategies) | SV "survivor frenzy: every run ends..." | OFFLINE | same run | pass | 2026-11-28 |
 | R10 | UI: pool hover, stake warnings, cut-win text, run refusal text, percent labels, free play texts; enUS + deDE | DC "stake warning: ...", UI "the pool's hover ...", UI tests (dropdown "1:30 x1.1", endless cash out pays 105%), locale test (every key in deDE), DC "percent text" | OFFLINE | same run | pass (layout not seen) | 2026-11-28 |
+| R10-msg | the limit message shows in game | user | IN-GAME | user: "shows a message" | pass | 2026-11-28 |
 | R10-layout | the pool hover and the stake "!" (position right of the copper box, colours, tooltip text) look right | in-game screenshot | NOT-VERIFIED | needs the user | | |
 | RF1 | jackpot far above the limit: record full win, pool +remaining, one `cap` entry | DC "a win above the limit left..." + "the limit is shared..." (slots) | OFFLINE | same run | pass | 2026-11-28 |
 | RF2 | a 1.8 peer keeps an updated record (drops `tower`) | DC "tower section: a peer that does not know the field..." (emulated: field list without `tower`) | OFFLINE | same run; emulation, not the 0.13 code | pass | 2026-11-28 |
@@ -40,4 +41,4 @@ Test file abbreviations: DC = tests/test_daily_cap.lua, SV = tests/test_survivor
 - [ ] A guild member still on 0.13 still sees you in the guild lists after you played a Survivor run on this version.
 
 ## Accepted gaps
-- none yet
+- R10-layout, RF2-real (0.13 peer): closed at the user's status review (2026-11-28).

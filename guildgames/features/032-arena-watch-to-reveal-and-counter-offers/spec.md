@@ -1,6 +1,6 @@
 # 032 Arena watch to reveal and counter offers: spec
 
-- Status: verifying
+- Status: abandoned
 - Created: 2026-11-24
 - Target version: GuildGames 0.6.0 (protocol 1.3, schema 2)
 - Owner: claude

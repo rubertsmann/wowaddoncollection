@@ -10,8 +10,12 @@ Result after work:    `luajit tests/run.lua` -> 60 passed, 0 failed
 | R3 | In-place, holders keep working | same test (order board object keeps storing into the live table) | OFFLINE | tests/test_core.lua | pass | 2026-11-16 |
 | R4 | Refresh, rescan on next open, HELLO | code read | READ-ONLY | Core/Events.lua | not run in game | 2026-11-16 |
 | RF3 | Own empty record not published | NOT guarded beyond reopening the window (see spec Decisions) | NOT-VERIFIED | n/a | known gap | 2026-11-16 |
+| ALL | user's status review | user, live use | IN-GAME | user: "obsolete but worked in the past" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] `/tsd clean`: prints what would be deleted, deletes nothing.
 - [ ] `/tsd clean confirm`: prints "cleaned: ...", `/tsd` window is empty with the hint; minimap button and UI language are unchanged.
 - [ ] Reopen `/tsd`: the automatic scan refills your recipes.
+
+## Accepted gaps
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "obsolete but worked in the past").

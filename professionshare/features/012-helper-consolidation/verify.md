@@ -22,6 +22,7 @@ Result after work:    `luajit tests/run.lua` -> 204 passed, 0 failed
 | RF2 | Knows on record without recipes | test_helpers "Store.Knows ..." | OFFLINE | 204 passed | pass | 2026-11-17 |
 | RF3 | numeric key order kept | test_helpers "SortedKeys ..." | OFFLINE | 204 passed | pass | 2026-11-17 |
 | RF4 | throwing sanitizer dropped | test_helpers "SanitizeMap ..." | OFFLINE | 204 passed | pass | 2026-11-17 |
+| ALL | user's status review | user, live use | IN-GAME | user: "worked" | pass | 2026-11-28 |
 
 UI files (`UI/Window.lua`, `UI/Alerts.lua`, `UI/DevProbe.lua`) and `Core/Game/Events.lua` are not loaded by the offline suite: their one-line changes are READ-ONLY until the in-game checklist is done.
 
@@ -31,4 +32,4 @@ UI files (`UI/Window.lua`, `UI/Alerts.lua`, `UI/DevProbe.lua`) and `Core/Game/Ev
 - [ ] `/tsd offers scan` and `/tsd export`: no errors, the report lists characters/offers/orders.
 
 ## Accepted gaps
-- none yet
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "worked").

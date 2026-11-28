@@ -1,6 +1,6 @@
 # 010 Order notifications: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-16
 - Target version: 0.5.0 (UI + local settings only, no protocol/schema change)
 - Owner: claude

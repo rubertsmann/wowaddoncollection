@@ -1,6 +1,6 @@
 # 033 Fighter block in the Companion view (training icons, clickable need bars): spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-25
 - Target version: GuildGames 0.7.0 (protocol 1.3, schema 2)
 - Owner: claude
@@ -53,7 +53,7 @@ actions move onto the need bars, and Arena > Fighter goes away.
   companion view, a click trains, SelectPage("fighter") -> guild).
 - [x] T2 (M): clickable need bars replace the care icons. Verify: test_load (care via a bar click, cooldown, greyed).
 - [x] T3 (S): simulator screenshots of the Companion view and the compact training menu (tools/wow-sim.ps1). Verify: evidence PNGs.
-- [ ] T4 (S): in game: train by icon click, feed by bar click, compact menu open/close. Verify: user (dev build).
+- [x] T4 (S): in game: train by icon click, feed by bar click, compact menu open/close. Verify: user (dev build).
 - [x] T5 (M): compact view training button + menu (R9). Verify: test_load (button, 4 icons, opens, time on the
   training icon, closes), test_pet_view (layout).
 

@@ -44,3 +44,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: all green. Exposure analysis (answer to the user): inside the own guild, the developer's character name can be learned (32-bit djb2 hash vs. roster names; the only WANTF sender, visible in a sender's trace; GUILD retries visible to all; tab visibility). Nothing reaches other guilds; no real-world data is involved. Not fixable while the tab must know whether the developer is in the guild: any check the client runs, a curious member can run too.
 - Evidence: luajit tests/run.lua -> 269 passed, 0 failed
 - Next: user: in-game checklist in verify.md; release when wanted
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "works" (2026-11-28)
+- Next: none

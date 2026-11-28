@@ -1,6 +1,6 @@
 # 052 Member builds button (live build and record version, one viewer): spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-27
 - Target version: 0.14.0
 - Owner: claude

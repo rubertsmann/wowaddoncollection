@@ -79,3 +79,9 @@ Append only. Newest entry at the bottom. The last entry must say what to do next
 - Result: shipped; the real profession buttons were not clicked in game after the AnyDown change (the probe's secure button with the same setup was)
 - Evidence: `luajit tests/run.lua` -> 338 passed, 0 failed
 - Next: user clicks Skinning/Leatherworking/Cooking and the Craft button once; after members played a few days, read windowSpellReports (`/ps spellids`) and add the new ids to ProfessionSpells.WINDOW
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done (obsolete)
+- Evidence: user: "obsolete but worked" (2026-11-28)
+- Next: none

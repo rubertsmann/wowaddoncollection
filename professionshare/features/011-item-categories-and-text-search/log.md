@@ -39,3 +39,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: pass (verify.md R1, R2, R3 partly IN-GAME); open: effect-text words, profession switch clearing categories, /tsd clean
 - Evidence: user message "ive checked searching for simple words also dropdown and the category"
 - Next: release 0.5.0 committed on release/0.5.0; remaining checklist items 3-5 when convenient
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "worked" (2026-11-28)
+- Next: none

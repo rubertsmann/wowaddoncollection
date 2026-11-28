@@ -222,3 +222,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Did: user: Hazeen's companion showed after "Make companion" ("it did work"), then "also make the first animal instantly a companion". Core/Minigames/AzeCaught.lua OnDeath: a successful catch with no active companion calls Select (result.companion, journal companion.auto); never replaces an active one; read-only data selects nothing. Core/Game/Catcher.lua: chat "{name} is now your companion.", publish at once. deDE 1 key. tests: withCaught clears the auto-selected companion (those tests select it themselves).
 - Evidence: luajit tests/run.lua -> "126 passed, 0 failed" (new: "a catch becomes the companion when none is active, never replaces one")
 - Next: user: catch with no companion -> chat line, companion view, guild sees it within seconds.
+
+## 2026-11-28 10:42 | DONE | works in live use
+- Did: user: "018 works"
+- Result: status done
+- Evidence: user 2026-11-28
+- Next: none

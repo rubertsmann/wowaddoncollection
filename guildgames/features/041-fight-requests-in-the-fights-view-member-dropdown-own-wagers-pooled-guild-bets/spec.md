@@ -1,6 +1,6 @@
 # 041 Fight requests in the Fights view (member dropdown, own wagers, pooled guild bets): spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-26
 - Target version: 0.12.0 (protocol 1.7, schema 3)
 - Owner: claude

@@ -1,6 +1,6 @@
 # 006 Hardening and version compatibility: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-16
 - Target version: 0.3.0 (TOC bumped to 0.3.0 at merge, tag v0.3.0)
 - Owner: claude (requested by user)

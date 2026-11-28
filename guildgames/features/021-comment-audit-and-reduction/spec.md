@@ -1,6 +1,6 @@
 # 021 Comment audit and reduction: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-22
 - Target version: none (no behaviour change; ships with each addon's next release)
 - Owner: claude

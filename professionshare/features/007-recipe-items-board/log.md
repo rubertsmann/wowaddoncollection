@@ -31,3 +31,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Did: feature committed as 61eff86 and pushed; merged with the 0.3.2 whisper fix (c09e84d). TOC version is 0.3.2 (the released fix); 0.4.0 is the target for this feature and is NOT tagged.
 - Result: `luajit tests/run.lua` -> 134 passed, 0 failed. Still NOT verified in game: bank/mail/guild bank/auction scans, tab layout, two-client sync.
 - Next: user runs the in-game checklist in verify.md on the dev build (/tsd offers), then bump the version to 0.4.0 and tag when ready.
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "worked" (2026-11-28)
+- Next: none

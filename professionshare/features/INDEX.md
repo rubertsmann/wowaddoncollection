@@ -5,30 +5,30 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 
 | ID | Feature | Status | Version | Commits | Folder |
 |---|---|---|---|---|---|
-| 001 | Dev live coexistence | verifying | 0.3.0 (build flag: 0.3.1) | ede5a33, 91b5f67 | [001-dev-live-coexistence](001-dev-live-coexistence/spec.md) |
-| 002 | Localization layer | verifying | 0.3.0 | abdb5c3, 9ad54bd | [002-localization-layer](002-localization-layer/spec.md) |
+| 001 | Dev live coexistence | done (obsolete) | 0.3.0 (build flag: 0.3.1) | ede5a33, 91b5f67 | [001-dev-live-coexistence](001-dev-live-coexistence/spec.md) |
+| 002 | Localization layer | done | 0.3.0 | abdb5c3, 9ad54bd | [002-localization-layer](002-localization-layer/spec.md) |
 | 003 | Auto profession scan | abandoned (see 005) | - | 6e660a1, 34049a3, 38b7798 (removed in fca0b5a) | [003-auto-profession-scan](003-auto-profession-scan/spec.md) |
-| 004 | Clean command | verifying | 0.3.0 | b9534c6 | [004-clean-command](004-clean-command/spec.md) |
-| 005 | Profession scan buttons | verifying | 0.3.0 | fca0b5a, be8b731, c9e7a52, 475765f | [005-profession-scan-buttons](005-profession-scan-buttons/spec.md) |
-| 006 | Hardening and version compatibility | verifying | 0.3.0 (protocol 2.0, schema 2), fixes 0.3.1, 0.3.2 | fc21757, 9b76d90, d43333b, 91b5f67, 5261868 | [006-hardening-and-version-compatibility](006-hardening-and-version-compatibility/spec.md) |
-| 007 | Recipe items board | verifying | 0.4.0 (protocol 2.1, schema 3) | 61eff86 | [007-recipe-items-board](007-recipe-items-board/spec.md) |
-| 008 | Sync diagnostics and name/retry fixes | verifying | 0.4.2 (protocol 2.2, schema 3) | - | [008-sync-diagnostics](008-sync-diagnostics/spec.md) |
-| 009 | Craft and whisper from lists | verifying | 0.5.0 (UI only) | - | [009-craft-and-whisper-from-lists](009-craft-and-whisper-from-lists/spec.md) |
-| 010 | Order notifications | verifying | 0.5.0 (UI + local settings) | - | [010-order-notifications](010-order-notifications/spec.md) |
-| 011 | Item categories and text search | verifying | 0.5.0 (UI + local cache) | - | [011-item-categories-and-text-search](011-item-categories-and-text-search/spec.md) |
-| 012 | Helper consolidation | verifying | next (internal refactor) | - | [012-helper-consolidation](012-helper-consolidation/spec.md) |
-| 013 | Naming types and logging overhaul | verifying | next (internal refactor) | - | [013-naming-types-and-logging-overhaul](013-naming-types-and-logging-overhaul/spec.md) |
-| 014 | Guild game base (coin flip) | verifying (moved to GuildGames by 015) | 0.6.0 (protocol 2.3, schema 4) | - | [014-guild-game-base](014-guild-game-base/spec.md) |
-| 015 | Games extraction and shared sync library | verifying | 0.7.0 (protocol 2.3, schema 5); GuildGames 0.1.0; LibGuildSync-1.0 minor 1 | d9e0ea0 | [015-games-extraction-and-shared-sync-library](015-games-extraction-and-shared-sync-library/spec.md) |
+| 004 | Clean command | done (obsolete) | 0.3.0 | b9534c6 | [004-clean-command](004-clean-command/spec.md) |
+| 005 | Profession scan buttons | done (obsolete) | 0.3.0 | fca0b5a, be8b731, c9e7a52, 475765f | [005-profession-scan-buttons](005-profession-scan-buttons/spec.md) |
+| 006 | Hardening and version compatibility | done | 0.3.0 (protocol 2.0, schema 2), fixes 0.3.1, 0.3.2 | fc21757, 9b76d90, d43333b, 91b5f67, 5261868 | [006-hardening-and-version-compatibility](006-hardening-and-version-compatibility/spec.md) |
+| 007 | Recipe items board | done | 0.4.0 (protocol 2.1, schema 3) | 61eff86 | [007-recipe-items-board](007-recipe-items-board/spec.md) |
+| 008 | Sync diagnostics and name/retry fixes | done | 0.4.2 (protocol 2.2, schema 3) | - | [008-sync-diagnostics](008-sync-diagnostics/spec.md) |
+| 009 | Craft and whisper from lists | done | 0.5.0 (UI only) | - | [009-craft-and-whisper-from-lists](009-craft-and-whisper-from-lists/spec.md) |
+| 010 | Order notifications | done | 0.5.0 (UI + local settings) | - | [010-order-notifications](010-order-notifications/spec.md) |
+| 011 | Item categories and text search | done | 0.5.0 (UI + local cache) | - | [011-item-categories-and-text-search](011-item-categories-and-text-search/spec.md) |
+| 012 | Helper consolidation | done | next (internal refactor) | - | [012-helper-consolidation](012-helper-consolidation/spec.md) |
+| 013 | Naming types and logging overhaul | done | next (internal refactor) | - | [013-naming-types-and-logging-overhaul](013-naming-types-and-logging-overhaul/spec.md) |
+| 014 | Guild game base (coin flip) | moved to GuildGames by 015 (tracked in `guildgames/features/014-guild-game-base`) | 0.6.0 (protocol 2.3, schema 4) | - | [014-guild-game-base](014-guild-game-base/spec.md) |
+| 015 | Games extraction and shared sync library | done | 0.7.0 (protocol 2.3, schema 5); GuildGames 0.1.0; LibGuildSync-1.0 minor 1 | d9e0ea0 | [015-games-extraction-and-shared-sync-library](015-games-extraction-and-shared-sync-library/spec.md) |
 | 016 | Recipe table columns and resizable window | done | 0.7.0 (UI + local settings) | d9e0ea0 | [016-recipe-table-columns-and-resizable-window](016-recipe-table-columns-and-resizable-window/spec.md) |
 | 017 | Enchant effect text | done | 0.7.2, fix 0.7.3 (UI only) | 91a9da0 | [017-enchant-effect-text](017-enchant-effect-text/spec.md) |
-| 022 | Misc items tab with keys | verifying | 1.2.0 (protocol 2.4, schema 6) | release commit 1.2.0 | [022-misc-items-tab-with-keys](022-misc-items-tab-with-keys/spec.md) |
-| 023 | Send backlog and offline whispers | verifying | ProfessionShare 1.2.1, GuildGames 0.4.1, LibGuildSync MINOR 5 | release commit | [023-send-backlog-and-offline-whispers](023-send-backlog-and-offline-whispers/spec.md) |
-| 024 | Feedback tab and hidden debug tab | verifying | 1.3.0 (protocol 2.5, schema 7) | release commit 1.3.0 | [024-feedback-tab-and-hidden-debug-tab](024-feedback-tab-and-hidden-debug-tab/spec.md) |
-| 025 | Reputation list with faction hints | verifying | 1.4.0 unreleased (protocol 2.6, schema 8) | feat commit (reputation list) | [025-reputation-list-with-faction-hints](025-reputation-list-with-faction-hints/spec.md) |
+| 022 | Misc items tab with keys | done (portrait icon -> 054) | 1.2.0 (protocol 2.4, schema 6) | release commit 1.2.0 | [022-misc-items-tab-with-keys](022-misc-items-tab-with-keys/spec.md) |
+| 023 | Send backlog and offline whispers | done | ProfessionShare 1.2.1, GuildGames 0.4.1, LibGuildSync MINOR 5 | release commit | [023-send-backlog-and-offline-whispers](023-send-backlog-and-offline-whispers/spec.md) |
+| 024 | Feedback tab and hidden debug tab | done | 1.3.0 (protocol 2.5, schema 7) | release commit 1.3.0 | [024-feedback-tab-and-hidden-debug-tab](024-feedback-tab-and-hidden-debug-tab/spec.md) |
+| 025 | Reputation list with faction hints | done | 1.4.0 unreleased (protocol 2.6, schema 8) | feat commit (reputation list) | [025-reputation-list-with-faction-hints](025-reputation-list-with-faction-hints/spec.md) |
 | 026 | Debug fake data menu and recipe probe | done | 1.4.0 unreleased (dev tools; protocol and schema unchanged) | feat commit (recipe drops) | [026-debug-fake-data-menu-and-recipe-probe](026-debug-fake-data-menu-and-recipe-probe/spec.md) |
 | 027 | Recipe drop alerts | done | 1.4.0 unreleased (protocol 2.7, schema 8) | feat commit (recipe drops) | [027-recipe-drop-alerts](027-recipe-drop-alerts/spec.md) |
-| 028 | Craft cooldowns grid | verifying | 1.4.0 unreleased (protocol 2.8, schema 9) | - | [028-craft-cooldowns-grid](028-craft-cooldowns-grid/spec.md) |
+| 028 | Craft cooldowns grid | done (UX report -> bug B003) | 1.4.0 unreleased (protocol 2.8, schema 9) | - | [028-craft-cooldowns-grid](028-craft-cooldowns-grid/spec.md) |
 | 029 | Grouped settings page | done | 1.4.0 unreleased (UI + local settings) | feat commit (recipe drops) | [029-grouped-settings-page](029-grouped-settings-page/spec.md) |
 | 044 | Auctionator buy list from orders | done | 1.5.0 (UI + local setting; protocol and schema unchanged) | release commit 1.5.0 | [044-auctionator-buy-list-from-orders](044-auctionator-buy-list-from-orders/spec.md) |
 | 045 | Mail order items | done | 1.5.0 (UI + local data `mailQueue`; protocol and schema unchanged) | release commit 1.5.0 | [045-mail-order-items](045-mail-order-items/spec.md) |
@@ -37,3 +37,4 @@ One row per feature. Status: planned, in-progress, verifying, done, abandoned. W
 | 048 | Order detail window with chat and history | done | 1.6.0 (protocol 2.9, schema unchanged) | release commit 1.6.0 | [048-order-detail-window-with-chat-and-history](048-order-detail-window-with-chat-and-history/spec.md) |
 | 049 | Order mail status and history | done | 1.7.0 (protocol 2.10, schema unchanged) | release commit 1.7.0 | [049-order-mail-status-and-history](049-order-mail-status-and-history/spec.md) |
 | 050 | Mail tag and pickup tracking | done | 1.8.0 (protocol 2.11, schema unchanged) | release commit 1.8.0 | [050-mail-tag-and-pickup-tracking](050-mail-tag-and-pickup-tracking/spec.md) |
+| 054 | Party and raid portrait key icon | planned | - | - | [054-party-and-raid-portrait-key-icon](054-party-and-raid-portrait-key-icon/spec.md) |

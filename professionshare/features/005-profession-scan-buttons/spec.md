@@ -1,6 +1,6 @@
 # 005 Profession scan buttons: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-16
 - Target version: 0.2.0
 - Owner: claude

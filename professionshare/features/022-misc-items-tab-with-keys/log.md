@@ -81,3 +81,8 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Evidence: spec.md Decisions; `luajit tests/run.lua` -> 332 passed, 0 failed
 - Next: user looks at Misc Items -> Keys after /reload; commit when asked
 
+## 2026-11-28 09:53 | DONE | confirmed in game; portrait icon split out
+- Did: user: "ps 22 seems to working"
+- Result: status done; R8/T7 moved to feature 054
+- Evidence: user 2026-11-28
+- Next: 054

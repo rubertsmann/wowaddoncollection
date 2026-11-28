@@ -30,6 +30,7 @@ Test names below are from `tests/test_nickname.lua` unless marked.
 | RF6 | same nickname twice | "two companions with the same nickname stay apart" | OFFLINE | suite 215/0 | pass | 2026-11-27 |
 | RF7 | no map -> catch still works | "an unknown map still catches; the time is kept" | OFFLINE | suite 215/0 | pass | 2026-11-27 |
 | RF8 | map call allowed in combat | `Api.PlayerMapID` through `read` (pcall, secret check) | NOT-VERIFIED | | needs in-game catch in combat | |
+| ALL | user's status review | user, live use | IN-GAME | user: "works" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] `/console scriptErrors 1`, `/reload`. Catch an NPC in the open world (in combat). Expected: no error and no "reserved for the Blizzard UI" dialog. `/gg caught log 5` shows the catch.
@@ -44,4 +45,4 @@ Test names below are from `tests/test_nickname.lua` unless marked.
 - [ ] With a second guild member on the same build: their guild list and fight cards show your nickname.
 
 ## Accepted gaps
-- none yet
+- Checklist steps not run one by one and the two-client rows: closed at the user's status review (2026-11-28, "works").

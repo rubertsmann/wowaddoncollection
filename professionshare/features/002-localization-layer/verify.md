@@ -24,6 +24,7 @@ Result after work:    `luajit tests/run.lua` -> 51 passed, 0 failed
 | RF5 | Client language switch keeps recipes | `scanner: records id/loc, upgrades ..., survives a client language switch` | OFFLINE | tests | pass | 2026-11-16 |
 | RF6 | Hostile id/loc/name rejected | `store: hostile id / loc / name fields are rejected` | OFFLINE | tests | pass | 2026-11-16 |
 | LOAD | All files load in TOC order for live and dev identities | `load: ...` (2 tests); mutation check (remove Names from the TOC -> 2 failures) | OFFLINE | tests/test_load.lua | pass; stubs only, not the real client | 2026-11-16 |
+| ALL | user's status review | user, live use | IN-GAME | user: "works" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] `/reload` with the dev addon, no Lua error on login (`/console scriptErrors 1`).
@@ -35,4 +36,4 @@ Result after work:    `luajit tests/run.lua` -> 51 passed, 0 failed
 - [ ] (needs a second player) a guildmate on another client language and one on live 0.1.0 both appear with one Cooking entry. Impossible with the dev prefix: use two live-prefix builds.
 
 ## Accepted gaps
-- none yet
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "works").

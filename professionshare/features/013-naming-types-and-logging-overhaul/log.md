@@ -20,3 +20,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: a broken load order now fails loudly (and is reported by Events' "not loaded" check / test_load) instead of silently skipping work
 - Evidence: `luajit tests/run.lua` -> `209 passed, 0 failed`
 - Next: unchanged: in-game checklist in verify.md
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "worked" (2026-11-28)
+- Next: none

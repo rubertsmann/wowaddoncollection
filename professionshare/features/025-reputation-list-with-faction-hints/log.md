@@ -70,3 +70,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: two 1.4.1 members announced reputation (`WANTR` x5 out, `REP` x5 in), both records stored with 10-11 factions; older members (1.3.0, 1.0.2) still sync recipes; no warnings after 12:51
 - Evidence: live ProfessionShare.lua comm log and `rep` table
 - Next: only "progress shared after gaining reputation" (level at once, progress after 30 min) is still unseen in game; status can go to done if the user accepts that
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "works" (2026-11-28)
+- Next: none

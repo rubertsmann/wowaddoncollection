@@ -32,3 +32,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: layout (button widths, text overflow), `/tsd i18n` answers (are skill line ids and spell names what we assume) and real client behaviour are NOT verified
 - Evidence: n/a
 - Next: user runs the checklist in verify.md and pastes the `/tsd i18n` output (open a profession window first)
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "works" (2026-11-28)
+- Next: none

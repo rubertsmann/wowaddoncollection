@@ -50,3 +50,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: three members on 1.4.1; HELLO with the cooldown field arrives, "cds: peer has none" for each (none knows a timegated recipe, checked against their synced recipes), `cds` empty; 1.3.0 / 1.0.2 members still sync; no warnings after 12:51
 - Evidence: live ProfessionShare.lua comm log (HELLO `ver=1.4.1/6`, `why` lines), `cds = {}`, chars records without cooldown recipe ids
 - Next: checklist 7 needs a 1.4.x member who knows a transmute, Mooncloth or the Salt Shaker; 1-2 an own alchemist/tailor; 6 the 20 s trigger; or the user accepts the gaps -> done
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done (UX report -> bug B003)
+- Evidence: user: "works but confusing sometimes" (2026-11-28)
+- Next: B003

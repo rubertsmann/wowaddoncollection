@@ -16,6 +16,7 @@ Result after work:    `luajit tests/run.lua` -> 209 passed, 0 failed
 | RF2 | log escaping | test_log "peer text is escaped" | OFFLINE | 209 passed | pass | 2026-11-17 |
 | RF3 | log bounded | test_log "repeats are folded, the ring is bounded" | OFFLINE | 209 passed | pass | 2026-11-17 |
 | RF4 | client-only code | in-game checklist below | NOT-VERIFIED | needs the user | open | |
+| ALL | user's status review | user, live use | IN-GAME | user: "worked" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] `powershell tools/deploy.ps1`, RESTART the game (TOC changed), `/console scriptErrors 1`, `/tsd`: no "not loaded" line, no Lua error, all four tabs work.
@@ -25,4 +26,4 @@ Result after work:    `luajit tests/run.lua` -> 209 passed, 0 failed
 - [ ] (optional) VS Code with the Lua extension: open the repo and check the Problems panel for annotation errors.
 
 ## Accepted gaps
-- none yet
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "worked").

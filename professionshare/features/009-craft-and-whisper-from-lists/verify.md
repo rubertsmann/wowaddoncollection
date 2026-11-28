@@ -22,6 +22,7 @@ Result after work:    `luajit tests/run.lua` -> 178 passed, 0 failed (mutation: 
 | RF3 | other profession open -> no wrong craft | craft mode only when `Api.OpenProfessionName() == target.spellName`; checklist 8 | READ-ONLY | UI/Window.lua refreshCraft | | 2026-11-16 |
 | RF4 | combat | as R4 | READ-ONLY | | | 2026-11-16 |
 | RF5 | stale profession -> disabled | `craft: no target without a live profession` | OFFLINE | test run | pass | 2026-11-16 |
+| ALL | user's status review | user, live use | IN-GAME | user: "works" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do; `/console scriptErrors 1` first)
 - [x] 1. Orders tab, select an order for a recipe you know: **Open profession** is enabled; for one you do not know: **Craft** is greyed out.
@@ -34,4 +35,4 @@ Result after work:    `luajit tests/run.lua` -> 178 passed, 0 failed (mutation: 
 - [ ] 8. With ANOTHER profession window open, select an order: the button says **Open profession**, a click switches to the right profession.
 
 ## Accepted gaps
-- none yet
+- Checklist steps not run one by one and the two-client rows: closed at the user's status review (2026-11-28, "works").

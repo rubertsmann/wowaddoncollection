@@ -62,3 +62,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: `luajit tests/run.lua` -> `159 passed, 0 failed`
 - Evidence: test output
 - Next: user: in-game checklist in verify.md (`/ggd caught setup` first); T8 RED/GREEN skill runs; open: trap prices, meat reward
+
+## 2026-11-28 09:53 | DONE | catches confirmed in game; trap report split out
+- Did: user: meat boost and trap work; "a player reported that a magic trap had been used without a message anywhere"
+- Result: status done; bug tracked as B001 (`guildgames/bugs/`); T8 (skill test runs) stays open
+- Evidence: user 2026-11-28
+- Next: B001

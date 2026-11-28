@@ -16,6 +16,7 @@ Result after work:    `luajit tests/run.lua` -> 53 passed, 0 failed (AutoScan te
 | R7 | Localized text | `locale files: ...`, `ui lint` | OFFLINE | tests/test_locale_files.lua | pass | 2026-11-16 |
 | RF1 | No call the client blocks | see R3 | OFFLINE | tests | pass | 2026-11-16 |
 | RF4 | UI build/refresh does not throw | stubbed build + refresh + tab switch; mutation check | OFFLINE | tests/test_load.lua | pass | 2026-11-16 |
+| ALL | user's status review | user, live use | IN-GAME | user: "obsolete but worked" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] **First, without the addon:** type `/cast Kochkunst` into chat (your own profession name). Does the profession window open? If not, tell me; the whole approach depends on this.
@@ -27,4 +28,4 @@ Result after work:    `luajit tests/run.lua` -> 53 passed, 0 failed (AutoScan te
 - [ ] Optional: click an icon during combat (expect nothing to be broken; the bar only updates after combat).
 
 ## Accepted gaps
-- none yet
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "obsolete but worked").

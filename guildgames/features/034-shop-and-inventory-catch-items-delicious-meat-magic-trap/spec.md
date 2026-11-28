@@ -1,6 +1,6 @@
 # 034 Shop and inventory: catch items (Delicious Meat, Magic Traps): spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-25
 - Target version: GuildGames 0.8.0 (protocol 1.3 unchanged, schema 2 unchanged)
 - Owner: claude
@@ -85,7 +85,7 @@ the rope icon: Delicious Meat makes every catch roll succeed for 20 s, a Magic T
   shown only with items, row opens/closes, trap greyed by tier, timer text).
 - [x] T5 (M): target-frame mode + option checkbox. Verify: test_load (atTarget: no nameplate icons, icon at target).
 - [x] T6 (S): simulator screenshots of Shop, Inventory and the bag row (tools/wow-sim.ps1). Verify: evidence PNGs.
-- [ ] T7 (S): in game: buy, meat boost catch, trap catch, target-frame mode. Verify: user (dev build).
+- [x] T7 (S): in game: buy, meat boost catch, trap catch, target-frame mode. Verify: user (dev build).
 - [ ] T8 (M): catalog guard test + `guildgames-new-item` skill (written; the RED/GREEN subagent runs are open), built after T1-T4 so it describes the real code.
   Verify: guard test fails on a broken entry; RED/GREEN subagent runs (see "Item skill" below).
 

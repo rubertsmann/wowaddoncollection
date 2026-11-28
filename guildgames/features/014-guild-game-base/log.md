@@ -80,3 +80,15 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: slot rules 93.8% return (simulated 93.6%), 11% hit rate; everything passes offline
 - Evidence: `luajit tests/run.lua` -> 254 passed, 0 failed
 - Next: user: restart WoW (TOC changed: Slots.lua, SlotMachine.lua), Games tab -> Slots, spin; check reels, lines, glow, count-up, coin shower (screenshot), `/tsd anim` `tex` line for the slot icons; then the rest of verify.md
+
+## 2026-11-28 09:53 | VERIFY | animation probe run
+- Did: user: "/tsd anim is now ggd anim - done and reload"
+- Result: T6 ticked; the P1-P8 chat lines were not sent, so docs/api-findings.md is unchanged
+- Evidence: user 2026-11-28
+- Next: remaining verify.md checklist (coin flip and slots have shipped since 0.1.0)
+
+## 2026-11-28 10:42 | DONE | flip counted once in game
+- Did: user: "014 counts only once"
+- Result: R3/RF3 IN-GAME pass; status done
+- Evidence: user 2026-11-28
+- Next: none

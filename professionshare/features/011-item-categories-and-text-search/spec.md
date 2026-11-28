@@ -1,6 +1,6 @@
 # 011 Item categories and text search: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-16
 - Target version: 0.5.0 (UI + local cache, no protocol/schema change expected)
 - Owner: claude

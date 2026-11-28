@@ -21,7 +21,7 @@ Result after work: `luajit tests/run.lua` -> `147 passed, 0 failed`
 | RF3 | CheckInteractDistance in combat | catch dump `interactRange4` | NOT-VERIFIED | needs user | | |
 | RF4 | health told before range | test_azecaught "health is told first" | OFFLINE | same | pass | 2026-11-24 |
 | SIM | R2, R3, R6, R7 in Blizzard's UI | `tools/wow-sim.ps1 -Addon guildgames -Mode shot -NoOpen -Lua evidence/sim-catch-refusals.lua` (IsInInstance and unit functions stubbed) | SIM | evidence/sim-catch-refusals.png: red overlay "Catching does not work in dungeons and raids." + the three chat lines; "0 Lua error(s) in GuildGames" | pass | 2026-11-24 |
-| R1-R3 (client) | real client in a dungeon | `/gg catch` inside a dungeon | NOT-VERIFIED | needs user | | |
+| R1 (client) | real client in a dungeon | user in a dungeon | IN-GAME | user: companions cannot be caught in a dungeon | pass (refused); overlay/chat text not reported | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] Enter a dungeon, `/gg catch`: red line "Catching does not work in dungeons and raids." at the top and the same line in chat; no rope.
@@ -31,4 +31,4 @@ Result after work: `luajit tests/run.lua` -> `147 passed, 0 failed`
   and report the `interactRange4` value (true/false/secret/error/nil) of the last dump.
 
 ## Accepted gaps
-- none yet
+- R2/R3 in the client (overlay + chat text), RF3 (`interactRange4`), R6/R7 in game: closed at the user's status review (2026-11-28); the user reported only that catching is refused in dungeons.

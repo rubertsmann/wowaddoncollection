@@ -1,3 +1,6 @@
+> **Historical (kept for reference):** the original TalentShare plan from the first night. Every task is done or was
+> replaced; its checkboxes were never ticked. Current state: `features/INDEX.md` and `docs/status.md`.
+
 # TalentShare Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

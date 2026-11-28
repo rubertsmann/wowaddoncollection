@@ -1,6 +1,6 @@
 # 043 Survivor and Companion Dash polish (models fit their box, target dropdown, icon start, framed stats): spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-27
 - Target version: GuildGames 0.13.0
 - Owner: claude

@@ -8,7 +8,7 @@ Result after work:    `luajit tests/run.lua` -> 218 passed, 0 failed
 | ID | Requirement / Review Focus | How verified | Level | Evidence | Result | Date |
 |---|---|---|---|---|---|---|
 | R1 | Survivor top camera from the fitted distance | test_games_ui "models are framed by their size..." (x1.15, once per creature, re-measured for a new one, clamp) | OFFLINE | suite 218/0 | pass (logic) | 2026-11-27 |
-| R1 | ...a big companion fits the tower spot in game | | NOT-VERIFIED | | needs in-game | |
+| R1 | ...a big companion fits in game | user | IN-GAME | user: "really big creatures are still cut off at the right side" | FAIL, moved to bug B002 | 2026-11-28 |
 | R2 | re-framed after a scale change, hidden models skipped | same test (RefreshAll) | OFFLINE | suite 218/0 | pass (logic) | 2026-11-27 |
 | R2 | ...drawn size follows the window size in game | | NOT-VERIFIED | | needs in-game | |
 | R3 | padded frames (camera scaled with them), hitbox markers | test_games_ui (pad -> camera, padded heights); hitbox drawing READ-ONLY | OFFLINE / READ-ONLY | suite 218/0 | needs in-game look | 2026-11-27 |
@@ -31,4 +31,4 @@ Result after work:    `luajit tests/run.lua` -> 218 passed, 0 failed
 - [ ] If a companion is still too big or too small in Survivor: `/gg caught log 5 model` and paste the "survivor companion was framed" line (height, fitted).
 
 ## Accepted gaps
-- none yet
+- R1 (fail) continues as bug B002. R2, R3, R4 look, R6: closed at the user's status review (2026-11-28), not reported.

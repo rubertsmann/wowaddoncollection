@@ -32,3 +32,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: user: "looks good" (asked for icons, done), then "works"
 - Evidence: user statement in chat, 2026-11-25
 - Next: release 0.6.0; two-member test (counter offer between real players) still open
+
+## 2026-11-28 09:53 | NOTE | obsolete
+- Did: user: "32 obsolete as it has been reworked"
+- Result: status abandoned; the arena flow was reworked by 038 (team fights) and 041 (fight requests in the Fights view); the dev-build check (2026-11-25) had passed
+- Evidence: user 2026-11-28
+- Next: none

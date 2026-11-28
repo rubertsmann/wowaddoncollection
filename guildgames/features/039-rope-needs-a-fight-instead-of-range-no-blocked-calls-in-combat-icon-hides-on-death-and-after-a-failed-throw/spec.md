@@ -1,6 +1,6 @@
 # 039 Rope needs a fight instead of range (no blocked calls in combat), icon hides on death and after a failed throw: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-26
 - Target version: 0.11.1 (released 2026-11-26)
 - Owner: claude

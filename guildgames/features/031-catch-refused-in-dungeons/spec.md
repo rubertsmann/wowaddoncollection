@@ -1,6 +1,6 @@
 # 031 Catch refused in dungeons: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-24
 - Target version: GuildGames 0.6.0 (protocol 1.3, schema 2)
 - Owner: claude
@@ -34,7 +34,7 @@ catching does not work there, instead of failing on the client's hidden unit val
 ## Tasks
 - [x] T1 (S): `Api.InDungeon`, `Api.ShowOverlay`, the check in `Catcher.Throw`, deDE string. Verify: test_load.
 - [x] T2 (S): test: party/raid refuse with overlay + chat; open world shows no overlay. Verify: `luajit tests/run.lua`.
-- [ ] T3 (S): in game: `/gg catch` in a dungeon shows both. Verify: user.
+- [x] T3 (S): in game: `/gg catch` in a dungeon shows both. Verify: user.
 - [x] T4 (S): `Api.IsTapDenied`, `Api.InRopeRange` in `Api.UnitSnapshot`; refusals "tapped" and "range" in the pure
   `AzeCaught.Throw` (Core/Minigames/AzeCaught.lua); texts in `Catcher.lua` + deDE; `interactRange4` in the unit dump.
   Verify: test_azecaught "a throw needs low health ...".

@@ -38,3 +38,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: `luajit tests/run.lua` -> `152 passed, 0 failed`
 - Evidence: test output
 - Next: release 0.7.0
+
+## 2026-11-28 09:53 | DONE | training and feeding confirmed in game
+- Did: user: "033 training and feeding works"
+- Result: status done; compact-menu outside click not reported (accepted gap)
+- Evidence: user 2026-11-28
+- Next: none

@@ -25,7 +25,8 @@ Result after work:    `luajit tests/run.lua` -> `159 passed, 0 failed`
 | RF3 | trap refusals keep the trap | test_items "traps catch ..." | OFFLINE | 159 passed | pass | 2026-11-25 |
 | RF4 | target changes while the row is open | CatchItems.Update closes on a new GUID | READ-ONLY | UI/CatchItems.lua Update | open | |
 | RF5 | no TargetFrame -> nameplates | Catcher.AtTarget journals and returns nil | READ-ONLY | Core/Game/Catcher.lua AtTarget | open | |
-| ALL | in the game | user, dev build | NOT-VERIFIED | needs user | | |
+| R5, R6 | meat boost and trap catch in game | user | IN-GAME | user: "meat boost trap seems to be working" | pass | 2026-11-28 |
+| BUG | a guild member: a Magic Trap was used up with no message | report | - | moved to bug B001 | open (B001) | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] `/ggd caught setup` (companion, 3000g, 3 of every item, Shop tab); buy one more meat: gold goes down, Inventory lists them.
@@ -36,4 +37,4 @@ Result after work:    `luajit tests/run.lua` -> `159 passed, 0 failed`
 - [ ] Options > AddOns > GuildGames AZEcaught: "At the target frame: on"; the rope icon and bag sit right of the target frame.
 
 ## Accepted gaps
-- none yet
+- R11 (skill RED/GREEN runs, T8 still open), RF4, RF5, target-frame mode: closed at the user's status review (2026-11-28). The trap-without-message report is bug B001.

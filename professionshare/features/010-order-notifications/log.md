@@ -26,3 +26,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: offline green; harness: Test all -> chat line + sound, no errors
 - Evidence: `luajit tests/run.lua` -> 187 passed, 0 failed
 - Next: user runs verify.md checklist 1-7 (7 works alone, without a second member)
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "worked" (2026-11-28)
+- Next: none

@@ -1,6 +1,6 @@
 # 015 Games extraction and shared sync library: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-18
 - Target version: TalentShare 0.7.0, GuildGames 0.1.0, LibGuildSync-1.0 minor 1
 - Owner: claude (user decisions below)

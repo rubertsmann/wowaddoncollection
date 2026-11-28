@@ -32,3 +32,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: status stays `verifying`: the in-game rows of verify.md are open
 - Evidence: `luajit tests/run.lua` -> 193 passed, 0 failed
 - Next: user checks in the game (verify.md checklist), then set `done`
+
+## 2026-11-28 11:55 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "yes it does" (2026-11-28)
+- Next: none

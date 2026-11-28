@@ -1,6 +1,6 @@
 # 007 Recipe items board: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-16
 - Target version: 0.4.0 (released; protocol 2.1 additive, schema 3)
 - Owner: claude

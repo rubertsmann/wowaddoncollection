@@ -1,6 +1,6 @@
 # 022 Misc items tab with keys: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-23
 - Target version: 1.2.0 (protocol 2.4, schema 6)
 - Owner: claude
@@ -76,7 +76,7 @@ members hold which dungeon key) and **Attunements** (which members can enter whi
 - [x] T4 (M): `Api.ScanAccess`, `Api.QuestDone`, events, `/ps access`. Verify: `test_items_api.lua` with stubbed APIs; in game `/ps access`.
 - [x] T5 (M): Model `BuildKeyRows` / `BuildAttunementRows`. Verify: `tests/test_access_model.lua`.
 - [x] T6 (M): Window: rename tab, mode dropdown, Keys and Attunements views, locale strings. Verify: `test_load.lua`, `test_locale_files.lua`; in game screenshot.
-- [ ] T7 (M, stretch, deferred): `UI/GroupIcons.lua` party/raid icon + option. Verify: in game in a group.
+- [ ] T7 (M, stretch, moved to 054): `UI/GroupIcons.lua` party/raid icon + option. Verify: in game in a group.
 - [x] T9 (M): generic `ColumnTable`, `MiscTables` per-mode columns, header labels, columns menu. Verify: `tests/test_access_model.lua`, `test_recipe_table.lua`.
 - [x] T8 (S): docs (doc.md, README, CHANGELOG, docs/protocol.md, docs/status.md).
 

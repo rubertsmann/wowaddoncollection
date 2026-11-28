@@ -38,3 +38,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: user: "crafting menu works"; C_TradeSkillUI.CraftRecipe from the addon button click works on Forever; every craft fires TRADE_SKILL_SHOW again (harmless: refreshes the button)
 - Evidence: debug log lines "craft.start 2544 1 ok" (30+), "craft.start 6499 1 ok", "craft.start 2149 1 ok"; no "whisper" line at all in the log
 - Next: whisper not yet tested after the fix (no log line): user clicks a crafter / recipe icon, reports chat output, /reload
+
+## 2026-11-28 11:55 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "works" (2026-11-28)
+- Next: none

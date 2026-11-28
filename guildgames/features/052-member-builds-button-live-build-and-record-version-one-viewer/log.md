@@ -20,3 +20,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: offline suite green; released with 0.14.0
 - Evidence: `luajit tests/run.lua` -> 233 passed, 0 failed
 - Next: after the members update and log in, hover the (i): every row should show "Eintrag 0.14.0"; then set the UI row in verify.md
+
+## 2026-11-28 10:30 | DONE | works in game
+- Did: user hovered the member builds (i) in game
+- Result: rows and record versions as expected; status done
+- Evidence: user: "52 works as expected" (2026-11-28)
+- Next: none

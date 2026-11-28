@@ -26,3 +26,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: all tests pass; dev TOC file list identical to the live TOC
 - Evidence: `luajit tests/run.lua` -> `204 passed, 0 failed`
 - Next: user restarts the game after `tools/deploy.ps1` (TOC changed, /reload is not enough) and runs the in-game checklist in verify.md, then set status done
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "worked" (2026-11-28)
+- Next: none

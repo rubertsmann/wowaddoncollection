@@ -7,3 +7,9 @@ Append only. Newest entry at the bottom. The last entry must say what to do next
 - Result: preferences, schema and `me` are kept; the order board keeps working because tables are emptied in place
 - Evidence: `luajit tests/run.lua` -> 60 passed, 0 failed (59 before)
 - Next: user runs `/tsd clean`, then `/tsd clean confirm` in game and checks the window is empty afterwards
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done (obsolete)
+- Evidence: user: "obsolete but worked in the past" (2026-11-28)
+- Next: none

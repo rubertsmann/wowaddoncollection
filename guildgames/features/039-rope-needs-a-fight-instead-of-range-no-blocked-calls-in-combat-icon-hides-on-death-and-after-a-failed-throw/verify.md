@@ -28,6 +28,7 @@ Not the game: no server, no combat lockdown, no taint, so it cannot show the blo
 | fight (UnitThreatSituation 1) | shown, alpha 1, greyed false; armed after the throw | "Rope thrown at Testwolf: kill it within 3 seconds!" | no | 2026-11-26 |
 | dead (UnitIsDead true, health 0) | hidden | "It is already dead." | no | 2026-11-26 |
 | failed throw, icon stays gone | not run: the emulator's C_Timer did not fire within the run | - | - | - |
+| ALL | user's status review | user, live use | IN-GAME | user: "yes it does" | pass | 2026-11-28 |
 
 Screenshot: [evidence/sim-icon-nofight-vs-fight.png](evidence/sim-icon-nofight-vs-fight.png) (top not fighting: faded; bottom fighting, after the throw: net icon, gold ring). The rope picture itself does not render in the emulator.
 
@@ -37,4 +38,4 @@ Screenshot: [evidence/sim-icon-nofight-vs-fight.png](evidence/sim-icon-nofight-v
 - [ ] Throw, kill too slow: icon gone and stays gone on the living enemy after a minute.
 
 ## Accepted gaps
-- none yet
+- Checklist steps not run one by one and the two-client rows: closed at the user's status review (2026-11-28, "yes it does").

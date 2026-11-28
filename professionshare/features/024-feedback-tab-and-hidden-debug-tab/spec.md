@@ -1,6 +1,6 @@
 # 024 Feedback tab and hidden debug tab: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-23
 - Target version: ProfessionShare 1.3.0 (protocol 2.5, schema 7)
 - Owner: claude

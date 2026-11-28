@@ -26,6 +26,7 @@ Result after work:    `luajit tests/run.lua` -> 295 passed, 0 failed
 | RF5 | 1.3.0 peer | test_reputation "(RF5)..." | OFFLINE | 294 passed | pass | 2026-11-24 |
 | - | window builds and fills reputation rows; `/ps rep` runs | test_load (mode loop incl. reputation; row fill confirmed reached) | OFFLINE | 294 passed | pass | 2026-11-24 |
 | - | two members see each other's standings | live 1.4.1 build, real guild members | MULTI-CLIENT | live SavedVariables 2026-11-24: HELLO from two 1.4.1 members with "rep: have 0 < ... -> WANTR", 5 WANTR out, 5 REP in, both members' records (10-11 factions each) stored in `rep`; 1.3.0 and 1.0.2 members still "char: up to date"; no warnings after 12:51 | pass | 2026-11-24 |
+| ALL | user's status review | user, live use | IN-GAME | user: "works" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [x] `powershell tools/deploy.ps1`, restart the game, `/console scriptErrors 1`.
@@ -42,4 +43,4 @@ Result after work:    `luajit tests/run.lua` -> 295 passed, 0 failed
 - [x] Second member on 1.4.0: their rows appear after they log in; a 1.3.0 member still syncs recipes/orders.
 
 ## Accepted gaps
-- none yet
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "works").

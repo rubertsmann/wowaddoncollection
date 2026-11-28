@@ -1,6 +1,6 @@
 # 018 AZEcaught: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-20
 - Target version: GuildGames 0.2.0 (protocol 1.1, schema 2)
 - Owner: claude

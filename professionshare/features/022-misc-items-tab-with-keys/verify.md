@@ -18,7 +18,8 @@ Result after work:    `luajit tests/run.lua` -> 257 passed, 0 failed (three runs
 | R5 | Attunements from quests/items | `test_items_api` "access api (RF3) ...", `test_access_model` "attunement rows ..." | OFFLINE | 257 passed | pass; quest ids NOT verified in game | 2026-11-23 |
 | R6 | Own record, arev, pulled on change, last | `test_access` "access sync: a changed record reaches a peer once; afterwards only arev travels" | OFFLINE | 257 passed | pass | 2026-11-23 |
 | R7 | Only ids/keys/booleans sent; names local | `test_access` sanitize test, `test_locale_files` | OFFLINE | 257 passed | pass | 2026-11-23 |
-| R8 | Party/raid portrait icon | not built (see log DEVIATION) | NOT-VERIFIED | - | deferred | 2026-11-23 |
+| R8 | Party/raid portrait icon | not built; moved to 054 | - | - | moved | 2026-11-28 |
+| ALL | the tab in game | user | IN-GAME | user: "ps 22 seems to working" | pass | 2026-11-28 |
 | T-col | Per-mode columns, sort, column menu (user request "rework the table view") | `test_access_model` "misc tables: ..." (2 tests), "recipe table keeps its API on top of ColumnTable", existing `test_recipe_table` | OFFLINE | 257 passed | pass; header/columns menu look NOT verified in game | 2026-11-23 |
 | RF1 | Forged author, oversized, bad values -> dropped | `test_access` "(RF1) sanitize ...", "access sync (RF1) ..." | OFFLINE | 257 passed | pass | 2026-11-23 |
 | RF2 | Bank closed keeps bank keys; no key ring still scans bags | `test_access` "(RF2) ...", `test_items_api` "access api: keys ..." | OFFLINE | 257 passed | pass | 2026-11-23 |
@@ -36,4 +37,4 @@ Result after work:    `luajit tests/run.lua` -> 257 passed, 0 failed (three runs
 - [ ] Tell which raids exist on Forever (rows for missing content can be hidden).
 
 ## Accepted gaps
-- (none yet)
+- The detailed in-game checklist items and two-member sync: closed at the user's status review (2026-11-28) ("seems to working"). R8 continues as 054.

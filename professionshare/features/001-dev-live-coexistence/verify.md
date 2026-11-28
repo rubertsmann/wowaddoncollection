@@ -15,6 +15,7 @@ Result after work:    `luajit tests/run.lua` -> 30 passed, 0 failed
 | RF1 | Prefix <= 16 bytes | `identity: addon-message prefixes fit the 16 byte limit` | OFFLINE | test | pass | 2026-11-16 |
 | RF2 | Junction removal never deletes repo files | script removed only the link; `Test-Path TalentShare.toc` true | IN-GAME? no: filesystem | output | pass | 2026-11-16 |
 | RF3 | Live and dev never answer on one prefix | distinct-prefix test | OFFLINE | test | pass | 2026-11-16 |
+| ALL | user's status review | user, live use | NOT-VERIFIED | user: "obsolete" | closed (obsolete) | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] Start the game; AddOns list shows "TalentShare (dev)" (and "TalentShare" once the live zip is installed).
@@ -23,4 +24,4 @@ Result after work:    `luajit tests/run.lua` -> 30 passed, 0 failed
 - [ ] `/tsd scan` works; `TalentShareDevDB.lua` appears in SavedVariables after /reload.
 
 ## Accepted gaps
-- none yet
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "obsolete").

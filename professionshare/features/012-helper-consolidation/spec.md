@@ -1,6 +1,6 @@
 # 012 Helper consolidation: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-17
 - Target version: next release (internal refactor, no player-visible change)
 - Owner: claude

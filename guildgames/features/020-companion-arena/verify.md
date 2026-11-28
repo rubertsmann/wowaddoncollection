@@ -27,6 +27,7 @@ Result after work:    `luajit tests/run.lua` -> 133 passed, 0 failed
 | RF4 | only the opponent's answer counts | test_arena "hostile sections ..." | OFFLINE | suite line | pass | 2026-11-21 |
 | RF5 | no bet on own fight / after fight time | test_arena "challenge ..." (own, closed) | OFFLINE | suite line | pass | 2026-11-21 |
 | MC | two real players: challenge, accept, bet, same result | in game with a guild member | NOT-VERIFIED | needs user + a second player | | |
+| ALL | user's status review | user, live use | IN-GAME | user: "looks fine" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] Restart the game (new files in the TOC), `/ggd arena`: the Fighter page shows the companion, stats and Train.
@@ -36,4 +37,4 @@ Result after work:    `luajit tests/run.lua` -> 133 passed, 0 failed
 - [ ] A third member bets in those 5 minutes and is paid when right.
 
 ## Accepted gaps
-- none yet
+- Checklist steps not run one by one and the two-client rows: closed at the user's status review (2026-11-28, "looks fine").

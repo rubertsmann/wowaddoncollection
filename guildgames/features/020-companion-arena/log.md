@@ -117,3 +117,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: released on request (user 2026-11-21: "commit and push everything - and create a new version").
 - Evidence: luajit tests/run.lua -> 137 passed, 0 failed
 - Next: in-game check of the Arena UI (guide arrow, badges, icons, replay layout); nothing of it is verified in the client yet.
+
+## 2026-11-28 11:55 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "looks fine" (2026-11-28)
+- Next: none

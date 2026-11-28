@@ -20,3 +20,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: released
 - Evidence: `luajit tests/run.lua` -> 234 passed, 0 failed
 - Next: confirm R4 (chat line, tooltip warning) explicitly in verify.md, then set done
+
+## 2026-11-28 09:53 | DONE | verified in game
+- Did: user checked sleep during a training in game
+- Result: R4 IN-GAME pass; status done
+- Evidence: user: "in-game verified sleeps interrupts the training with a warning"
+- Next: none

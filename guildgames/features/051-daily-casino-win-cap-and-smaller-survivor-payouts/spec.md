@@ -1,6 +1,6 @@
 # 051 Daily casino win cap and smaller Survivor payouts: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-27
 - Target version: GuildGames 0.14.0 (protocol 1.9, schema 3)
 - Owner: claude
@@ -114,7 +114,7 @@ small multipliers (105% to 140%) instead of 2x to 64x.
 - [x] T6 (M): UI + locales (limit line, warnings, cut-win message, run refusal, percent labels, free play).
   Verify: test_games_ui / test_store_and_locale (every new key in both locales); in-game screenshots.
 - [x] T7 (S): protocol 1.9, `docs/protocol.md`, README, CHANGELOG, RELEASE_NOTES draft (EN/DE). Verify: test_load.
-- [ ] T8: in-game check with the user (limit line, a cut slots win, limit reached message, Survivor percent labels,
+- [x] T8: in-game check with the user (limit line, a cut slots win, limit reached message, Survivor percent labels,
   free play, an old 0.13 client still lists an updated player).
 
 ## Review Focus (failure modes a happy-path test would miss)

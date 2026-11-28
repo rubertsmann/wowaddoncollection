@@ -24,6 +24,7 @@ Result after work:    talentshare -> `211 passed, 0 failed`; guildgames -> `51 p
 | RF3 | 0.6.0 peers: wire meaning unchanged, games messages ignored | talentshare test_hardening "015: a 0.6 peer's games messages are ignored, the rest of its HELLO still works" + all existing sync tests | OFFLINE | `211 passed` | pass | 2026-11-18 |
 | RF4 | Shared name state, per-addon identity | libguildsync "utility: the name state is shared, Me is not part of the library", test_channel echo test (a realm learned by one channel re-keys the other addon) | OFFLINE | `27 passed` | pass | 2026-11-18 |
 | RF5 | GuildGames outside a guild: no sends, no errors | guildgames test_load "not in a guild -> the channel stays inactive and a play is still stored" | OFFLINE | `51 passed` | pass | 2026-11-18 |
+| ALL | user's status review | user, live use | IN-GAME | user: "worked" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] Restart the game (new files and TOCs). Enable TalentShare (dev) and GuildGames (dev); `/console scriptErrors 1`.
@@ -34,4 +35,4 @@ Result after work:    talentshare -> `211 passed, 0 failed`; guildgames -> `51 p
 - [ ] With a second member: their flips appear on your GuildGames leaderboard; TalentShare recipes/orders still sync (also with a member on 0.6.0).
 
 ## Accepted gaps
-- (none yet)
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "worked").

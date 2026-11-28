@@ -1,6 +1,6 @@
 # 013 Naming types and logging overhaul: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-17
 - Target version: next release (internal; no player-visible change except more log lines)
 - Owner: claude

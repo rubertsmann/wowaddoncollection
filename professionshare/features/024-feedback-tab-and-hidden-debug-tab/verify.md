@@ -23,6 +23,7 @@ Result after work:    `luajit tests/run.lua` -> 268 passed, 0 failed
 | RF3 | 2.4 peer and frev/WANTF | library drops unknown types, unknown HELLO fields are not read | READ-ONLY | LibGuildSync Sync._onHello / _handlerFor | reasoned | 2026-11-23 |
 | RF4 | 11th message drops the oldest, rev grows | test_feedback "Add ... keeps the newest 10, rev grows" | OFFLINE | suite 268 passed | pass | 2026-11-23 |
 | RF5 | hidden Debug tab selected -> Recipes | test_load | OFFLINE | suite 268 passed | pass | 2026-11-23 |
+| ALL | user's status review | user, live use | IN-GAME | user: "works" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] Live build, any character: the tab row shows Recipes, Orders, Misc Items, Feedback; no Debug. `/ps debug` prints log lines and opens the window on a now visible Debug tab; after `/reload` it is hidden again.
@@ -32,4 +33,4 @@ Result after work:    `luajit tests/run.lua` -> 268 passed, 0 failed
 - [ ] Dev build: Debug tab -> "Fake feedback" adds 3 messages from "Fake Tester" to the Feedback list.
 
 ## Accepted gaps
-- none yet
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "works").

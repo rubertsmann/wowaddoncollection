@@ -22,6 +22,7 @@ without menu templates (fallback cycle buttons, InputBoxTemplate) without errors
 | RF4 | language change | `search: item text cache ... starts over with a new language` | OFFLINE | test run | pass | 2026-11-16 |
 | - | escape sequences in tooltip text | `search: tooltip text drops the name line and every escape sequence...` | OFFLINE | test run | pass | 2026-11-16 |
 | - | /ts clean | `search: Clean also drops the item text cache` | OFFLINE | test run | pass | 2026-11-16 |
+| ALL | user's status review | user, live use | IN-GAME | user: "worked" | pass | 2026-11-28 |
 
 ## In-game checklist (`/console scriptErrors 1` first; restart the game once: new file in the TOC)
 - [x] 1. Recipes tab: the profession control is a dropdown listing "All" and every profession; picking one filters the list.
@@ -29,3 +30,6 @@ without menu templates (fallback cycle buttons, InputBoxTemplate) without errors
 - [ ] 3. Picking another profession clears the categories and the menu shows only that profession's categories.
 - [ ] 4. (simple words checked in game; effect words such as `beweglichkeit` not confirmed) Search box (magnifier, clear button): `beweglichkeit` finds agility food/gear after a second or two; `leder brust` finds leather chest pieces; the clear button empties it.
 - [ ] 5. `/tsd clean` then search again: texts are read again without errors.
+
+## Accepted gaps
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "worked").

@@ -27,6 +27,7 @@ Test names below are from `tests/test_item_batch.lua` unless another file is nam
 | RF4 | The Elixir and the clock going back | "Feast and Toy ... the Elixir stops the decay" (a tick with an earlier time) | OFFLINE | 180 passed, 0 failed | pass | 2026-11-25 |
 | RF5 | A 1.4 peer computes the same fight | "a challenge spends the buffs once; the fight is the same for a client that drops bf" | OFFLINE | 180 passed, 0 failed | pass | 2026-11-25 |
 | UI | The new UI loads without Lua errors | `tools/wow-sim.ps1 -Mode shot`, four scenarios (`evidence/sim-items.lua`) | NOT-VERIFIED | 0 GuildGames errors in last-guildgames-errors.json (simulator) | sim ok | 2026-11-25 |
+| ALL | user's status review | user, live use | IN-GAME | user: "shows and helps and works" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] Shop: the groups Charms, Care, Arena and Games appear. Buy a charm; Buy is then greyed out ("owned once").
@@ -46,4 +47,4 @@ Test names below are from `tests/test_item_batch.lua` unless another file is nam
 - [ ] Second client (MULTI-CLIENT): an older version (0.9.1) sees the same fight winner against a buffed fighter.
 
 ## Accepted gaps
-- none yet
+- Checklist steps not run one by one and the two-client rows: closed at the user's status review (2026-11-28, "shows and helps and works").

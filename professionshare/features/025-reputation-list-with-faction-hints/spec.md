@@ -1,6 +1,6 @@
 # 025 Reputation list with faction hints: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-24
 - Target version: 1.4.0 (protocol 2.6, schema 8)
 - Owner: claude

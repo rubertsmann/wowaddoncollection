@@ -111,3 +111,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: verify.md R5 ok with the accepted gap; the in-game checklist item stays open.
 - Evidence: user answers 2026-11-23.
 - Next: user's in-game check of AzeCaught.Tick; then status done.
+
+## 2026-11-28 11:55 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "should work like that" (2026-11-28)
+- Next: none

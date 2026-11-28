@@ -1,6 +1,6 @@
 # 053 Sleeping interrupts a running training: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-28
 - Target version: 0.15.0
 - Owner: claude

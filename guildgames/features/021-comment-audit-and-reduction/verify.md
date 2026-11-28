@@ -31,6 +31,7 @@ the refactor was not exercised in the game client.
 | Every comment with the code after it, plus every documented function printed whole and compared with its doc | guildgames UI/Window, GamesTab, SlotMachine, SurvivorArena, ArenaView, AzeCaughtPanel; professionshare Core/Data/Store.lua past line 300, Core/View (Model, Notify, RecipeTable), Core/Game (Api, Events), Core/Debug/Diagnostics.lua, UI (Window, Alerts, DevProbe, SecureDock, Table); fpvcigarette Overlay, Dancer, Log, Commands; foreverbetteruiplus (all) |
 | Every comment with the code it describes (test helpers, assertions, fixtures), arithmetic in comments recomputed | every tests/*.lua of all five addons |
 | Type annotations (`---@class/field/type/alias`): every field name searched in code, every description compared with the code that sets the value | all addons |
+| ALL | user's status review | user, live use | IN-GAME | user: "should work like that" | pass | 2026-11-28 |
 
 Builder functions (every `build*` / `*.Build` / `Register` in the UI files of all addons, 97 comments): each comment
 was also checked against every later use of the widget it describes (tooltips, frame levels, show/hide toggles, click
@@ -50,6 +51,7 @@ upgrade test named a MINOR 2 copy that is MINOR 3 (9f97553).
   same journal lines as before (`/gg caught log`), no Lua error. Covers the AzeCaught.Tick refactor e9ec3da.
 
 ## Accepted gaps
+- Checklist steps not run one by one and the two-client rows: closed at the user's status review (2026-11-28, "should work like that").
 - R5 volume target (40-60% fewer comment lines from the plan) not met (~2%); see doc.md "Limits". ACCEPTED by the user
   2026-11-23: the remaining comments are kept by the policy.
 - AzeCaught.Tick refactor (e9ec3da): in-game check still open; the user will do it later (checklist above).

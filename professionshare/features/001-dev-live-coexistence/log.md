@@ -20,3 +20,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: dev addon cannot be run by me
 - Evidence: n/a
 - Next: user runs `/tsd version` (expect "TalentShare (dev): v0.2.0-dev (protocol 1, prefix TShareDev)"), opens the window with `/tsd`, and reads the AddOn list (Esc -> AddOns) for the entry "TalentShare (dev)"
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done (obsolete)
+- Evidence: user: "obsolete" (2026-11-28)
+- Next: none

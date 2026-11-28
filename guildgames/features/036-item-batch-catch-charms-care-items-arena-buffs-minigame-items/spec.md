@@ -1,6 +1,6 @@
 # 036 Item batch: catch charms, care items, arena buffs, minigame items: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-25
 - Target version: 0.10.0
 - Owner: claude

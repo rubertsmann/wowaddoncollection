@@ -26,3 +26,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: overlay line and all three chat lines render in Blizzard's UI; no Lua errors. (A first run hung: the script printed inside its own chat hook; fixed in the script.)
 - Evidence: evidence/sim-catch-refusals.png; "sim: 0 Lua error(s) in GuildGames, 0 elsewhere"
 - Next: in game (user): T3 dungeon, T5 `interactRange4` in combat, a tagged enemy
+
+## 2026-11-28 09:53 | DONE | dungeon refusal confirmed in game
+- Did: user: "doesnt work because minions cant be caught in a dungeon"
+- Result: catching is refused in dungeons in the client; remaining rows closed as accepted gaps (verify.md); T5 left open
+- Evidence: user report 2026-11-28
+- Next: none; reopen only if the range check (T5) matters

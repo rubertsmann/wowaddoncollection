@@ -1,6 +1,6 @@
 # 042 Companion nicknames: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-27
 - Target version: 0.12.0 (with 041, protocol 1.7, schema 3)
 - Owner: claude

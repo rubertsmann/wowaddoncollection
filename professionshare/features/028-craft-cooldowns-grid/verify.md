@@ -26,6 +26,7 @@ Result after work:    `luajit tests/run.lua` -> 331 passed, 0 failed
 | RF3 | clocks hours apart | test_craft_cooldowns two-peer test with 7200 s skew | OFFLINE | | pass | 2026-11-24 |
 | RF4 | unlearned / left the guild -> gone, pruned | test_craft_cooldowns "version reset drops peers' records, clean and prune remove them", "update ... the group goes" | OFFLINE | | pass | 2026-11-24 |
 | RF5 | grid open for hours: ticker only while shown, pooled tiles | UI/CooldownGrid.lua OnShow/OnHide ticker, tile pool; checklist 6 | READ-ONLY | | open | |
+| ALL | user's status review | user, live use | IN-GAME | user: "works but confusing sometimes" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 The dev build is deployed (`tools/deploy.ps1` ran; restart the game, `/reload` does not re-read the TOC). Dev commands start
@@ -52,4 +53,4 @@ answer is "cds: peer has none", which is right: none of them knows a transmute, 
 stays empty. The handshake between 1.4.1 clients runs without warnings; the timer sync itself (7) is still unseen.
 
 ## Accepted gaps
-- none yet
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "works but confusing sometimes"). The confusing part is tracked as bug B003.

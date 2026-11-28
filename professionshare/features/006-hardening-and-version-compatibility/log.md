@@ -75,3 +75,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: `luajit tests/run.lua` -> 134 passed, 0 failed. Status stays `verifying`: the in-game and two-client rows of verify.md are still NOT verified.
 - Evidence: suite output; GitHub Actions runs for v0.3.1 and v0.3.2 (conclusion success).
 - Next: install 0.3.2 live, restart the game, check /ts version, /ts comm (roster, rejected) with a second player; reproduce the "addon action blocked" dialog with /console taintLog 2.
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "worked" (2026-11-28)
+- Next: none

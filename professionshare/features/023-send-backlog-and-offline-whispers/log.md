@@ -26,3 +26,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: status stays `verifying` (live check open)
 - Evidence: libguildsync 39, professionshare 259, guildgames 139 passed, 0 failed
 - Next: user plays a crafting session with the guild, then checks the trace (verify.md checklist)
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "works" (2026-11-28)
+- Next: none

@@ -40,6 +40,7 @@ Result after work:    `luajit tests/run.lua` -> 95 passed, 0 failed
 | RF5 | offline across weeks | test_azecaught "weekly payout..." | OFFLINE | suite line | pass | 2026-11-20 |
 | RF6 | balance edges | test_wallet "a stake above the balance..." | OFFLINE | suite line | pass | 2026-11-20 |
 | R24-effect | throw effect: wind-up on the player, then the lasso on the target's nameplate | user threw the rope in game after /reload | IN-GAME | user, 2026-11-21: "looks fine" | pass | 2026-11-21 |
+| ALL | AZEcaught in daily live use | user | IN-GAME | user: "018 works" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 Setup: `powershell tools/deploy.ps1` (regenerates GuildGames-Dev.toc; new files were added), **restart** the game,
@@ -60,4 +61,4 @@ Setup: `powershell tools/deploy.ps1` (regenerates GuildGames-Dev.toc; new files 
 - [ ] 9. After the checks: `/ggd caught export` and `/ggd caught log 40`, screenshot or paste into evidence/.
 
 ## Accepted gaps
-- (none yet)
+- The checklist steps not run one by one and the two-member leaderboard: closed at the user's status review (2026-11-28, "018 works").

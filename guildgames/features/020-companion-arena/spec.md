@@ -1,6 +1,6 @@
 # 020 Companion arena: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-21
 - Target version: GuildGames 0.3.0 (protocol 1.2, schema 2)
 - Owner: claude (user: "create a fully new async battle system for the companion")

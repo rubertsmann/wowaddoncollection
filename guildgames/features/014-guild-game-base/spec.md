@@ -1,6 +1,6 @@
 # 014 Guild game base (first draft: coin flip): spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-17
 - Target version: 0.6.0 (protocol 2.3, schema 4)
 - Owner: claude (decisions: user)
@@ -17,7 +17,7 @@ This file is self-contained: everything needed to implement 014 is here or linke
    one logging helper `addon.Log.Information|Warning|Error|Exception(area, message, fields)`, helpers in `addon.Utility`
    (`SafeInteger(value, min, max)`, `IsSafeName`, `Escape`, `Now`, `CanonicalName`, `DeepCopy`, `SanitizeMap`, `SortedKeys`, `Count`).
    Pure modules never touch WoW globals; WoW calls only in `Core/Game/Api.lua` and `UI/*`.
-4. Dev-only slash commands live under `/tsd` and are registered inside `if addon.IS_DEVELOPMENT_BUILD then ... end`
+4. Dev-only slash commands live under `/ggd` and are registered inside `if addon.IS_DEVELOPMENT_BUILD then ... end`
    (pattern: `UI/DevProbe.lua:334`). Player commands are `addon.SlashCommands.<name>` (`/ts <name>`).
 5. After any TOC change run `powershell tools/deploy.ps1` (regenerates `TalentShare-Dev.toc`; `tests/test_load.lua` fails
    while it is stale) and restart the game (`/reload` does not re-read the TOC).
@@ -46,8 +46,8 @@ amounts) are shown on a guild leaderboard that syncs like offers do.
 - R9: The tab states "For fun only: no gold changes hands." The addon never reads, moves or checks real gold.
 - R10: Peers on protocol 2.2 or older keep syncing everything else; a schema-4 file opened by 0.5.x is left untouched.
 - R11: Offline iteration: rules, record validation, leaderboard, coin pose math and sync run in `luajit tests/run.lua`;
-  `luajit tools/coinflip.lua` prints the animation curve and a flip distribution; the dev build has `/tsd anim` (probe P1-P8)
-  and `/tsd game sim <n>` (n fake leaderboard players, in memory only, never stored or sent).
+  `luajit tools/coinflip.lua` prints the animation curve and a flip distribution; the dev build has `/ggd anim` (probe P1-P8)
+  and `/ggd game sim <n>` (n fake leaderboard players, in memory only, never stored or sent).
 
 ## 3. Non-goals
 - Real gold: no trade, mail, `GetMoney()` checks or settlement. Numbers are bookkeeping for fun.
@@ -74,7 +74,7 @@ amounts) are shown on a guild leaderboard that syncs like offers do.
 | `UI/Animate.lua` | new, client | `addon.Animate` effects + tween driver (4.6) |
 | `UI/Window.lua` | changed | tab list refactor (`:592-603`, `:1338-1357`); `UI.Widgets` export of the local widget helpers |
 | `UI/GamesTab.lua` | new, client | `addon.GamesTab.Build(tabFrame)`, `addon.GamesTab.Refresh()` (4.7) |
-| `UI/DevProbe.lua` | changed | `/tsd anim` probe, `/tsd anim speed <x>`, `/tsd game sim <n>` |
+| `UI/DevProbe.lua` | changed | `/ggd anim` probe, `/ggd anim speed <x>`, `/ggd game sim <n>` |
 | `Locales/enUS.lua`, `Locales/deDE.lua` | changed | strings in 4.8 |
 | `TalentShare.toc` | changed | `Core\Play\Games.lua`, `Core\Play\CoinFlip.lua` after `Core\Data\Offers.lua`; `UI\Animate.lua`, `UI\GamesTab.lua` after `UI\Window.lua` |
 | `tests/run.lua` | changed | add `Core/Play/Games.lua`, `Core/Play/CoinFlip.lua` after `Core/Data/Offers.lua` in the module list (`:28`); `PROTOCOL_MINOR = 3` (`:22`) |
@@ -159,7 +159,7 @@ Hybrid per the study: AnimationGroup for effects that end where they started, an
   any `pcall` error: apply the final state and call `onDone` synchronously.
 - `Animate.Tween(key, duration, onStep(elapsed), onDone)`: one shared driver frame, `OnUpdate` set only while tweens
   exist; a new tween with the same key replaces the old one (calls nothing of the old). `Animate.speed` (default 1)
-  divides durations' passage of time: `/tsd anim speed 0.25` = slow motion for tuning.
+  divides durations' passage of time: `/ggd anim speed 0.25` = slow motion for tuning.
 - The coin uses `Tween("coin", CoinFlip.DURATION, step)` where `step` applies `CoinFlip.Pose`: texture width =
   `COIN_SIZE * width`, `SetPoint` y offset = `y`, texture = face (no Translation/Scale animation, so K1/K2 do not apply).
   Landing: `Pulse(coin, 1.15, 0.25)`, `FadeIn(resultText, 0.3)`, win -> `Glow(glowTexture, 2)` + sound, loss -> `Shake(coinHolder, 4, 4)`.
@@ -214,7 +214,7 @@ No flips yet [Noch keine Würfe], "For fun only: no gold changes hands." [Nur zu
 | L1 pure | R2, R3 (store-before-animate order), R5-R8, R10, RF1-RF5 | `luajit tests/run.lua` | seconds |
 | L2 console | R4 curve feel, 50/50 distribution | `luajit tools/coinflip.lua` | seconds |
 | L3 widget stubs | R1, R4 fallback, load order | `tests/test_load.lua`, `tests/test_games_ui.lua` | seconds |
-| L4 in-game solo | R1, R4 visuals, R6-R9, probe P1-P8 | `tools/deploy.ps1`, restart once, then `/reload`; `/tsd anim`, `/tsd game sim 12` | ~10 s |
+| L4 in-game solo | R1, R4 visuals, R6-R9, probe P1-P8 | `tools/deploy.ps1`, restart once, then `/reload`; `/ggd anim`, `/ggd game sim 12` | ~10 s |
 | L5 two clients | R5, R10 live | two guild members, one on 0.5.x for R10 | slow, last |
 
 ## 6. Tasks (in order; T1-T5 are pure and can be done without the game)
@@ -225,7 +225,7 @@ No flips yet [Noch keine Würfe], "For fun only: no gold changes hands." [Nur zu
 - [x] T4 (M): Sync protocol 2.3 (`grev`, WANTG, GAMES, RECORD_KINDS.games), `PROTOCOL_MINOR = 3` (Init + tests/run.lua),
   `RequestHelloSoon` + pump check + `GAMES_CHANGED` event, `Api.Random`; tests in `test_sync.lua`, `test_soak.lua`. Verify: L1.
 - [x] T5 (S): Model rows (leaderboard, feed, previous winner) + `tests/test_games_model.lua`. Verify: L1.
-- [ ] T6 (S) (probe built; BLOCKED on the user running it): `/tsd anim` probe in `UI/DevProbe.lua` answering P1-P8 of the study + coin/glow texture check; prints one line
+- [x] T6 (S) (now `/ggd anim`; run by the user 2026-11-28): `/ggd anim` probe in `UI/DevProbe.lua` answering P1-P8 of the study + coin/glow texture check; prints one line
   per question. Then **BLOCKED on the user**: run it in game, send the chat output (and screenshots for P5/P8). Record answers
   in `docs/api-findings.md` and the study. Verify: L4.
 - [x] T7 (M) (built before the probe answers, see Decisions; revisit after T6): `UI/Animate.lua` shaped by the T6 answers (if P3/P4 show built-in bugs, swap the affected effect to the tween
@@ -233,7 +233,7 @@ No flips yet [Noch keine Würfe], "For fun only: no gold changes hands." [Nur zu
 - [x] T8 (S): `UI/Window.lua` tab list refactor + `UI.Widgets` export; no behaviour change for the 4 existing tabs. Verify: L3, L4 click through.
 - [x] T9 (M): `UI/GamesTab.lua`, locale strings (enUS + deDE), TOC, `deploy.ps1`, `Api.CoinSoundKit`; GamesTab part of
   `tests/test_games_ui.lua`. Verify: L3, then L4.
-- [x] T10 (S): `/tsd game sim <n>` and `/tsd anim speed <x>`. Verify: L1 (simulated never sent/stored), L4.
+- [x] T10 (S): `/ggd game sim <n>` and `/ggd anim speed <x>`. Verify: L1 (simulated never sent/stored), L4.
 - [x] T11 (S): docs: `docs/protocol.md` section 9 (2.3 + schema 4), README (Games tab, "for fun only"), CHANGELOG, `docs/status.md`, `doc.md`. Verify: read-through.
 - [x] T13 (L): slot machine: `Core/Play/Slots.lua`, `UI/SlotMachine.lua`, game selector + per-game boards in
   `UI/GamesTab.lua`, `slots` record section; tests `test_slots.lua` (8), `test_games_ui.lua` (+3), `test_load.lua`.

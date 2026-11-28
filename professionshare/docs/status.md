@@ -1,111 +1,28 @@
-﻿# Implementation status (updated 2026-11-16, after release 0.3.2)
+# Implementation status (updated 2026-11-28, after release 1.8.0 and the status review)
 
-**Sync failure in 0.4.0 (user report, live guild):** orders sync (with a wrong name), known recipes and recipe items do not. Analysis: `review/sync-0.4.0-diagnosis.md` (every failing path is a whisper round trip; the name-form comparisons on that path are the probable cause). Feature 008 (v0.4.1, `verifying`, protocol 2.2) adds the Debug tab, `/ps export`, canonical player names, pull retries over GUILD, order name snapshots and fixes for the same-realm whisper target and stale identity. Proven OFFLINE only (incl. a test where every whisper is lost); the in-game effect is NOT confirmed until two members run it and send exports.
+Per-feature state lives in `features/INDEX.md`; what is proven and what is open lives in each feature's `verify.md`.
+This page is the short overview, not a second copy.
 
-**Releases (GitHub tags, built by `.github/workflows/release.yml`):** v0.3.0, v0.3.1 (build flag `ns.BUILD`, dev/live isolation checks), v0.3.2 (same-realm whispers addressed by character name; names in lists without the realm suffix). v0.4.0 adds feature 007 (Available tab, protocol 2.1, schema 3). v0.4.1 adds feature 008 (surname-aware player names, pull retries over GUILD, Debug tab and `/ps export`, protocol 2.2). User-reported: an "addon action blocked" dialog in the live build on a second click. Cause found 2026-11-18: the window holds secure buttons and so could not be shown or hidden in combat; fixed in 0.7.1 by `UI/SecureDock.lua` (confirmed in game by the user, 2026-11-18); blocked actions are now logged. Sync between two real players (live build) is unverified: the live 0.3.1 folder was not loaded in the first test session (a restart is needed after installing the folder).
+**Released:** up to 1.8.0. Every feature up to 050 is `done` (001, 004, 005 as obsolete) or `abandoned` (003).
+Most closed at the user's status review on 2026-11-28 from live use, not from the step-by-step checklists.
+014 moved to GuildGames with 015.
 
-**Current:** `luajit tests/run.lua` -> see the last line of the suite (feature 006 added 30 hardening tests on top of master's suite). Per-feature state lives in `features/INDEX.md` (001 dev/live coexistence, 002 localization, 004 clean command, 005 profession scan buttons, 006 hardening and version compatibility: `verifying`; 003 auto profession scan was abandoned: the game blocks addons from opening professions), waiting for the in-game checklists in their `verify.md`. Feature 006 (protocol 2.0, schema 2, inbound guild gate, strict validation) is proven OFFLINE only; the roster gate after login and two-client interop of the new header are NOT verified in game.
-**Feature 007 (Available tab: recipe items + dibs, protocol 2.1, schema 3):** built and proven OFFLINE (`tests/test_offers.lua`, `test_offers_model.lua`, `test_items_api.lua`); the client APIs for bank/mail/guild bank/auction scanning and the tab layout are NOT verified in game (`/ps offers` is the probe), nor is two-client sync.
-**Feature 014 (Games tab: coin flip + guild leaderboard, protocol 2.3, schema 4; moved to GuildGames by 015):** built and proven OFFLINE (`tests/test_games*.lua`, `test_coinflip.lua`, `test_load.lua`); the look of the animation, the animation API facts (probe `/psd anim`, P1-P8), and two-client sync are NOT verified in game. Checklist: `features/014-guild-game-base/verify.md`.
-**Feature 015 (games moved to the GuildGames addon, comms + helpers into the embedded LibGuildSync-1.0, schema 5):** built and proven OFFLINE in all three repos (professionshare `211 passed`, guildgames `51 passed`, libguildsync `27 passed`). NOT verified in game: both addons loaded together (one active library copy, shared send budget), TalentShare 0.7 syncing with 0.6.0 members, GuildGames between two members. Checklist: `features/015-games-extraction-and-shared-sync-library/verify.md`. Known gap: the inactive GitHub release workflow (`.pkgmeta`) does not fetch LibGuildSync; releases are built with `tools/package.ps1`.
-**Feature 016 (Recipes table: quality-coloured names, switchable columns, sort by item level; resizable window; UI + local settings only):** logic proven OFFLINE (`tests/test_recipe_table.lua`; suite `222 passed, 1 failed`, the failure is the pre-existing stray `Core/Play/Slots.lua`). NOT verified in game: the table look, header sorting, options section, resize grip and scaling of every tab. Checklist: `features/016-recipe-table-columns-and-resizable-window/verify.md`.
-**Feature 022 (Misc Items tab: recipe items, dungeon keys, raid attunements; per-mode table columns; protocol 2.4, schema 6):** built and proven OFFLINE (`tests/test_access.lua`, `test_access_model.lua`, `test_items_api.lua`, `test_load.lua`; suite `257 passed`). NOT verified in game: key ring and quest API on Forever, the key/quest ids, the tab look, two-client sync. Checklist: `features/022-misc-items-tab-with-keys/verify.md`.
-**Feature 024 (Feedback tab for the developer, bug snapshot, Debug tab hidden until `/ps debug`; protocol 2.5, schema 7):** built and proven OFFLINE (`tests/test_feedback.lua`, `test_load.lua`, `test_send_backlog.lua`). NOT verified in game: the tab look, the multi-line box, status icons, delivery between a member and the developer. Checklist: `features/024-feedback-tab-and-hidden-debug-tab/verify.md`.
-**Feature 029 (Grouped settings page):** done. OFFLINE (the page builds and opens in `test_load.lua`); not seen in game (accepted).
+**Planned:** 054 party/raid portrait key icon (still wanted? open question in its spec).
 
-**Feature 027 (Recipe drop alerts; protocol 2.7):** done. OFFLINE (`tests/test_recipe_drops.lua`, `test_load.lua`) and IN-GAME with the dev triggers on one client. NOT verified: a real drop, two members (accepted by the user). Review: `review/recipe-drops.md`. Checklist: `features/027-recipe-drop-alerts/verify.md`.
+**Bugs:** `bugs/INDEX.md` (B003: the cooldowns grid is sometimes confusing; what exactly is open).
 
-**Feature 028 (Misc Items: Cooldowns grid; protocol 2.8, schema 9):** built and proven OFFLINE (`tests/test_craft_cooldowns.lua`,
-`test_craft_cooldowns_model.lua`, `test_load.lua`; suite `331 passed`). NOT verified in game: the recipe/spell ids and durations
-(`/ps cd`), whether `GetSpellCooldown` reports tradeskill cooldowns after a relog, the grid look and effects, two-client sync.
-Checklist: `features/028-craft-cooldowns-grid/verify.md`.
-
-**Feature 026 (Dev tools menu, recipe probe; dev build only):** done. OFFLINE plus IN-GAME (recipe tooltips on Forever deDE: red requirement line, bind on pickup, loot formats). Open: a real recipe loot line, "Already known". Checklist: `features/026-debug-fake-data-menu-and-recipe-probe/verify.md`.
-
-**Feature 025 (Misc Items: Reputation list with faction hints; protocol 2.6, schema 8):** built and proven OFFLINE (`tests/test_reputation.lua`, `test_reputation_model.lua`, `test_reputation_api.lua`, `test_load.lua`). NOT verified in game: GetFactionInfoByID on Forever, the faction ids (`/ps rep`), the list look, filter dropdown and hint tooltip, two-client sync. Hint data is static and unverified against Forever. Checklist: `features/025-reputation-list-with-faction-hints/verify.md`.
-**Feature 017 (enchant effect text, 0.7.2, fixed in 0.7.3, UI only):** effect text of recipes without an item in the tooltip, detail panel and search, from the spell description (0.7.2 showed tools/reagents for most enchants; fixed). Confirmed in game with the dev fake enchanter (all 6 enchants). Checklist: `features/017-enchant-effect-text/verify.md`.
-**Verified in game (user, 0.1.0 dev build):** profession scan (23 recipes, reagents), `/ts scan` and `/ts dump`, window opens, API probe (see `docs/api-findings.md`). **Not verified in game:** two-player sync, the 0.2.0 changes (localized UI, dev/live side by side), CurseForge auto-release.
-
-Table below is the original plan status from the first night (T1-T19), kept for history.
-
-Legend: DONE = written; UNVERIFIED = needs the check in the last column.
-
-| Plan task | State | What proves it |
-|---|---|---|
-| T1 scaffold, deploy | DONE, UNVERIFIED | `powershell tools/deploy.ps1`, start game, `/ps version` |
-| T2 test harness | DONE, UNVERIFIED | `luajit tests/run.lua` (needs `winget install DEVCOM.LuaJIT`) |
-| T3 API probe | DONE (addon), findings pending | `tools/deploy.ps1 -WithProbe`, `/psp` with a profession window open, `/reload`, read `ProfessionShareProbeDB.lua` |
-| T4 libs | LibStub + LibDeflate vendored (copied from the installed Spoken addon, zlib licence). **AceComm / ChatThrottleLib / LibSerialize are NOT used**; replaced by `Core/Net/Codec.lua` (own safe serializer) and `Core/Net/Communication.lua` (own chunking + token-bucket pacing) | tests + in-game `/ps comm` |
-| T5 Store | DONE, UNVERIFIED | `tests/test_core.lua` |
-| T6 Api adapter | DONE; supports modern `C_TradeSkillUI` and legacy `GetTradeSkill*`, chosen at runtime | `/ps scan`, `/ps dump` with a profession open |
-| T7 Scanner | DONE, UNVERIFIED | `/ps dump` shows recipe counts per profession |
-| T8 Events | DONE, UNVERIFIED | `/ps debug` shows `scan changed/same` entries |
-| T9 Codec | DONE, UNVERIFIED | `tests/test_core.lua` |
-| T10 Sync | DONE, UNVERIFIED | `tests/test_sync.lua` |
-| T11 Comm | DONE, UNVERIFIED | two guild characters; `/ps comm`, `/ps chars` |
-| T12 Orders | DONE, UNVERIFIED | `tests/test_orders.lua` |
-| T13 Orders sync | DONE (in Sync) | two characters, create/claim an order |
-| T14-T17 UI | DONE, UNVERIFIED | open `/ps` in game; checklist in `eval/plan.md` |
-| T18 packaging | `tools/package.ps1`, `.pkgmeta`, workflow written; CurseForge project/token not created | `powershell tools/package.ps1`, install zip |
-| T19 soak | offline half DONE and passing (`tests/test_soak.lua`: 3000-case fuzz, 30 peers x 20 min at 10% loss converge); real-guild half not started | needs a real guild evening |
+Never run: two real members syncing over a full evening (the original soak test).
 
 ## Publishing
 
-* CurseForge project (slug `guild-talentshare`), files uploaded **manually** from `dist/ProfessionShare-<version>.zip (TalentShare-*.zip up to 0.7.3)`
-  (built by `tools/package.ps1`): https://legacy.curseforge.com/wow/addons/guild-talentshare
-* Screenshots page: https://legacy.curseforge.com/wow/addons/guild-talentshare/screenshots
+* CurseForge project (slug `guild-talentshare`), files uploaded **manually** from `dist/ProfessionShare-<version>.zip`
+  (`TalentShare-*.zip` up to 0.7.3), built by `tools/package.ps1`: https://legacy.curseforge.com/wow/addons/guild-talentshare
 * GitHub: https://github.com/rubertsmann/wowaddoncollection
-* Automated release (`.github/workflows/release.yml`) is NOT active: it needs `## X-Curse-Project-ID` in the TOC and the
-  repo secret `CF_API_TOKEN`.
+* The automated release (`.github/workflows/release.yml`) is NOT active: it needs `## X-Curse-Project-ID` in the TOC and
+  the repo secret `CF_API_TOKEN`, and it does not fetch LibGuildSync.
 
-## Differences from the plan
+## Design differences from the original plan (`eval/plan.md`, historical)
 
-* No AceComm / LibSerialize / ChatThrottleLib (no network access used). Messages are chunked at 225 bytes with header
-  `id|idx|total|`; sends are paced at ~0.9/s with a burst of 5.
-* Sync is pull-based: HELLO carries my record revision; peers `WANT` my snapshot when theirs is older. Offline members'
-  records are NOT gossiped by third parties (a new install only learns members who come online while it is running, or
-  who were online when it logged in and answered the login HELLO). This is the main functional gap.
-* Professions are keyed by localized profession name (mixed-language guilds would show duplicates).
-
-## First things to do when you wake up
-
-1. `luajit tests/run.lua` -> 26 passed (LuaJIT is installed under `%LOCALAPPDATA%\Programs\LuaJIT\bin`; open a new shell for PATH).
-2. `powershell tools/deploy.ps1 -WithProbe`; log in; open a profession; `/psp`; `/reload`; check `/ps scan`, `/ps dump`.
-3. Watch for Lua errors (`/console scriptErrors 1`).
-
-
-**Feature 044 (Orders tab: Auctionator buy list from ticked orders; UI + local setting, protocol and schema unchanged):**
-built and proven OFFLINE (`tests/test_buy_list.lua`, `test_load.lua`; suite `350 passed`). NOT verified in game: the
-tick boxes and controls, the real Auctionator 354 call on Forever, whether the quantity shows in the Shopping tab, the
-error window, the search at the auction house and the waiting search on `AUCTION_HOUSE_SHOW` (suite now `354 passed`).
-Checklist: `features/044-auctionator-buy-list-from-orders/verify.md`.
-
-**Feature 045 (Mail queue: mails for orders filled at the mailbox, Mail tab; local data `mailQueue`, protocol and schema
-unchanged):** built and proven OFFLINE against a simulated mailbox (`tests/test_mail_queue.lua`, `test_mail_sender.lua`,
-`test_load.lua`; suite `382 passed`). Known on Forever from the dev probe: attaching works, soulbound items are refused,
-a split clicked straight into the mail attaches the whole stack. NOT verified in game: filling recipient/subject, the
-split into a free bag slot, `MAIL_SEND_SUCCESS` and the next mail, the Mail tab and mailbox panel. Checklist:
-`features/045-mail-order-items/verify.md`.
-
-**Feature 046 (Orders tab rework: filter dropdown, right-click actions, row icons for mail and Auctionator, Craft in the
-top bar; mailbox panel lists the mail queue, Fill/Done/Delete per mail; UI + local settings):** built and proven OFFLINE
-(suite `384 passed`). Supersedes the tick boxes and controls of 044/045. NOT verified in game: the dropdown, the
-right-click menu, the icons, the buy-list dialog, the mailbox panel. Checklist:
-`features/046-order-row-actions-and-mailbox-queue-list/verify.md`.
-
-**Feature 047 (Settings: "Tell me about" dropdown, new scope "Orders I have the profession level for"; UI + local
-setting):** built and proven OFFLINE (`tests/test_notify.lua`, `test_load.lua`; suite `387 passed`). NOT verified in
-game: the dropdown and hint. Checklist: `features/047-notification-scope-dropdown-and-profession-level-scope/verify.md`.
-**Feature 048 (order window: overview, chat, history; protocol 2.9, schema unchanged):** built and proven OFFLINE
-(`tests/test_order_chat.lua`, `test_sync.lua`, `test_load.lua`; suite `402 passed, 0 failed`). NOT verified in game: the
-window look, typing and Enter, `GetTradeSkillTools` on Forever, chat between two members. Checklist:
-`features/048-order-detail-window-with-chat-and-history/verify.md`.
-Released in 1.6.0 (features 047, 048 done): the user confirmed the order window, chat and alert in game on one client (2026-11-27); two members chatting and the tools API remain unchecked (accepted).
-**Feature 049 (order mail status and history; protocol 2.10, schema unchanged):** built and proven OFFLINE
-(`tests/test_order_mail.lua`, `test_mail_sender.lua`, `test_sync.lua`, `test_load.lua`; suite `415 passed, 0 failed`).
-Confirmed in game by the user on one client (2026-11-27): send, Done, mark buttons, alert (`/psd fake mailed`), filter. NOT
-verified: two members (accepted at release). Checklist: `features/049-order-mail-status-and-history/verify.md`.
-**Feature 050 (mail tag and pickup tracking; protocol 2.11, schema unchanged):** built and proven OFFLINE against a
-simulated inbox (`tests/test_mail_pickup.lua`, `test_load.lua`; suite `423 passed, 0 failed`). NOT verified in game:
-the inbox API on Forever (`GetInboxHeaderInfo` return order, `GetInboxItem` item id, the take hooks), a real pickup by a
-second character (accepted at release 1.8.0). Checklist: `features/050-mail-tag-and-pickup-tracking/verify.md`.
+* No AceComm / LibSerialize / ChatThrottleLib. Messages are chunked at 225 bytes with header `id|idx|total|`; sends are
+  paced (now through LibGuildSync).
+* Sync is pull-based: HELLO carries my record revision; peers `WANT` my snapshot when theirs is older.

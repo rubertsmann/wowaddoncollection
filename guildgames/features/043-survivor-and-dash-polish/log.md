@@ -20,3 +20,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: pass
 - Evidence: `luajit tests/run.lua` -> 218 passed, 0 failed (model test now covers padding and the padded heights)
 - Next: user: `/reload`, check Survivor and Companion Dash with a big creature (no cut-off, hitbox visible, size right); paste the "survivor companion was framed" line (now with `distance`) if the size is still off.
+
+## 2026-11-28 09:53 | DONE | closed; cut-off moved to bug B002
+- Did: user: "really big creatures are still cut off at the right side"
+- Result: R1 fails in game for very big creatures -> bug B002 (`guildgames/bugs/`); status done for the rest
+- Evidence: user 2026-11-28
+- Next: B002

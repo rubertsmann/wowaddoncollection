@@ -32,6 +32,7 @@ whisper gate accepts anyone -> 3 failing | parser accepts inf -> 1 | catalog ids
 | R13 | adversarial regression tests exist | `tests/test_hardening.lua` (32 tests) + mutation check above | OFFLINE | suite | pass | 2026-11-16 |
 | R14 | docs | `docs/protocol.md`, `docs/vendored-libs.md`, CHANGELOG, README, `docs/status.md`, review files updated | READ-ONLY | files exist; content reviewed by the author only | n/a | 2026-11-16 |
 | (pkg) | package script output | `powershell tools/package.ps1` -> 22 files after the rebase (AutoScan.lua is gone on master), every TOC file present, no backslash entries | OFFLINE (script run) | `built ...TalentShare-0.2.0.zip (22 files)`, check script: `missing from zip: []`, `backslash names: []` | pass | 2026-11-16 |
+| ALL | user's status review | user, live use | IN-GAME | user: "worked" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] `/reload`, then `/ts version`: shows the TOC version, `protocol 2.0, schema 2`. No Lua errors (`/console scriptErrors 1`).
@@ -41,4 +42,4 @@ whisper gate accepts anyone -> 3 failing | parser accepts inf -> 1 | catalog ids
 - [ ] With a second guild member on this build: `/ts hello`, both see each other's recipes (`/ts chars`). With one still on 0.2.0: the 0.3 client prints the "older version" notice once.
 
 ## Accepted gaps
-- none yet (every `NOT-VERIFIED` row above needs the user or a second guild member).
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "worked").

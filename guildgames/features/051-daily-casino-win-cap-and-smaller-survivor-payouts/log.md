@@ -74,3 +74,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: green
 - Evidence: `luajit tests/run.lua` -> `236 passed, 0 failed`
 - Next: in-game check (verify.md checklist updated), commit when the user asks
+
+## 2026-11-28 09:53 | DONE | limit message confirmed in game
+- Did: user: "51 - shows a message"
+- Result: status done; layout and 0.13 peer rows accepted
+- Evidence: user 2026-11-28
+- Next: none

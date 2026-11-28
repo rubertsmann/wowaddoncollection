@@ -1,6 +1,6 @@
 # 001 Dev live coexistence: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-16
 - Target version: 0.2.0 (dev builds report `0.2.0-dev`)
 - Owner: claude

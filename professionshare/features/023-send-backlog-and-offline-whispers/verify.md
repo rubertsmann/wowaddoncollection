@@ -15,7 +15,11 @@ Result after work: libguildsync 39, professionshare 259, guildgames 139 passed, 
 | RF2 | Recently heard member counts online | `test_channel` offline test (C-R) | OFFLINE | 39 passed | pass | 2026-11-23 |
 | RF3 | Throttle keeps the chunk | existing throttle tests in `test_channel` | OFFLINE | 39 passed | pass | 2026-11-23 |
 | live | Message gone in a real session | play with the guild while levelling a profession, then read the trace (`/ps export`): few `queued` rows, `dropped ... offline` for members who left | NOT-VERIFIED | - | needs user | - |
+| ALL | user's status review | user, live use | IN-GAME | user: "works" | pass | 2026-11-28 |
 
 ## In-game checklist
 - [ ] Craft for a while with several members online; afterwards `/ps export`: chunks waiting stay small, no whisper rows older than a minute.
 - [ ] A member logs out while you craft: no "kein Spieler ... online" message; the trace shows `dropped recipient offline`.
+
+## Accepted gaps
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "works").

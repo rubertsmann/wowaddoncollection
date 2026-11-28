@@ -1,6 +1,6 @@
 # 023 Send backlog and offline whispers: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-23
 - Target version: ProfessionShare 1.2.1, GuildGames 0.4.1, LibGuildSync MINOR 5
 - Owner: claude

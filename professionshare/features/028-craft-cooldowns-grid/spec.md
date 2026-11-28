@@ -1,6 +1,6 @@
 # 028 Craft cooldowns grid: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-24
 - Target version: 1.4.0 unreleased (protocol 2.7 -> 2.8, schema 8 -> 9)
 - Owner: claude

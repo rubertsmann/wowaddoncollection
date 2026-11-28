@@ -26,6 +26,7 @@ Mutation check (2026-11-16): removing the own-item dib rule, the OFFERS sender c
 | RF4 | dib toggled twice, two dibbers | test_offers.lua | OFFLINE | 127 passed, 0 failed | pass | 2026-11-16 |
 | RF5 | hide then sync; clean | test_offers.lua | OFFLINE | 127 passed, 0 failed | pass | 2026-11-16 |
 | Compat 0.3.x | 0.3.x ignores the new HELLO field and messages | receiver side of 2.1 tested ("hello without orev"); 0.3.x behaviour reasoned from `Sync` dropping unknown types | READ-ONLY | - | not run against a real 0.3.x | 2026-11-16 |
+| ALL | user's status review | user, live use | IN-GAME | user: "worked" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] Run `powershell tools/deploy.ps1` (regenerates the dev TOC, a new file was added), restart the game, then `/tsd offers`: note which "APIs:" entries say NO.
@@ -38,4 +39,4 @@ Mutation check (2026-11-16): removing the own-item dib rule, the OFFERS sender c
 - [ ] `/tsd version` shows `protocol 2.1, schema 3`; a 0.3.x client in the guild keeps working (it just ignores offers).
 
 ## Accepted gaps
-- none yet
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "worked").

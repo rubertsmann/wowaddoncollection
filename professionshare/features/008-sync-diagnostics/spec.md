@@ -1,6 +1,6 @@
 # 008 Sync diagnostics: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-16
 - Target version: 0.4.1
 - Owner: claude

@@ -20,8 +20,8 @@ payout up and, from 15x or on a coin line (jackpot), rains coins. Each game has 
   leaderboard (rank, player, net, won, lost, wins/losses; my row highlighted), Recent flips.
 - Three stake boxes (gold, silver, copper; Tab moves between them, Enter flips). The stake is remembered in copper
   (`db.ui.lastStakeCopper`), the scope too (`db.ui.gamesScope`). Amounts show as "1g 50s 25c" in coin colours.
-- Dev build only: `/tsd anim` (animation probe P1-P8, prints `anim P1..P8` lines and shows test squares for 10 s),
-  `/tsd anim speed 0.25` (slow motion; `1` = normal), `/tsd game sim <n>` (n fake leaderboard players, memory only; `0` clears).
+- Dev build only: `/ggd anim` (animation probe P1-P8, prints `anim P1..P8` lines and shows test squares for 10 s),
+  `/ggd anim speed 0.25` (slow motion; `1` = normal), `/ggd game sim <n>` (n fake leaderboard players, memory only; `0` clears).
 - Offline: `luajit tools/coinflip.lua [H|T] [flips]` prints the coin's pose curve and a flip distribution.
 
 ## How it works
@@ -48,7 +48,7 @@ Dev probe output is English on purpose.
 - Results are self-reported: a modified client can report any well-formed numbers (guild trust model).
 - Gold is bookkeeping only; no settlement between players.
 - Animation facts (types, alpha end state, scale origin, texture paths, coin sound) are not yet measured on the Forever
-  client: `/tsd anim` answers them; every effect falls back to its end state when a type is missing.
+  client: `/ggd anim` answers them; every effect falls back to its end state when a type is missing.
 - A record pull lost late in a lossy period can lag up to the retry schedule (45 + 90 + 180 s) or the next HELLO.
 
 ## Changelog line

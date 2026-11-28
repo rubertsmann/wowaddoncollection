@@ -15,11 +15,11 @@ Result after work:    `luajit tests/run.lua` -> 220 passed, 0 failed
 | R5 | simulated records not listed | UI reads `Store.db.games`, not `Games.AllRecords` | READ-ONLY | UI/Window.lua buildMemberBuildsButton | - | 2026-11-27 |
 | RF1-RF4 | see spec | same test | OFFLINE | 220 passed, 0 failed | pass | 2026-11-27 |
 | R6 | arena section rewritten when missing / older | test_member_builds "arena version: ..." | OFFLINE | 233 passed, 0 failed | pass (in game NOT-VERIFIED) | 2026-11-28 |
-| UI | tooltip renders in the client | hover the (i) bottom left of the GuildGames window | NOT-VERIFIED | needs the user in game | - | |
+| UI | tooltip renders in the client | hover the (i) bottom left of the GuildGames window | IN-GAME | user: "52 works as expected" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
-- [ ] On the maintainer character: open the GuildGames window, an (i) icon sits at the bottom left; hover it: "Member builds", my build, one row per member (orange = record version differs from the live build).
+- [x] On the maintainer character: open the GuildGames window, an (i) icon sits at the bottom left; hover it: "Member builds", my build, one row per member (orange = record version differs from the live build).
 - [ ] On any other character: no (i) icon.
 
 ## Accepted gaps
-- none yet
+- R5 (READ-ONLY), "no (i) on other characters": closed at the user's status review (2026-11-28).

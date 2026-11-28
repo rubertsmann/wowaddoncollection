@@ -80,3 +80,9 @@ Format: `## <YYYY-MM-DD HH:MM> | <PLAN|DECISION|BUILD|TEST|VERIFY|DOC|DEVIATION|
 - Result: user reports that recipe, recipe item and order sync work as expected
 - Evidence: user report (no export attached)
 - Next: merge release/0.4.2 to master, tag v0.4.2; review-talentshare run before marking 008 done
+
+## 2026-11-28 10:37 | DONE | closed at the status review
+- Did: user reviewed the feature's state
+- Result: status done
+- Evidence: user: "worked" (2026-11-28)
+- Next: none

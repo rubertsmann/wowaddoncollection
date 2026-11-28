@@ -21,6 +21,7 @@ UI smoke (stubbed client, scratchpad harness): new order after start -> chat "Ne
 | RF3 | other-language profession | `notify: profession match works across languages (skill line id)` | OFFLINE | test run | pass | 2026-11-16 |
 | RF4 | garbage settings | `notify: settings fall back to defaults, bad values are ignored`, `notify: mark seen forgets pruned orders and ignores garbage` | OFFLINE | test run | pass | 2026-11-16 |
 | RF5 | board open -> no alert | `Alerts.Update` marks seen when `UI.OrdersVisible()` | READ-ONLY | | | 2026-11-16 |
+| ALL | user's status review | user, live use | IN-GAME | user: "worked" | pass | 2026-11-28 |
 
 ## In-game checklist (`/console scriptErrors 1` first; needs a second guild member with the dev build, or two accounts)
 - [ ] 1. Member B creates an order for a recipe of a profession A has: A's minimap button shows a red **1** and a letter icon; the window's tab reads **Orders (1)**.
@@ -32,4 +33,4 @@ UI smoke (stubbed client, scratchpad harness): new order after start -> chat "Ne
 - [ ] 7. Options > **Test all notifications**: every switched-on effect appears once (chat line, sound, screen message, red 1 + letter on the minimap button and `Orders (1)` for 8 s); switch to another window: the taskbar flashes after 3 s. With only the letter on: letter without number.
 
 ## Accepted gaps
-- none yet
+- Checklist items not run one by one: closed at the user's status review (2026-11-28, "worked").

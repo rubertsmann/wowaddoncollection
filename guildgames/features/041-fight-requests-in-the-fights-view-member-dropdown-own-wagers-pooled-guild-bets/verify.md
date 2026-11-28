@@ -28,6 +28,7 @@ Result after work:    `luajit tests/run.lua` -> 198 passed, 0 failed
 | RF4 | 0.11 accept without wager, odds bet | see R9 | OFFLINE | `198 passed, 0 failed` | pass | 2026-11-26 |
 | RF5 | member turns busy before Send | `Arena.Challenge` refuses `theybusy` before taking the stake (existing test `arena: one fight at a time ...`) | OFFLINE | `198 passed, 0 failed` | pass | 2026-11-26 |
 | - | a real request, accept and pot between two players | two guild members on the dev build, a third betting | NOT-VERIFIED | needs two (three) real players | - | - |
+| ALL | user's status review | user, live use | IN-GAME | user: "works" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] Dev build, `/reload`, AZEcaught > Arena > Fights: the request row (dropdown + Fight!) and the dev icon row at the bottom.
@@ -39,4 +40,4 @@ Result after work:    `luajit tests/run.lua` -> 198 passed, 0 failed
 - [ ] Two real players on the same build: request, accept with a different wager, a third player bets.
 
 ## Accepted gaps
-- none
+- Checklist steps not run one by one and the two-client rows: closed at the user's status review (2026-11-28, "works").

@@ -1,6 +1,6 @@
 # 009 Craft and whisper from lists: spec
 
-- Status: verifying
+- Status: done
 - Created: 2026-11-16
 - Target version: 0.5.0 (UI only, no protocol/schema change)
 - Owner: claude

@@ -25,7 +25,7 @@ SIM = wow-ui-sim (Blizzard UI without the game, `tools/wow-sim.ps1`): layout and
 | RF4 | guide arrow finds Arena > Guild | existing load/guide tests | OFFLINE | test_load | pass | 2026-11-25 |
 | RF5 | fits the 336 px stage | sim screenshot: icons + labels above the status line | SIM | evidence/sim-companion.png | pass | 2026-11-25 |
 | ALL | simulator window (wow-ui-sim GUI, not the game): Companion view and the minimal training menu clicked through | user | SIM | user: "looks like it works fine" (2026-11-25) | pass | 2026-11-25 |
-| ALL | in the game | user, live client | NOT-VERIFIED | needs user | | |
+| R3, R5 | train by icon click, feed by bar click | user, live client | IN-GAME | user: "training and feeding works" | pass | 2026-11-28 |
 
 ## In-game checklist (things only the user can do)
 - [ ] Full window > AZEcaught > Companion: the line "Arena level N  xW yL" and a purple XP bar under the name; hover it (stats, ability).
@@ -37,4 +37,4 @@ SIM = wow-ui-sim (Blizzard UI without the game, `tools/wow-sim.ps1`): layout and
 - [ ] `/ggd` / `/gg caught log 5 petView.train` shows `globalMouse=true` (if false, the row closes through a screen-wide catcher that eats that one click).
 
 ## Accepted gaps
-- none yet
+- R9 outside click / compact menu, RF2, RF3 (READ-ONLY): closed at the user's status review (2026-11-28).
